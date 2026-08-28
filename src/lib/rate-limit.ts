@@ -1,53 +1,140 @@
 // src/lib/rate-limit.ts
 
-/**
- * Simple in-memory rate limiter per IP address.
- * Cocok untuk single-instance deployment.
- * Untuk production multi-instance, gunakan Redis/Upstash.
- */
+import { headers } from "next/headers"
 
-interface RateLimitEntry {
+export interface RateLimitResult {
+  success: boolean
+  remaining: number
+  resetAt: number
+}
+
+export interface RateLimitOptions {
+  maxRequests: number
+  windowMs: number
+}
+
+export interface RateLimiterBackend {
+  limit(identifier: string, options: RateLimitOptions): Promise<RateLimitResult>
+}
+
+// --- UPSTASH REDIS BACKEND (PRODUCTION) ---
+class UpstashRateLimiter implements RateLimiterBackend {
+  private ratelimit: any = null
+
+  private async getRatelimit(options: RateLimitOptions) {
+    if (!this.ratelimit) {
+      const { Ratelimit } = await import("@upstash/ratelimit")
+      const { Redis } = await import("@upstash/redis")
+
+      const redis = new Redis({
+        url: process.env.UPSTASH_REDIS_REST_URL!,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+      })
+
+      this.ratelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(
+          options.maxRequests,
+          `${options.windowMs} ms`
+        ),
+        analytics: false,
+      })
+    }
+    return this.ratelimit
+  }
+
+  async limit(
+    identifier: string,
+    options: RateLimitOptions
+  ): Promise<RateLimitResult> {
+    const ratelimit = await this.getRatelimit(options)
+    const result = await ratelimit.limit(identifier)
+    return {
+      success: result.success,
+      remaining: result.remaining,
+      resetAt: result.reset,
+    }
+  }
+}
+
+// --- IN-MEMORY BACKEND (LOCAL FALLBACK) ---
+interface InMemoryEntry {
   count: number
   resetAt: number
 }
 
-const store = new Map<string, RateLimitEntry>()
+class InMemoryRateLimiter implements RateLimiterBackend {
+  private store = new Map<string, InMemoryEntry>()
 
-// Bersihkan entry yang sudah expired setiap 5 menit
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, entry] of store.entries()) {
-    if (now > entry.resetAt) {
-      store.delete(key)
-    }
+  constructor() {
+    setInterval(() => {
+      const now = Date.now()
+      for (const [key, entry] of this.store.entries()) {
+        if (now > entry.resetAt) this.store.delete(key)
+      }
+    }, 5 * 60 * 1000).unref()
   }
-}, 5 * 60 * 1000)
 
-export function rateLimit(
-  identifier: string,
-  options: { maxRequests: number; windowMs: number }
-): { success: boolean; remaining: number; resetAt: number } {
-  const now = Date.now()
-  const key = identifier
-  const entry = store.get(key)
+  async limit(
+    identifier: string,
+    options: RateLimitOptions
+  ): Promise<RateLimitResult> {
+    const now = Date.now()
+    const entry = this.store.get(identifier)
 
-  if (!entry || now > entry.resetAt) {
-    // Window baru
-    const resetAt = now + options.windowMs
-    store.set(key, { count: 1, resetAt })
+    if (!entry || now > entry.resetAt) {
+      const resetAt = now + options.windowMs
+      this.store.set(identifier, { count: 1, resetAt })
+      return { success: true, remaining: options.maxRequests - 1, resetAt }
+    }
+
+    if (entry.count >= options.maxRequests) {
+      return { success: false, remaining: 0, resetAt: entry.resetAt }
+    }
+
+    entry.count++
     return {
       success: true,
-      remaining: options.maxRequests - 1,
-      resetAt,
+      remaining: options.maxRequests - entry.count,
+      resetAt: entry.resetAt,
     }
+  }
+}
+
+const localMemoryStore = new Map<string, InMemoryEntry>()
+
+function createRateLimiter(): RateLimiterBackend {
+  const hasUpstash =
+    process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+
+  if (hasUpstash) {
+    return new UpstashRateLimiter()
+  }
+  return new InMemoryRateLimiter()
+}
+
+const rateLimiterInstance = createRateLimiter()
+
+// --- PUBLIC INTEGRATED EXPORTS ---
+
+/**
+ * Sync-safe rate limit menggunakan Local Memory untuk fallback cepat.
+ */
+export function rateLimit(
+  identifier: string,
+  options: RateLimitOptions
+): RateLimitResult {
+  const now = Date.now()
+  const entry = localMemoryStore.get(identifier)
+
+  if (!entry || now > entry.resetAt) {
+    const resetAt = now + options.windowMs
+    localMemoryStore.set(identifier, { count: 1, resetAt })
+    return { success: true, remaining: options.maxRequests - 1, resetAt }
   }
 
   if (entry.count >= options.maxRequests) {
-    return {
-      success: false,
-      remaining: 0,
-      resetAt: entry.resetAt,
-    }
+    return { success: false, remaining: 0, resetAt: entry.resetAt }
   }
 
   entry.count++
@@ -59,12 +146,28 @@ export function rateLimit(
 }
 
 /**
- * Helper untuk mendapatkan IP dari NextRequest
+ * Async rate limit mendukung Upstash Redis (untuk Route Handler/Vercel Serverless).
  */
+export async function rateLimitAsync(
+  identifier: string,
+  options: RateLimitOptions
+): Promise<RateLimitResult> {
+  return rateLimiterInstance.limit(identifier, options)
+}
+
 export function getClientIp(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for")
-  if (forwarded) {
-    return forwarded.split(",")[0].trim()
-  }
+  if (forwarded) return forwarded.split(",")[0].trim()
   return request.headers.get("x-real-ip") || "unknown"
+}
+
+export async function getClientIpFromHeaders(): Promise<string> {
+  try {
+    const headersList = await headers()
+    const forwarded = headersList.get("x-forwarded-for")
+    if (forwarded) return forwarded.split(",")[0].trim()
+    return headersList.get("x-real-ip") || "unknown"
+  } catch {
+    return "unknown"
+  }
 }

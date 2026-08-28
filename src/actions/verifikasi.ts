@@ -16,10 +16,6 @@ import type { ActionResponse, PendaftaranWithRelations } from "@/types"
 import { StatusPendaftaran, StatusVerifikasiBukti, Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
-// ========================================================
-// 1. GET DATA PENDAFTARAN (DASHBOARD GURU)
-// ========================================================
-
 export async function getPendaftaranList(options?: {
   status?: StatusPendaftaran
   search?: string
@@ -40,7 +36,7 @@ export async function getPendaftaranList(options?: {
     const limit = options?.limit || 10
     const skip = (page - 1) * limit
 
-    const whereCondition: any = {}
+    const whereCondition: Record<string, any> = {}
 
     if (options?.status) {
       whereCondition.status = options.status
@@ -158,9 +154,24 @@ export async function getPendaftaranDetail(
   }
 }
 
-// ========================================================
-// 2. VERIFIKASI PENDAFTARAN — FIXED: Random Password + Email
-// ========================================================
+// Helper untuk menghapus user Supabase Auth jika transaction gagal
+async function cleanupAuthUsers(
+  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
+  authIds: string[]
+): Promise<void> {
+  for (const authId of authIds) {
+    try {
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(authId)
+      if (error) {
+        console.error(`⚠️ Cleanup Error (Auth ID: ${authId}): ${error.message}`)
+      } else {
+        console.log(`✅ Cleanup Sukses (Auth ID: ${authId})`)
+      }
+    } catch (cleanupErr) {
+      console.error(`⚠️ Exception saat membersihkan Auth ID: ${authId}`, cleanupErr)
+    }
+  }
+}
 
 export async function verifikasiPendaftaran(
   payload: VerifikasiPendaftaranValues
@@ -192,9 +203,7 @@ export async function verifikasiPendaftaran(
 
     const latestBuktiId = pendaftaran.buktiTransfer[0]?.id
 
-    // ==========================================
-    // SKENARIO A: DITOLAK
-    // ==========================================
+    // --- CASE A: PENDAFTARAN DITOLAK ---
     if (status === "DITOLAK") {
       if (!alasanPenolakan) {
         return {
@@ -235,13 +244,11 @@ export async function verifikasiPendaftaran(
       }
     }
 
-    // ==========================================
-    // SKENARIO B: DITERIMA — RANDOM PASSWORD + EMAIL
-    // ==========================================
+    // --- CASE B: PENDAFTARAN DITERIMA ---
     if (status === "DITERIMA") {
       const supabaseAdmin = createSupabaseAdmin()
 
-      // ✅ FIX: Generate password RANDOM, bukan dari nomor pendaftaran
+      // Amankan credentials secara random
       const passwordOrangTua = generateSecurePassword(14)
       const passwordSiswa = generateSecurePassword(14)
 
@@ -249,8 +256,11 @@ export async function verifikasiPendaftaran(
       const cleanNomor = pendaftaran.nomorPendaftaran.toLowerCase().replace(/[^a-z0-9]/g, "")
       const emailSiswa = `siswa.${cleanNomor}@sekolah.internal`
 
-      // Buat User Supabase Auth untuk Orang Tua
+      const newlyCreatedAuthIds: string[] = []
       let authOrtuId: string
+      let ortuAlreadyExisted = false
+
+      // Create Supabase Auth Orang Tua
       const { data: authOrtuData, error: authOrtuError } =
         await supabaseAdmin.auth.admin.createUser({
           email: emailOrtu,
@@ -266,16 +276,18 @@ export async function verifikasiPendaftaran(
         if (authOrtuError.message.includes("already been registered")) {
           const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
           const matched = existingUsers.users.find((u) => u.email === emailOrtu)
-          if (!matched) throw new Error("Gagal mengambil akun auth orang tua")
+          if (!matched) throw new Error("Gagal memetakan akun auth orang tua")
           authOrtuId = matched.id
+          ortuAlreadyExisted = true
         } else {
           throw new Error(`Gagal membuat akun auth orang tua: ${authOrtuError.message}`)
         }
       } else {
         authOrtuId = authOrtuData.user.id
+        if (!ortuAlreadyExisted) newlyCreatedAuthIds.push(authOrtuId)
       }
 
-      // Buat User Supabase Auth untuk Siswa
+      // Create Supabase Auth Siswa
       const { data: authSiswaData, error: authSiswaError } =
         await supabaseAdmin.auth.admin.createUser({
           email: emailSiswa,
@@ -288,104 +300,115 @@ export async function verifikasiPendaftaran(
         })
 
       if (authSiswaError) {
+        await cleanupAuthUsers(supabaseAdmin, newlyCreatedAuthIds)
         throw new Error(`Gagal membuat akun auth siswa: ${authSiswaError.message}`)
       }
+
       const authSiswaId = authSiswaData.user.id
+      newlyCreatedAuthIds.push(authSiswaId)
 
-      // Prisma Transaction: buat semua record + set mustChangePassword = true
-      await prisma.$transaction(async (tx) => {
-        let userOrtu = await tx.user.findUnique({ where: { email: emailOrtu } })
+      // ✅ Prisma Transaction with strict rollback cleanup
+      try {
+        await prisma.$transaction(async (tx) => {
+          let userOrtu = await tx.user.findUnique({
+            where: { email: emailOrtu },
+          })
 
-        if (!userOrtu) {
-          userOrtu = await tx.user.create({
+          if (!userOrtu) {
+            userOrtu = await tx.user.create({
+              data: {
+                email: emailOrtu,
+                nama: pendaftaran.namaOrangTua,
+                role: Role.ORANG_TUA,
+                authId: authOrtuId,
+                mustChangePassword: true,
+                orangTua: {
+                  create: {
+                    noHp: pendaftaran.noHpOrangTua,
+                    alamat: pendaftaran.alamatOrangTua || pendaftaran.alamatSiswa,
+                  },
+                },
+              },
+            })
+          }
+
+          const orangTuaRecord = await tx.orangTua.findUnique({
+            where: { userId: userOrtu.id },
+          })
+
+          const userSiswa = await tx.user.create({
             data: {
-              email: emailOrtu,
-              nama: pendaftaran.namaOrangTua,
-              role: Role.ORANG_TUA,
-              authId: authOrtuId,
-              mustChangePassword: true, // ✅ FIX: Paksa ganti password saat login pertama
-              orangTua: {
+              email: emailSiswa,
+              nama: pendaftaran.namaLengkap,
+              role: Role.SISWA,
+              authId: authSiswaId,
+              mustChangePassword: true,
+              siswa: {
                 create: {
-                  noHp: pendaftaran.noHpOrangTua,
-                  alamat: pendaftaran.alamatOrangTua || pendaftaran.alamatSiswa,
+                  nisn: pendaftaran.nisn || null,
+                  tempatLahir: pendaftaran.tempatLahir,
+                  tanggalLahir: pendaftaran.tanggalLahir,
+                  jenisKelamin: pendaftaran.jenisKelamin,
+                  alamat: pendaftaran.alamatSiswa,
+                  kelasId: pendaftaran.kelasTujuanId || null,
+                  pendaftaranId: pendaftaran.id,
                 },
               },
             },
           })
-        }
 
-        const orangTuaRecord = await tx.orangTua.findUnique({
-          where: { userId: userOrtu.id },
-        })
-
-        const userSiswa = await tx.user.create({
-          data: {
-            email: emailSiswa,
-            nama: pendaftaran.namaLengkap,
-            role: Role.SISWA,
-            authId: authSiswaId,
-            mustChangePassword: true, // ✅ FIX: Paksa ganti password saat login pertama
-            siswa: {
-              create: {
-                nisn: pendaftaran.nisn || null,
-                tempatLahir: pendaftaran.tempatLahir,
-                tanggalLahir: pendaftaran.tanggalLahir,
-                jenisKelamin: pendaftaran.jenisKelamin,
-                alamat: pendaftaran.alamatSiswa,
-                kelasId: pendaftaran.kelasTujuanId || null,
-                pendaftaranId: pendaftaran.id,
-              },
-            },
-          },
-        })
-
-        const siswaRecord = await tx.siswa.findUnique({
-          where: { userId: userSiswa.id },
-        })
-
-        if (orangTuaRecord && siswaRecord) {
-          await tx.parentStudent.create({
-            data: {
-              orangTuaId: orangTuaRecord.id,
-              siswaId: siswaRecord.id,
-              hubungan: "Orang Tua",
-            },
+          const siswaRecord = await tx.siswa.findUnique({
+            where: { userId: userSiswa.id },
           })
-        }
 
-        if (latestBuktiId) {
-          await tx.buktiTransferPendaftaran.update({
-            where: { id: latestBuktiId },
+          if (orangTuaRecord && siswaRecord) {
+            await tx.parentStudent.create({
+              data: {
+                orangTuaId: orangTuaRecord.id,
+                siswaId: siswaRecord.id,
+                hubungan: "Orang Tua",
+              },
+            })
+          }
+
+          if (latestBuktiId) {
+            await tx.buktiTransferPendaftaran.update({
+              where: { id: latestBuktiId },
+              data: {
+                status: StatusVerifikasiBukti.DITERIMA,
+                diverifikasiOlehId: guruUser.id,
+                waktuVerifikasi: new Date(),
+              },
+            })
+          }
+
+          await tx.pendaftaran.update({
+            where: { id: pendaftaranId },
             data: {
-              status: StatusVerifikasiBukti.DITERIMA,
+              status: StatusPendaftaran.DITERIMA,
+              catatanAdmin: catatanAdmin || null,
               diverifikasiOlehId: guruUser.id,
               waktuVerifikasi: new Date(),
             },
           })
-        }
-
-        await tx.pendaftaran.update({
-          where: { id: pendaftaranId },
-          data: {
-            status: StatusPendaftaran.DITERIMA,
-            catatanAdmin: catatanAdmin || null,
-            diverifikasiOlehId: guruUser.id,
-            waktuVerifikasi: new Date(),
-          },
         })
-      })
+      } catch (txError) {
+        console.error("Prisma transaction error, rolling back Supabase Users...", txError)
+        await cleanupAuthUsers(supabaseAdmin, newlyCreatedAuthIds)
+        throw txError
+      }
 
-      // ✅ FIX: Kirim kredensial via EMAIL, bukan ditampilkan di UI/response
+      // Kirim Credentials email secure
       await sendEmail({
         to: emailOrtu,
-        subject: `Pendaftaran Diterima — ${pendaftaran.nomorPendaftaran}`,
+        subject: `Pendaftaran Disetujui — ${pendaftaran.nomorPendaftaran}`,
         html: buildKredensialEmail({
           namaOrangTua: pendaftaran.namaOrangTua,
           emailOrangTua: emailOrtu,
-          passwordOrangTua: passwordOrangTua,
+          passwordOrangTua,
           namaSiswa: pendaftaran.namaLengkap,
-          emailSiswa: emailSiswa,
-          passwordSiswa: passwordSiswa,
+          emailSiswa,
+          passwordSiswa,
           nomorPendaftaran: pendaftaran.nomorPendaftaran,
         }),
       })
@@ -393,7 +416,7 @@ export async function verifikasiPendaftaran(
       revalidatePath("/dashboard/pendaftaran")
       return {
         success: true,
-        message: `Pendaftaran ${pendaftaran.nomorPendaftaran} DITERIMA. Kredensial login telah dikirim ke email ${emailOrtu}.`,
+        message: `Pendaftaran ${pendaftaran.nomorPendaftaran} DITERIMA. Akun login telah dikirimkan ke ${emailOrtu}.`,
       }
     }
 

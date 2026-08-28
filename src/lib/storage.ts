@@ -5,45 +5,96 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { nanoid } from "nanoid"
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
-const ALLOWED_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "application/pdf",
-]
 
-/**
- * Validasi file sebelum upload
- */
-export function validateFile(file: File): { valid: boolean; error?: string } {
-  if (file.size > MAX_FILE_SIZE) {
-    return {
-      valid: false,
-      error: `Ukuran file "${file.name}" melebihi 5 MB`,
-    }
-  }
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    return {
-      valid: false,
-      error: `Tipe file "${file.name}" tidak didukung. Gunakan JPG, PNG, atau PDF.`,
-    }
-  }
-  return { valid: true }
+// Magic bytes signatures untuk format valid
+const MAGIC_BYTES: Record<string, number[]> = {
+  "image/jpeg": [0xff, 0xd8, 0xff],
+  "image/png": [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+  "image/webp": [0x52, 0x49, 0x46, 0x46], // "RIFF"
+  "application/pdf": [0x25, 0x50, 0x44, 0x46], // "%PDF"
 }
 
 /**
- * Upload file ke Supabase Storage (dari browser/client-side)
- * @param bucket - Nama bucket ('dokumen-pendaftaran' atau 'bukti-transfer')
- * @param folder - Sub-folder (misal: 'pendaftaran/REG-2024-00001')
- * @param file - File yang akan diupload
- * @returns URL path file di storage
+ * Validasi magic bytes (file signature) langsung dari Buffer
  */
+async function validateMagicBytes(
+  file: File
+): Promise<{ valid: boolean; detectedType?: string; error?: string }> {
+  try {
+    const buffer = await file.slice(0, 12).arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+
+    if (bytes.length < 3) {
+      return { valid: false, error: "Berkas terlalu kecil" }
+    }
+
+    // JPEG check: FF D8 FF
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+      return { valid: true, detectedType: "image/jpeg" }
+    }
+
+    // PNG check: 89 50 4E 47
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+      return { valid: true, detectedType: "image/png" }
+    }
+
+    // WEBP check: RIFF....WEBP
+    if (
+      bytes[0] === 0x52 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes[3] === 0x46 &&
+      bytes.length >= 12 &&
+      bytes[8] === 0x57 &&
+      bytes[9] === 0x45 &&
+      bytes[10] === 0x42 &&
+      bytes[11] === 0x50
+    ) {
+      return { valid: true, detectedType: "image/webp" }
+    }
+
+    // PDF check: %PDF
+    if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
+      return { valid: true, detectedType: "application/pdf" }
+    }
+
+    return {
+      valid: false,
+      error: "Format berkas tidak valid atau tidak didukung (Gunakan format JPG, PNG, WEBP, atau PDF)",
+    }
+  } catch {
+    return { valid: false, error: "Gagal memproses validasi struktur berkas" }
+  }
+}
+
+export async function validateFile(
+  file: File
+): Promise<{ valid: boolean; error?: string }> {
+  if (file.size > MAX_FILE_SIZE) {
+    return {
+      valid: false,
+      error: `Ukuran file "${file.name}" melebihi batas maksimal 5 MB`,
+    }
+  }
+
+  if (file.size === 0) {
+    return { valid: false, error: `File "${file.name}" tidak memiliki data (kosong)` }
+  }
+
+  const magicCheck = await validateMagicBytes(file)
+  if (!magicCheck.valid) {
+    return { valid: false, error: magicCheck.error }
+  }
+
+  return { valid: true }
+}
+
 export async function uploadFileToStorage(
   bucket: string,
   folder: string,
   file: File
 ): Promise<{ path: string; error?: string }> {
-  const validation = validateFile(file)
+  const validation = await validateFile(file)
   if (!validation.valid) {
     return { path: "", error: validation.error }
   }
@@ -61,16 +112,13 @@ export async function uploadFileToStorage(
     })
 
   if (error) {
-    console.error("Upload error:", error)
-    return { path: "", error: "Gagal mengupload file. Silakan coba lagi." }
+    console.error("Storage upload error:", error)
+    return { path: "", error: "Gagal mengunggah file ke server" }
   }
 
   return { path: data.path }
 }
 
-/**
- * Upload banyak file sekaligus
- */
 export async function uploadMultipleFiles(
   bucket: string,
   folder: string,
@@ -91,9 +139,6 @@ export async function uploadMultipleFiles(
   return { paths, errors }
 }
 
-/**
- * Dapatkan URL publik/signed untuk file di storage (server-side)
- */
 export async function getSignedUrl(
   bucket: string,
   path: string,

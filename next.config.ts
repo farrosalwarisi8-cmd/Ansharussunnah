@@ -3,6 +3,13 @@
 import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
+  // ✅ Konfigurasi batas upload server actions (5MB)
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "5mb",
+    },
+  },
+
   // ✅ Security Headers untuk Production
   async headers() {
     return [
@@ -34,7 +41,7 @@ const nextConfig: NextConfig = {
     ]
   },
 
-  // ✅ Izinkan domain gambar dari Supabase Storage
+  // ✅ Konfigurasi Whitelist Supabase Storage domain
   images: {
     remotePatterns: [
       {
@@ -43,13 +50,6 @@ const nextConfig: NextConfig = {
         pathname: "/storage/**",
       },
     ],
-  },
-
-  // ✅ Batasi ukuran body untuk API routes (default 1MB, naikkan untuk upload)
-  experimental: {
-    serverActions: {
-      bodySizeLimit: "5mb",
-    },
   },
 }
 

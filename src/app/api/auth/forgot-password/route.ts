@@ -2,20 +2,19 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { requestPasswordReset } from "@/actions/password-reset"
-import { rateLimit, getClientIp } from "@/lib/rate-limit"
+import { rateLimitAsync, getClientIp } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
   try {
-    // Rate limit: 3 request per 5 menit per IP
     const ip = getClientIp(request)
-    const limiter = rateLimit(`forgot-password:${ip}`, {
+    const limiter = await rateLimitAsync(`api-forgot-password:${ip}`, {
       maxRequests: 3,
       windowMs: 5 * 60 * 1000,
     })
 
     if (!limiter.success) {
       return NextResponse.json(
-        { success: false, message: "Terlalu banyak permintaan. Coba lagi nanti." },
+        { success: false, message: "Batas limit tercapai. Silakan coba kembali dalam 5 menit." },
         { status: 429 }
       )
     }

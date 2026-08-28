@@ -2,20 +2,19 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { resetPassword } from "@/actions/password-reset"
-import { rateLimit, getClientIp } from "@/lib/rate-limit"
+import { rateLimitAsync, getClientIp } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
   try {
-    // Rate limit: 3 percobaan per 5 menit per IP
     const ip = getClientIp(request)
-    const limiter = rateLimit(`reset-password:${ip}`, {
+    const limiter = await rateLimitAsync(`api-reset-password:${ip}`, {
       maxRequests: 3,
       windowMs: 5 * 60 * 1000,
     })
 
     if (!limiter.success) {
       return NextResponse.json(
-        { success: false, message: "Terlalu banyak permintaan. Coba lagi nanti." },
+        { success: false, message: "Terlalu banyak permintaan reset. Silakan coba sesaat lagi." },
         { status: 429 }
       )
     }
@@ -24,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     if (!email || !resetToken || !newPassword || !confirmPassword) {
       return NextResponse.json(
-        { success: false, message: "Semua field wajib diisi" },
+        { success: false, message: "Semua data wajib dilengkapi" },
         { status: 400 }
       )
     }

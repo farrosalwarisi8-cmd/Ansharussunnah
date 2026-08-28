@@ -1,12 +1,19 @@
 // prisma/seed.ts
 
-import { PrismaClient, Role, JenisKelamin } from "@prisma/client"
+import { PrismaClient, Role, JenisKelamin, TipeTransaksi, Prisma } from "@prisma/client"
 import { createClient } from "@supabase/supabase-js"
 import * as dotenv from "dotenv"
 
 dotenv.config()
 
-const prisma = new PrismaClient()
+// ✅ FIX P1017: Paksa Prisma Client Seeder memakai DIRECT_URL (Port 5432)
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DIRECT_URL || process.env.DATABASE_URL,
+    },
+  },
+})
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -15,54 +22,53 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 })
 
-async function main() {
-  console.log("🌱 Memulai proses seeding database...")
+async function createAuthUser(email: string, password: string, nama: string, role: Role): Promise<string> {
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { nama, role },
+  })
 
-  // ========================================================
-  // 1. BUAT AKUN GURU (ADMIN) AWAL
-  // ========================================================
-  const guruEmail = "guru@sekolah.sch.id"
-  const guruPassword = "AdminGuru123!"
-
-  console.log(`\n1. Membuat User Auth Supabase untuk Guru (${guruEmail})...`)
-
-  let authUserId: string
-
-  const { data: authData, error: authError } =
-    await supabaseAdmin.auth.admin.createUser({
-      email: guruEmail,
-      password: guruPassword,
-      email_confirm: true,
-      user_metadata: {
-        nama: "Ustadz Ahmad Fauzi, S.Pd",
-        role: Role.GURU,
-      },
-    })
-
-  if (authError) {
-    if (authError.message.includes("already been registered")) {
+  if (error) {
+    if (error.message.includes("already been registered")) {
       const { data: users } = await supabaseAdmin.auth.admin.listUsers()
-      const existing = users.users.find((u) => u.email === guruEmail)
-      if (!existing) throw new Error("Gagal mengambil data user auth lama")
-      authUserId = existing.id
-      console.log("ℹ️  User auth sudah ada di Supabase. Menggunakan authId yang ada.")
-    } else {
-      throw authError
+      const existing = users.users.find((u) => u.email === email)
+      if (!existing) throw new Error(`Gagal mengambil auth user: ${email}`)
+      console.log(`  ℹ️  Auth user ${email} sudah ada`)
+      return existing.id
     }
-  } else {
-    authUserId = authData.user.id
-    console.log("✔ User auth Guru berhasil dibuat di Supabase.")
+    throw error
   }
 
-  // Buat User di database Prisma
+  console.log(`  ✔ Auth user ${email} berhasil dibuat`)
+  return data.user.id
+}
+
+async function main() {
+  console.log("🌱 Memulai proses seeding database...\n")
+
+  // ========================================================
+  // 1. USER ACCOUNTS
+  // ========================================================
+  console.log("1. Membuat Akun Pengguna...")
+
+  const guruAuthId = await createAuthUser(
+    "guru@sekolah.sch.id",
+    "AdminGuru123!",
+    "Ustadz Ahmad Fauzi, S.Pd",
+    Role.GURU
+  )
+
   const guruUser = await prisma.user.upsert({
-    where: { email: guruEmail },
-    update: { authId: authUserId },
+    where: { email: "guru@sekolah.sch.id" },
+    update: { authId: guruAuthId },
     create: {
-      email: guruEmail,
+      email: "guru@sekolah.sch.id",
       nama: "Ustadz Ahmad Fauzi, S.Pd",
       role: Role.GURU,
-      authId: authUserId,
+      authId: guruAuthId,
+      mustChangePassword: true,
       guru: {
         create: {
           nip: "198501012010011001",
@@ -73,102 +79,186 @@ async function main() {
     },
     include: { guru: true },
   })
-  console.log("✔ Record Guru berhasil dibuat di database.")
+  console.log("  ✔ Record Guru berhasil dibuat")
+
+  const financeAuthId = await createAuthUser(
+    "keuangan@sekolah.sch.id",
+    "AdminKeu123!",
+    "Hj. Siti Aminah, S.E",
+    Role.ADMIN_KEUANGAN
+  )
+
+  await prisma.user.upsert({
+    where: { email: "keuangan@sekolah.sch.id" },
+    update: { authId: financeAuthId },
+    create: {
+      email: "keuangan@sekolah.sch.id",
+      nama: "Hj. Siti Aminah, S.E",
+      role: Role.ADMIN_KEUANGAN,
+      authId: financeAuthId,
+      mustChangePassword: true,
+    },
+  })
+  console.log("  ✔ Record Admin Keuangan berhasil dibuat")
 
   // ========================================================
-  // 2. SEED DAFTAR JENJANG (Kelas 1 - Kelas 6)
+  // 2. PERIODE AJARAN
   // ========================================================
-  console.log("\n2. Mengisi Master Jenjang...")
+  console.log("\n2. Membuat Periode Ajaran...")
+
+  await prisma.periodeAjaran.upsert({
+    where: { nama: "2025/2026 - Ganjil" },
+    update: {},
+    create: {
+      nama: "2025/2026 - Ganjil",
+      tahunAjaran: "2025/2026",
+      semester: "GANJIL",
+      tanggalMulai: new Date("2025-07-01"),
+      tanggalSelesai: new Date("2025-12-31"),
+      aktif: true,
+    },
+  })
+
+  await prisma.periodeAjaran.upsert({
+    where: { nama: "2025/2026 - Genap" },
+    update: {},
+    create: {
+      nama: "2025/2026 - Genap",
+      tahunAjaran: "2025/2026",
+      semester: "GENAP",
+      tanggalMulai: new Date("2026-01-01"),
+      tanggalSelesai: new Date("2026-06-30"),
+      aktif: false,
+    },
+  })
+  console.log("  ✔ 2 Periode Ajaran berhasil dibuat (Ganjil aktif)")
+
+  // ========================================================
+  // 3. JENJANG & KELAS (dengan tarif SPP)
+  // ========================================================
+  console.log("\n3. Membuat Jenjang & Kelas...")
 
   const listJenjang = [
-    { nama: "Kelas 1", urutan: 1 },
-    { nama: "Kelas 2", urutan: 2 },
-    { nama: "Kelas 3", urutan: 3 },
-    { nama: "Kelas 4", urutan: 4 },
-    { nama: "Kelas 5", urutan: 5 },
-    { nama: "Kelas 6", urutan: 6 },
+    { nama: "Kelas 1", urutan: 1, tarif: 500000 },
+    { nama: "Kelas 2", urutan: 2, tarif: 500000 },
+    { nama: "Kelas 3", urutan: 3, tarif: 500000 },
+    { nama: "Kelas 4", urutan: 4, tarif: 550000 },
+    { nama: "Kelas 5", urutan: 5, tarif: 550000 },
+    { nama: "Kelas 6", urutan: 6, tarif: 600000 },
   ]
 
+  const jenjangMap: Record<string, string> = {}
+
   for (const j of listJenjang) {
-    await prisma.jenjang.upsert({
+    const jenjang = await prisma.jenjang.upsert({
       where: { nama: j.nama },
-      update: { urutan: j.urutan },
+      update: { urutan: j.urutan, tarifSppBulanan: new Prisma.Decimal(j.tarif) },
       create: {
         nama: j.nama,
         urutan: j.urutan,
         aktif: true,
+        tarifSppBulanan: new Prisma.Decimal(j.tarif),
       },
     })
+    jenjangMap[j.nama] = jenjang.id
   }
-  console.log("✔ 6 Jenjang kelas berhasil dibuat.")
+  console.log("  ✔ 6 Jenjang berhasil dibuat (dengan tarif SPP)")
 
-  // ========================================================
-  // 3. SEED DAFTAR KELAS
-  // ========================================================
-  console.log("\n3. Mengisi Data Kelas Contoh...")
+  const kelasData = [
+    { nama: "1A (Ali bin Abi Thalib)", jenjang: "Kelas 1", waliKelas: true },
+    { nama: "1B (Umar bin Khattab)", jenjang: "Kelas 1", waliKelas: false },
+    { nama: "2A (Abu Bakar Ash-Shiddiq)", jenjang: "Kelas 2", waliKelas: false },
+    { nama: "3A (Utsman bin Affan)", jenjang: "Kelas 3", waliKelas: false },
+  ]
 
-  const jenjang1 = await prisma.jenjang.findUnique({ where: { nama: "Kelas 1" } })
-  const jenjang2 = await prisma.jenjang.findUnique({ where: { nama: "Kelas 2" } })
+  const kelasMap: Record<string, string> = {}
 
-  if (jenjang1 && guruUser.guru) {
-    await prisma.kelas.upsert({
+  for (const k of kelasData) {
+    const kelas = await prisma.kelas.upsert({
       where: {
         nama_jenjangId: {
-          nama: "1A (Ali bin Abi Thalib)",
-          jenjangId: jenjang1.id,
+          nama: k.nama,
+          jenjangId: jenjangMap[k.jenjang],
         },
       },
       update: {},
       create: {
-        nama: "1A (Ali bin Abi Thalib)",
-        jenjangId: jenjang1.id,
-        waliKelasId: guruUser.guru.id,
+        nama: k.nama,
+        jenjangId: jenjangMap[k.jenjang],
+        waliKelasId: k.waliKelas && guruUser.guru ? guruUser.guru.id : null,
         kapasitas: 28,
         aktif: true,
       },
     })
+    kelasMap[k.nama] = kelas.id
+  }
+  console.log("  ✔ 4 Kelas berhasil dibuat")
 
-    await prisma.kelas.upsert({
-      where: {
-        nama_jenjangId: {
-          nama: "1B (Umar bin Khattab)",
-          jenjangId: jenjang1.id,
+  // ========================================================
+  // 4. GURU-KELAS (Relasi Mengajar)
+  // ========================================================
+  console.log("\n4. Membuat Relasi Guru Mengajar...")
+
+  if (guruUser.guru) {
+    const mapelKelas = [
+      { kelasNama: "1A (Ali bin Abi Thalib)", mapel: "Al-Quran" },
+      { kelasNama: "1A (Ali bin Abi Thalib)", mapel: "Fiqih" },
+      { kelasNama: "1B (Umar bin Khattab)", mapel: "Al-Quran" },
+      { kelasNama: "2A (Abu Bakar Ash-Shiddiq)", mapel: "Aqidah Akhlak" },
+    ]
+
+    for (const mk of mapelKelas) {
+      await prisma.guruKelas.upsert({
+        where: {
+          guruId_kelasId_mataPelajaran: {
+            guruId: guruUser.guru.id,
+            kelasId: kelasMap[mk.kelasNama],
+            mataPelajaran: mk.mapel,
+          },
         },
-      },
-      update: {},
+        update: {},
+        create: {
+          guruId: guruUser.guru.id,
+          kelasId: kelasMap[mk.kelasNama],
+          mataPelajaran: mk.mapel,
+        },
+      })
+    }
+    console.log("  ✔ 4 Relasi Guru-Kelas-Mata Pelajaran berhasil dibuat")
+  }
+
+  // ========================================================
+  // 5. KATEGORI TRANSAKSI KEUANGAN
+  // ========================================================
+  console.log("\n5. Membuat Kategori Transaksi Keuangan...")
+
+  const kategoriData = [
+    { nama: "SPP Bulanan", tipe: TipeTransaksi.PEMASUKAN, deskripsi: "Pembayaran SPP rutin bulanan siswa" },
+    { nama: "Uang Pangkal", tipe: TipeTransaksi.PEMASUKAN, deskripsi: "Biaya pendaftaran awal siswa baru" },
+    { nama: "Donasi", tipe: TipeTransaksi.PEMASUKAN, deskripsi: "Donasi dari wali murid atau pihak luar" },
+    { nama: "Pemasukan Lain", tipe: TipeTransaksi.PEMASUKAN, deskripsi: "Pemasukan lainnya" },
+    { nama: "Gaji Guru & Staf", tipe: TipeTransaksi.PENGELUARAN, deskripsi: "Pembayaran gaji bulanan" },
+    { nama: "Operasional Sekolah", tipe: TipeTransaksi.PENGELUARAN, deskripsi: "Biaya listrik, air, internet, dll" },
+    { nama: "Pembelian Sarana", tipe: TipeTransaksi.PENGELUARAN, deskripsi: "Pembelian buku, alat tulis, furniture" },
+    { nama: "Pengeluaran Lain", tipe: TipeTransaksi.PENGELUARAN, deskripsi: "Pengeluaran lainnya" },
+  ]
+
+  for (const kat of kategoriData) {
+    await prisma.kategoriTransaksi.upsert({
+      where: { nama: kat.nama },
+      update: { tipe: kat.tipe, deskripsi: kat.deskripsi },
       create: {
-        nama: "1B (Umar bin Khattab)",
-        jenjangId: jenjang1.id,
-        kapasitas: 28,
+        nama: kat.nama,
+        tipe: kat.tipe,
+        deskripsi: kat.deskripsi,
         aktif: true,
       },
     })
   }
-
-  if (jenjang2) {
-    await prisma.kelas.upsert({
-      where: {
-        nama_jenjangId: {
-          nama: "2A (Abu Bakar Ash-Shiddiq)",
-          jenjangId: jenjang2.id,
-        },
-      },
-      update: {},
-      create: {
-        nama: "2A (Abu Bakar Ash-Shiddiq)",
-        jenjangId: jenjang2.id,
-        kapasitas: 30,
-        aktif: true,
-      },
-    })
-  }
-  console.log("✔ Sample kelas berhasil dibuat.")
+  console.log("  ✔ 8 Kategori Transaksi berhasil dibuat")
 
   console.log("\n==========================================")
   console.log("🎉 SEEDING SELESAI!")
-  console.log(`Akun Guru Login:`)
-  console.log(`Email    : ${guruEmail}`)
-  console.log(`Password : ${guruPassword}`)
   console.log("==========================================")
 }
 

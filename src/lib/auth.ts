@@ -52,14 +52,12 @@ export async function requireGuru() {
 }
 
 /**
- * ✅ FIX: Guard yang memaksa user ganti password jika mustChangePassword = true
- * Dipanggil di layout dashboard (Server Component)
+ * Guard yang memaksa user melakukan ganti password default
  */
 export async function enforcePasswordChange(currentPathname: string) {
   const user = await getCurrentUser()
   if (!user) return
 
-  // Jika user masih harus ganti password DAN belum di halaman ganti-password
   if (user.mustChangePassword && currentPathname !== "/ganti-password") {
     redirect("/ganti-password")
   }

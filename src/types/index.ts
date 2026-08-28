@@ -17,8 +17,26 @@ export type BuktiTransferPendaftaran = Prisma.BuktiTransferPendaftaranGetPayload
 export type ParentStudent = Prisma.ParentStudentGetPayload<Record<string, never>>
 export type PasswordResetToken = Prisma.PasswordResetTokenGetPayload<Record<string, never>>
 
+// NEW: Akademik & Keuangan Models
+export type PeriodeAjaran = Prisma.PeriodeAjaranGetPayload<Record<string, never>>
+export type GuruKelas = Prisma.GuruKelasGetPayload<Record<string, never>>
+export type Ujian = Prisma.UjianGetPayload<Record<string, never>>
+export type SoalUjian = Prisma.SoalUjianGetPayload<Record<string, never>>
+export type OpsiJawaban = Prisma.OpsiJawabanGetPayload<Record<string, never>>
+export type PengerjaanUjian = Prisma.PengerjaanUjianGetPayload<Record<string, never>>
+export type JawabanSiswa = Prisma.JawabanSiswaGetPayload<Record<string, never>>
+export type Absensi = Prisma.AbsensiGetPayload<Record<string, never>>
+export type Tugas = Prisma.TugasGetPayload<Record<string, never>>
+export type PengumpulanTugas = Prisma.PengumpulanTugasGetPayload<Record<string, never>>
+export type RiwayatPengumpulanTugas = Prisma.RiwayatPengumpulanTugasGetPayload<Record<string, never>>
+export type CatatanRapor = Prisma.CatatanRaporGetPayload<Record<string, never>>
+export type KategoriTransaksi = Prisma.KategoriTransaksiGetPayload<Record<string, never>>
+export type TagihanSpp = Prisma.TagihanSppGetPayload<Record<string, never>>
+export type PembayaranSpp = Prisma.PembayaranSppGetPayload<Record<string, never>>
+export type TransaksiKeuangan = Prisma.TransaksiKeuanganGetPayload<Record<string, never>>
+
 // ============================================
-// COMPOSITE TYPES (WITH RELATIONS)
+// COMPOSITE TYPES
 // ============================================
 
 export type UserWithRelations = Prisma.UserGetPayload<{
@@ -81,8 +99,26 @@ export type PendaftaranWithRelations = Prisma.PendaftaranGetPayload<{
   }
 }>
 
+export type UjianWithDetails = Prisma.UjianGetPayload<{
+  include: {
+    kelas: true
+    periodeAjaran: true
+    dibuatOleh: { select: { nama: true } }
+    soal: {
+      include: {
+        opsi: true
+      }
+    }
+    _count: {
+      select: {
+        pengerjaan: true
+      }
+    }
+  }
+}>
+
 // ============================================
-// API RESPONSE TYPES
+// API & ACTION RESPONSE TYPE
 // ============================================
 
 export type ActionResponse<T = unknown> = {

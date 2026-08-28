@@ -14,9 +14,6 @@ const OTP_RESEND_COOLDOWN_SECONDS = parseInt(
   process.env.OTP_RESEND_COOLDOWN_SECONDS || "60"
 )
 
-/**
- * Step 1: Request OTP — Generate & kirim kode ke email
- */
 export async function requestPasswordReset(
   email: string
 ): Promise<ActionResponse> {
@@ -27,30 +24,21 @@ export async function requestPasswordReset(
       return { success: false, message: "Format email tidak valid" }
     }
 
-    // Cari user di database
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     })
 
-    // ✅ SECURITY: Jangan beri tahu apakah email terdaftar atau tidak
-    // Selalu return success agar attacker tidak bisa enumerate email
-    if (!user) {
-      return {
-        success: true,
-        message:
-          "Jika email terdaftar, kode verifikasi akan dikirim dalam beberapa saat.",
-      }
+    // ✅ generic response untuk meminimalkan email enumeration vulnerability
+    const genericSuccessResponse = {
+      success: true,
+      message: "Jika email terdaftar, kode verifikasi akan dikirim dalam beberapa saat.",
     }
 
-    if (!user.aktif) {
-      return {
-        success: true,
-        message:
-          "Jika email terdaftar, kode verifikasi akan dikirim dalam beberapa saat.",
-      }
+    if (!user || !user.aktif) {
+      return genericSuccessResponse
     }
 
-    // ✅ Rate limit: Cek apakah user sudah request OTP dalam 60 detik terakhir
+    // Rate Limit Check
     const recentToken = await prisma.passwordResetToken.findFirst({
       where: {
         userId: user.id,
@@ -72,17 +60,14 @@ export async function requestPasswordReset(
       }
     }
 
-    // Invalidate token lama yang belum digunakan
     await prisma.passwordResetToken.updateMany({
       where: { userId: user.id, digunakan: false },
       data: { digunakan: true },
     })
 
-    // Generate OTP baru
     const { plainOtp, hashedOtp } = await createOtpWithHash()
     const expiredAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000)
 
-    // Simpan ke database (hashed)
     await prisma.passwordResetToken.create({
       data: {
         userId: user.id,
@@ -93,10 +78,9 @@ export async function requestPasswordReset(
       },
     })
 
-    // Kirim email
     await sendEmail({
       to: normalizedEmail,
-      subject: "Kode Verifikasi Lupa Password",
+      subject: "Kode Verifikasi Reset Password",
       html: buildOtpEmail({
         nama: user.nama,
         kodeOtp: plainOtp,
@@ -104,24 +88,16 @@ export async function requestPasswordReset(
       }),
     })
 
-    return {
-      success: true,
-      message:
-        "Jika email terdaftar, kode verifikasi akan dikirim dalam beberapa saat.",
-    }
+    return genericSuccessResponse
   } catch (error: any) {
     console.error("Error requestPasswordReset:", error)
     return {
       success: false,
-      message: "Terjadi kesalahan. Silakan coba lagi.",
+      message: "Gagal mengirimkan kode verifikasi.",
     }
   }
 }
 
-/**
- * Step 2: Verifikasi OTP — Cek apakah kode benar dan belum expired
- * Return token sementara jika valid (untuk digunakan di step 3)
- */
 export async function verifyResetOtp(
   email: string,
   otp: string
@@ -130,7 +106,7 @@ export async function verifyResetOtp(
     const normalizedEmail = email.toLowerCase().trim()
 
     if (!otp || !/^\d{6}$/.test(otp)) {
-      return { success: false, message: "Kode OTP harus 6 digit angka" }
+      return { success: false, message: "Kode OTP harus berupa 6 digit angka" }
     }
 
     const user = await prisma.user.findUnique({
@@ -141,7 +117,6 @@ export async function verifyResetOtp(
       return { success: false, message: "Kode verifikasi tidak valid" }
     }
 
-    // Cari token aktif terbaru
     const token = await prisma.passwordResetToken.findFirst({
       where: {
         userId: user.id,
@@ -154,29 +129,25 @@ export async function verifyResetOtp(
     if (!token) {
       return {
         success: false,
-        message: "Kode verifikasi tidak valid atau sudah kadaluarsa",
+        message: "Kode verifikasi tidak valid atau sudah kedaluwarsa",
       }
     }
 
-    // ✅ Anti brute-force: Cek jumlah percobaan gagal
+    // anti-brute force lockout
     if (token.jumlahGagal >= OTP_MAX_ATTEMPTS) {
-      // Invalidate token
       await prisma.passwordResetToken.update({
         where: { id: token.id },
         data: { digunakan: true },
       })
       return {
         success: false,
-        message:
-          "Terlalu banyak percobaan salah. Silakan minta kode verifikasi baru.",
+        message: "Terlalu banyak percobaan salah. Silakan minta kode verifikasi baru.",
       }
     }
 
-    // Verifikasi OTP
     const isValid = await verifyOtp(otp, token.kodeOtpHash)
 
     if (!isValid) {
-      // Increment counter gagal
       await prisma.passwordResetToken.update({
         where: { id: token.id },
         data: { jumlahGagal: { increment: 1 } },
@@ -192,21 +163,17 @@ export async function verifyResetOtp(
       }
     }
 
-    // OTP valid — return resetToken (ID token yang sudah diverifikasi)
     return {
       success: true,
-      message: "Kode verifikasi berhasil",
+      message: "Verifikasi kode berhasil",
       data: { resetToken: token.id },
     }
   } catch (error: any) {
     console.error("Error verifyResetOtp:", error)
-    return { success: false, message: "Terjadi kesalahan. Silakan coba lagi." }
+    return { success: false, message: "Gagal memproses verifikasi OTP" }
   }
 }
 
-/**
- * Step 3: Reset Password — Set password baru & invalidate semua session
- */
 export async function resetPassword(
   email: string,
   resetTokenId: string,
@@ -216,20 +183,19 @@ export async function resetPassword(
   try {
     const normalizedEmail = email.toLowerCase().trim()
 
-    // Validasi password baru
     if (newPassword.length < 8) {
-      return { success: false, message: "Password minimal 8 karakter" }
+      return { success: false, message: "Password minimal harus 8 karakter" }
     }
 
     if (!/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
       return {
         success: false,
-        message: "Password harus mengandung huruf dan angka",
+        message: "Password harus mengandung kombinasi huruf dan angka",
       }
     }
 
     if (newPassword !== confirmPassword) {
-      return { success: false, message: "Konfirmasi password tidak cocok" }
+      return { success: false, message: "Konfirmasi password baru tidak cocok" }
     }
 
     const user = await prisma.user.findUnique({
@@ -237,10 +203,9 @@ export async function resetPassword(
     })
 
     if (!user) {
-      return { success: false, message: "Reset token tidak valid" }
+      return { success: false, message: "Token reset tidak valid" }
     }
 
-    // Verifikasi token masih valid
     const token = await prisma.passwordResetToken.findFirst({
       where: {
         id: resetTokenId,
@@ -253,13 +218,12 @@ export async function resetPassword(
     if (!token) {
       return {
         success: false,
-        message: "Token reset tidak valid atau sudah kadaluarsa",
+        message: "Token reset tidak valid atau sudah kedaluwarsa",
       }
     }
 
     const supabaseAdmin = createSupabaseAdmin()
 
-    // Update password di Supabase Auth
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       user.authId,
       { password: newPassword }
@@ -272,24 +236,20 @@ export async function resetPassword(
       }
     }
 
-    // ✅ Invalidate semua session aktif (logout semua device)
+    // Invalidate semua session aktif (global sign-out)
     await supabaseAdmin.auth.admin.signOut(user.authId)
 
-    // Update database Prisma
     await prisma.$transaction(async (tx) => {
-      // Tandai token sebagai sudah digunakan
       await tx.passwordResetToken.update({
         where: { id: token.id },
         data: { digunakan: true },
       })
 
-      // Invalidate semua token lain yang masih aktif
       await tx.passwordResetToken.updateMany({
         where: { userId: user.id, digunakan: false },
         data: { digunakan: true },
       })
 
-      // Update flag user
       await tx.user.update({
         where: { id: user.id },
         data: {
@@ -301,14 +261,13 @@ export async function resetPassword(
 
     return {
       success: true,
-      message:
-        "Password berhasil diubah. Silakan login dengan password baru.",
+      message: "Password berhasil diubah. Silakan login kembali.",
     }
   } catch (error: any) {
     console.error("Error resetPassword:", error)
     return {
       success: false,
-      message: "Terjadi kesalahan. Silakan coba lagi.",
+      message: "Gagal menyetel password baru.",
     }
   }
 }

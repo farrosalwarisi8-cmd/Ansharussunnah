@@ -6,7 +6,6 @@ import { changePassword } from "@/actions/change-password"
 
 export async function POST(request: NextRequest) {
   try {
-    // Harus login (role apapun)
     const auth = await authenticateApiRequest(request)
     if (!auth.authenticated) return auth.errorResponse!
 
@@ -14,7 +13,7 @@ export async function POST(request: NextRequest) {
 
     if (!currentPassword || !newPassword || !confirmPassword) {
       return NextResponse.json(
-        { success: false, message: "Semua field wajib diisi" },
+        { success: false, message: "Semua data wajib dilengkapi" },
         { status: 400 }
       )
     }

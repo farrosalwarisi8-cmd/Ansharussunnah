@@ -5,16 +5,30 @@
 import prisma from "@/lib/prisma"
 import { generateNomorPendaftaran } from "@/lib/registration-number"
 import { pendaftaranSchema } from "@/lib/validations/pendaftaran"
+import { rateLimit, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
+import { Prisma } from "@prisma/client"
 
-/**
- * Server Action untuk membuat pendaftaran baru (PUBLIC - tanpa auth)
- */
+const MAX_RETRY = 5
+
 export async function createPendaftaran(
   formData: FormData
 ): Promise<ActionResponse<{ nomorPendaftaran: string }>> {
   try {
-    // 1. Parse & validasi data form
+    // ✅ Rate Limiting: 5 pendaftaran / 10 menit per IP
+    const ip = await getClientIpFromHeaders()
+    const limiter = rateLimit(`create-pendaftaran:${ip}`, {
+      maxRequests: 5,
+      windowMs: 10 * 60 * 1000,
+    })
+
+    if (!limiter.success) {
+      return {
+        success: false,
+        message: "Terlalu banyak permintaan pendaftaran. Silakan coba lagi dalam 10 menit.",
+      }
+    }
+
     const rawData = {
       namaLengkap: formData.get("namaLengkap") as string,
       tempatLahir: formData.get("tempatLahir") as string,
@@ -47,24 +61,16 @@ export async function createPendaftaran(
 
     const data = validation.data
 
-    // 2. Cek apakah jenjang tujuan valid
     const jenjang = await prisma.jenjang.findUnique({
       where: { id: data.jenjangTujuanId },
     })
     if (!jenjang) {
-      return {
-        success: false,
-        message: "Jenjang tujuan tidak ditemukan",
-      }
+      return { success: false, message: "Jenjang tujuan tidak ditemukan" }
     }
 
-    // 3. Cek apakah kelas tujuan valid (jika diisi)
     if (data.kelasTujuanId) {
       const kelas = await prisma.kelas.findFirst({
-        where: {
-          id: data.kelasTujuanId,
-          jenjangId: data.jenjangTujuanId,
-        },
+        where: { id: data.kelasTujuanId, jenjangId: data.jenjangTujuanId },
       })
       if (!kelas) {
         return {
@@ -74,56 +80,76 @@ export async function createPendaftaran(
       }
     }
 
-    // 4. Parse dokumen pendukung dari FormData
     const dokKK = formData.get("dokKartuKeluarga") as string | null
     const dokAkte = formData.get("dokAkteLahir") as string | null
     const dokFoto = formData.get("dokFoto") as string | null
     const dokLainnyaRaw = formData.getAll("dokLainnya") as string[]
 
-    // 5. Generate nomor pendaftaran
-    const nomorPendaftaran = await generateNomorPendaftaran()
-
-    // 6. Buat record pendaftaran di database
     const biayaPendaftaran = parseFloat(
       process.env.NEXT_PUBLIC_REGISTRATION_FEE || "500000"
     )
 
-    const pendaftaran = await prisma.pendaftaran.create({
-      data: {
-        nomorPendaftaran,
-        namaLengkap: data.namaLengkap,
-        tempatLahir: data.tempatLahir,
-        tanggalLahir: new Date(data.tanggalLahir),
-        jenisKelamin: data.jenisKelamin as "LAKI_LAKI" | "PEREMPUAN",
-        alamatSiswa: data.alamatSiswa,
-        nisn: data.nisn,
-        namaOrangTua: data.namaOrangTua,
-        noHpOrangTua: data.noHpOrangTua,
-        emailOrangTua: data.emailOrangTua,
-        alamatOrangTua: data.alamatOrangTua,
-        jenjangTujuanId: data.jenjangTujuanId,
-        kelasTujuanId: data.kelasTujuanId,
-        dokKartuKeluarga: dokKK,
-        dokAkteLahir: dokAkte,
-        dokFoto: dokFoto,
-        dokLainnya: dokLainnyaRaw.filter(Boolean),
-        status: "MENUNGGU_PEMBAYARAN",
-        biayaPendaftaran,
-      },
-    })
+    let lastError: Error | null = null
 
+    // ✅ Handle Race Condition dengan retry logic untuk record nomorPendaftaran unik
+    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+      try {
+        const nomorPendaftaran = await generateNomorPendaftaran()
+
+        const pendaftaran = await prisma.pendaftaran.create({
+          data: {
+            nomorPendaftaran,
+            namaLengkap: data.namaLengkap,
+            tempatLahir: data.tempatLahir,
+            tanggalLahir: new Date(data.tanggalLahir),
+            jenisKelamin: data.jenisKelamin as "LAKI_LAKI" | "PEREMPUAN",
+            alamatSiswa: data.alamatSiswa,
+            nisn: data.nisn,
+            namaOrangTua: data.namaOrangTua,
+            noHpOrangTua: data.noHpOrangTua,
+            emailOrangTua: data.emailOrangTua,
+            alamatOrangTua: data.alamatOrangTua,
+            jenjangTujuanId: data.jenjangTujuanId,
+            kelasTujuanId: data.kelasTujuanId,
+            dokKartuKeluarga: dokKK,
+            dokAkteLahir: dokAkte,
+            dokFoto: dokFoto,
+            dokLainnya: dokLainnyaRaw.filter(Boolean),
+            status: "MENUNGGU_PEMBAYARAN",
+            biayaPendaftaran,
+          },
+        })
+
+        return {
+          success: true,
+          message: "Pendaftaran berhasil dibuat",
+          data: { nomorPendaftaran: pendaftaran.nomorPendaftaran },
+        }
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002" &&
+          (error.meta?.target as string[])?.includes("nomor_pendaftaran")
+        ) {
+          console.warn(`Nomor Pendaftaran bentrok, mencoba kembali (attempt ${attempt}/${MAX_RETRY})`)
+          lastError = error
+          await new Promise((resolve) => setTimeout(resolve, 50 * attempt + Math.random() * 100))
+          continue
+        }
+        throw error
+      }
+    }
+
+    console.error("Gagal men-generate nomor pendaftaran yang unik:", lastError)
     return {
-      success: true,
-      message: "Pendaftaran berhasil dibuat",
-      data: {
-        nomorPendaftaran: pendaftaran.nomorPendaftaran,
-      },
+      success: false,
+      message: "Sistem sedang padat. Silakan dicoba beberapa saat lagi.",
     }
   } catch (error) {
     console.error("Error createPendaftaran:", error)
     return {
       success: false,
-      message: "Terjadi kesalahan saat memproses pendaftaran. Silakan coba lagi.",
+      message: "Gagal memproses pendaftaran baru.",
     }
   }
 }

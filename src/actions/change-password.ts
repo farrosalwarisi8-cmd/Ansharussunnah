@@ -16,7 +16,6 @@ export async function changePassword(
   try {
     const user = await requireAuth()
 
-    // Validasi input
     if (newPassword.length < 8) {
       return { success: false, message: "Password baru minimal 8 karakter" }
     }
@@ -24,7 +23,7 @@ export async function changePassword(
     if (!/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
       return {
         success: false,
-        message: "Password baru harus mengandung huruf dan angka",
+        message: "Password baru harus berupa kombinasi huruf dan angka",
       }
     }
 
@@ -41,7 +40,7 @@ export async function changePassword(
 
     const supabaseAdmin = createSupabaseAdmin()
 
-    // Verifikasi password lama via Supabase Auth
+    // Verifikasi validitas password saat ini
     const { data: signInData, error: signInError } =
       await supabaseAdmin.auth.signInWithPassword({
         email: user.email,
@@ -49,10 +48,10 @@ export async function changePassword(
       })
 
     if (signInError || !signInData.user) {
-      return { success: false, message: "Password saat ini salah" }
+      return { success: false, message: "Password saat ini yang Anda masukkan salah" }
     }
 
-    // Update password di Supabase Auth
+    // Update password di level Auth
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       user.authId,
       { password: newPassword }
@@ -65,7 +64,6 @@ export async function changePassword(
       }
     }
 
-    // Update flag di database Prisma
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -74,14 +72,14 @@ export async function changePassword(
       },
     })
 
-    // Invalidate semua session lain
+    // Sign out global
     await supabaseAdmin.auth.admin.signOut(user.authId)
 
     revalidatePath("/", "layout")
 
     return {
       success: true,
-      message: "Password berhasil diubah. Silakan login ulang.",
+      message: "Password berhasil diperbarui. Silakan login kembali.",
     }
   } catch (error: any) {
     console.error("Error changePassword:", error)

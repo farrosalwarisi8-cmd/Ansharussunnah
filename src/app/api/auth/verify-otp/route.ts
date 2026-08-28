@@ -2,20 +2,19 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { verifyResetOtp } from "@/actions/password-reset"
-import { rateLimit, getClientIp } from "@/lib/rate-limit"
+import { rateLimitAsync, getClientIp } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
   try {
-    // Rate limit: 5 percobaan per menit per IP
     const ip = getClientIp(request)
-    const limiter = rateLimit(`verify-otp:${ip}`, {
+    const limiter = await rateLimitAsync(`api-verify-otp:${ip}`, {
       maxRequests: 5,
       windowMs: 60 * 1000,
     })
 
     if (!limiter.success) {
       return NextResponse.json(
-        { success: false, message: "Terlalu banyak percobaan. Coba lagi nanti." },
+        { success: false, message: "Terlalu banyak percobaan. Coba lagi dalam 1 menit." },
         { status: 429 }
       )
     }
