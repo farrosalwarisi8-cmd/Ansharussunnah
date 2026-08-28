@@ -43,15 +43,17 @@ enum StatusVerifikasiBukti {
 // ============================================
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  nama      String
-  role      Role
-  avatar    String?
-  authId    String   @unique @map("auth_id") // Supabase Auth UID
-  aktif     Boolean  @default(true)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  nama               String
+  role               Role
+  avatar             String?
+  authId             String   @unique @map("auth_id")
+  aktif              Boolean  @default(true)
+  mustChangePassword Boolean  @default(false) @map("must_change_password") // NEW - flag untuk paksa ganti password
+  lastPasswordChange DateTime? @map("last_password_change")                 // NEW - untuk audit
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   // Relasi berdasarkan role
   guru     Guru?
@@ -62,19 +64,21 @@ model User {
   verifikasiBuktiTransfer BuktiTransferPendaftaran[] @relation("VerifiedBy")
   verifikasiPendaftaran   Pendaftaran[]              @relation("VerifiedBy")
 
+  // Relasi OTP reset password
+  passwordResetTokens PasswordResetToken[]
+
   @@map("users")
 }
 
 model Guru {
-  id       String  @id @default(cuid())
-  userId   String  @unique @map("user_id")
-  nip      String? @unique
-  jabatan  String?
-  noHp     String? @map("no_hp")
+  id      String  @id @default(cuid())
+  userId  String  @unique @map("user_id")
+  nip     String? @unique
+  jabatan String?
+  noHp    String? @map("no_hp")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Guru bisa jadi wali kelas
   waliKelas Kelas[] @relation("WaliKelas")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -84,21 +88,20 @@ model Guru {
 }
 
 model Siswa {
-  id              String       @id @default(cuid())
-  userId          String       @unique @map("user_id")
-  nisn            String?      @unique
-  tempatLahir     String?      @map("tempat_lahir")
-  tanggalLahir    DateTime?    @map("tanggal_lahir")
-  jenisKelamin    JenisKelamin @map("jenis_kelamin")
-  alamat          String?
-  kelasId         String?      @map("kelas_id")
-  pendaftaranId   String?      @unique @map("pendaftaran_id")
+  id            String       @id @default(cuid())
+  userId        String       @unique @map("user_id")
+  nisn          String?      @unique
+  tempatLahir   String?      @map("tempat_lahir")
+  tanggalLahir  DateTime?    @map("tanggal_lahir")
+  jenisKelamin  JenisKelamin @map("jenis_kelamin")
+  alamat        String?
+  kelasId       String?      @map("kelas_id")
+  pendaftaranId String?      @unique @map("pendaftaran_id")
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   kelas       Kelas?       @relation(fields: [kelasId], references: [id])
   pendaftaran Pendaftaran? @relation(fields: [pendaftaranId], references: [id])
 
-  // Relasi ke orang tua (many-to-many)
   orangTua ParentStudent[]
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -115,7 +118,6 @@ model OrangTua {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Relasi ke siswa (many-to-many)
   siswa ParentStudent[]
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -125,10 +127,10 @@ model OrangTua {
 }
 
 model ParentStudent {
-  id        String @id @default(cuid())
+  id         String @id @default(cuid())
   orangTuaId String @map("orang_tua_id")
   siswaId    String @map("siswa_id")
-  hubungan   String @default("Orang Tua") // Ayah, Ibu, Wali
+  hubungan   String @default("Orang Tua")
 
   orangTua OrangTua @relation(fields: [orangTuaId], references: [id], onDelete: Cascade)
   siswa    Siswa    @relation(fields: [siswaId], references: [id], onDelete: Cascade)
@@ -144,9 +146,9 @@ model ParentStudent {
 // ============================================
 
 model Jenjang {
-  id     String @id @default(cuid())
-  nama   String @unique // "Kelas 1", "Kelas 2", "X", "XI", "XII"
-  urutan Int    @unique // untuk sorting: 1, 2, 3, ...
+  id     String  @id @default(cuid())
+  nama   String  @unique
+  urutan Int     @unique
   aktif  Boolean @default(true)
 
   kelas       Kelas[]
@@ -159,12 +161,12 @@ model Jenjang {
 }
 
 model Kelas {
-  id        String  @id @default(cuid())
-  nama      String  // "1A", "1B", "XI-IPA-1"
-  jenjangId String  @map("jenjang_id")
+  id          String  @id @default(cuid())
+  nama        String
+  jenjangId   String  @map("jenjang_id")
   waliKelasId String? @map("wali_kelas_id")
-  kapasitas Int     @default(30)
-  aktif     Boolean @default(true)
+  kapasitas   Int     @default(30)
+  aktif       Boolean @default(true)
 
   jenjang   Jenjang @relation(fields: [jenjangId], references: [id], onDelete: Cascade)
   waliKelas Guru?   @relation("WaliKelas", fields: [waliKelasId], references: [id])
@@ -184,47 +186,40 @@ model Kelas {
 // ============================================
 
 model Pendaftaran {
-  id                String            @id @default(cuid())
-  nomorPendaftaran  String            @unique @map("nomor_pendaftaran") // Auto-generated: REG-2024-XXXXX
-  
-  // Data Calon Siswa
-  namaLengkap      String            @map("nama_lengkap")
-  tempatLahir      String            @map("tempat_lahir")
-  tanggalLahir     DateTime          @map("tanggal_lahir")
-  jenisKelamin     JenisKelamin      @map("jenis_kelamin")
-  alamatSiswa      String            @map("alamat_siswa")
-  nisn             String?
+  id               String @id @default(cuid())
+  nomorPendaftaran String @unique @map("nomor_pendaftaran")
 
-  // Data Orang Tua / Wali
-  namaOrangTua     String            @map("nama_orang_tua")
-  noHpOrangTua     String            @map("no_hp_orang_tua")
-  emailOrangTua    String            @map("email_orang_tua")
-  alamatOrangTua   String?           @map("alamat_orang_tua")
+  namaLengkap  String       @map("nama_lengkap")
+  tempatLahir  String       @map("tempat_lahir")
+  tanggalLahir DateTime     @map("tanggal_lahir")
+  jenisKelamin JenisKelamin @map("jenis_kelamin")
+  alamatSiswa  String       @map("alamat_siswa")
+  nisn         String?
 
-  // Tujuan Pendaftaran
-  jenjangTujuanId  String            @map("jenjang_tujuan_id")
-  kelasTujuanId    String?           @map("kelas_tujuan_id")
+  namaOrangTua   String  @map("nama_orang_tua")
+  noHpOrangTua   String  @map("no_hp_orang_tua")
+  emailOrangTua  String  @map("email_orang_tua")
+  alamatOrangTua String? @map("alamat_orang_tua")
 
-  // Dokumen Pendukung (URLs di Supabase Storage)
-  dokKartuKeluarga String?           @map("dok_kartu_keluarga")
-  dokAkteLahir     String?           @map("dok_akte_lahir")
-  dokFoto          String?           @map("dok_foto")
-  dokLainnya       String[]          @map("dok_lainnya") @default([])
+  jenjangTujuanId String  @map("jenjang_tujuan_id")
+  kelasTujuanId   String? @map("kelas_tujuan_id")
 
-  // Status & Pembayaran
+  dokKartuKeluarga String?  @map("dok_kartu_keluarga")
+  dokAkteLahir     String?  @map("dok_akte_lahir")
+  dokFoto          String?  @map("dok_foto")
+  dokLainnya       String[] @default([]) @map("dok_lainnya")
+
   status           StatusPendaftaran @default(MENUNGGU_PEMBAYARAN)
   biayaPendaftaran Decimal           @map("biaya_pendaftaran") @db.Decimal(12, 2)
   catatanAdmin     String?           @map("catatan_admin")
   alasanPenolakan  String?           @map("alasan_penolakan")
 
-  // Verifikasi
-  diverifikasiOlehId String?         @map("diverifikasi_oleh_id")
-  waktuVerifikasi    DateTime?       @map("waktu_verifikasi")
+  diverifikasiOlehId String?   @map("diverifikasi_oleh_id")
+  waktuVerifikasi    DateTime? @map("waktu_verifikasi")
 
-  // Relasi
-  jenjangTujuan    Jenjang           @relation(fields: [jenjangTujuanId], references: [id])
-  kelasTujuan      Kelas?            @relation(fields: [kelasTujuanId], references: [id])
-  diverifikasiOleh User?             @relation("VerifiedBy", fields: [diverifikasiOlehId], references: [id])
+  jenjangTujuan    Jenjang                    @relation(fields: [jenjangTujuanId], references: [id])
+  kelasTujuan      Kelas?                     @relation(fields: [kelasTujuanId], references: [id])
+  diverifikasiOleh User?                      @relation("VerifiedBy", fields: [diverifikasiOlehId], references: [id])
   buktiTransfer    BuktiTransferPendaftaran[]
   siswa            Siswa?
 
@@ -235,23 +230,43 @@ model Pendaftaran {
 }
 
 model BuktiTransferPendaftaran {
-  id              String                @id @default(cuid())
-  pendaftaranId   String                @map("pendaftaran_id")
-  urlFile         String                @map("url_file") // Path di Supabase Storage
-  namaFile        String                @map("nama_file")
-  ukuranFile      Int?                  @map("ukuran_file") // dalam bytes
-  status          StatusVerifikasiBukti @default(PENDING)
-  catatanVerifikasi String?             @map("catatan_verifikasi")
+  id                String                @id @default(cuid())
+  pendaftaranId     String                @map("pendaftaran_id")
+  urlFile           String                @map("url_file")
+  namaFile          String                @map("nama_file")
+  ukuranFile        Int?                  @map("ukuran_file")
+  status            StatusVerifikasiBukti @default(PENDING)
+  catatanVerifikasi String?               @map("catatan_verifikasi")
 
-  // Verifikasi
-  diverifikasiOlehId String?           @map("diverifikasi_oleh_id")
-  waktuVerifikasi    DateTime?         @map("waktu_verifikasi")
+  diverifikasiOlehId String?   @map("diverifikasi_oleh_id")
+  waktuVerifikasi    DateTime? @map("waktu_verifikasi")
 
-  // Relasi
-  pendaftaran      Pendaftaran          @relation(fields: [pendaftaranId], references: [id], onDelete: Cascade)
-  diverifikasiOleh User?               @relation("VerifiedBy", fields: [diverifikasiOlehId], references: [id])
+  pendaftaran      Pendaftaran @relation(fields: [pendaftaranId], references: [id], onDelete: Cascade)
+  diverifikasiOleh User?       @relation("VerifiedBy", fields: [diverifikasiOlehId], references: [id])
 
   waktuUpload DateTime @default(now()) @map("waktu_upload")
 
   @@map("bukti_transfer_pendaftarans")
+}
+
+// ============================================
+// PASSWORD RESET (OTP) — NEW
+// ============================================
+
+model PasswordResetToken {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  kodeOtpHash  String   @map("kode_otp_hash")   // OTP di-hash sebelum disimpan
+  expiredAt    DateTime @map("expired_at")
+  digunakan    Boolean  @default(false)
+  jumlahGagal  Int      @default(0) @map("jumlah_gagal") // Counter untuk anti-brute force
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, digunakan])
+  @@index([expiredAt])
+  @@map("password_reset_tokens")
 }

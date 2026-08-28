@@ -2,7 +2,10 @@
 
 import type { Prisma } from "@prisma/client"
 
-// Model Base Types dari Prisma
+// ============================================
+// BASE MODEL TYPES
+// ============================================
+
 export type User = Prisma.UserGetPayload<Record<string, never>>
 export type Guru = Prisma.GuruGetPayload<Record<string, never>>
 export type Siswa = Prisma.SiswaGetPayload<Record<string, never>>
@@ -12,8 +15,12 @@ export type Kelas = Prisma.KelasGetPayload<Record<string, never>>
 export type Pendaftaran = Prisma.PendaftaranGetPayload<Record<string, never>>
 export type BuktiTransferPendaftaran = Prisma.BuktiTransferPendaftaranGetPayload<Record<string, never>>
 export type ParentStudent = Prisma.ParentStudentGetPayload<Record<string, never>>
+export type PasswordResetToken = Prisma.PasswordResetTokenGetPayload<Record<string, never>>
 
-// User dengan relasi lengkap
+// ============================================
+// COMPOSITE TYPES (WITH RELATIONS)
+// ============================================
+
 export type UserWithRelations = Prisma.UserGetPayload<{
   include: {
     guru: true
@@ -30,7 +37,6 @@ export type UserWithRelations = Prisma.UserGetPayload<{
   }
 }>
 
-// Kelas dengan relasi jenjang dan wali kelas
 export type KelasWithRelations = Prisma.KelasGetPayload<{
   include: {
     jenjang: true
@@ -47,7 +53,6 @@ export type KelasWithRelations = Prisma.KelasGetPayload<{
   }
 }>
 
-// Jenjang dengan daftar kelas
 export type JenjangWithKelas = Prisma.JenjangGetPayload<{
   include: {
     kelas: {
@@ -67,7 +72,6 @@ export type JenjangWithKelas = Prisma.JenjangGetPayload<{
   }
 }>
 
-// Pendaftaran dengan relasi
 export type PendaftaranWithRelations = Prisma.PendaftaranGetPayload<{
   include: {
     jenjangTujuan: true
@@ -77,7 +81,10 @@ export type PendaftaranWithRelations = Prisma.PendaftaranGetPayload<{
   }
 }>
 
-// Response standard Server Action
+// ============================================
+// API RESPONSE TYPES
+// ============================================
+
 export type ActionResponse<T = unknown> = {
   success: boolean
   message: string

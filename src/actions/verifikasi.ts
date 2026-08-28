@@ -6,6 +6,8 @@ import prisma from "@/lib/prisma"
 import { requireGuru } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getSignedUrl } from "@/lib/storage"
+import { generateSecurePassword } from "@/lib/password"
+import { sendEmail, buildKredensialEmail } from "@/lib/email"
 import {
   verifikasiPendaftaranSchema,
   type VerifikasiPendaftaranValues,
@@ -18,9 +20,6 @@ import { revalidatePath } from "next/cache"
 // 1. GET DATA PENDAFTARAN (DASHBOARD GURU)
 // ========================================================
 
-/**
- * Mengambil daftar pendaftaran untuk dashboard admin dengan filter status & search
- */
 export async function getPendaftaranList(options?: {
   status?: StatusPendaftaran
   search?: string
@@ -65,9 +64,7 @@ export async function getPendaftaranList(options?: {
         include: {
           jenjangTujuan: true,
           kelasTujuan: true,
-          buktiTransfer: {
-            orderBy: { waktuUpload: "desc" },
-          },
+          buktiTransfer: { orderBy: { waktuUpload: "desc" } },
           diverifikasiOleh: true,
         },
       }),
@@ -92,9 +89,6 @@ export async function getPendaftaranList(options?: {
   }
 }
 
-/**
- * Mengambil detail satu pendaftaran lengkap dengan Signed URL untuk melihat file private
- */
 export async function getPendaftaranDetail(
   pendaftaranId: string
 ): Promise<
@@ -116,9 +110,7 @@ export async function getPendaftaranDetail(
       include: {
         jenjangTujuan: true,
         kelasTujuan: true,
-        buktiTransfer: {
-          orderBy: { waktuUpload: "desc" },
-        },
+        buktiTransfer: { orderBy: { waktuUpload: "desc" } },
         diverifikasiOleh: true,
       },
     })
@@ -127,7 +119,6 @@ export async function getPendaftaranDetail(
       return { success: false, message: "Data pendaftaran tidak ditemukan" }
     }
 
-    // Generate Signed URLs untuk file-file private (berlaku 1 jam)
     const [signedKK, signedAkte, signedFoto, signedBukti] = await Promise.all([
       pendaftaran.dokKartuKeluarga
         ? getSignedUrl("dokumen-pendaftaran", pendaftaran.dokKartuKeluarga)
@@ -168,20 +159,9 @@ export async function getPendaftaranDetail(
 }
 
 // ========================================================
-// 2. SERVER ACTION: VERIFIKASI PENDAFTARAN & AUTO-CREATE USER
+// 2. VERIFIKASI PENDAFTARAN — FIXED: Random Password + Email
 // ========================================================
 
-/**
- * Verifikasi Pendaftaran:
- * - Jika DITOLAK: ubah status pendaftaran & bukti transfer menjadi DITOLAK + catat alasan penolakan.
- * - Jika DITERIMA:
- *   1. Buat User Orang Tua di Supabase Auth + Database.
- *   2. Buat User Siswa di Supabase Auth + Database.
- *   3. Buat relasi ParentStudent.
- *   4. Hubungkan Siswa ke Kelas tujuan.
- *   5. Update status pendaftaran menjadi DITERIMA.
- *   Semua dieksekusi dalam satu Prisma Transaction!
- */
 export async function verifikasiPendaftaran(
   payload: VerifikasiPendaftaranValues
 ): Promise<ActionResponse> {
@@ -202,10 +182,7 @@ export async function verifikasiPendaftaran(
     const pendaftaran = await prisma.pendaftaran.findUnique({
       where: { id: pendaftaranId },
       include: {
-        buktiTransfer: {
-          orderBy: { waktuUpload: "desc" },
-          take: 1,
-        },
+        buktiTransfer: { orderBy: { waktuUpload: "desc" }, take: 1 },
       },
     })
 
@@ -216,7 +193,7 @@ export async function verifikasiPendaftaran(
     const latestBuktiId = pendaftaran.buktiTransfer[0]?.id
 
     // ==========================================
-    // SKENARIO A: PENDAFTARAN DITOLAK
+    // SKENARIO A: DITOLAK
     // ==========================================
     if (status === "DITOLAK") {
       if (!alasanPenolakan) {
@@ -227,19 +204,17 @@ export async function verifikasiPendaftaran(
       }
 
       await prisma.$transaction(async (tx) => {
-        // Update pendaftaran
         await tx.pendaftaran.update({
           where: { id: pendaftaranId },
           data: {
             status: StatusPendaftaran.DITOLAK,
             catatanAdmin: catatanAdmin || null,
-            alasanPenolakan: alasanPenolakan,
+            alasanPenolakan,
             diverifikasiOlehId: guruUser.id,
             waktuVerifikasi: new Date(),
           },
         })
 
-        // Update status bukti transfer jika ada
         if (latestBuktiId) {
           await tx.buktiTransferPendaftaran.update({
             where: { id: latestBuktiId },
@@ -256,32 +231,30 @@ export async function verifikasiPendaftaran(
       revalidatePath("/dashboard/pendaftaran")
       return {
         success: true,
-        message: `Pendaftaran ${pendaftaran.nomorPendaftaran} telah DITOLAK. Calon siswa dapat mengunggah bukti transfer ulang.`,
+        message: `Pendaftaran ${pendaftaran.nomorPendaftaran} telah DITOLAK.`,
       }
     }
 
     // ==========================================
-    // SKENARIO B: PENDAFTARAN DITERIMA (APPROVE)
+    // SKENARIO B: DITERIMA — RANDOM PASSWORD + EMAIL
     // ==========================================
     if (status === "DITERIMA") {
       const supabaseAdmin = createSupabaseAdmin()
 
-      // 1. Generate kredensial login otomatis
-      // Email orang tua menggunakan email pendaftaran
-      const emailOrtu = pendaftaran.emailOrangTua.toLowerCase().trim()
-      const defaultPasswordOrtu = `Ortu@${pendaftaran.nomorPendaftaran.replace(/[^a-zA-Z0-9]/g, "")}`
+      // ✅ FIX: Generate password RANDOM, bukan dari nomor pendaftaran
+      const passwordOrangTua = generateSecurePassword(14)
+      const passwordSiswa = generateSecurePassword(14)
 
-      // Email siswa: jika tidak ada email, buat format internal `siswa.<nomor>@sekolah.internal`
+      const emailOrtu = pendaftaran.emailOrangTua.toLowerCase().trim()
       const cleanNomor = pendaftaran.nomorPendaftaran.toLowerCase().replace(/[^a-z0-9]/g, "")
       const emailSiswa = `siswa.${cleanNomor}@sekolah.internal`
-      const defaultPasswordSiswa = `Siswa@${pendaftaran.nomorPendaftaran.replace(/[^a-zA-Z0-9]/g, "")}`
 
-      // 2. Buat User Supabase Auth untuk Orang Tua
+      // Buat User Supabase Auth untuk Orang Tua
       let authOrtuId: string
       const { data: authOrtuData, error: authOrtuError } =
         await supabaseAdmin.auth.admin.createUser({
           email: emailOrtu,
-          password: defaultPasswordOrtu,
+          password: passwordOrangTua,
           email_confirm: true,
           user_metadata: {
             nama: pendaftaran.namaOrangTua,
@@ -290,10 +263,9 @@ export async function verifikasiPendaftaran(
         })
 
       if (authOrtuError) {
-        // Jika user auth sudah ada sebelumnya, ambil user_id yang sudah ada
         if (authOrtuError.message.includes("already been registered")) {
-          const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers()
-          const matched = existingUser.users.find((u) => u.email === emailOrtu)
+          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
+          const matched = existingUsers.users.find((u) => u.email === emailOrtu)
           if (!matched) throw new Error("Gagal mengambil akun auth orang tua")
           authOrtuId = matched.id
         } else {
@@ -303,11 +275,11 @@ export async function verifikasiPendaftaran(
         authOrtuId = authOrtuData.user.id
       }
 
-      // 3. Buat User Supabase Auth untuk Siswa
+      // Buat User Supabase Auth untuk Siswa
       const { data: authSiswaData, error: authSiswaError } =
         await supabaseAdmin.auth.admin.createUser({
           email: emailSiswa,
-          password: defaultPasswordSiswa,
+          password: passwordSiswa,
           email_confirm: true,
           user_metadata: {
             nama: pendaftaran.namaLengkap,
@@ -320,12 +292,9 @@ export async function verifikasiPendaftaran(
       }
       const authSiswaId = authSiswaData.user.id
 
-      // 4. Eksekusi Transaction di Prisma
+      // Prisma Transaction: buat semua record + set mustChangePassword = true
       await prisma.$transaction(async (tx) => {
-        // A. Create/Find User & OrangTua
-        let userOrtu = await tx.user.findUnique({
-          where: { email: emailOrtu },
-        })
+        let userOrtu = await tx.user.findUnique({ where: { email: emailOrtu } })
 
         if (!userOrtu) {
           userOrtu = await tx.user.create({
@@ -334,6 +303,7 @@ export async function verifikasiPendaftaran(
               nama: pendaftaran.namaOrangTua,
               role: Role.ORANG_TUA,
               authId: authOrtuId,
+              mustChangePassword: true, // ✅ FIX: Paksa ganti password saat login pertama
               orangTua: {
                 create: {
                   noHp: pendaftaran.noHpOrangTua,
@@ -348,13 +318,13 @@ export async function verifikasiPendaftaran(
           where: { userId: userOrtu.id },
         })
 
-        // B. Create User & Siswa
         const userSiswa = await tx.user.create({
           data: {
             email: emailSiswa,
             nama: pendaftaran.namaLengkap,
             role: Role.SISWA,
             authId: authSiswaId,
+            mustChangePassword: true, // ✅ FIX: Paksa ganti password saat login pertama
             siswa: {
               create: {
                 nisn: pendaftaran.nisn || null,
@@ -373,7 +343,6 @@ export async function verifikasiPendaftaran(
           where: { userId: userSiswa.id },
         })
 
-        // C. Hubungkan Orang Tua dan Siswa (ParentStudent)
         if (orangTuaRecord && siswaRecord) {
           await tx.parentStudent.create({
             data: {
@@ -384,7 +353,6 @@ export async function verifikasiPendaftaran(
           })
         }
 
-        // D. Update Status Bukti Transfer
         if (latestBuktiId) {
           await tx.buktiTransferPendaftaran.update({
             where: { id: latestBuktiId },
@@ -396,7 +364,6 @@ export async function verifikasiPendaftaran(
           })
         }
 
-        // E. Update Pendaftaran menjadi DITERIMA
         await tx.pendaftaran.update({
           where: { id: pendaftaranId },
           data: {
@@ -408,17 +375,29 @@ export async function verifikasiPendaftaran(
         })
       })
 
+      // ✅ FIX: Kirim kredensial via EMAIL, bukan ditampilkan di UI/response
+      await sendEmail({
+        to: emailOrtu,
+        subject: `Pendaftaran Diterima — ${pendaftaran.nomorPendaftaran}`,
+        html: buildKredensialEmail({
+          namaOrangTua: pendaftaran.namaOrangTua,
+          emailOrangTua: emailOrtu,
+          passwordOrangTua: passwordOrangTua,
+          namaSiswa: pendaftaran.namaLengkap,
+          emailSiswa: emailSiswa,
+          passwordSiswa: passwordSiswa,
+          nomorPendaftaran: pendaftaran.nomorPendaftaran,
+        }),
+      })
+
       revalidatePath("/dashboard/pendaftaran")
       return {
         success: true,
-        message: `Pendaftaran ${pendaftaran.nomorPendaftaran} BERHASIL DITERIMA. Akun Siswa & Orang Tua telah otomatis dibuat.`,
+        message: `Pendaftaran ${pendaftaran.nomorPendaftaran} DITERIMA. Kredensial login telah dikirim ke email ${emailOrtu}.`,
       }
     }
 
-    return {
-      success: false,
-      message: "Status verifikasi tidak dikenali",
-    }
+    return { success: false, message: "Status verifikasi tidak dikenali" }
   } catch (error: any) {
     console.error("Error verifikasiPendaftaran:", error)
     return {

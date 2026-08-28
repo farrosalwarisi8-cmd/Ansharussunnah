@@ -3,10 +3,34 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
+// Route yang boleh diakses tanpa login
+const PUBLIC_ROUTES = [
+  "/",
+  "/pendaftaran",
+  "/pendaftaran/sukses",
+  "/cek-pendaftaran",
+  "/login",
+  "/lupa-password",
+  "/api/cek-pendaftaran",
+  "/api/jenjang-kelas",
+  "/api/pendaftaran",
+  "/api/auth/login",
+]
+
+// Route yang hanya boleh diakses saat SUDAH login
+const AUTH_ROUTES = ["/dashboard", "/ganti-password"]
+
+// Route yang TIDAK boleh diakses jika sudah login (redirect ke dashboard)
+const GUEST_ONLY_ROUTES = ["/login", "/lupa-password"]
+
+function isPublicRoute(pathname: string): boolean {
+  return PUBLIC_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(route + "/")
+  )
+}
+
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+  let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,9 +44,7 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
-          supabaseResponse = NextResponse.next({
-            request,
-          })
+          supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -31,21 +53,31 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session jika ada
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Protect dashboard routes - redirect ke login jika belum login
-  if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
+  const { pathname } = request.nextUrl
+
+  // Abaikan static files
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/favicon") ||
+    pathname.includes(".")
+  ) {
+    return supabaseResponse
+  }
+
+  // Jika TIDAK login dan mencoba akses protected route
+  if (!user && !isPublicRoute(pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
-    url.searchParams.set("redirectedFrom", request.nextUrl.pathname)
+    url.searchParams.set("redirectedFrom", pathname)
     return NextResponse.redirect(url)
   }
 
-  // Redirect user yang sudah login agar tidak bisa akses halaman login lagi
-  if (user && request.nextUrl.pathname === "/login") {
+  // Jika SUDAH login dan mencoba akses halaman login/lupa-password
+  if (user && GUEST_ONLY_ROUTES.some((r) => pathname.startsWith(r))) {
     const url = request.nextUrl.clone()
     url.pathname = "/dashboard"
     return NextResponse.redirect(url)

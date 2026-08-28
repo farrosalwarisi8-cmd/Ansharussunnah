@@ -3,12 +3,12 @@
 "use server"
 
 import prisma from "@/lib/prisma"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import type { ActionResponse } from "@/types"
 
 /**
- * Server Action untuk upload bukti transfer (PUBLIC - tanpa auth)
- * File sudah diupload ke Supabase Storage dari client,
- * server action ini hanya menyimpan path-nya ke database.
+ * ✅ FIX: Verifikasi file benar-benar ada di Supabase Storage
+ * sebelum menyimpan record ke database.
  */
 export async function uploadBuktiTransferPendaftaran(
   formData: FormData
@@ -26,6 +26,24 @@ export async function uploadBuktiTransferPendaftaran(
       }
     }
 
+    // ✅ FIX: Validasi path file — cegah path traversal
+    // Path harus berada di folder transfer/{nomorPendaftaran}/
+    const expectedPrefix = `transfer/${nomorPendaftaran}/`
+    if (!urlFile.startsWith(expectedPrefix)) {
+      return {
+        success: false,
+        message: "Path file tidak valid. File harus berada di folder pendaftaran yang sesuai.",
+      }
+    }
+
+    // Cegah path traversal (../)
+    if (urlFile.includes("..") || urlFile.includes("//")) {
+      return {
+        success: false,
+        message: "Path file mengandung karakter tidak valid.",
+      }
+    }
+
     // Cek apakah pendaftaran ada
     const pendaftaran = await prisma.pendaftaran.findUnique({
       where: { nomorPendaftaran },
@@ -38,7 +56,7 @@ export async function uploadBuktiTransferPendaftaran(
       }
     }
 
-    // Cek status - hanya bisa upload jika MENUNGGU_PEMBAYARAN atau DITOLAK
+    // Cek status
     if (
       pendaftaran.status !== "MENUNGGU_PEMBAYARAN" &&
       pendaftaran.status !== "DITOLAK"
@@ -46,6 +64,31 @@ export async function uploadBuktiTransferPendaftaran(
       return {
         success: false,
         message: `Pendaftaran dengan status "${pendaftaran.status}" tidak dapat mengupload bukti transfer`,
+      }
+    }
+
+    // ✅ FIX: Verifikasi file benar-benar ada di Supabase Storage
+    const supabaseAdmin = createSupabaseAdmin()
+    const { data: fileList, error: listError } = await supabaseAdmin.storage
+      .from("bukti-transfer")
+      .list(`transfer/${nomorPendaftaran}`)
+
+    if (listError) {
+      console.error("Storage list error:", listError)
+      return {
+        success: false,
+        message: "Gagal memverifikasi file di storage.",
+      }
+    }
+
+    // Cek apakah file dengan nama yang sesuai benar-benar ada
+    const fileName = urlFile.split("/").pop()
+    const fileExists = fileList?.some((f) => f.name === fileName)
+
+    if (!fileExists) {
+      return {
+        success: false,
+        message: "File bukti transfer tidak ditemukan di storage. Silakan upload ulang.",
       }
     }
 
@@ -60,12 +103,12 @@ export async function uploadBuktiTransferPendaftaran(
       },
     })
 
-    // Update status pendaftaran menjadi MENUNGGU_VERIFIKASI
+    // Update status pendaftaran
     await prisma.pendaftaran.update({
       where: { id: pendaftaran.id },
       data: {
         status: "MENUNGGU_VERIFIKASI",
-        alasanPenolakan: null, // Hapus alasan penolakan sebelumnya jika ada
+        alasanPenolakan: null,
       },
     })
 
