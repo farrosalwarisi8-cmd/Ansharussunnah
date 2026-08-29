@@ -2,14 +2,14 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { rateLimit, getClientIp } from "@/lib/rate-limit"
+import { rateLimitAsync, getClientIp } from "@/lib/rate-limit"
 
 export async function GET(request: NextRequest) {
   try {
     // ✅ FIX: Rate limiting per IP — 5 request per menit
     const ip = getClientIp(request)
     const maxRequests = parseInt(process.env.RATE_LIMIT_CEK_PENDAFTARAN || "5")
-    const limiter = rateLimit(`cek-pendaftaran:${ip}`, {
+    const limiter = await rateLimitAsync(`cek-pendaftaran:${ip}`, {
       maxRequests,
       windowMs: 60 * 1000, // 1 menit
     })

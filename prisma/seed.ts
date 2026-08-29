@@ -197,7 +197,25 @@ async function main() {
   // ========================================================
   // 4. GURU-KELAS (Relasi Mengajar)
   // ========================================================
-  console.log("\n4. Membuat Relasi Guru Mengajar...")
+  console.log("\n4. Membuat Mata Pelajaran & Relasi Guru Mengajar...")
+
+  // Buat Mata Pelajaran terlebih dahulu
+  const mapelData = [
+    { kode: "ALQ", nama: "Al-Quran", kelompok: "A" },
+    { kode: "FIQ", nama: "Fiqih", kelompok: "A" },
+    { kode: "AQD", nama: "Aqidah Akhlak", kelompok: "A" },
+  ]
+
+  const mapelMap: Record<string, string> = {}
+  for (const m of mapelData) {
+    const mapel = await prisma.mataPelajaran.upsert({
+      where: { kode: m.kode },
+      update: {},
+      create: { kode: m.kode, nama: m.nama, kelompok: m.kelompok, aktif: true },
+    })
+    mapelMap[m.nama] = mapel.id
+  }
+  console.log("  ✔ 3 Mata Pelajaran berhasil dibuat")
 
   if (guruUser.guru) {
     const mapelKelas = [
@@ -210,17 +228,17 @@ async function main() {
     for (const mk of mapelKelas) {
       await prisma.guruKelas.upsert({
         where: {
-          guruId_kelasId_mataPelajaran: {
+          guruId_kelasId_mataPelajaranId: {
             guruId: guruUser.guru.id,
             kelasId: kelasMap[mk.kelasNama],
-            mataPelajaran: mk.mapel,
+            mataPelajaranId: mapelMap[mk.mapel],
           },
         },
         update: {},
         create: {
           guruId: guruUser.guru.id,
           kelasId: kelasMap[mk.kelasNama],
-          mataPelajaran: mk.mapel,
+          mataPelajaranId: mapelMap[mk.mapel],
         },
       })
     }

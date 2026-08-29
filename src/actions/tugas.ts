@@ -5,7 +5,7 @@
 import prisma from "@/lib/prisma"
 import { requireRole } from "@/lib/auth"
 import { verifyGuruAksesKelas } from "@/lib/guru-auth"
-import { rateLimit, getClientIpFromHeaders } from "@/lib/rate-limit"
+import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getSignedUrl } from "@/lib/storage"
 import {
@@ -510,7 +510,7 @@ export async function submitTugas(
   try {
     // Rate limit: 10 submit per 5 menit per IP
     const ip = await getClientIpFromHeaders()
-    const limiter = rateLimit(`submit-tugas:${ip}`, {
+    const limiter = await rateLimitAsync(`submit-tugas:${ip}`, {
       maxRequests: 10,
       windowMs: 5 * 60 * 1000,
     })

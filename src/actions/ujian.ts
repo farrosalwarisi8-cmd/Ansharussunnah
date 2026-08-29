@@ -17,7 +17,7 @@ import {
   type SubmitPengerjaanUjianValues,
   type NilaiEsaiValues,
 } from "@/lib/validations/ujian"
-import { rateLimit, getClientIpFromHeaders } from "@/lib/rate-limit"
+import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
 import { Role, StatusUjian, StatusPengerjaan, Prisma } from "@prisma/client"
 import { revalidatePath } from "next/cache"
@@ -614,7 +614,7 @@ export async function submitPengerjaanUjian(
 ): Promise<ActionResponse> {
   try {
     const ip = await getClientIpFromHeaders()
-    const limiter = rateLimit(`submit-ujian:${ip}`, {
+    const limiter = await rateLimitAsync(`submit-ujian:${ip}`, {
       maxRequests: 5,
       windowMs: 60 * 1000,
     })

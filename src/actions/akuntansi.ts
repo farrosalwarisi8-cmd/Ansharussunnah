@@ -4,7 +4,8 @@
 
 import prisma from "@/lib/prisma"
 import { requireAuth, requireRole } from "@/lib/auth"
-import { getClientIpFromHeaders, rateLimit } from "@/lib/rate-limit"
+import { verifyGuruAksesKelas } from "@/lib/guru-auth"
+import { getClientIpFromHeaders, rateLimitAsync } from "@/lib/rate-limit"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getSignedUrl } from "@/lib/storage"
 import {
@@ -173,7 +174,7 @@ export async function submitBuktiPembayaranSpp(
 ): Promise<ActionResponse> {
   try {
     const ip = await getClientIpFromHeaders()
-    const limiter = rateLimit(`submit-bukti-spp:${ip}`, {
+    const limiter = await rateLimitAsync(`submit-bukti-spp:${ip}`, {
       maxRequests: 5,
       windowMs: 5 * 60 * 1000,
     })
@@ -925,7 +926,21 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
       if (!hasAkses) {
         return { success: false, message: "Akses ditolak: Siswa ini bukan anak kandung Anda" }
       }
-    } else if (sessionUser.role !== Role.ADMIN_KEUANGAN && sessionUser.role !== Role.GURU) {
+    } else if (sessionUser.role === Role.GURU) {
+      // GURU hanya boleh melihat data SPP jika dia adalah wali kelas siswa tersebut
+      const siswaCheck = await prisma.siswa.findUnique({ where: { id: siswaId } })
+      if (!siswaCheck || !siswaCheck.kelasId) {
+        return { success: false, message: "Data siswa tidak valid" }
+      }
+      try {
+        const { roleInKelas } = await verifyGuruAksesKelas(siswaCheck.kelasId)
+        if (roleInKelas !== "WALI_KELAS") {
+          return { success: false, message: "Akses ditolak: Anda bukan wali kelas siswa ini" }
+        }
+      } catch {
+        return { success: false, message: "Akses ditolak: Anda bukan wali kelas siswa ini" }
+      }
+    } else if (sessionUser.role !== Role.ADMIN_KEUANGAN) {
       return { success: false, message: "Hak akses tidak valid" }
     }
 

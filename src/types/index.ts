@@ -34,6 +34,8 @@ export type KategoriTransaksi = Prisma.KategoriTransaksiGetPayload<Record<string
 export type TagihanSpp = Prisma.TagihanSppGetPayload<Record<string, never>>
 export type PembayaranSpp = Prisma.PembayaranSppGetPayload<Record<string, never>>
 export type TransaksiKeuangan = Prisma.TransaksiKeuanganGetPayload<Record<string, never>>
+export type MateriPembelajaran = Prisma.MateriPembelajaranGetPayload<Record<string, never>>
+export type RiwayatKelasSiswa = Prisma.RiwayatKelasSiswaGetPayload<Record<string, never>>
 
 // ============================================
 // COMPOSITE TYPES

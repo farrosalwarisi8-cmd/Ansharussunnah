@@ -445,7 +445,12 @@ export async function createOrUpdateCatatanRapor(
       return { success: false, message: "Data siswa tidak ditemukan" }
     }
 
-    const { user, guru } = await verifyGuruAksesKelas(siswa.kelas.id)
+    const { user, guru, roleInKelas } = await verifyGuruAksesKelas(siswa.kelas.id)
+
+    // Hanya wali kelas yang boleh menulis catatan rapor
+    if (roleInKelas !== "WALI_KELAS") {
+      return { success: false, message: "Akses ditolak: Hanya wali kelas yang dapat menulis catatan rapor" }
+    }
 
     // Upsert catatan rapor
     await prisma.catatanRapor.upsert({
@@ -510,7 +515,10 @@ export async function updateCatatanRapor(
     }
 
     if (catatanRapor.siswa.kelas) {
-      await verifyGuruAksesKelas(catatanRapor.siswa.kelas.id)
+      const { roleInKelas } = await verifyGuruAksesKelas(catatanRapor.siswa.kelas.id)
+      if (roleInKelas !== "WALI_KELAS") {
+        return { success: false, message: "Akses ditolak: Hanya wali kelas yang dapat mengubah catatan rapor" }
+      }
     }
 
     await prisma.catatanRapor.update({

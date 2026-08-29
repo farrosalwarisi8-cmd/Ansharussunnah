@@ -118,7 +118,8 @@ const rateLimiterInstance = createRateLimiter()
 // --- PUBLIC INTEGRATED EXPORTS ---
 
 /**
- * Sync-safe rate limit menggunakan Local Memory untuk fallback cepat.
+ * @deprecated Gunakan rateLimitAsync() untuk production. Fungsi ini hanya pakai in-memory
+ * yang TIDAK konsisten antara instance serverless di Vercel.
  */
 export function rateLimit(
   identifier: string,

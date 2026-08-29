@@ -86,6 +86,46 @@ export function buildKredensialEmail(params: {
 }
 
 /**
+ * Template email: Kredensial Akun Guru Baru
+ */
+export function buildKredensialGuruEmail(params: {
+  nama: string
+  email: string
+  password: string
+}): string {
+  return `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head><meta charset="UTF-8"></head>
+    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
+      <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h2 style="color: #1e40af; margin-top: 0;">👩‍🏫 Akun Guru Baru — Ansharussunnah</h2>
+        <p>Halo <strong>${params.nama}</strong>,</p>
+        <p>Anda telah terdaftar sebagai guru di sistem LMS Ansharussunnah. Berikut adalah informasi akun Anda:</p>
+        
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+        
+        <h3 style="color: #333;">🔐 Informasi Akun Login</h3>
+        
+        <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 12px 0;">
+          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.email}</code></p>
+          <p style="margin: 2px 0;">Password: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.password}</code></p>
+        </div>
+        
+        <div style="background: #fef3c7; border-radius: 8px; padding: 16px; margin: 16px 0;">
+          <p style="margin: 0; color: #92400e;">⚠️ <strong>PENTING:</strong> Saat pertama kali login, Anda akan diminta untuk mengganti password. Simpan informasi ini dengan aman dan jangan bagikan kepada siapapun.</p>
+        </div>
+        
+        <p style="color: #666; font-size: 13px; margin-top: 24px;">
+          Jika Anda tidak merasa mendaftar, abaikan email ini atau hubungi admin sekolah.
+        </p>
+      </div>
+    </body>
+    </html>
+  `
+}
+
+/**
  * Template email: OTP Lupa Password
  */
 export function buildOtpEmail(params: {

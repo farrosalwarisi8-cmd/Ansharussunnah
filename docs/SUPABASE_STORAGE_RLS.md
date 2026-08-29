@@ -17,6 +17,7 @@
 | `bukti-spp` | Bukti pembayaran SPP bulanan | Siswa/Orang Tua authenticated |
 | `tugas-siswa` | Submission tugas & lampiran instruksi guru | Siswa (submission), Guru (lampiran) |
 | `nota` | Bukti transaksi keuangan non-SPP | Admin Keuangan saja |
+| `materi` | Materi pembelajaran (file, PDF, dokumen) | Guru (upload materi) |
 
 ---
 
@@ -26,8 +27,8 @@
 File disimpan di path `bukti-transfer/{pendaftaranId}/{randomFile}`.
 
 ```sql
--- =============================================
--- INSERT (Upload bukti transfer pendaftaran)
+-- ============================================
+-- INSERT (U=pload bukti transfer pendaftaran)
 -- =============================================
 -- Siapa saja yang terautentikasi dapat upload ke folder milik pendaftaran tertentu.
 -- Karena pendaftaranId adalah UUID yang tidak bisa ditebak, ini cukup aman.
@@ -312,6 +313,105 @@ USING (
     SELECT 1 FROM public.users
     WHERE auth_id = auth.uid()
     AND role = 'ADMIN_KEUANGAN'
+  )
+);
+```
+
+---
+
+## Bucket: `materi`
+
+**Konteks:** Guru upload materi pembelajaran (file, PDF, dokumen) untuk siswa per kelas & mapel.
+Struktur path: `materi/{kelasId}/{randomFile}`.
+
+```sql
+-- =============================================
+-- INSERT (Upload materi pembelajaran)
+-- =============================================
+-- Hanya guru yang boleh upload materi.
+-- Path: materi/{kelasId}/{file}
+-- Validasi akses kelas dilakukan di server action (verifyGuruAksesKelas).
+-- RLS di sini sebagai defense-in-depth: pastikan hanya role GURU yang bisa upload.
+CREATE POLICY "Guru dapat upload materi pembelajaran"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'materi'
+  AND (storage.foldername(name))[1] = 'materi'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid()
+    AND role = 'GURU'
+  )
+);
+
+-- =============================================
+-- SELECT (Baca/download materi)
+-- =============================================
+-- Guru bisa baca semua materi (untuk manajemen).
+-- Siswa bisa baca materi di kelasnya (path validation dilakukan server-side via signed URL).
+-- Orang Tua bisa baca materi anaknya (juga via signed URL server-side).
+CREATE POLICY "Guru dapat membaca semua materi"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'materi'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid()
+    AND role IN ('GURU', 'ADMIN_KEUANGAN')
+  )
+);
+
+CREATE POLICY "Siswa dapat membaca materi di kelasnya"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'materi'
+  AND EXISTS (
+    SELECT 1 FROM public.siswas s
+    JOIN public.users u ON u.id = s.user_id
+    WHERE u.auth_id = auth.uid()
+    AND u.role = 'SISWA'
+    -- Validasi kelas: siswa harus berada di kelas yang sama dengan path folder
+    AND s.kelas_id = (storage.foldername(name))[2]
+  )
+);
+
+CREATE POLICY "OrangTua dapat membaca materi anaknya"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'materi'
+  AND EXISTS (
+    SELECT 1 FROM public.parent_students ps
+    JOIN public.users u ON u.id = (
+      SELECT user_id FROM public.siswas WHERE id = ps.siswa_id
+    )
+    JOIN public.users ou ON ou.id = (
+      SELECT user_id FROM public.orang_tuas WHERE id = ps.orang_tua_id
+    )
+    WHERE ou.auth_id = auth.uid()
+    AND ou.role = 'ORANG_TUA'
+    -- Orang tua bisa akses materi kelas anaknya
+    AND u.kelas_id = (storage.foldername(name))[2]
+  )
+);
+
+-- =============================================
+-- DELETE
+-- =============================================
+-- Hanya guru yang boleh menghapus materi.
+-- Validasi kepemilikan (guru yang upload) dilakukan di server action.
+CREATE POLICY "Guru dapat menghapus materi"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'materi'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid()
+    AND role = 'GURU'
   )
 );
 ```

@@ -5,7 +5,7 @@
 import prisma from "@/lib/prisma"
 import { generateNomorPendaftaran } from "@/lib/registration-number"
 import { pendaftaranSchema } from "@/lib/validations/pendaftaran"
-import { rateLimit, getClientIpFromHeaders } from "@/lib/rate-limit"
+import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
 import { Prisma } from "@prisma/client"
 
@@ -17,7 +17,7 @@ export async function createPendaftaran(
   try {
     // ✅ Rate Limiting: 5 pendaftaran / 10 menit per IP
     const ip = await getClientIpFromHeaders()
-    const limiter = rateLimit(`create-pendaftaran:${ip}`, {
+    const limiter = await rateLimitAsync(`create-pendaftaran:${ip}`, {
       maxRequests: 5,
       windowMs: 10 * 60 * 1000,
     })
