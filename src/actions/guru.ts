@@ -139,7 +139,15 @@ export async function updateAkunGuru(
   payload: UpdateAkunGuruValues
 ): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    const currentUser = await requireGuru()
+
+    // Otorisasi: hanya boleh edit profil sendiri atau guru admin boleh edit siapa saja
+    if (currentUser.id !== userId && !currentUser.isAdmin) {
+      return {
+        success: false,
+        message: "Akses ditolak: Anda hanya bisa mengedit profil sendiri",
+      }
+    }
 
     const validated = updateAkunGuruSchema.safeParse(payload)
     if (!validated.success) {

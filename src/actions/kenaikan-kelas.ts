@@ -79,53 +79,92 @@ export async function promosiSiswaMassal(
     let totalBerhasil = 0
     let totalGagal = 0
 
-    // Eksekusi dalam satu Prisma transaction
-    await prisma.$transaction(async (tx) => {
-      for (const item of mapping) {
-        try {
-          const siswa = siswaList.find((s) => s.id === item.siswaId)
-          if (!siswa) {
-            totalGagal++
-            continue
-          }
+    // ========================================================
+    // Strategi optimasi batch:
+    //
+    // 1. Pre-validasi semua data SEBELUM masuk transaction.
+    //    Jika ada siswa yang tidak valid atau kelas asal tidak ditemukan,
+    //    hitung sebagai gagal di fase validasi. Begitu masuk transaction,
+    //    seharusnya tidak ada kegagalan individual (kecuali error DB).
+    //
+    // 2. Gunakan createMany + skipDuplicates untuk riwayatKelasSiswa.
+    //    Constraint unique [siswaId, periodeAjaranId] memastikan tidak ada
+    //    duplikat. Ini mengubah O(n) findUnique+create menjadi 1 query.
+    //
+    // 3. Kelompokkan siswa berdasarkan kelasBaruId, lalu updateMany per grup.
+    //    Ini mengubah O(n) update per-siswa menjadi O(kelas unik) query.
+    //
+    // 4. Naikkan timeout transaction untuk menampung skala besar.
+    // ========================================================
 
-          const kelasAsalId = siswa.kelasId
+    // --- Fase 1: Pre-validasi & siapkan data ---
+    const siswaMap = new Map(siswaList.map((s) => [s.id, s]))
+    const validItems: { siswaId: string; kelasBaruId: string }[] = []
+    const kelasAsalMap = new Map<string, string | null>() // siswaId → kelasAsalId
 
-          // Simpan histori kelas sebelum promosi
-          // Cek apakah sudah ada riwayat untuk periode ini
-          const existingRiwayat = await tx.riwayatKelasSiswa.findUnique({
-            where: {
-              siswaId_periodeAjaranId: {
-                siswaId: item.siswaId,
-                periodeAjaranId,
-              },
-            },
-          })
+    for (const item of mapping) {
+      const siswa = siswaMap.get(item.siswaId)
+      if (!siswa) {
+        totalGagal++
+        console.error(`Siswa ${item.siswaId} tidak ditemukan, dilewati`)
+        continue
+      }
+      validItems.push(item)
+      kelasAsalMap.set(item.siswaId, siswa.kelasId)
+    }
 
-          if (!existingRiwayat && kelasAsalId) {
-            await tx.riwayatKelasSiswa.create({
-              data: {
-                siswaId: item.siswaId,
-                kelasId: kelasAsalId, // Kelas asal (sebelum promosi)
-                periodeAjaranId,
-                kelasAsalId,
-              },
+    // --- Fase 2: Eksekusi batch dalam transaction ---
+    if (validItems.length > 0) {
+      await prisma.$transaction(
+        async (tx) => {
+          // Batch 1: Simpan histori kelas asal (riwayat sebelum promosi)
+          // Hanya siswa yang punya kelas asal perlu disimpan riwayatnya
+          const riwayatData = validItems
+            .map((item) => ({
+              siswaId: item.siswaId,
+              kelasId: kelasAsalMap.get(item.siswaId)!, // Kelas asal (sebelum promosi)
+              periodeAjaranId,
+              kelasAsalId: kelasAsalMap.get(item.siswaId)!,
+            }))
+            .filter((item) => item.kelasId) // Filter siswa tanpa kelas asal
+
+          if (riwayatData.length > 0) {
+            // skipDuplicates: true — jika riwayat sudah ada untuk periode ini,
+            // lewati tanpa error (berkat constraint unique siswaId + periodeAjaranId)
+            await tx.riwayatKelasSiswa.createMany({
+              data: riwayatData,
+              skipDuplicates: true,
             })
           }
 
-          // Update kelas siswa ke kelas baru
-          await tx.siswa.update({
-            where: { id: item.siswaId },
-            data: { kelasId: item.kelasBaruId },
-          })
+          // Batch 2: Update kelas siswa, dikelompokkan per kelasBaruId
+          // Strategi: gunakan Map<kelasBaruId, siswaId[]> lalu updateMany per grup
+          const grupPerKelas = new Map<string, string[]>()
+          for (const item of validItems) {
+            const existing = grupPerKelas.get(item.kelasBaruId) || []
+            existing.push(item.siswaId)
+            grupPerKelas.set(item.kelasBaruId, existing)
+          }
 
-          totalBerhasil++
-        } catch (err) {
-          console.error(`Gagal mempromosikan siswa ${item.siswaId}:`, err)
-          totalGagal++
+          for (const [kelasBaruId, siswaIds] of grupPerKelas) {
+            await tx.siswa.updateMany({
+              where: { id: { in: siswaIds } },
+              data: { kelasId: kelasBaruId },
+            })
+          }
+
+          // Jika transaction berhasil, semua validItems dianggap berhasil
+          totalBerhasil = validItems.length
+        },
+        {
+          // Naikkan timeout untuk menampung promosi skala besar (ratusan siswa)
+          // maxWait: waktu menunggu slot transaction (ms)
+          // timeout: waktu maksimal eksekusi transaction (ms)
+          timeout: 30000,
+          maxWait: 10000,
         }
-      }
-    })
+      )
+    }
 
     revalidatePath("/dashboard/guru/kenaikan-kelas")
     return {
