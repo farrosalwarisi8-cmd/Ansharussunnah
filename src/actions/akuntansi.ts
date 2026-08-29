@@ -11,6 +11,7 @@ import {
   generateBulkSppSchema,
   submitBuktiSppSchema,
   konfirmasiPembayaranSppSchema,
+  konfirmasiPembayaranAdminSchema,
   createTransaksiKeuanganSchema,
   cancelTransaksiSchema,
   cancelTagihanSchema,
@@ -18,13 +19,14 @@ import {
   type GenerateBulkSppValues,
   type SubmitBuktiSppValues,
   type KonfirmasiPembayaranSppValues,
+  type KonfirmasiPembayaranAdminValues,
   type CreateTransaksiKeuanganValues,
   type CancelTransaksiValues,
   type CancelTagihanValues,
   type QueryLaporanKeuanganValues,
 } from "@/lib/validations/akuntansi"
 import type { ActionResponse } from "@/types"
-import { Role, StatusTagihan, StatusTransaksi, TipeTransaksi } from "@prisma/client"
+import { Role, StatusTagihan, StatusPembayaran, StatusTransaksi, TipeTransaksi } from "@prisma/client"
 import { Prisma } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
@@ -162,6 +164,8 @@ export async function generateBulkSpp(
 
 // ========================================================
 // 2. ORANG TUA / SISWA: SUBMIT BUKTI PEMBAYARAN SPP
+//    PENTEST FIX #1: Alur dua-tahap — status → MENUNGGU_VERIFIKASI
+//    Status tidak langsung SUDAH_BAYAR; admin harus konfirmasi terlebih dahulu.
 // ========================================================
 
 export async function submitBuktiPembayaranSpp(
@@ -197,8 +201,19 @@ export async function submitBuktiPembayaranSpp(
       return { success: false, message: "Data tagihan SPP tidak ditemukan" }
     }
 
+    // Tagihan yang sudah lunas, dibatalkan, atau sedang menunggu verifikasi tidak bisa disubmit lagi
     if (tagihan.status === StatusTagihan.SUDAH_BAYAR || tagihan.status === StatusTagihan.DIBATALKAN) {
       return { success: false, message: "Tagihan ini sudah lunas atau dibatalkan" }
+    }
+
+    // PENTEST FIX #1: Cegah double-submit saat ada pembayaran PENDING yang belum diproses admin
+    if (tagihan.status === StatusTagihan.MENUNGGU_VERIFIKASI) {
+      return {
+        success: false,
+        message:
+          "Bukti pembayaran Anda sudah diterima dan sedang menunggu verifikasi admin keuangan. " +
+          "Harap tunggu hingga diproses sebelum mengirim bukti baru.",
+      }
     }
 
     // ✅ Otorisasi: Siswa hanya bisa bayar tagihannya sendiri, Orang tua hanya bisa bayar tagihan anaknya
@@ -236,7 +251,10 @@ export async function submitBuktiPembayaranSpp(
       return { success: false, message: "Berkas bukti transfer tidak ditemukan di server" }
     }
 
-    // Buat record pembayaran SPP & Ubah status tagihan menjadi SUDAH_BAYAR secara atomik
+    // PENTEST FIX #1: Buat record PembayaranSpp berstatus PENDING
+    //   - Status tagihan → MENUNGGU_VERIFIKASI (BUKAN SUDAH_BAYAR)
+    //   - Admin keuangan harus memanggil konfirmasiPembayaranSppOlehAdmin untuk finalisasi
+    //   - nominalDibayar dicatat apa adanya; admin yang memvalidasi kesesuaiannya
     await prisma.$transaction(async (tx) => {
       await tx.pembayaranSpp.create({
         data: {
@@ -247,14 +265,15 @@ export async function submitBuktiPembayaranSpp(
           urlBukti,
           namaBukti,
           catatan,
-          dikonfirmasiOlehId: sessionUser.id,
+          statusPembayaran: StatusPembayaran.PENDING,
+          // dikonfirmasiOlehId & waktuKonfirmasi dibiarkan null hingga admin konfirmasi
         },
       })
 
       await tx.tagihanSpp.update({
         where: { id: tagihanId },
         data: {
-          status: StatusTagihan.SUDAH_BAYAR,
+          status: StatusTagihan.MENUNGGU_VERIFIKASI,
         },
       })
     })
@@ -262,7 +281,9 @@ export async function submitBuktiPembayaranSpp(
     revalidatePath("/dashboard/finance/spp")
     return {
       success: true,
-      message: "Pembayaran berhasil dicatat dan diverifikasi",
+      message:
+        "Bukti pembayaran berhasil dikirim dan sedang menunggu verifikasi oleh admin keuangan. " +
+        "Status tagihan Anda akan diperbarui setelah pembayaran dikonfirmasi.",
     }
   } catch (error: any) {
     return {
@@ -273,7 +294,173 @@ export async function submitBuktiPembayaranSpp(
 }
 
 // ========================================================
-// 3. ADMIN KEUANGAN: MANAJEMEN PEMBAYARAN SPP (MANUAL)
+// 3. ADMIN KEUANGAN: KONFIRMASI PEMBAYARAN SPP DARI SISWA/ORTU
+//    PENTEST FIX #1 (baru): Action dua-tahap — approve atau reject bukti upload
+//    Hanya ADMIN_KEUANGAN yang bisa memanggil fungsi ini.
+// ========================================================
+
+export async function konfirmasiPembayaranSppOlehAdmin(
+  payload: KonfirmasiPembayaranAdminValues
+): Promise<
+  ActionResponse<{
+    statusTagihanBaru: string
+    totalTerbayar: number
+    sisaTunggakan: number
+    nominalTidakSesuai: boolean
+    selisihNominal: number
+  }>
+> {
+  try {
+    const adminUser = await requireAdminKeuangan()
+
+    const validated = konfirmasiPembayaranAdminSchema.safeParse(payload)
+    if (!validated.success) {
+      return {
+        success: false,
+        message: "Data konfirmasi tidak valid",
+        errors: validated.error.flatten().fieldErrors,
+      }
+    }
+
+    const { pembayaranId, disetujui, catatan, alasanPenolakan } = validated.data
+
+    // Ambil pembayaran beserta tagihan dan semua pembayaran lain yang sudah DIKONFIRMASI
+    const pembayaran = await prisma.pembayaranSpp.findUnique({
+      where: { id: pembayaranId },
+      include: {
+        tagihan: {
+          include: {
+            pembayaran: {
+              where: { statusPembayaran: StatusPembayaran.DIKONFIRMASI },
+            },
+          },
+        },
+      },
+    })
+
+    if (!pembayaran) {
+      return { success: false, message: "Data pembayaran tidak ditemukan" }
+    }
+
+    if (pembayaran.statusPembayaran !== StatusPembayaran.PENDING) {
+      return {
+        success: false,
+        message: `Pembayaran ini sudah diproses sebelumnya (status: ${pembayaran.statusPembayaran})`,
+      }
+    }
+
+    const tagihan = pembayaran.tagihan
+    const nominalTagihan = Number(tagihan.nominal)
+    const nominalPembayaranIni = Number(pembayaran.nominalDibayar)
+
+    // Hitung total yang sudah dikonfirmasi admin SEBELUM pembayaran ini
+    const totalSudahDikonfirmasi = tagihan.pembayaran.reduce(
+      (acc, p) => acc + Number(p.nominalDibayar),
+      0
+    )
+
+    // PENTEST FIX #1: Flag untuk memperingatkan admin jika nominal tidak sesuai
+    // Tidak memblokir, hanya memberi sinyal agar admin bisa verifikasi manual
+    const nominalTidakSesuai = nominalPembayaranIni !== nominalTagihan
+    const selisihNominal = Math.abs(nominalTagihan - nominalPembayaranIni)
+
+    const hasil = await prisma.$transaction(async (tx) => {
+      if (disetujui) {
+        // PENTEST FIX #3 (Partial Payment): Hitung total setelah pembayaran ini dikonfirmasi
+        const totalDibayarSetelahIni = totalSudahDikonfirmasi + nominalPembayaranIni
+
+        // Tentukan status tagihan berdasarkan total kumulatif
+        let statusTagihanBaru: StatusTagihan
+        if (totalDibayarSetelahIni >= nominalTagihan) {
+          statusTagihanBaru = StatusTagihan.SUDAH_BAYAR
+        } else {
+          statusTagihanBaru = StatusTagihan.DIBAYAR_SEBAGIAN
+        }
+
+        // Update record pembayaran: DIKONFIRMASI
+        await tx.pembayaranSpp.update({
+          where: { id: pembayaranId },
+          data: {
+            statusPembayaran: StatusPembayaran.DIKONFIRMASI,
+            dikonfirmasiOlehId: adminUser.id,
+            waktuKonfirmasi: new Date(),
+            catatan: catatan || pembayaran.catatan,
+          },
+        })
+
+        // Update tagihan dengan status baru dan cache totalTerbayar
+        await tx.tagihanSpp.update({
+          where: { id: tagihan.id },
+          data: {
+            status: statusTagihanBaru,
+            totalTerbayar: new Prisma.Decimal(totalDibayarSetelahIni),
+          },
+        })
+
+        return {
+          statusTagihanBaru,
+          totalTerbayar: totalDibayarSetelahIni,
+          sisaTunggakan: Math.max(0, nominalTagihan - totalDibayarSetelahIni),
+        }
+      } else {
+        // Pembayaran DITOLAK: kembalikan status tagihan sesuai jatuh tempo
+        const now = new Date()
+        const statusTagihanDikembalikan =
+          tagihan.jatuhTempo < now ? StatusTagihan.TERLAMBAT : StatusTagihan.BELUM_BAYAR
+
+        await tx.pembayaranSpp.update({
+          where: { id: pembayaranId },
+          data: {
+            statusPembayaran: StatusPembayaran.DITOLAK,
+            dikonfirmasiOlehId: adminUser.id,
+            waktuKonfirmasi: new Date(),
+            alasanPenolakan: alasanPenolakan || null,
+            catatan: catatan || pembayaran.catatan,
+          },
+        })
+
+        // Kembalikan status tagihan ke kondisi sebelum ada pending
+        await tx.tagihanSpp.update({
+          where: { id: tagihan.id },
+          data: {
+            status: statusTagihanDikembalikan,
+          },
+        })
+
+        return {
+          statusTagihanBaru: statusTagihanDikembalikan,
+          totalTerbayar: totalSudahDikonfirmasi,
+          sisaTunggakan: Math.max(0, nominalTagihan - totalSudahDikonfirmasi),
+        }
+      }
+    })
+
+    revalidatePath("/dashboard/finance/spp")
+    return {
+      success: true,
+      message: disetujui
+        ? hasil.sisaTunggakan > 0
+          ? `Pembayaran dikonfirmasi. Tagihan dibayar sebagian — sisa tunggakan: Rp ${hasil.sisaTunggakan.toLocaleString("id-ID")}`
+          : "Pembayaran dikonfirmasi. Tagihan dinyatakan lunas."
+        : `Pembayaran ditolak. Tagihan dikembalikan ke status sebelumnya. Siswa/ortu dapat mengupload ulang bukti.`,
+      data: {
+        statusTagihanBaru: hasil.statusTagihanBaru,
+        totalTerbayar: hasil.totalTerbayar,
+        sisaTunggakan: hasil.sisaTunggakan,
+        // Sinyal ke admin UI agar dapat menampilkan peringatan kesesuaian nominal
+        nominalTidakSesuai,
+        selisihNominal,
+      },
+    }
+  } catch (error: any) {
+    return { success: false, message: error.message || "Gagal memproses konfirmasi pembayaran" }
+  }
+}
+
+// ========================================================
+// 4. ADMIN KEUANGAN: MANAJEMEN PEMBAYARAN SPP (INPUT MANUAL)
+//    PENTEST FIX #3: Tambah logika partial payment — tidak langsung SUDAH_BAYAR
+//    jika total pembayaran < nominal tagihan.
 // ========================================================
 
 export async function konfirmasiPembayaranSppManual(
@@ -295,12 +482,34 @@ export async function konfirmasiPembayaranSppManual(
 
     const tagihan = await prisma.tagihanSpp.findUnique({
       where: { id: tagihanId },
+      include: {
+        pembayaran: {
+          where: { statusPembayaran: StatusPembayaran.DIKONFIRMASI },
+        },
+      },
     })
     if (!tagihan) return { success: false, message: "Tagihan tidak ditemukan" }
 
     if (tagihan.status === StatusTagihan.SUDAH_BAYAR) {
       return { success: false, message: "Tagihan sudah lunas" }
     }
+    if (tagihan.status === StatusTagihan.DIBATALKAN) {
+      return { success: false, message: "Tagihan sudah dibatalkan" }
+    }
+
+    // PENTEST FIX #3: Hitung total kumulatif termasuk pembayaran baru ini
+    const totalSudahDikonfirmasi = tagihan.pembayaran.reduce(
+      (acc, p) => acc + Number(p.nominalDibayar),
+      0
+    )
+    const totalDibayarSetelahIni = totalSudahDikonfirmasi + nominalDibayar
+    const nominalTagihan = Number(tagihan.nominal)
+
+    // Tentukan status berdasarkan total kumulatif, bukan nominal input saja
+    const statusTagihanBaru =
+      totalDibayarSetelahIni >= nominalTagihan
+        ? StatusTagihan.SUDAH_BAYAR
+        : StatusTagihan.DIBAYAR_SEBAGIAN
 
     await prisma.$transaction(async (tx) => {
       await tx.pembayaranSpp.create({
@@ -312,20 +521,30 @@ export async function konfirmasiPembayaranSppManual(
           urlBukti: urlBukti || null,
           namaBukti: namaBukti || null,
           catatan: catatan || "Konfirmasi manual oleh admin keuangan",
+          // Input manual oleh admin langsung berstatus DIKONFIRMASI
+          statusPembayaran: StatusPembayaran.DIKONFIRMASI,
           dikonfirmasiOlehId: adminUser.id,
+          waktuKonfirmasi: new Date(),
         },
       })
 
       await tx.tagihanSpp.update({
         where: { id: tagihanId },
-        data: { status: StatusTagihan.SUDAH_BAYAR },
+        data: {
+          status: statusTagihanBaru,
+          totalTerbayar: new Prisma.Decimal(totalDibayarSetelahIni),
+        },
       })
     })
 
+    const sisaTunggakan = Math.max(0, nominalTagihan - totalDibayarSetelahIni)
     revalidatePath("/dashboard/finance/spp")
     return {
       success: true,
-      message: `Konfirmasi pembayaran tagihan SPP sukses diselesaikan`,
+      message:
+        statusTagihanBaru === StatusTagihan.SUDAH_BAYAR
+          ? "Konfirmasi pembayaran berhasil. Tagihan dinyatakan lunas."
+          : `Konfirmasi pembayaran sebagian berhasil. Sisa tunggakan: Rp ${sisaTunggakan.toLocaleString("id-ID")}`,
     }
   } catch (error: any) {
     return { success: false, message: error.message || "Gagal memproses konfirmasi" }
@@ -333,7 +552,7 @@ export async function konfirmasiPembayaranSppManual(
 }
 
 // ========================================================
-// 4. ADMIN KEUANGAN: TRANSAKSI KEUANGAN NON-SPP
+// 5. ADMIN KEUANGAN: TRANSAKSI KEUANGAN NON-SPP
 // ========================================================
 
 export async function createTransaksiKeuangan(
@@ -391,7 +610,7 @@ export async function createTransaksiKeuangan(
 }
 
 // ========================================================
-// 5. AUDIT TRAIL: SOFT-DELETE TRANSAKSI & TAGIHAN
+// 6. AUDIT TRAIL: SOFT-DELETE TRANSAKSI & TAGIHAN
 // ========================================================
 
 export async function batalkanTransaksiKeuangan(
@@ -479,7 +698,9 @@ export async function batalkanTagihanSpp(
 }
 
 // ========================================================
-// 6. REPORTS: LAPORAN ARUS KAS & TUNGGAKAN
+// 7. REPORTS: LAPORAN ARUS KAS & TUNGGAKAN
+//    PENTEST FIX #1: Filter pemasukan SPP hanya dari PembayaranSpp DIKONFIRMASI
+//    PENTEST FIX #1: getRekapTunggakanSpp sertakan MENUNGGU_VERIFIKASI sebagai kategori terpisah
 // ========================================================
 
 export async function getLaporanKeuangan(
@@ -501,11 +722,22 @@ export async function getLaporanKeuangan(
     const start = new Date(tanggalMulai)
     const end = new Date(tanggalSelesai)
 
-    // 1. Ambil pembayaran SPP (Pemasukan SPP)
+    // PENTEST FIX #1: Hanya hitung pembayaran yang sudah DIKONFIRMASI admin sebagai pemasukan sah
+    // Pembayaran PENDING (menunggu verifikasi) TIDAK masuk ke laporan keuangan
     const totalSpp = await prisma.pembayaranSpp.aggregate({
       where: {
         tanggalBayar: { gte: start, lte: end },
+        statusPembayaran: StatusPembayaran.DIKONFIRMASI,
         tagihan: { status: { not: StatusTagihan.DIBATALKAN } },
+      },
+      _sum: { nominalDibayar: true },
+    })
+
+    // Hitung pembayaran pending di periode yang sama (untuk info, BUKAN pemasukan)
+    const totalSppPending = await prisma.pembayaranSpp.aggregate({
+      where: {
+        tanggalBayar: { gte: start, lte: end },
+        statusPembayaran: StatusPembayaran.PENDING,
       },
       _sum: { nominalDibayar: true },
     })
@@ -540,8 +772,9 @@ export async function getLaporanKeuangan(
       }
     })
 
-    const nominalSpp = Number(totalSpp._sum.nominalDibayar || 0)
-    const totalPemasukan = nominalSpp + totalPemasukanLain
+    const nominalSppDikonfirmasi = Number(totalSpp._sum.nominalDibayar || 0)
+    const nominalSppPending = Number(totalSppPending._sum.nominalDibayar || 0)
+    const totalPemasukan = nominalSppDikonfirmasi + totalPemasukanLain
     const saldoBersih = totalPemasukan - totalPengeluaran
 
     return {
@@ -550,7 +783,9 @@ export async function getLaporanKeuangan(
       data: {
         periode: { mulai: start, selesai: end },
         ringkasan: {
-          pemasukanSpp: nominalSpp,
+          pemasukanSpp: nominalSppDikonfirmasi,
+          // Info: nominal SPP yang belum diverifikasi (tidak masuk ke saldo)
+          sppMenungguVerifikasi: nominalSppPending,
           pemasukanLain: totalPemasukanLain,
           totalPemasukan,
           totalPengeluaran,
@@ -572,33 +807,78 @@ export async function getRekapTunggakanSpp(
   try {
     await requireAdminKeuangan()
 
-    const whereClause: Record<string, any> = {
-      status: { in: [StatusTagihan.BELUM_BAYAR, StatusTagihan.TERLAMBAT] },
-    }
-
-    if (bulan) whereClause.bulan = bulan
-    if (tahun) whereClause.tahun = tahun
+    // PENTEST FIX #1: Pisahkan tunggakan murni dan yang menunggu verifikasi
+    const baseFilter: Record<string, any> = {}
+    if (bulan) baseFilter.bulan = bulan
+    if (tahun) baseFilter.tahun = tahun
     if (kelasId) {
-      whereClause.siswa = { kelasId }
+      baseFilter.siswa = { kelasId }
     }
 
-    const tunggakan = await prisma.tagihanSpp.findMany({
-      where: whereClause,
-      include: {
-        siswa: {
-          select: {
-            id: true,
-            nisn: true,
-            user: { select: { nama: true } },
-            kelas: { select: { nama: true } },
-          },
+    const includeConfig = {
+      siswa: {
+        select: {
+          id: true,
+          nisn: true,
+          user: { select: { nama: true } },
+          kelas: { select: { nama: true } },
         },
       },
-      orderBy: [{ tahun: "asc" }, { bulan: "asc" }, { siswa: { user: { nama: "asc" } } }],
+    }
+
+    const orderByConfig = [
+      { tahun: "asc" as const },
+      { bulan: "asc" as const },
+      { siswa: { user: { nama: "asc" as const } } },
+    ]
+
+    // Ambil tunggakan murni (belum bayar sama sekali)
+    const tunggakanMurni = await prisma.tagihanSpp.findMany({
+      where: {
+        ...baseFilter,
+        status: { in: [StatusTagihan.BELUM_BAYAR, StatusTagihan.TERLAMBAT] },
+      },
+      include: includeConfig,
+      orderBy: orderByConfig,
     })
 
-    const totalTunggakanNominal = tunggakan.reduce(
-      (acc, curr) => acc + Number(curr.nominal),
+    // Ambil tagihan yang dibayar sebagian (cicilan)
+    const dibayarSebagian = await prisma.tagihanSpp.findMany({
+      where: {
+        ...baseFilter,
+        status: StatusTagihan.DIBAYAR_SEBAGIAN,
+      },
+      include: includeConfig,
+      orderBy: orderByConfig,
+    })
+
+    // Ambil tagihan yang menunggu verifikasi admin (bukan tunggakan, belum lunas)
+    const menungguVerifikasi = await prisma.tagihanSpp.findMany({
+      where: {
+        ...baseFilter,
+        status: StatusTagihan.MENUNGGU_VERIFIKASI,
+      },
+      include: includeConfig,
+      orderBy: orderByConfig,
+    })
+
+    const formatTagihan = (list: typeof tunggakanMurni) =>
+      list.map((t) => ({
+        tagihanId: t.id,
+        siswaId: t.siswa.id,
+        namaSiswa: t.siswa.user.nama,
+        kelas: t.siswa.kelas?.nama || "Tanpa Kelas",
+        periode: `${t.bulan}/${t.tahun}`,
+        nominal: Number(t.nominal),
+        totalTerbayar: Number(t.totalTerbayar || 0),
+        sisaTunggakan: Number(t.nominal) - Number(t.totalTerbayar || 0),
+        jatuhTempo: t.jatuhTempo,
+        status: t.status,
+      }))
+
+    const totalNominalTunggakanMurni = tunggakanMurni.reduce((acc, t) => acc + Number(t.nominal), 0)
+    const totalNominalDibayarSebagian = dibayarSebagian.reduce(
+      (acc, t) => acc + (Number(t.nominal) - Number(t.totalTerbayar || 0)),
       0
     )
 
@@ -606,17 +886,16 @@ export async function getRekapTunggakanSpp(
       success: true,
       message: "Data tunggakan SPP berhasil dikompilasi",
       data: {
-        totalSiswaMenunggak: tunggakan.length,
-        totalNominalTunggakan: totalTunggakanNominal,
-        rincian: tunggakan.map((t) => ({
-          tagihanId: t.id,
-          siswaId: t.siswa.id,
-          namaSiswa: t.siswa.user.nama,
-          kelas: t.siswa.kelas?.nama || "Tanpa Kelas",
-          periode: `${t.bulan}/${t.tahun}`,
-          nominal: Number(t.nominal),
-          jatuhTempo: t.jatuhTempo,
-        })),
+        ringkasan: {
+          totalTunggakanMurni: tunggakanMurni.length,
+          totalNominalTunggakanMurni,
+          totalDibayarSebagian: dibayarSebagian.length,
+          totalSisaDibayarSebagian: totalNominalDibayarSebagian,
+          totalMenungguVerifikasi: menungguVerifikasi.length,
+        },
+        tunggakanMurni: formatTagihan(tunggakanMurni),
+        dibayarSebagian: formatTagihan(dibayarSebagian),
+        menungguVerifikasi: formatTagihan(menungguVerifikasi),
       },
     }
   } catch (error: any) {
@@ -625,7 +904,8 @@ export async function getRekapTunggakanSpp(
 }
 
 // ========================================================
-// 7. ORANG TUA / SISWA: READ-ONLY STATUS SPP & BUKTI SIGNED URL
+// 8. ORANG TUA / SISWA: READ-ONLY STATUS SPP & BUKTI SIGNED URL
+//    PENTEST FIX #1: Expose status MENUNGGU_VERIFIKASI & DIBAYAR_SEBAGIAN dengan jelas
 // ========================================================
 
 export async function getTagihanSppSiswa(siswaId: string): Promise<ActionResponse> {
@@ -653,6 +933,7 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
       where: { siswaId },
       include: {
         pembayaran: {
+          orderBy: { createdAt: "desc" },
           include: { dikonfirmasiOleh: { select: { nama: true } } },
         },
       },
@@ -661,30 +942,63 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
 
     const formatted = await Promise.all(
       tagihanList.map(async (t) => {
-        const pembayaran = t.pembayaran[0] || null
-        let signedBuktiUrl: string | null = null
+        // Ambil pembayaran terakhir (paling baru) untuk ditampilkan
+        const pembayaranTerakhir = t.pembayaran[0] || null
+        // Pembayaran yang sudah dikonfirmasi untuk riwayat lengkap
+        const pembayaranDikonfirmasi = t.pembayaran.filter(
+          (p) => p.statusPembayaran === StatusPembayaran.DIKONFIRMASI
+        )
 
-        if (pembayaran?.urlBukti) {
-          signedBuktiUrl = await getSignedUrl("bukti-spp", pembayaran.urlBukti)
+        let signedBuktiUrl: string | null = null
+        if (pembayaranTerakhir?.urlBukti) {
+          signedBuktiUrl = await getSignedUrl("bukti-spp", pembayaranTerakhir.urlBukti)
+        }
+
+        const nominalTagihan = Number(t.nominal)
+        const totalTerbayar = Number(t.totalTerbayar || 0)
+        const sisaTunggakan = Math.max(0, nominalTagihan - totalTerbayar)
+
+        // PENTEST FIX #1: Label yang jelas untuk setiap status
+        const labelStatus: Record<string, string> = {
+          BELUM_BAYAR: "Belum Dibayar",
+          TERLAMBAT: "Terlambat — Harap segera bayar",
+          MENUNGGU_VERIFIKASI: "Bukti dikirim — Menunggu konfirmasi admin keuangan",
+          DIBAYAR_SEBAGIAN: `Dibayar Sebagian — Sisa Rp ${sisaTunggakan.toLocaleString("id-ID")}`,
+          SUDAH_BAYAR: "Lunas",
+          DIBATALKAN: "Dibatalkan",
         }
 
         return {
           id: t.id,
           bulan: t.bulan,
           tahun: t.tahun,
-          nominal: Number(t.nominal),
+          nominal: nominalTagihan,
           status: t.status,
+          labelStatus: labelStatus[t.status] || t.status,
           jatuhTempo: t.jatuhTempo,
-          pembayaran: pembayaran
+          totalTerbayar,
+          sisaTunggakan,
+          // Info pembayaran terkini (PENDING atau DIKONFIRMASI)
+          pembayaranTerkini: pembayaranTerakhir
             ? {
-                nominalDibayar: Number(pembayaran.nominalDibayar),
-                tanggalBayar: pembayaran.tanggalBayar,
-                metodeBayar: pembayaran.metodeBayar,
-                catatan: pembayaran.catatan,
-                konfirmator: pembayaran.dikonfirmasiOleh.nama,
+                id: pembayaranTerakhir.id,
+                nominalDibayar: Number(pembayaranTerakhir.nominalDibayar),
+                tanggalBayar: pembayaranTerakhir.tanggalBayar,
+                metodeBayar: pembayaranTerakhir.metodeBayar,
+                statusPembayaran: pembayaranTerakhir.statusPembayaran,
+                alasanPenolakan: pembayaranTerakhir.alasanPenolakan,
+                catatan: pembayaranTerakhir.catatan,
+                konfirmator: pembayaranTerakhir.dikonfirmasiOleh?.nama || null,
                 buktiUrl: signedBuktiUrl,
               }
             : null,
+          // Riwayat pembayaran yang sudah dikonfirmasi
+          riwayatPembayaran: pembayaranDikonfirmasi.map((p) => ({
+            nominalDibayar: Number(p.nominalDibayar),
+            tanggalBayar: p.tanggalBayar,
+            metodeBayar: p.metodeBayar,
+            konfirmator: p.dikonfirmasiOleh?.nama || null,
+          })),
         }
       })
     )

@@ -12,7 +12,9 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ArrowLeft, Lock, Loader2, CheckCircle2 } from "lucide-react"
 
-export default function ResetPasswordPage() {
+import { Suspense } from "react"
+
+function ResetPasswordContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const email = searchParams.get("email") || ""
@@ -129,5 +131,17 @@ export default function ResetPasswordPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-500">Memuat...</p>
+      </div>
+    }>
+      <ResetPasswordContent />
+    </Suspense>
   )
 }

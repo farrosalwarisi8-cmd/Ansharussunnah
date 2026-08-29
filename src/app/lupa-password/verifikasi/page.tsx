@@ -12,7 +12,9 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ArrowLeft, Shield, Loader2 } from "lucide-react"
 
-export default function VerifikasiOtpPage() {
+import { Suspense } from "react"
+
+function VerifikasiOtpContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const email = searchParams.get("email") || ""
@@ -143,5 +145,17 @@ export default function VerifikasiOtpPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function VerifikasiOtpPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-500">Memuat...</p>
+      </div>
+    }>
+      <VerifikasiOtpContent />
+    </Suspense>
   )
 }

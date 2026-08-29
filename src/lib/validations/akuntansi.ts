@@ -32,6 +32,30 @@ export const konfirmasiPembayaranSppSchema = z.object({
 
 export type KonfirmasiPembayaranSppValues = z.infer<typeof konfirmasiPembayaranSppSchema>
 
+// PENTEST FIX #1: Schema untuk action konfirmasi dua-tahap oleh admin keuangan
+export const konfirmasiPembayaranAdminSchema = z
+  .object({
+    pembayaranId: z.string().min(1, "ID pembayaran wajib diisi"),
+    disetujui: z.boolean({ required_error: "Keputusan persetujuan wajib diisi" }),
+    catatan: z.string().max(500, "Catatan maksimal 500 karakter").optional(),
+    alasanPenolakan: z.string().max(500).optional(),
+  })
+  .refine(
+    (data) => {
+      // Jika ditolak, alasan penolakan wajib diisi (minimal 5 karakter)
+      if (!data.disetujui && (!data.alasanPenolakan || data.alasanPenolakan.trim().length < 5)) {
+        return false
+      }
+      return true
+    },
+    {
+      message: "Alasan penolakan wajib diisi (minimal 5 karakter) jika pembayaran ditolak",
+      path: ["alasanPenolakan"],
+    }
+  )
+
+export type KonfirmasiPembayaranAdminValues = z.infer<typeof konfirmasiPembayaranAdminSchema>
+
 export const createTransaksiKeuanganSchema = z.object({
   kategoriId: z.string().min(1, "Kategori transaksi wajib dipilih"),
   nominal: z.number().positive("Nominal transaksi harus lebih dari 0"),

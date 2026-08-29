@@ -78,9 +78,17 @@ enum TipeTransaksi {
 
 enum StatusTagihan {
   BELUM_BAYAR
+  MENUNGGU_VERIFIKASI // Siswa/ortu sudah upload bukti, menunggu konfirmasi admin
+  DIBAYAR_SEBAGIAN    // Total pembayaran dikonfirmasi < nominal tagihan (cicilan)
   SUDAH_BAYAR
   TERLAMBAT
   DIBATALKAN
+}
+
+enum StatusPembayaran {
+  PENDING      // Disubmit siswa/ortu, belum diproses admin
+  DIKONFIRMASI // Admin sudah approve
+  DITOLAK      // Admin menolak, siswa/ortu perlu upload ulang
 }
 
 enum StatusTransaksi {
@@ -474,15 +482,17 @@ model OpsiJawaban {
 }
 
 model PengerjaanUjian {
-  id            String           @id @default(cuid())
-  ujianId       String           @map("ujian_id")
-  siswaId       String           @map("siswa_id")
-  waktuMulai    DateTime         @default(now()) @map("waktu_mulai")
-  waktuSubmit   DateTime?        @map("waktu_submit")
-  status        StatusPengerjaan @default(SEDANG_MENGERJAKAN)
-  nilaiTotal    Decimal?         @map("nilai_total") @db.Decimal(6, 2) // Nilai akhir setelah semua dinilai
-  nilaiPg       Decimal?         @map("nilai_pg") @db.Decimal(6, 2) // Nilai pilihan ganda (auto)
-  nilaiEsai     Decimal?         @map("nilai_esai") @db.Decimal(6, 2) // Nilai esai (manual)
+  id              String           @id @default(cuid())
+  ujianId         String           @map("ujian_id")
+  siswaId         String           @map("siswa_id")
+  waktuMulai      DateTime         @default(now()) @map("waktu_mulai")
+  waktuSubmit     DateTime?        @map("waktu_submit")
+  status          StatusPengerjaan @default(SEDANG_MENGERJAKAN)
+  nilaiTotal      Decimal?         @map("nilai_total") @db.Decimal(6, 2) // Nilai akhir setelah semua dinilai
+  nilaiPg         Decimal?         @map("nilai_pg") @db.Decimal(6, 2) // Nilai pilihan ganda (auto)
+  nilaiEsai       Decimal?         @map("nilai_esai") @db.Decimal(6, 2) // Nilai esai (manual)
+  // PENTEST FIX #2: Server-side deadline enforcement
+  submitTerlambat Boolean          @default(false) @map("submit_terlambat") // true jika submit setelah deadlineFinal
 
   ujian    Ujian          @relation(fields: [ujianId], references: [id], onDelete: Cascade)
   siswa    Siswa          @relation(fields: [siswaId], references: [id], onDelete: Cascade)
@@ -688,6 +698,9 @@ model TagihanSpp {
   jatuhTempo   DateTime      @map("jatuh_tempo")
   status       StatusTagihan @default(BELUM_BAYAR)
 
+  // PENTEST FIX #1+3: Cache aggregate total yang sudah dikonfirmasi admin (untuk performa)
+  totalTerbayar Decimal? @map("total_terbayar") @db.Decimal(12, 2)
+
   // Soft-delete/pembatalan
   alasanPembatalan   String?   @map("alasan_pembatalan")
   dibatalkanOlehId   String?   @map("dibatalkan_oleh_id")
@@ -708,20 +721,25 @@ model TagihanSpp {
 }
 
 model PembayaranSpp {
-  id             String   @id @default(cuid())
-  tagihanId      String   @map("tagihan_id")
-  nominalDibayar Decimal  @map("nominal_dibayar") @db.Decimal(12, 2)
-  tanggalBayar   DateTime @map("tanggal_bayar")
-  metodeBayar    String   @map("metode_bayar") // "TRANSFER", "TUNAI", "VA", dll
-  urlBukti       String?  @map("url_bukti")
-  namaBukti      String?  @map("nama_bukti")
+  id             String           @id @default(cuid())
+  tagihanId      String           @map("tagihan_id")
+  nominalDibayar Decimal          @map("nominal_dibayar") @db.Decimal(12, 2)
+  tanggalBayar   DateTime         @map("tanggal_bayar")
+  metodeBayar    String           @map("metode_bayar") // "TRANSFER", "TUNAI", "VA", dll
+  urlBukti       String?          @map("url_bukti")
+  namaBukti      String?          @map("nama_bukti")
   catatan        String?
 
-  dikonfirmasiOlehId String   @map("dikonfirmasi_oleh_id")
-  waktuKonfirmasi    DateTime @default(now()) @map("waktu_konfirmasi")
+  // PENTEST FIX #1: Alur verifikasi dua-tahap
+  statusPembayaran   StatusPembayaran @default(PENDING) @map("status_pembayaran")
+  alasanPenolakan    String?          @map("alasan_penolakan") // Diisi admin jika DITOLAK
 
-  tagihan         TagihanSpp @relation(fields: [tagihanId], references: [id], onDelete: Cascade)
-  dikonfirmasiOleh User      @relation("PembayaranDikonfirmasi", fields: [dikonfirmasiOlehId], references: [id])
+  // Optional karena saat PENDING belum ada konfirmator
+  dikonfirmasiOlehId String?   @map("dikonfirmasi_oleh_id")
+  waktuKonfirmasi    DateTime? @map("waktu_konfirmasi")
+
+  tagihan          TagihanSpp @relation(fields: [tagihanId], references: [id], onDelete: Cascade)
+  dikonfirmasiOleh User?      @relation("PembayaranDikonfirmasi", fields: [dikonfirmasiOlehId], references: [id])
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

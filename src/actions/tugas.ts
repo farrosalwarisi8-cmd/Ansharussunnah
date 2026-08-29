@@ -554,8 +554,10 @@ export async function submitTugas(
       }
     }
 
-    // ✅ Validasi path file: harus di folder submission/{tugasId}/
-    const expectedPrefix = `submission/${tugasId}/`
+    // PENTEST FIX #4: Validasi path file harus per-siswa: submission/{tugasId}/{siswaId}/
+    // Ini mencegah siswa mereferensikan file milik siswa lain di folder yang sama
+    // Kontrak upload dari frontend: folder = `submission/${tugasId}/${siswaId}`
+    const expectedPrefix = `submission/${tugasId}/${siswaId}/`
     if (!urlFile.startsWith(expectedPrefix)) {
       return {
         success: false,
@@ -569,12 +571,13 @@ export async function submitTugas(
       }
     }
 
-    // Verifikasi file ada di Supabase Storage
+    // PENTEST FIX #4: Verifikasi file di subfolder per-siswa, bukan folder umum per-tugas
+    // Ini memastikan siswa tidak bisa mereferensikan file di folder siswa lain
     const supabaseAdmin = createSupabaseAdmin()
     const fileName = urlFile.split("/").pop()
     const { data: fileList } = await supabaseAdmin.storage
       .from("tugas-siswa")
-      .list(`submission/${tugasId}`)
+      .list(`submission/${tugasId}/${siswaId}`)
 
     const fileExists = fileList?.some((f) => f.name === fileName)
     if (!fileExists) {

@@ -270,6 +270,7 @@ export async function deleteSoalUjian(
   }
 }
 
+// PENTEST FIX #2: Expose submitTerlambat di rekap hasil ujian
 export async function getRekapHasilUjian(ujianId: string): Promise<ActionResponse> {
   try {
     const ujian = await prisma.ujian.findUnique({
@@ -304,12 +305,24 @@ export async function getRekapHasilUjian(ujianId: string): Promise<ActionRespons
       orderBy: { siswa: { user: { nama: "asc" } } },
     })
 
+    // PENTEST FIX #2: Field submitTerlambat sekarang tersedia dari schema, diteruskan ke rekap
     return {
       success: true,
       message: "Rekap hasil ujian berhasil dimuat",
       data: {
         ujian,
-        peserta: rekap,
+        peserta: rekap.map((p) => ({
+          id: p.id,
+          siswa: p.siswa,
+          status: p.status,
+          waktuMulai: p.waktuMulai,
+          waktuSubmit: p.waktuSubmit,
+          submitTerlambat: p.submitTerlambat, // Flag dari pentest fix #2
+          nilaiTotal: p.nilaiTotal,
+          nilaiPg: p.nilaiPg,
+          nilaiEsai: p.nilaiEsai,
+          jawaban: p.jawaban,
+        })),
       },
     }
   } catch (error: any) {
@@ -645,6 +658,22 @@ export async function submitPengerjaanUjian(
       return { success: false, message: "Ujian ini sudah pernah dikumpulkan sebelumnya" }
     }
 
+    // =========================================================
+    // PENTEST FIX #2: Server-side deadline enforcement
+    // Hitung deadlineFinal di server — tidak bergantung pada timer client
+    // =========================================================
+    const deadlineSiswaMs = pengerjaan.waktuMulai.getTime() + pengerjaan.ujian.durasiMenit * 60 * 1000
+    const deadlineSiswa = new Date(deadlineSiswaMs)
+    const deadlineFinal =
+      deadlineSiswa < pengerjaan.ujian.waktuSelesai
+        ? deadlineSiswa
+        : pengerjaan.ujian.waktuSelesai
+
+    // Tandai apakah submit ini melewati batas waktu resmi
+    // Jawaban TETAP diterima agar tidak ada data yang hilang,
+    // tapi guru dapat melihat flag submitTerlambat di rekap
+    const submitTerlambat = now > deadlineFinal
+
     // Eksekusi Grading Pilihan Ganda & Submit secara Atomik
     const hasil = await prisma.$transaction(async (tx) => {
       let poinPgDiperoleh = 0
@@ -706,7 +735,6 @@ export async function submitPengerjaanUjian(
       }
 
       // Hitung nilai akhir PG jika tidak ada esai
-      // ✅ FIX: Berikan tipe data eksplisit `: StatusPengerjaan` untuk mencegah literal widening issue
       let statusAkhir: StatusPengerjaan = StatusPengerjaan.SELESAI
       let nilaiTotal: Prisma.Decimal | null = null
       const nilaiPgDecimal = new Prisma.Decimal(
@@ -720,6 +748,7 @@ export async function submitPengerjaanUjian(
         nilaiTotal = nilaiPgDecimal
       }
 
+      // PENTEST FIX #2: Simpan submitTerlambat bersama data pengerjaan
       const updatedPengerjaan = await tx.pengerjaanUjian.update({
         where: { id: pengerjaan.id },
         data: {
@@ -727,24 +756,173 @@ export async function submitPengerjaanUjian(
           status: statusAkhir,
           nilaiPg: nilaiPgDecimal,
           nilaiTotal,
+          submitTerlambat, // Field baru dari pentest fix
         },
       })
 
       return updatedPengerjaan
     })
 
-    return {
-      success: true,
-      message:
+    // Susun pesan response dengan info keterlambatan jika relevan
+    let pesanSubmit: string
+    if (submitTerlambat) {
+      pesanSubmit =
+        hasil.status === StatusPengerjaan.DINILAI
+          ? `Ujian dikumpulkan (terlambat dari batas waktu). Nilai Anda: ${hasil.nilaiTotal}. Guru akan melihat catatan keterlambatan ini.`
+          : "Ujian dikumpulkan (terlambat dari batas waktu) dan menunggu penilaian guru. Keterlambatan dicatat dalam rekap."
+    } else {
+      pesanSubmit =
         hasil.status === StatusPengerjaan.DINILAI
           ? `Ujian berhasil dikumpulkan. Nilai Anda: ${hasil.nilaiTotal}`
-          : "Ujian berhasil dikumpulkan dan menunggu penilaian soal esai oleh guru.",
+          : "Ujian berhasil dikumpulkan dan menunggu penilaian soal esai oleh guru."
+    }
+
+    return {
+      success: true,
+      message: pesanSubmit,
       data: {
         status: hasil.status,
         nilaiTotal: hasil.nilaiTotal,
+        submitTerlambat,
       },
     }
   } catch (error: any) {
     return { success: false, message: error.message || "Gagal mengumpulkan jawaban ujian" }
+  }
+}
+
+// ========================================================
+// PENTEST FIX #2: AUTO-CLOSE PENGERJAAN YANG KEDALUWARSA
+//
+// Fungsi ini menutup semua sesi pengerjaan yang masih SEDANG_MENGERJAKAN
+// tapi sudah melewati deadlineFinal mereka masing-masing.
+//
+// CARA SCHEDULING (pilih salah satu):
+// 1. Vercel Cron (direkomendasikan): tambahkan ke vercel.json:
+//    { "crons": [{ "path": "/api/cron/tutup-ujian", "schedule": "*/5 * * * *" }] }
+//    Buat Route Handler di src/app/api/cron/tutup-ujian/route.ts yang memanggil action ini
+//    setelah memvalidasi header "Authorization: Bearer <CRON_SECRET>".
+// 2. Trigger manual guru: tombol "Tutup Ujian" di dashboard guru memanggil fungsi ini
+//    dengan ujianId spesifik (opsional).
+// 3. Dipanggil otomatis oleh getRekapHasilUjian saat guru membuka rekap (lazy close).
+// ========================================================
+
+export async function tutupPengerjaanUjianKedaluwarsa(
+  ujianId?: string // Jika diisi, hanya proses ujian tersebut; jika kosong, proses semua
+): Promise<ActionResponse<{ totalDitutup: number; detail: string[] }>> {
+  try {
+    // Bisa dipanggil guru (spesifik per ujian) atau sistem cron (semua ujian)
+    // Jika ada ujianId, validasi guru punya akses ke ujian tersebut
+    if (ujianId) {
+      const ujian = await prisma.ujian.findUnique({ where: { id: ujianId } })
+      if (!ujian) return { success: false, message: "Ujian tidak ditemukan" }
+      await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaran)
+    }
+    // Untuk mode cron (tanpa ujianId), tidak perlu validasi pemanggil —
+    // middleware route handler yang bertanggung jawab memvalidasi CRON_SECRET.
+
+    const now = new Date()
+
+    // Cari semua sesi yang masih SEDANG_MENGERJAKAN
+    const whereClause: Record<string, any> = {
+      status: StatusPengerjaan.SEDANG_MENGERJAKAN,
+    }
+    if (ujianId) {
+      whereClause.ujianId = ujianId
+    }
+
+    const sesiAktif = await prisma.pengerjaanUjian.findMany({
+      where: whereClause,
+      include: {
+        ujian: {
+          include: {
+            soal: { select: { id: true, tipe: true, bobot: true } },
+          },
+        },
+      },
+    })
+
+    let totalDitutup = 0
+    const detail: string[] = []
+
+    for (const sesi of sesiAktif) {
+      const deadlineSiswaMs = sesi.waktuMulai.getTime() + sesi.ujian.durasiMenit * 60 * 1000
+      const deadlineSiswa = new Date(deadlineSiswaMs)
+      const deadlineFinal =
+        deadlineSiswa < sesi.ujian.waktuSelesai ? deadlineSiswa : sesi.ujian.waktuSelesai
+
+      // Hanya tutup jika sudah melewati deadline
+      if (now <= deadlineFinal) continue
+
+      const adaSoalEsai = sesi.ujian.soal.some((s) => s.tipe === "ESAI")
+
+      await prisma.$transaction(async (tx) => {
+        // Buat record jawaban kosong untuk soal yang belum dijawab sama sekali
+        // (agar rekap guru lengkap dan tidak ada data kosong)
+        for (const soal of sesi.ujian.soal) {
+          const jawabanExisting = await tx.jawabanSiswa.findUnique({
+            where: {
+              pengerjaanId_soalId: { pengerjaanId: sesi.id, soalId: soal.id },
+            },
+          })
+
+          if (!jawabanExisting) {
+            await tx.jawabanSiswa.create({
+              data: {
+                pengerjaanId: sesi.id,
+                soalId: soal.id,
+                opsiDipilihId: null,
+                jawabanEsai: soal.tipe === "ESAI" ? "" : null,
+                benar: soal.tipe === "PILIHAN_GANDA" ? false : null,
+                nilaiSoal: soal.tipe === "PILIHAN_GANDA" ? new Prisma.Decimal(0) : null,
+              },
+            })
+          }
+        }
+
+        // Tutup sesi: status SELESAI (ada esai) atau DINILAI (hanya PG)
+        // Hitung nilai PG dari jawaban yang sudah masuk
+        const jawabanPg = await tx.jawabanSiswa.findMany({
+          where: { pengerjaanId: sesi.id },
+          include: { soal: { select: { tipe: true, bobot: true } } },
+        })
+
+        const totalBobot = sesi.ujian.soal.reduce((acc, s) => acc + s.bobot, 0)
+        const poinPg = jawabanPg
+          .filter((j) => j.soal.tipe === "PILIHAN_GANDA" && j.benar === true)
+          .reduce((acc, j) => acc + j.soal.bobot, 0)
+
+        const nilaiPgDecimal = new Prisma.Decimal(
+          totalBobot > 0 ? ((poinPg / totalBobot) * 100).toFixed(2) : "0.00"
+        )
+
+        await tx.pengerjaanUjian.update({
+          where: { id: sesi.id },
+          data: {
+            status: adaSoalEsai ? StatusPengerjaan.SELESAI : StatusPengerjaan.DINILAI,
+            waktuSubmit: deadlineFinal, // Waktu submit = tepat di deadline (bukan "now")
+            submitTerlambat: true,
+            nilaiPg: nilaiPgDecimal,
+            nilaiTotal: adaSoalEsai ? null : nilaiPgDecimal,
+          },
+        })
+      })
+
+      totalDitutup++
+      detail.push(
+        `Sesi ${sesi.id} (siswa: ${sesi.siswaId}, ujian: ${sesi.ujianId}) — ditutup otomatis`
+      )
+    }
+
+    return {
+      success: true,
+      message:
+        totalDitutup === 0
+          ? "Tidak ada sesi pengerjaan yang perlu ditutup saat ini"
+          : `${totalDitutup} sesi pengerjaan kedaluwarsa berhasil ditutup`,
+      data: { totalDitutup, detail },
+    }
+  } catch (error: any) {
+    return { success: false, message: error.message || "Gagal menutup sesi ujian kedaluwarsa" }
   }
 }
