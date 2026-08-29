@@ -116,6 +116,7 @@ model User {
   avatar             String?
   authId             String    @unique @map("auth_id")
   aktif              Boolean   @default(true)
+  isAdmin            Boolean   @default(false) @map("is_admin")
   mustChangePassword Boolean   @default(false) @map("must_change_password")
   lastPasswordChange DateTime? @map("last_password_change")
   createdAt          DateTime  @default(now()) @map("created_at")

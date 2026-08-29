@@ -3,7 +3,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireGuru } from "@/lib/auth"
+import { requireGuru, requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
 import { sendEmail, buildKredensialGuruEmail } from "@/lib/email"
@@ -22,7 +22,7 @@ import { revalidatePath } from "next/cache"
 
 /**
  * Membuat akun guru baru.
- * Bisa dipanggil oleh semua guru (trust-based).
+ * Hanya bisa dipanggil oleh guru admin (requireGuruAdmin).
  * - Generate password random aman
  * - Buat user di Supabase Auth (email_confirm: true)
  * - Set mustChangePassword: true
@@ -31,9 +31,9 @@ import { revalidatePath } from "next/cache"
  */
 export async function createAkunGuru(
   payload: CreateAkunGuruValues
-): Promise<ActionResponse<{ userId: string; password: string }>> {
+): Promise<ActionResponse<{ userId: string }>> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const validated = createAkunGuruSchema.safeParse(payload)
     if (!validated.success) {
@@ -121,7 +121,7 @@ export async function createAkunGuru(
     return {
       success: true,
       message: `Akun guru "${nama}" berhasil dibuat. Kredensial telah dikirim ke ${email}.`,
-      data: { userId: result.userId, password },
+      data: { userId: result.userId },
     }
   } catch (error: any) {
     return {
@@ -206,12 +206,13 @@ export async function updateAkunGuru(
 /**
  * Nonaktifkan akun guru (soft-delete via field aktif di User).
  * Tidak hard delete agar data historis tetap tersimpan.
+ * Juga melakukan ban di Supabase Auth agar login benar-benar diblokir.
  */
 export async function nonaktifkanAkunGuru(
   userId: string
 ): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -227,10 +228,11 @@ export async function nonaktifkanAkunGuru(
     }
 
     // Nonaktifkan user di Supabase Auth juga
+    // ban_duration "876000h" = 100 tahun = effectively permanent ban
     const supabaseAdmin = createSupabaseAdmin()
     const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
       user.authId,
-      { ban_duration: "none" } // Set ban untuk disable akses login
+      { ban_duration: "876000h" }
     )
 
     if (authError) {
@@ -254,6 +256,101 @@ export async function nonaktifkanAkunGuru(
 }
 
 /**
+ * Mengaktifkan kembali akun guru yang sebelumnya dinonaktifkan.
+ * Mencabut ban di Supabase Auth dan mengembalikan field aktif: true.
+ */
+export async function aktifkanKembaliAkunGuru(
+  userId: string
+): Promise<ActionResponse> {
+  try {
+    await requireGuruAdmin()
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { guru: true },
+    })
+
+    if (!user || user.role !== "GURU") {
+      return { success: false, message: "Akun guru tidak ditemukan" }
+    }
+
+    if (user.aktif) {
+      return { success: false, message: "Akun guru sudah aktif" }
+    }
+
+    // Cabut ban di Supabase Auth
+    const supabaseAdmin = createSupabaseAdmin()
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+      user.authId,
+      { ban_duration: "none" }
+    )
+
+    if (authError) {
+      console.error("Supabase auth unban error:", authError)
+      // Lanjutkan meskipun gagal di Supabase — tetap aktifkan di DB
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { aktif: true },
+    })
+
+    revalidatePath("/dashboard/guru")
+    return { success: true, message: `Akun guru "${user.nama}" berhasil diaktifkan kembali` }
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || "Gagal mengaktifkan kembali akun guru",
+    }
+  }
+}
+
+/**
+ * Mengubah status admin guru (promote/demote).
+ * Hanya bisa dipanggil oleh guru admin (requireGuruAdmin).
+ */
+export async function setGuruAdmin(
+  userId: string,
+  isAdmin: boolean
+): Promise<ActionResponse> {
+  try {
+    await requireGuruAdmin()
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { guru: true },
+    })
+
+    if (!user || user.role !== "GURU") {
+      return { success: false, message: "Akun guru tidak ditemukan" }
+    }
+
+    // Tidak boleh mengubah status admin diri sendiri
+    const currentUser = await requireGuruAdmin()
+    if (currentUser.id === userId) {
+      return { success: false, message: "Tidak dapat mengubah status admin diri sendiri" }
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { isAdmin },
+    })
+
+    const action = isAdmin ? "diangkat menjadi admin" : "diturunkan dari admin"
+    revalidatePath("/dashboard/guru")
+    return {
+      success: true,
+      message: `Guru "${user.nama}" berhasil ${action}`,
+    }
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || "Gagal mengubah status admin guru",
+    }
+  }
+}
+
+/**
  * Mengambil daftar semua guru beserta info akun.
  */
 export async function getDaftarGuru(): Promise<ActionResponse> {
@@ -268,6 +365,7 @@ export async function getDaftarGuru(): Promise<ActionResponse> {
             nama: true,
             email: true,
             aktif: true,
+            isAdmin: true,
             mustChangePassword: true,
             createdAt: true,
           },
@@ -294,6 +392,7 @@ export async function getDaftarGuru(): Promise<ActionResponse> {
       jabatan: g.jabatan,
       noHp: g.noHp,
       aktif: g.user.aktif,
+      isAdmin: g.user.isAdmin,
       mustChangePassword: g.user.mustChangePassword,
       createdAt: g.user.createdAt,
       waliKelas: g.waliKelas.map((k) => k.nama),

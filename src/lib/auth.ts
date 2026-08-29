@@ -26,6 +26,13 @@ export async function getCurrentUser() {
     },
   })
 
+  // Defense-in-depth: cek apakah akun masih aktif
+  // Memastikan meskipun ban Supabase Auth gagal/belum ter-propagate,
+  // aplikasi tetap menolak akses berdasarkan data di database
+  if (user && !user.aktif) {
+    throw new Error("Akun Anda telah dinonaktifkan. Hubungi admin sekolah.")
+  }
+
   return user
 }
 
@@ -49,6 +56,18 @@ export async function requireRole(allowedRoles: Role[]) {
 
 export async function requireGuru() {
   return requireRole([Role.GURU])
+}
+
+/**
+ * Guard yang memastikan user adalah guru dengan hak admin.
+ * Hanya guru dengan isAdmin === true yang boleh mengakses fitur ini.
+ */
+export async function requireGuruAdmin() {
+  const user = await requireGuru()
+  if (!user.isAdmin) {
+    throw new Error("Akses ditolak: Fitur ini hanya untuk admin")
+  }
+  return user
 }
 
 /**

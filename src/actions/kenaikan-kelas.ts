@@ -3,7 +3,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireGuru } from "@/lib/auth"
+import { requireGuru, requireGuruAdmin } from "@/lib/auth"
 import {
   promosiSiswaMassalSchema,
   type PromosiSiswaMassalValues,
@@ -25,7 +25,7 @@ export async function promosiSiswaMassal(
   payload: PromosiSiswaMassalValues
 ): Promise<ActionResponse<{ totalBerhasil: number; totalGagal: number }>> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const validated = promosiSiswaMassalSchema.safeParse(payload)
     if (!validated.success) {

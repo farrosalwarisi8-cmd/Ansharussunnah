@@ -3,7 +3,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireGuru } from "@/lib/auth"
+import { requireGuru, requireGuruAdmin } from "@/lib/auth"
 import { verifyGuruAksesKelas } from "@/lib/guru-auth"
 import {
   assignGuruKeKelasSchema,
@@ -24,7 +24,7 @@ export async function assignGuruKeKelas(
   payload: AssignGuruKeKelasValues
 ): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const validated = assignGuruKeKelasSchema.safeParse(payload)
     if (!validated.success) {
@@ -88,7 +88,7 @@ export async function removeGuruDariKelas(
   guruKelasId: string
 ): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const guruKelas = await prisma.guruKelas.findUnique({
       where: { id: guruKelasId },

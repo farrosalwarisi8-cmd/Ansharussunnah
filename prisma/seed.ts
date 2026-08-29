@@ -62,13 +62,14 @@ async function main() {
 
   const guruUser = await prisma.user.upsert({
     where: { email: "guru@sekolah.sch.id" },
-    update: { authId: guruAuthId },
+    update: { authId: guruAuthId, isAdmin: true },
     create: {
       email: "guru@sekolah.sch.id",
       nama: "Ustadz Ahmad Fauzi, S.Pd",
       role: Role.GURU,
       authId: guruAuthId,
       mustChangePassword: true,
+      isAdmin: true,
       guru: {
         create: {
           nip: "198501012010011001",
