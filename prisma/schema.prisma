@@ -104,6 +104,23 @@ enum StatusTransaksi {
   DIBATALKAN
 }
 
+enum StatusOrangTua {
+  MASIH_HIDUP
+  SUDAH_MENINGGAL
+  TIDAK_DIKETAHUI
+}
+
+enum StatusWali {
+  SAMA_DENGAN_AYAH
+  SAMA_DENGAN_IBU
+  LAINNYA
+}
+
+enum Kewarganegaraan {
+  WNI
+  WNA
+}
+
 // ============================================
 // AUTH & USER MODELS
 // ============================================
@@ -168,18 +185,30 @@ model Guru {
 }
 
 model Siswa {
-  id            String       @id @default(cuid())
-  userId        String       @unique @map("user_id")
-  nisn          String?      @unique
-  nis           String?      @unique // Nomor Induk Siswa Lokal
-  agama         String?
-  tempatLahir   String?      @map("tempat_lahir")
-  tanggalLahir  DateTime?    @map("tanggal_lahir")
-  jenisKelamin  JenisKelamin @map("jenis_kelamin")
-  alamat        String?
-  kelasId       String?      @map("kelas_id")
-  pendaftaranId String?      @unique @map("pendaftaran_id")
-  sppKhusus     Decimal?     @map("spp_khusus") @db.Decimal(12, 2)
+  id                String            @id @default(cuid())
+  userId            String            @unique @map("user_id")
+  nisn              String?           @unique
+  nis               String?           @unique // Nomor Induk Siswa Lokal
+  agama             String?
+  tempatLahir       String?           @map("tempat_lahir")
+  tanggalLahir      DateTime?         @map("tanggal_lahir")
+  jenisKelamin      JenisKelamin      @map("jenis_kelamin")
+  alamat            String?
+  noHpSiswa         String?           @map("no_hp_siswa")
+  namaAyahKandung   String?           @map("nama_ayah_kandung")
+  statusAyahKandung StatusOrangTua?   @map("status_ayah_kandung")
+  nikAyah           String?           @map("nik_ayah")
+  namaIbuKandung    String?           @map("nama_ibu_kandung")
+  statusIbuKandung  StatusOrangTua?   @map("status_ibu_kandung")
+  nikIbu            String?           @map("nik_ibu")
+  statusWali        StatusWali?       @map("status_wali")
+  namaWali          String?           @map("nama_wali")
+  kewarganegaraan   Kewarganegaraan?  @default(WNI)
+  kitas             String?
+  asalNegara        String?           @map("asal_negara")
+  kelasId           String?           @map("kelas_id")
+  pendaftaranId     String?           @unique @map("pendaftaran_id")
+  sppKhusus         Decimal?          @map("spp_khusus") @db.Decimal(12, 2)
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   kelas       Kelas?       @relation(fields: [kelasId], references: [id])
@@ -350,30 +379,43 @@ model GuruKelas {
 // ============================================
 
 model Pendaftaran {
-  id                 String   @id @default(cuid())
-  nomorPendaftaran   String   @unique @map("nomor_pendaftaran")
-  namaLengkap        String   @map("nama_lengkap")
-  tempatLahir        String   @map("tempat_lahir")
-  tanggalLahir       DateTime @map("tanggal_lahir")
-  jenisKelamin       JenisKelamin @map("jenis_kelamin")
-  alamatSiswa        String   @map("alamat_siswa")
-  nisn               String?
-  namaOrangTua       String   @map("nama_orang_tua")
-  noHpOrangTua       String   @map("no_hp_orang_tua")
-  emailOrangTua      String   @map("email_orang_tua")
-  alamatOrangTua     String?  @map("alamat_orang_tua")
-  jenjangTujuanId    String   @map("jenjang_tujuan_id")
-  kelasTujuanId      String?  @map("kelas_tujuan_id")
-  dokKartuKeluarga   String?  @map("dok_kartu_keluarga")
-  dokAkteLahir       String?  @map("dok_akte_lahir")
-  dokFoto            String?  @map("dok_foto")
-  dokLainnya         String[] @default([]) @map("dok_lainnya")
-  status             StatusPendaftaran @default(MENUNGGU_PEMBAYARAN)
-  biayaPendaftaran   Decimal  @map("biaya_pendaftaran") @db.Decimal(12, 2)
-  catatanAdmin       String?  @map("catatan_admin")
-  alasanPenolakan    String?  @map("alasan_penolakan")
-  diverifikasiOlehId String?  @map("diverifikasi_oleh_id")
-  waktuVerifikasi    DateTime? @map("waktu_verifikasi")
+  id                   String            @id @default(cuid())
+  nomorPendaftaran     String            @unique @map("nomor_pendaftaran")
+  namaLengkap          String            @map("nama_lengkap")
+  tempatLahir          String            @map("tempat_lahir")
+  tanggalLahir         DateTime          @map("tanggal_lahir")
+  jenisKelamin         JenisKelamin      @map("jenis_kelamin")
+  agama                String?
+  alamatSiswa          String            @map("alamat_siswa")
+  nisn                 String?
+  noHpSiswa            String?           @map("no_hp_siswa")
+  namaOrangTua         String            @map("nama_orang_tua")
+  noHpOrangTua         String            @map("no_hp_orang_tua")
+  emailOrangTua        String            @map("email_orang_tua")
+  alamatOrangTua       String?           @map("alamat_orang_tua")
+  namaAyahKandung      String?           @map("nama_ayah_kandung")
+  statusAyahKandung    StatusOrangTua?   @map("status_ayah_kandung")
+  nikAyah              String?           @map("nik_ayah")
+  namaIbuKandung       String?           @map("nama_ibu_kandung")
+  statusIbuKandung     StatusOrangTua?   @map("status_ibu_kandung")
+  nikIbu               String?           @map("nik_ibu")
+  statusWali           StatusWali?       @map("status_wali")
+  namaWali             String?           @map("nama_wali")
+  kewarganegaraan      Kewarganegaraan?  @default(WNI)
+  kitas                String?
+  asalNegara           String?           @map("asal_negara")
+  jenjangTujuanId      String            @map("jenjang_tujuan_id")
+  kelasTujuanId        String?           @map("kelas_tujuan_id")
+  dokKartuKeluarga     String?           @map("dok_kartu_keluarga")
+  dokAkteLahir         String?           @map("dok_akte_lahir")
+  dokFoto              String?           @map("dok_foto")
+  dokLainnya           String[]          @default([]) @map("dok_lainnya")
+  status               StatusPendaftaran @default(MENUNGGU_PEMBAYARAN)
+  biayaPendaftaran     Decimal           @map("biaya_pendaftaran") @db.Decimal(12, 2)
+  catatanAdmin         String?           @map("catatan_admin")
+  alasanPenolakan      String?           @map("alasan_penolakan")
+  diverifikasiOlehId   String?           @map("diverifikasi_oleh_id")
+  waktuVerifikasi      DateTime?         @map("waktu_verifikasi")
 
   jenjangTujuan    Jenjang                    @relation(fields: [jenjangTujuanId], references: [id])
   kelasTujuan      Kelas?                     @relation(fields: [kelasTujuanId], references: [id])

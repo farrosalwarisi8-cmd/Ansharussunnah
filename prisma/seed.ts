@@ -135,65 +135,82 @@ async function main() {
   console.log("  ✔ 2 Periode Ajaran berhasil dibuat (Ganjil aktif)")
 
   // ========================================================
-  // 3. JENJANG & KELAS (dengan tarif SPP)
+  // 3. JENJANG & KELAS (Format EMIS Pesantren)
   // ========================================================
   console.log("\n3. Membuat Jenjang & Kelas...")
 
-  const listJenjang = [
-    { nama: "Kelas 1", urutan: 1, tarif: 500000 },
-    { nama: "Kelas 2", urutan: 2, tarif: 500000 },
-    { nama: "Kelas 3", urutan: 3, tarif: 500000 },
-    { nama: "Kelas 4", urutan: 4, tarif: 550000 },
-    { nama: "Kelas 5", urutan: 5, tarif: 550000 },
-    { nama: "Kelas 6", urutan: 6, tarif: 600000 },
+  // Struktur jenjang sesuai EMIS Pesantren
+  const strukturJenjang = [
+    {
+      nama: "Madrasah Ibtidaiyyah",
+      urutan: 1,
+      kelas: Array.from({ length: 6 }, (_, i) => `Kelas ${i + 1}`),
+    },
+    {
+      nama: "Madrasah Mutawasithah",
+      urutan: 2,
+      kelas: Array.from({ length: 3 }, (_, i) => `Kelas ${i + 1}`),
+    },
+    {
+      nama: "Madrasah Aliyah",
+      urutan: 3,
+      kelas: Array.from({ length: 3 }, (_, i) => `Kelas ${i + 1}`),
+    },
+    {
+      nama: "Kuliah Jurusan Agama Islam",
+      urutan: 4,
+      kelas: Array.from({ length: 4 }, (_, i) => `Tingkat ${i + 1}`),
+    },
   ]
 
   const jenjangMap: Record<string, string> = {}
+  const kelasMap: Record<string, string> = {}
 
-  for (const j of listJenjang) {
+  for (const j of strukturJenjang) {
     const jenjang = await prisma.jenjang.upsert({
       where: { nama: j.nama },
-      update: { urutan: j.urutan, tarifSppBulanan: new Prisma.Decimal(j.tarif) },
+      update: { urutan: j.urutan },
       create: {
         nama: j.nama,
         urutan: j.urutan,
         aktif: true,
-        tarifSppBulanan: new Prisma.Decimal(j.tarif),
+        tarifSppBulanan: null,
       },
     })
     jenjangMap[j.nama] = jenjang.id
-  }
-  console.log("  ✔ 6 Jenjang berhasil dibuat (dengan tarif SPP)")
 
-  const kelasData = [
-    { nama: "1A (Ali bin Abi Thalib)", jenjang: "Kelas 1", waliKelas: true },
-    { nama: "1B (Umar bin Khattab)", jenjang: "Kelas 1", waliKelas: false },
-    { nama: "2A (Abu Bakar Ash-Shiddiq)", jenjang: "Kelas 2", waliKelas: false },
-    { nama: "3A (Utsman bin Affan)", jenjang: "Kelas 3", waliKelas: false },
-  ]
-
-  const kelasMap: Record<string, string> = {}
-
-  for (const k of kelasData) {
-    const kelas = await prisma.kelas.upsert({
-      where: {
-        nama_jenjangId: {
-          nama: k.nama,
-          jenjangId: jenjangMap[k.jenjang],
+    for (const namaKelas of j.kelas) {
+      const kelas = await prisma.kelas.upsert({
+        where: {
+          nama_jenjangId: {
+            nama: namaKelas,
+            jenjangId: jenjang.id,
+          },
         },
-      },
-      update: {},
-      create: {
-        nama: k.nama,
-        jenjangId: jenjangMap[k.jenjang],
-        waliKelasId: k.waliKelas && guruUser.guru ? guruUser.guru.id : null,
-        kapasitas: 28,
-        aktif: true,
-      },
-    })
-    kelasMap[k.nama] = kelas.id
+        update: {},
+        create: {
+          nama: namaKelas,
+          jenjangId: jenjang.id,
+          kapasitas: 30,
+          aktif: true,
+        },
+      })
+      kelasMap[namaKelas] = kelas.id
+    }
   }
-  console.log("  ✔ 4 Kelas berhasil dibuat")
+  console.log("  ✔ 4 Jenjang berhasil dibuat")
+  console.log(`  ✔ ${Object.keys(kelasMap).length} Kelas berhasil dibuat`)
+
+  // Assign wali kelas untuk beberapa kelas contoh
+  if (guruUser.guru) {
+    const firstKelasIbtidaiyyah = kelasMap["Kelas 1"]
+    if (firstKelasIbtidaiyyah) {
+      await prisma.kelas.update({
+        where: { id: firstKelasIbtidaiyyah },
+        data: { waliKelasId: guruUser.guru.id },
+      })
+    }
+  }
 
   // ========================================================
   // 4. GURU-KELAS (Relasi Mengajar)
@@ -220,28 +237,37 @@ async function main() {
 
   if (guruUser.guru) {
     const mapelKelas = [
-      { kelasNama: "1A (Ali bin Abi Thalib)", mapel: "Al-Quran" },
-      { kelasNama: "1A (Ali bin Abi Thalib)", mapel: "Fiqih" },
-      { kelasNama: "1B (Umar bin Khattab)", mapel: "Al-Quran" },
-      { kelasNama: "2A (Abu Bakar Ash-Shiddiq)", mapel: "Aqidah Akhlak" },
+      { kelasNama: "Kelas 1", jenjang: "Madrasah Ibtidaiyyah", mapel: "Al-Quran" },
+      { kelasNama: "Kelas 1", jenjang: "Madrasah Ibtidaiyyah", mapel: "Fiqih" },
+      { kelasNama: "Kelas 2", jenjang: "Madrasah Ibtidaiyyah", mapel: "Al-Quran" },
+      { kelasNama: "Kelas 1", jenjang: "Madrasah Mutawasithah", mapel: "Aqidah Akhlak" },
     ]
 
     for (const mk of mapelKelas) {
-      await prisma.guruKelas.upsert({
+      // Cari ID kelas berdasarkan nama kelas + jenjang
+      const kelasRecord = await prisma.kelas.findFirst({
         where: {
-          guruId_kelasId_mataPelajaranId: {
-            guruId: guruUser.guru.id,
-            kelasId: kelasMap[mk.kelasNama],
-            mataPelajaranId: mapelMap[mk.mapel],
-          },
-        },
-        update: {},
-        create: {
-          guruId: guruUser.guru.id,
-          kelasId: kelasMap[mk.kelasNama],
-          mataPelajaranId: mapelMap[mk.mapel],
+          nama: mk.kelasNama,
+          jenjang: { nama: mk.jenjang },
         },
       })
+      if (kelasRecord) {
+        await prisma.guruKelas.upsert({
+          where: {
+            guruId_kelasId_mataPelajaranId: {
+              guruId: guruUser.guru.id,
+              kelasId: kelasRecord.id,
+              mataPelajaranId: mapelMap[mk.mapel],
+            },
+          },
+          update: {},
+          create: {
+            guruId: guruUser.guru.id,
+            kelasId: kelasRecord.id,
+            mataPelajaranId: mapelMap[mk.mapel],
+          },
+        })
+      }
     }
     console.log("  ✔ 4 Relasi Guru-Kelas-Mata Pelajaran berhasil dibuat")
   }
