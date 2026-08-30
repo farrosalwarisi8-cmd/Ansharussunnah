@@ -4,6 +4,7 @@
 
 import prisma from "@/lib/prisma"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
 
 /**
@@ -14,6 +15,19 @@ export async function uploadBuktiTransferPendaftaran(
   formData: FormData
 ): Promise<ActionResponse> {
   try {
+    // Rate Limit: maksimal 10 upload per 10 menit per IP
+    const ip = await getClientIpFromHeaders()
+    const limiter = await rateLimitAsync(`upload-bukti-transfer:${ip}`, {
+      maxRequests: 10,
+      windowMs: 10 * 60 * 1000, // 10 menit
+    })
+    if (!limiter.success) {
+      return {
+        success: false,
+        message: "Terlalu banyak percobaan upload. Silakan coba lagi dalam 10 menit.",
+      }
+    }
+
     const nomorPendaftaran = formData.get("nomorPendaftaran") as string
     const urlFile = formData.get("urlFile") as string
     const namaFile = formData.get("namaFile") as string

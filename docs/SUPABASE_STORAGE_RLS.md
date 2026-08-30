@@ -18,6 +18,7 @@
 | `tugas-siswa` | Submission tugas & lampiran instruksi guru | Siswa (submission), Guru (lampiran) |
 | `nota` | Bukti transaksi keuangan non-SPP | Admin Keuangan saja |
 | `materi` | Materi pembelajaran (file, PDF, dokumen) | Guru (upload materi) |
+| `dokumen-pendaftaran` | Dokumen pendaftaran (KK, akte lahir, foto) | Calon siswa (authenticated) |
 
 ---
 
@@ -313,6 +314,72 @@ USING (
     SELECT 1 FROM public.users
     WHERE auth_id = auth.uid()
     AND role = 'ADMIN_KEUANGAN'
+  )
+);
+```
+
+---
+
+## Bucket: `dokumen-pendaftaran`
+
+**Konteks:** Calon siswa upload dokumen pendaftaran (Kartu Keluarga, Akte Lahir, Foto).
+File disimpan di path `dokumen-pendaftaran/{pendaftaranId}/{randomFile}`.
+
+```sql
+-- =============================================
+-- INSERT (Upload dokumen pendaftaran)
+-- =============================================
+-- Calon siswa bisa upload dokumen pendaftaran ke folder milik pendaftaran tertentu.
+-- PendaftaranId adalah UUID yang tidak bisa ditebak.
+CREATE POLICY "Calon siswa dapat upload dokumen pendaftaran"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'dokumen-pendaftaran'
+  AND (storage.foldername(name))[1] = 'dokumen-pendaftaran'
+);
+
+-- =============================================
+-- SELECT (Baca/download dokumen pendaftaran)
+-- =============================================
+-- Hanya guru (yang memverifikasi pendaftaran) dan admin keuangan.
+CREATE POLICY "Guru dapat membaca dokumen pendaftaran"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'dokumen-pendaftaran'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid()
+    AND role = 'GURU'
+  )
+);
+
+CREATE POLICY "Admin keuangan dapat membaca dokumen pendaftaran"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'dokumen-pendaftaran'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid()
+    AND role = 'ADMIN_KEUANGAN'
+  )
+);
+
+-- =============================================
+-- DELETE
+-- =============================================
+-- Hanya guru yang bisa menghapus dokumen pendaftaran.
+CREATE POLICY "Guru dapat menghapus dokumen pendaftaran"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'dokumen-pendaftaran'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid()
+    AND role = 'GURU'
   )
 );
 ```

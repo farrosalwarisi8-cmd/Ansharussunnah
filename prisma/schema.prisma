@@ -891,6 +891,27 @@ model TransaksiKeuangan {
 }
 
 // ============================================
+// AUDIT TRAIL: LOGIN ATTEMPTS
+// ============================================
+
+model LoginAudit {
+  id        String   @id @default(cuid())
+  email     String   // email yang dicoba login (normalized lowercase)
+  ip        String?  @map("ip_address") // IP address pelaku
+  userAgent String?  @map("user_agent") // User-Agent browser
+  status    String   // SUCCESS atau FAILED
+  reason    String?  // alasan kegagalan (misal: "Invalid credentials", "Rate limited")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Index untuk query dashboard keamanan & cleanup lama
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@map("login_audits")
+}
+
+// ============================================
 // RIWAYAT HISTORIS
 // ============================================
 

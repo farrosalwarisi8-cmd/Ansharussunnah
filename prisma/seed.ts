@@ -1,7 +1,19 @@
 // prisma/seed.ts
+//
+// ⚠️ CATATAN KEAMANAN:
+// - Seed ini AMAN dijalankan berulang kali (idempotent via upsert) — tidak akan
+//   membuat data duplikat atau merusak data yang sudah ada.
+// - Password akun seed diambil dari environment variable (SEED_GURU_PASSWORD,
+//   SEED_KEUANGAN_PASSWORD). Jika tidak diset, password random aman akan
+//   di-generate secara otomatis.
+// - 🔴 SEGERA login dan ganti password setelah menjalankan seed di production!
+//   Password seed hanya untuk akses awal — bukan password permanen.
+// - Kedua akun seed memiliki mustChangePassword: true, sehingga user WAJIB
+//   mengganti password saat pertama kali login.
 
 import { PrismaClient, Role, JenisKelamin, TipeTransaksi, Prisma } from "@prisma/client"
 import { createClient } from "@supabase/supabase-js"
+import { generateSecurePassword } from "../src/lib/password"
 import * as dotenv from "dotenv"
 
 dotenv.config()
@@ -54,9 +66,13 @@ async function main() {
   // ========================================================
   console.log("1. Membuat Akun Pengguna...")
 
+  // Password diambil dari env var; fallback = password random aman 16 karakter
+  const guruPassword = process.env.SEED_GURU_PASSWORD || generateSecurePassword(16)
+  const keuanganPassword = process.env.SEED_KEUANGAN_PASSWORD || generateSecurePassword(16)
+
   const guruAuthId = await createAuthUser(
     "guru@sekolah.sch.id",
-    "AdminGuru123!",
+    guruPassword,
     "Ustadz Ahmad Fauzi, S.Pd",
     Role.GURU
   )
@@ -85,7 +101,7 @@ async function main() {
 
   const financeAuthId = await createAuthUser(
     "keuangan@sekolah.sch.id",
-    "AdminKeu123!",
+    keuanganPassword,
     "Hj. Siti Aminah, S.E",
     Role.ADMIN_KEUANGAN
   )
@@ -102,6 +118,28 @@ async function main() {
     },
   })
   console.log("  ✔ Record Admin Keuangan berhasil dibuat")
+
+  // Tampilkan password yang di-generate agar admin bisa login
+  const passwordSource = process.env.SEED_GURU_PASSWORD ? "env var" : "random"
+  const keuanganPasswordSource = process.env.SEED_KEUANGAN_PASSWORD ? "env var" : "random"
+
+  console.log("\n╔══════════════════════════════════════════════════════════════╗")
+  console.log("║  🔐 KREDENSIAL AKUN SEED — CATAT DAN SIMPAN DENGAN AMAN!  ║")
+  console.log("╠══════════════════════════════════════════════════════════════╣")
+  console.log("║                                                            ║")
+  console.log("║  👨‍🏫 AKUN GURU ADMIN:                                      ║")
+  console.log(`║  Email    : guru@sekolah.sch.id                             ║`)
+  console.log(`║  Password : ${guruPassword.padEnd(47)}║`)
+  console.log(`║  Sumber   : ${passwordSource.padEnd(47)}║`)
+  console.log("║                                                            ║")
+  console.log("║  💰 AKUN ADMIN KEUANGAN:                                   ║")
+  console.log(`║  Email    : keuangan@sekolah.sch.id                         ║`)
+  console.log(`║  Password : ${keuanganPassword.padEnd(47)}║`)
+  console.log(`║  Sumber   : ${keuanganPasswordSource.padEnd(47)}║`)
+  console.log("║                                                            ║")
+  console.log("║  ⚠️  KEDUA AKUN: mustChangePassword = true                 ║")
+  console.log("║  🔴 SEGERA LOGIN DAN GANTI PASSWORD SETELAH SEED!          ║")
+  console.log("╚══════════════════════════════════════════════════════════════╝\n")
 
   // ========================================================
   // 2. PERIODE AJARAN
