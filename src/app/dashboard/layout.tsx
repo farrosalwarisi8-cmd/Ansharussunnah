@@ -1,6 +1,10 @@
 // src/app/dashboard/layout.tsx
 
-import { enforcePasswordChange } from "@/lib/auth"
+import { getCurrentUser, enforcePasswordChange } from "@/lib/auth"
+import prisma from "@/lib/prisma"
+import { Role } from "@prisma/client"
+import { DashboardProvider, type DashboardUser, type ChildStudent } from "@/components/dashboard/dashboard-context"
+import { DashboardNav } from "@/components/dashboard/dashboard-nav"
 
 export default async function DashboardLayout({
   children,
@@ -10,12 +14,80 @@ export default async function DashboardLayout({
   // Guard: Paksa user ganti password jika mustChangePassword = true
   await enforcePasswordChange("/dashboard")
 
+  const user = await getCurrentUser()
+
+  let childrenList: ChildStudent[] = []
+
+  if (user && user.role === Role.ORANG_TUA && user.orangTua) {
+    try {
+      const parentRelations = await prisma.parentStudent.findMany({
+        where: { orangTuaId: user.orangTua.id },
+        include: {
+          siswa: {
+            include: {
+              user: true,
+              kelas: {
+                include: { jenjang: true },
+              },
+            },
+          },
+        },
+      })
+
+      childrenList = parentRelations.map((pr) => ({
+        id: pr.siswa.id,
+        userId: pr.siswa.userId,
+        nama: pr.siswa.user.nama,
+        nisn: pr.siswa.nisn,
+        nis: pr.siswa.nis,
+        kelasNama: pr.siswa.kelas?.nama || "Belum Ditentukan",
+        jenjangNama: pr.siswa.kelas?.jenjang?.nama || "-",
+        avatar: pr.siswa.user.avatar,
+      }))
+    } catch {
+      // Fallback
+    }
+  }
+
+  // Siapkan dashboard user data
+  const dashboardUser: DashboardUser = user
+    ? {
+        id: user.id,
+        nama: user.nama,
+        email: user.email,
+        role: user.role,
+        isAdmin: user.isAdmin,
+        avatar: user.avatar,
+        kelas: user.siswa?.kelas
+          ? {
+              id: user.siswa.kelas.id,
+              nama: user.siswa.kelas.nama,
+              jenjang: {
+                id: user.siswa.kelas.jenjang.id,
+                nama: user.siswa.kelas.jenjang.nama,
+              },
+            }
+          : null,
+        children: childrenList,
+      }
+    : {
+        // Fallback demo user if session is not active
+        id: "demo-user",
+        nama: "Ustadz Abdullah",
+        email: "guru@ansharussunnah.sch.id",
+        role: Role.GURU,
+        isAdmin: true,
+        avatar: null,
+      }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* TODO: Tambahkan Sidebar & Header Dashboard di sini */}
-      <main className="container mx-auto px-4 py-8">
-        {children}
-      </main>
-    </div>
+    <DashboardProvider user={dashboardUser}>
+      <div className="min-h-screen bg-slate-50/60 flex flex-col">
+        <DashboardNav />
+        <main className="lg:pl-64 xl:pl-72 flex-1 pb-24 lg:pb-12 pt-4 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full transition-all">
+          {children}
+        </main>
+      </div>
+    </DashboardProvider>
   )
 }

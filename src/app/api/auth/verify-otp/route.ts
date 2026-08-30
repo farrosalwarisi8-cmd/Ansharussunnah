@@ -1,4 +1,5 @@
 // src/app/api/auth/verify-otp/route.ts
+export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { verifyResetOtp } from "@/actions/password-reset"

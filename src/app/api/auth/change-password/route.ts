@@ -1,4 +1,5 @@
 // src/app/api/auth/change-password/route.ts
+export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { authenticateApiRequest } from "@/lib/api-auth"

@@ -53,6 +53,12 @@ export async function createUjian(
     // Validasi otorisasi guru terhadap kelas
     const { user } = await verifyGuruAksesKelas(kelasId, mataPelajaran)
 
+    // Cari mata pelajaran berdasarkan nama
+    const mapel = await prisma.mataPelajaran.findFirst({ where: { nama: mataPelajaran } })
+    if (!mapel) {
+      return { success: false, message: `Mata pelajaran "${mataPelajaran}" tidak ditemukan` }
+    }
+
     const periode = await prisma.periodeAjaran.findUnique({
       where: { id: periodeAjaranId },
     })
@@ -64,7 +70,7 @@ export async function createUjian(
       data: {
         judul,
         deskripsi,
-        mataPelajaran,
+        mataPelajaranId: mapel.id,
         kelasId,
         periodeAjaranId,
         waktuMulai: new Date(waktuMulai),
@@ -110,7 +116,7 @@ export async function updateUjian(
       return { success: false, message: "Ujian tidak ditemukan" }
     }
 
-    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaran)
+    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
 
     // Jika ujian sudah berjalan dan ada siswa yang mulai mengerjakan, cegah perubahan waktu/durasi fatal
     if (ujian.status === StatusUjian.PUBLISHED) {
@@ -125,12 +131,22 @@ export async function updateUjian(
       }
     }
 
+    // Jika mataPelajaran diubah, cari ID baru
+    let mataPelajaranId: string | undefined
+    if (payload.mataPelajaran) {
+      const mapel = await prisma.mataPelajaran.findFirst({ where: { nama: payload.mataPelajaran } })
+      if (!mapel) {
+        return { success: false, message: `Mata pelajaran "${payload.mataPelajaran}" tidak ditemukan` }
+      }
+      mataPelajaranId = mapel.id
+    }
+
     await prisma.ujian.update({
       where: { id: ujianId },
       data: {
         judul: payload.judul,
         deskripsi: payload.deskripsi,
-        mataPelajaran: payload.mataPelajaran,
+        mataPelajaranId,
         kelasId: payload.kelasId,
         periodeAjaranId: payload.periodeAjaranId,
         waktuMulai: payload.waktuMulai ? new Date(payload.waktuMulai) : undefined,
@@ -159,7 +175,7 @@ export async function deleteUjian(ujianId: string): Promise<ActionResponse> {
       return { success: false, message: "Ujian tidak ditemukan" }
     }
 
-    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaran)
+    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
 
     if (ujian._count.pengerjaan > 0) {
       return {
@@ -196,7 +212,7 @@ export async function addOrUpdateSoalUjian(
     const ujian = await prisma.ujian.findUnique({ where: { id: ujianId } })
     if (!ujian) return { success: false, message: "Ujian tidak ditemukan" }
 
-    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaran)
+    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
 
     if (ujian.status === StatusUjian.SELESAI) {
       return { success: false, message: "Ujian sudah selesai, soal tidak dapat diubah" }
@@ -255,7 +271,7 @@ export async function deleteSoalUjian(
     const ujian = await prisma.ujian.findUnique({ where: { id: ujianId } })
     if (!ujian) return { success: false, message: "Ujian tidak ditemukan" }
 
-    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaran)
+    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
 
     await prisma.soalUjian.delete({
       where: {
@@ -284,7 +300,7 @@ export async function getRekapHasilUjian(ujianId: string): Promise<ActionRespons
     })
     if (!ujian) return { success: false, message: "Ujian tidak ditemukan" }
 
-    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaran)
+    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
 
     const rekap = await prisma.pengerjaanUjian.findMany({
       where: { ujianId },
@@ -362,7 +378,7 @@ export async function beriNilaiEsai(
 
     const { user } = await verifyGuruAksesKelas(
       pengerjaan.ujian.kelasId,
-      pengerjaan.ujian.mataPelajaran
+      pengerjaan.ujian.mataPelajaranId
     )
 
     await prisma.$transaction(async (tx) => {
@@ -477,7 +493,7 @@ export async function getDaftarUjianSiswa(): Promise<ActionResponse> {
         id: u.id,
         judul: u.judul,
         deskripsi: u.deskripsi,
-        mataPelajaran: u.mataPelajaran,
+        mataPelajaran: u.mataPelajaranId,
         durasiMenit: u.durasiMenit,
         waktuMulai: u.waktuMulai,
         waktuSelesai: u.waktuSelesai,
@@ -595,7 +611,7 @@ export async function mulaiPengerjaanUjian(
         ujian: {
           id: ujian.id,
           judul: ujian.judul,
-          mataPelajaran: ujian.mataPelajaran,
+          mataPelajaran: ujian.mataPelajaranId,
           durasiMenit: ujian.durasiMenit,
           waktuMulaiSiswa: pengerjaan.waktuMulai,
           deadlineSelesai: deadlineFinal,
@@ -816,7 +832,7 @@ export async function tutupPengerjaanUjianKedaluwarsa(
     if (ujianId) {
       const ujian = await prisma.ujian.findUnique({ where: { id: ujianId } })
       if (!ujian) return { success: false, message: "Ujian tidak ditemukan" }
-      await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaran)
+      await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
     }
     // Untuk mode cron (tanpa ujianId), tidak perlu validasi pemanggil —
     // middleware route handler yang bertanggung jawab memvalidasi CRON_SECRET.

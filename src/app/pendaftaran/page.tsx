@@ -7,7 +7,12 @@ import Link from "next/link"
 
 export default async function PendaftaranPage() {
   // Ambil data jenjang & kelas dari server
-  const jenjangData = await getJenjangDenganKelas()
+  let jenjangData: { success: boolean; data?: any[] } = { success: false, data: [] }
+  try {
+    jenjangData = await getJenjangDenganKelas()
+  } catch {
+    // Database tidak tersedia — tampilkan form dengan data kosong
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">

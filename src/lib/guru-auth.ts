@@ -34,17 +34,12 @@ export async function verifyGuruAksesKelas(
   }
 
   // Jika bukan wali kelas, cek apakah terdaftar mengajar di kelas ini
-  const whereGuruKelas: { guruId: string; kelasId: string; mataPelajaran?: string } = {
-    guruId,
-    kelasId,
-  }
-
-  if (mataPelajaran) {
-    whereGuruKelas.mataPelajaran = mataPelajaran
-  }
-
   const pengajar = await prisma.guruKelas.findFirst({
-    where: whereGuruKelas,
+    where: {
+      guruId,
+      kelasId,
+      ...(mataPelajaran ? { mataPelajaran: { nama: mataPelajaran } } : {}),
+    },
   })
 
   if (!pengajar) {

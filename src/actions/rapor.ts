@@ -63,7 +63,7 @@ async function hitungNilaiPerMapel(
       status: StatusPengerjaan.DINILAI,
     },
     include: {
-      ujian: { select: { mataPelajaran: true } },
+      ujian: { select: { mataPelajaran: { select: { nama: true } } } },
     },
   })
 
@@ -75,7 +75,7 @@ async function hitungNilaiPerMapel(
       status: StatusPengumpulan.DINILAI,
     },
     include: {
-      tugas: { select: { mataPelajaran: true } },
+      tugas: { select: { mataPelajaran: { select: { nama: true } } } },
     },
   })
 
@@ -86,7 +86,7 @@ async function hitungNilaiPerMapel(
   >()
 
   for (const p of pengerjaanUjian) {
-    const mapel = p.ujian.mataPelajaran
+    const mapel = p.ujian.mataPelajaran.nama
     if (!mapelMap.has(mapel)) {
       mapelMap.set(mapel, { nilaiUjian: [], nilaiTugas: [] })
     }
@@ -96,7 +96,7 @@ async function hitungNilaiPerMapel(
   }
 
   for (const p of pengumpulanTugas) {
-    const mapel = p.tugas.mataPelajaran
+    const mapel = p.tugas.mataPelajaran.nama
     if (!mapelMap.has(mapel)) {
       mapelMap.set(mapel, { nilaiUjian: [], nilaiTugas: [] })
     }

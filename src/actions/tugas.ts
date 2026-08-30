@@ -68,6 +68,12 @@ export async function createTugas(
 
     const { user } = await verifyGuruAksesKelas(kelasId, mataPelajaran)
 
+    // Cari mata pelajaran berdasarkan nama
+    const mapel = await prisma.mataPelajaran.findFirst({ where: { nama: mataPelajaran } })
+    if (!mapel) {
+      return { success: false, message: `Mata pelajaran "${mataPelajaran}" tidak ditemukan` }
+    }
+
     const periode = await prisma.periodeAjaran.findUnique({
       where: { id: periodeAjaranId },
     })
@@ -87,7 +93,7 @@ export async function createTugas(
       data: {
         judul,
         deskripsi,
-        mataPelajaran,
+        mataPelajaranId: mapel.id,
         kelasId,
         periodeAjaranId,
         deadline: deadlineDate,
@@ -134,7 +140,7 @@ export async function updateTugas(
       return { success: false, message: "Tugas tidak ditemukan" }
     }
 
-    await verifyGuruAksesKelas(tugas.kelasId, tugas.mataPelajaran)
+    await verifyGuruAksesKelas(tugas.kelasId, tugas.mataPelajaranId)
 
     // Cegah perubahan deadline jika sudah ada submission
     if (payload.deadline) {
@@ -150,12 +156,22 @@ export async function updateTugas(
       }
     }
 
+    // Jika mataPelajaran diubah, cari ID baru
+    let mataPelajaranId: string | undefined
+    if (payload.mataPelajaran) {
+      const mapel = await prisma.mataPelajaran.findFirst({ where: { nama: payload.mataPelajaran } })
+      if (!mapel) {
+        return { success: false, message: `Mata pelajaran "${payload.mataPelajaran}" tidak ditemukan` }
+      }
+      mataPelajaranId = mapel.id
+    }
+
     await prisma.tugas.update({
       where: { id: tugasId },
       data: {
         judul: payload.judul,
         deskripsi: payload.deskripsi,
-        mataPelajaran: payload.mataPelajaran,
+        mataPelajaranId,
         kelasId: payload.kelasId,
         periodeAjaranId: payload.periodeAjaranId,
         deadline: payload.deadline ? new Date(payload.deadline) : undefined,
@@ -188,7 +204,7 @@ export async function deleteTugas(tugasId: string): Promise<ActionResponse> {
       return { success: false, message: "Tugas tidak ditemukan" }
     }
 
-    await verifyGuruAksesKelas(tugas.kelasId, tugas.mataPelajaran)
+    await verifyGuruAksesKelas(tugas.kelasId, tugas.mataPelajaranId)
 
     if (tugas._count.pengumpulan > 0) {
       return {
@@ -230,7 +246,7 @@ export async function getDaftarTugasGuru(kelasId: string): Promise<ActionRespons
     const formatted = tugasList.map((t) => ({
       id: t.id,
       judul: t.judul,
-      mataPelajaran: t.mataPelajaran,
+      mataPelajaran: t.mataPelajaranId,
       deadline: t.deadline,
       periode: t.periodeAjaran.nama,
       guru: t.dibuatOleh.nama,
@@ -290,7 +306,7 @@ export async function beriNilaiTugas(
 
     const { user } = await verifyGuruAksesKelas(
       pengumpulan.tugas.kelasId,
-      pengumpulan.tugas.mataPelajaran
+      pengumpulan.tugas.mataPelajaranId
     )
 
     await prisma.pengumpulanTugas.update({
@@ -334,7 +350,7 @@ export async function getRekapPengumpulanTugas(
       return { success: false, message: "Tugas tidak ditemukan" }
     }
 
-    await verifyGuruAksesKelas(tugas.kelasId, tugas.mataPelajaran)
+    await verifyGuruAksesKelas(tugas.kelasId, tugas.mataPelajaranId)
 
     // Ambil semua siswa di kelas
     const siswaList = await prisma.siswa.findMany({
@@ -393,7 +409,7 @@ export async function getRekapPengumpulanTugas(
           id: tugas.id,
           judul: tugas.judul,
           deadline: tugas.deadline,
-          mataPelajaran: tugas.mataPelajaran,
+          mataPelajaran: tugas.mataPelajaranId,
         },
         statistik: {
           totalSiswa: siswaList.length,
@@ -461,7 +477,7 @@ export async function getDaftarTugasSiswa(): Promise<ActionResponse> {
         id: t.id,
         judul: t.judul,
         deskripsi: t.deskripsi,
-        mataPelajaran: t.mataPelajaran,
+        mataPelajaran: t.mataPelajaranId,
         deadline: t.deadline,
         guru: t.dibuatOleh.nama,
         periode: t.periodeAjaran.nama,
@@ -740,7 +756,7 @@ export async function getDetailTugasSiswa(
           id: tugas.id,
           judul: tugas.judul,
           deskripsi: tugas.deskripsi,
-          mataPelajaran: tugas.mataPelajaran,
+          mataPelajaran: tugas.mataPelajaranId,
           deadline: tugas.deadline,
           guru: tugas.dibuatOleh.nama,
           periode: tugas.periodeAjaran.nama,
@@ -838,7 +854,7 @@ export async function getTugasAnak(
       return {
         id: t.id,
         judul: t.judul,
-        mataPelajaran: t.mataPelajaran,
+        mataPelajaran: t.mataPelajaranId,
         deadline: t.deadline,
         guru: t.dibuatOleh.nama,
         statusPengumpulan: pengumpulan

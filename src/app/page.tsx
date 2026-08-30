@@ -1,191 +1,299 @@
 // src/app/page.tsx
 
 import Link from "next/link"
-import { GraduationCap, UserPlus, LogIn, Search } from "lucide-react"
+import {
+  GraduationCap,
+  UserPlus,
+  LogIn,
+  Search,
+  BookOpen,
+  Award,
+  ShieldCheck,
+  Users,
+  CheckCircle,
+  ArrowRight,
+  Sparkles,
+  HeartHandshake,
+  Calendar,
+  Building,
+} from "lucide-react"
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-emerald-100 selection:text-emerald-900">
+      {/* 1. Header / Navbar */}
+      <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur-md sticky top-0 z-50 transition-all">
+        <div className="container mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-primary rounded-xl p-2">
-              <GraduationCap className="h-6 w-6 text-white" />
+            <div className="bg-gradient-to-tr from-emerald-700 to-teal-500 rounded-2xl p-2.5 shadow-md shadow-emerald-900/20 text-white">
+              <GraduationCap className="h-6 w-6 sm:h-7 sm:w-7" />
             </div>
             <div>
-              <h1 className="font-bold text-lg text-gray-900">
-                {process.env.NEXT_PUBLIC_APP_NAME || "Sistem Pendaftaran Siswa"}
-              </h1>
-              <p className="text-xs text-gray-500">Portal Pendaftaran Online</p>
+              <div className="font-extrabold text-base sm:text-lg text-slate-900 tracking-tight flex items-center gap-1.5">
+                <span>Ansharussunnah</span>
+                <span className="hidden sm:inline-block text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                  Pesantren & Sekolah
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium">Portal Akademik & Santri Baru</p>
             </div>
           </div>
-          <nav className="flex items-center gap-3">
+
+          <nav className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/cek-pendaftaran"
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-primary transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-600 hover:text-emerald-700 transition-colors min-h-[44px]"
             >
               <Search className="h-4 w-4" />
-              Cek Status
+              <span className="hidden md:inline">Cek Status</span>
             </Link>
             <Link
               href="/login"
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all min-h-[44px]"
             >
-              <LogIn className="h-4 w-4" />
-              Login
+              <LogIn className="h-4 w-4 text-slate-500" />
+              <span>Login LMS</span>
             </Link>
             <Link
               href="/pendaftaran"
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors shadow-lg shadow-primary/25"
+              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-md shadow-emerald-700/20 min-h-[44px]"
             >
               <UserPlus className="h-4 w-4" />
-              Daftar Sekarang
+              <span>Daftar Sekarang</span>
             </Link>
           </nav>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <main className="container mx-auto px-4">
-        <section className="py-20 text-center">
-          <div className="max-w-3xl mx-auto">
-            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-              </span>
-              Pendaftaran Tahun Ajaran 2024/2025 Dibuka!
-            </div>
-
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6 leading-tight">
-              Pendaftaran Siswa Baru
-              <span className="text-primary block">Mudah & Cepat</span>
-            </h2>
-
-            <p className="text-lg text-gray-600 mb-10 max-w-2xl mx-auto">
-              Daftarkan putra-putri Anda secara online. Proses pendaftaran yang
-              simple, transparan, dan bisa dipantau kapan saja.
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link
-                href="/pendaftaran"
-                className="inline-flex items-center gap-2 px-8 py-4 text-base font-semibold text-white bg-primary rounded-xl hover:bg-primary/90 transition-all shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/30 hover:-translate-y-0.5"
-              >
-                <UserPlus className="h-5 w-5" />
-                Mulai Pendaftaran
-              </Link>
-              <Link
-                href="/cek-pendaftaran"
-                className="inline-flex items-center gap-2 px-8 py-4 text-base font-semibold text-gray-700 bg-white rounded-xl hover:bg-gray-50 transition-all border border-gray-200 shadow-sm"
-              >
-                <Search className="h-5 w-5" />
-                Cek Status Pendaftaran
-              </Link>
-            </div>
+      {/* 2. Hero Section */}
+      <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28 bg-gradient-to-b from-emerald-950 via-slate-900 to-slate-950 text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:24px_24px] opacity-10" />
+        <div className="container mx-auto px-4 sm:px-6 relative z-10 text-center max-w-4xl">
+          <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold mb-8 backdrop-blur-sm animate-in fade-in">
+            <Sparkles className="h-4 w-4 text-emerald-400" />
+            <span>Penerimaan Santri Baru (PSB) Tahun Ajaran 2024/2025 Dibuka</span>
           </div>
-        </section>
 
-        {/* Steps Section */}
-        <section className="py-16">
-          <h3 className="text-2xl font-bold text-center text-gray-900 mb-12">
-            Cara Mendaftar
-          </h3>
-          <div className="grid md:grid-cols-4 gap-8 max-w-5xl mx-auto">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
+            Membina Generasi Qurani Berakhlak Mulia &amp;{" "}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
+              Unggul Akademik
+            </span>
+          </h1>
+
+          <p className="text-base sm:text-lg text-slate-300 mb-10 max-w-2xl mx-auto leading-relaxed">
+            Platform pembelajaran terpadu pesantren Ansharussunnah. Pantau perkembangan hafalan, nilai akademik, tugas, ujian, dan pembayaran SPP dalam satu portal modern.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
+            <Link
+              href="/pendaftaran"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-slate-900 bg-emerald-400 hover:bg-emerald-300 rounded-2xl transition-all shadow-lg shadow-emerald-500/20 hover:scale-[1.02] min-h-[50px]"
+            >
+              <UserPlus className="h-5 w-5" />
+              <span>Daftar Santri Baru</span>
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Link>
+
+            <Link
+              href="/login"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-2xl transition-all backdrop-blur-sm min-h-[50px]"
+            >
+              <LogIn className="h-5 w-5 text-emerald-400" />
+              <span>Masuk Portal LMS</span>
+            </Link>
+          </div>
+
+          {/* Quick Stats Banner */}
+          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto text-left">
+            {[
+              { label: "Kurikulum Terpadu", value: "Salaf & Nasional", icon: BookOpen },
+              { label: "Tenaga Pendidik", value: "Berpengalaman", icon: Users },
+              { label: "Fasilitas Belajar", value: "Modern & Nyaman", icon: Building },
+              { label: "Sistem Manajemen", value: "100% Digital", icon: ShieldCheck },
+            ].map((stat, idx) => {
+              const Icon = stat.icon
+              return (
+                <div key={idx} className="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 backdrop-blur-sm">
+                  <Icon className="h-5 w-5 text-emerald-400 mb-2" />
+                  <div className="font-bold text-white text-sm sm:text-base">{stat.value}</div>
+                  <div className="text-xs text-slate-400">{stat.label}</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Steps to Register */}
+      <section className="py-16 sm:py-24 bg-white border-b border-slate-200/80">
+        <div className="container mx-auto px-4 sm:px-6 max-w-5xl">
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200/60">
+              Alur Pendaftaran Cepat
+            </span>
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 mt-3">
+              4 Langkah Mudah Menjadi Santri
+            </h2>
+            <p className="text-slate-500 text-sm sm:text-base mt-2">
+              Proses pendaftaran santri baru dilakukan secara online dan transparan.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               {
-                step: "1",
+                step: "01",
                 title: "Isi Formulir",
-                desc: "Lengkapi data calon siswa dan orang tua/wali",
-                color: "bg-blue-500",
+                desc: "Lengkapi biodata calon santri, orang tua/wali, serta pilihan jenjang pendidikan.",
               },
               {
-                step: "2",
-                title: "Upload Dokumen",
-                desc: "Unggah KK, akta lahir, dan pas foto",
-                color: "bg-indigo-500",
+                step: "02",
+                title: "Unggah Berkas",
+                desc: "Upload foto Kartu Keluarga (KK), Akta Kelahiran, dan Pas Foto santri terbaru.",
               },
               {
-                step: "3",
-                title: "Bayar & Upload Bukti",
-                desc: "Transfer biaya pendaftaran dan upload bukti transfer",
-                color: "bg-violet-500",
+                step: "03",
+                title: "Transfer & Bukti",
+                desc: "Transfer biaya administrasi pendaftaran dan upload bukti transfer.",
               },
               {
-                step: "4",
-                title: "Verifikasi",
-                desc: "Tim kami akan memverifikasi pendaftaran Anda",
-                color: "bg-purple-500",
+                step: "04",
+                title: "Verifikasi & Hasil",
+                desc: "Tim panitia memverifikasi berkas. Pantau status penerimaan langsung via web.",
               },
-            ].map((item) => (
-              <div key={item.step} className="text-center">
-                <div
-                  className={`${item.color} w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-xl mx-auto mb-4 shadow-lg`}
-                >
+            ].map((item, idx) => (
+              <div
+                key={idx}
+                className="relative p-6 rounded-3xl bg-slate-50 border border-slate-200/80 hover:border-emerald-300 hover:shadow-lg transition-all group"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white font-extrabold text-lg flex items-center justify-center mb-4 shadow-md shadow-emerald-700/20 group-hover:scale-105 transition-transform">
                   {item.step}
                 </div>
-                <h4 className="font-semibold text-gray-900 mb-2">
-                  {item.title}
-                </h4>
-                <p className="text-sm text-gray-500">{item.desc}</p>
+                <h3 className="font-bold text-lg text-slate-900 mb-2">{item.title}</h3>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">{item.desc}</p>
               </div>
             ))}
           </div>
-        </section>
 
-        {/* Info Section */}
-        <section className="py-16">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 max-w-3xl mx-auto">
-            <h3 className="text-xl font-bold text-gray-900 mb-6">
-              Informasi Biaya Pendaftaran
-            </h3>
-            <div className="bg-blue-50 rounded-xl p-6 mb-6">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-700 font-medium">
-                  Biaya Pendaftaran
-                </span>
-                <span className="text-2xl font-bold text-primary">
-                  Rp {parseInt(process.env.NEXT_PUBLIC_REGISTRATION_FEE || "500000").toLocaleString("id-ID")}
-                </span>
+          <div className="mt-12 text-center">
+            <Link
+              href="/pendaftaran"
+              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm shadow-md transition-all min-h-[44px]"
+            >
+              <UserPlus className="h-4 w-4" />
+              <span>Mulai Isi Formulir Pendaftaran Sekarang</span>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Keunggulan Sistem LMS */}
+      <section className="py-16 sm:py-24 bg-slate-50">
+        <div className="container mx-auto px-4 sm:px-6 max-w-5xl">
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/60 px-3 py-1 rounded-full">
+              Fitur Lengkap Terintegrasi
+            </span>
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 mt-3">
+              Portal Akademik Modern untuk Semua Role
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                <Users className="h-6 w-6" />
               </div>
+              <h3 className="font-bold text-lg text-slate-900">Untuk Asatidz &amp; Guru</h3>
+              <ul className="text-xs sm:text-sm text-slate-600 space-y-2.5">
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>Input absensi kelas cepat di mobile</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>Buat ujian online (PG &amp; Esai)</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>Kelola tugas &amp; input nilai rapor</span>
+                </li>
+              </ul>
             </div>
-            <div className="space-y-3">
-              <h4 className="font-semibold text-gray-900">
-                Transfer ke Rekening:
-              </h4>
-              <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Bank</span>
-                  <span className="font-medium">
-                    {process.env.NEXT_PUBLIC_BANK_NAME}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">No. Rekening</span>
-                  <span className="font-mono font-medium">
-                    {process.env.NEXT_PUBLIC_BANK_ACCOUNT_NUMBER}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Atas Nama</span>
-                  <span className="font-medium">
-                    {process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME}
-                  </span>
-                </div>
+
+            <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center font-bold">
+                <GraduationCap className="h-6 w-6" />
               </div>
+              <h3 className="font-bold text-lg text-slate-900">Untuk Santri / Siswa</h3>
+              <ul className="text-xs sm:text-sm text-slate-600 space-y-2.5">
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-teal-600 shrink-0" />
+                  <span>Kerjakan ujian dengan countdown timer</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-teal-600 shrink-0" />
+                  <span>Kirim tugas &amp; unduh materi belajar</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-teal-600 shrink-0" />
+                  <span>Lihat rapor hasil belajar digital</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                <HeartHandshake className="h-6 w-6" />
+              </div>
+              <h3 className="font-bold text-lg text-slate-900">Untuk Wali Santri</h3>
+              <ul className="text-xs sm:text-sm text-slate-600 space-y-2.5">
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-indigo-600 shrink-0" />
+                  <span>Selector multi-anak yang aman &amp; jelas</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-indigo-600 shrink-0" />
+                  <span>Pantau kehadiran &amp; nilai santri</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-indigo-600 shrink-0" />
+                  <span>Bayar SPP &amp; upload bukti transfer</span>
+                </li>
+              </ul>
             </div>
           </div>
-        </section>
-      </main>
+        </div>
+      </section>
 
-      {/* Footer */}
-      <footer className="border-t bg-white py-8">
-        <div className="container mx-auto px-4 text-center text-sm text-gray-500">
-          <p>
-            © {new Date().getFullYear()}{" "}
-            {process.env.NEXT_PUBLIC_APP_NAME || "Sistem Pendaftaran Siswa"}.
-            All rights reserved.
+      {/* 5. Footer */}
+      <footer className="bg-slate-950 text-slate-400 py-12 border-t border-slate-800">
+        <div className="container mx-auto px-4 sm:px-6 max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white">
+              <GraduationCap className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="font-bold text-white text-sm">Pesantren Ansharussunnah</div>
+              <div className="text-xs text-slate-500">Mencetak Generasi Berakhlak &amp; Berilmu</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6 text-xs font-medium">
+            <Link href="/pendaftaran" className="hover:text-emerald-400 transition-colors">
+              Pendaftaran Baru
+            </Link>
+            <Link href="/cek-pendaftaran" className="hover:text-emerald-400 transition-colors">
+              Cek Status
+            </Link>
+            <Link href="/login" className="hover:text-emerald-400 transition-colors">
+              Portal LMS
+            </Link>
+          </div>
+
+          <p className="text-xs text-slate-600">
+            &copy; {new Date().getFullYear()} Ansharussunnah. Hak cipta dilindungi.
           </p>
         </div>
       </footer>

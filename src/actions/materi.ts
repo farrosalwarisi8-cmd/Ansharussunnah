@@ -72,6 +72,12 @@ export async function createMateri(
 
     const { user } = await verifyGuruAksesKelas(kelasId, mataPelajaran)
 
+    // Cari mata pelajaran berdasarkan nama
+    const mapel = await prisma.mataPelajaran.findFirst({ where: { nama: mataPelajaran } })
+    if (!mapel) {
+      return { success: false, message: `Mata pelajaran "${mataPelajaran}" tidak ditemukan` }
+    }
+
     const periode = await prisma.periodeAjaran.findUnique({
       where: { id: periodeAjaranId },
     })
@@ -103,7 +109,7 @@ export async function createMateri(
       data: {
         judul,
         deskripsi: deskripsi || null,
-        mataPelajaran,
+        mataPelajaranId: mapel.id,
         kelasId,
         periodeAjaranId,
         urlFile: urlFile || null,
@@ -150,7 +156,7 @@ export async function updateMateri(
       return { success: false, message: "Materi tidak ditemukan" }
     }
 
-    await verifyGuruAksesKelas(materi.kelasId, materi.mataPelajaran)
+    await verifyGuruAksesKelas(materi.kelasId, materi.mataPelajaranId)
 
     // Validasi path file baru jika diubah
     if (payload.urlFile) {
@@ -160,12 +166,22 @@ export async function updateMateri(
       }
     }
 
+    // Jika mataPelajaran diubah, cari ID baru
+    let mataPelajaranId: string | undefined
+    if (payload.mataPelajaran) {
+      const mapel = await prisma.mataPelajaran.findFirst({ where: { nama: payload.mataPelajaran } })
+      if (!mapel) {
+        return { success: false, message: `Mata pelajaran "${payload.mataPelajaran}" tidak ditemukan` }
+      }
+      mataPelajaranId = mapel.id
+    }
+
     await prisma.materiPembelajaran.update({
       where: { id: materiId },
       data: {
         judul: payload.judul,
         deskripsi: payload.deskripsi,
-        mataPelajaran: payload.mataPelajaran,
+        mataPelajaranId,
         kelasId: payload.kelasId,
         periodeAjaranId: payload.periodeAjaranId,
         urlFile: payload.urlFile !== undefined ? payload.urlFile : undefined,
@@ -195,7 +211,7 @@ export async function deleteMateri(materiId: string): Promise<ActionResponse> {
       return { success: false, message: "Materi tidak ditemukan" }
     }
 
-    await verifyGuruAksesKelas(materi.kelasId, materi.mataPelajaran)
+    await verifyGuruAksesKelas(materi.kelasId, materi.mataPelajaranId)
 
     await prisma.materiPembelajaran.delete({ where: { id: materiId } })
 
@@ -227,6 +243,7 @@ export async function getDaftarMateriGuru(
       include: {
         periodeAjaran: { select: { nama: true } },
         diunggahOleh: { select: { nama: true } },
+        mataPelajaran: { select: { nama: true } },
       },
       orderBy: { createdAt: "desc" },
     })
@@ -242,7 +259,7 @@ export async function getDaftarMateriGuru(
           id: m.id,
           judul: m.judul,
           deskripsi: m.deskripsi,
-          mataPelajaran: m.mataPelajaran,
+          mataPelajaran: m.mataPelajaran.nama,
           urlFile: m.urlFile,
           urlLink: m.urlLink,
           signedUrl,
@@ -286,6 +303,7 @@ export async function getDaftarMateriSiswa(): Promise<ActionResponse> {
       include: {
         periodeAjaran: { select: { nama: true } },
         diunggahOleh: { select: { nama: true } },
+        mataPelajaran: { select: { nama: true } },
       },
       orderBy: { createdAt: "desc" },
     })
@@ -301,7 +319,7 @@ export async function getDaftarMateriSiswa(): Promise<ActionResponse> {
           id: m.id,
           judul: m.judul,
           deskripsi: m.deskripsi,
-          mataPelajaran: m.mataPelajaran,
+          mataPelajaran: m.mataPelajaran.nama,
           urlFile: m.urlFile,
           urlLink: m.urlLink,
           signedUrl,
@@ -361,6 +379,7 @@ export async function getDaftarMateriAnak(
       include: {
         periodeAjaran: { select: { nama: true } },
         diunggahOleh: { select: { nama: true } },
+        mataPelajaran: { select: { nama: true } },
       },
       orderBy: { createdAt: "desc" },
     })
@@ -376,7 +395,7 @@ export async function getDaftarMateriAnak(
           id: m.id,
           judul: m.judul,
           deskripsi: m.deskripsi,
-          mataPelajaran: m.mataPelajaran,
+          mataPelajaran: m.mataPelajaran.nama,
           urlFile: m.urlFile,
           urlLink: m.urlLink,
           signedUrl,

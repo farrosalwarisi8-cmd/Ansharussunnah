@@ -102,13 +102,12 @@ export async function generateBulkSpp(
     await prisma.$transaction(async (tx) => {
       for (const siswa of siswaList) {
         // Cek apakah tagihan bulan+tahun ini sudah ada untuk siswa terkait (Idempotency)
-        const existing = await tx.tagihanSpp.findUnique({
+        const bulanNames = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+        const existing = await tx.tagihanSiswa.findFirst({
           where: {
-            siswaId_bulan_tahun: {
-              siswaId: siswa.id,
-              bulan,
-              tahun,
-            },
+            siswaId: siswa.id,
+            bulan,
+            tahun,
           },
         })
 
@@ -134,9 +133,10 @@ export async function generateBulkSpp(
           continue
         }
 
-        await tx.tagihanSpp.create({
+        await tx.tagihanSiswa.create({
           data: {
             siswaId: siswa.id,
+            namaTagihan: `SPP ${bulanNames[bulan]} ${tahun}`,
             bulan,
             tahun,
             nominal: nominalSpp,
@@ -195,7 +195,7 @@ export async function submitBuktiPembayaranSpp(
 
     const sessionUser = await requireAuth()
 
-    const tagihan = await prisma.tagihanSpp.findUnique({
+    const tagihan = await prisma.tagihanSiswa.findUnique({
       where: { id: tagihanId },
     })
     if (!tagihan) {
@@ -257,7 +257,7 @@ export async function submitBuktiPembayaranSpp(
     //   - Admin keuangan harus memanggil konfirmasiPembayaranSppOlehAdmin untuk finalisasi
     //   - nominalDibayar dicatat apa adanya; admin yang memvalidasi kesesuaiannya
     await prisma.$transaction(async (tx) => {
-      await tx.pembayaranSpp.create({
+      await tx.pembayaranSiswa.create({
         data: {
           tagihanId,
           nominalDibayar: new Prisma.Decimal(nominalDibayar),
@@ -271,7 +271,7 @@ export async function submitBuktiPembayaranSpp(
         },
       })
 
-      await tx.tagihanSpp.update({
+      await tx.tagihanSiswa.update({
         where: { id: tagihanId },
         data: {
           status: StatusTagihan.MENUNGGU_VERIFIKASI,
@@ -326,7 +326,7 @@ export async function konfirmasiPembayaranSppOlehAdmin(
     const { pembayaranId, disetujui, catatan, alasanPenolakan } = validated.data
 
     // Ambil pembayaran beserta tagihan dan semua pembayaran lain yang sudah DIKONFIRMASI
-    const pembayaran = await prisma.pembayaranSpp.findUnique({
+    const pembayaran = await prisma.pembayaranSiswa.findUnique({
       where: { id: pembayaranId },
       include: {
         tagihan: {
@@ -379,7 +379,7 @@ export async function konfirmasiPembayaranSppOlehAdmin(
         }
 
         // Update record pembayaran: DIKONFIRMASI
-        await tx.pembayaranSpp.update({
+        await tx.pembayaranSiswa.update({
           where: { id: pembayaranId },
           data: {
             statusPembayaran: StatusPembayaran.DIKONFIRMASI,
@@ -390,7 +390,7 @@ export async function konfirmasiPembayaranSppOlehAdmin(
         })
 
         // Update tagihan dengan status baru dan cache totalTerbayar
-        await tx.tagihanSpp.update({
+        await tx.tagihanSiswa.update({
           where: { id: tagihan.id },
           data: {
             status: statusTagihanBaru,
@@ -409,7 +409,7 @@ export async function konfirmasiPembayaranSppOlehAdmin(
         const statusTagihanDikembalikan =
           tagihan.jatuhTempo < now ? StatusTagihan.TERLAMBAT : StatusTagihan.BELUM_BAYAR
 
-        await tx.pembayaranSpp.update({
+        await tx.pembayaranSiswa.update({
           where: { id: pembayaranId },
           data: {
             statusPembayaran: StatusPembayaran.DITOLAK,
@@ -421,7 +421,7 @@ export async function konfirmasiPembayaranSppOlehAdmin(
         })
 
         // Kembalikan status tagihan ke kondisi sebelum ada pending
-        await tx.tagihanSpp.update({
+        await tx.tagihanSiswa.update({
           where: { id: tagihan.id },
           data: {
             status: statusTagihanDikembalikan,
@@ -481,7 +481,7 @@ export async function konfirmasiPembayaranSppManual(
 
     const { tagihanId, nominalDibayar, metodeBayar, urlBukti, namaBukti, catatan } = validated.data
 
-    const tagihan = await prisma.tagihanSpp.findUnique({
+    const tagihan = await prisma.tagihanSiswa.findUnique({
       where: { id: tagihanId },
       include: {
         pembayaran: {
@@ -513,7 +513,7 @@ export async function konfirmasiPembayaranSppManual(
         : StatusTagihan.DIBAYAR_SEBAGIAN
 
     await prisma.$transaction(async (tx) => {
-      await tx.pembayaranSpp.create({
+      await tx.pembayaranSiswa.create({
         data: {
           tagihanId,
           nominalDibayar: new Prisma.Decimal(nominalDibayar),
@@ -529,7 +529,7 @@ export async function konfirmasiPembayaranSppManual(
         },
       })
 
-      await tx.tagihanSpp.update({
+      await tx.tagihanSiswa.update({
         where: { id: tagihanId },
         data: {
           status: statusTagihanBaru,
@@ -673,7 +673,7 @@ export async function batalkanTagihanSpp(
 
     const { tagihanId, alasanPembatalan } = validated.data
 
-    const tagihan = await prisma.tagihanSpp.findUnique({
+    const tagihan = await prisma.tagihanSiswa.findUnique({
       where: { id: tagihanId },
     })
     if (!tagihan) return { success: false, message: "Tagihan tidak ditemukan" }
@@ -681,7 +681,7 @@ export async function batalkanTagihanSpp(
       return { success: false, message: "Tagihan ini sudah dibatalkan" }
     }
 
-    await prisma.tagihanSpp.update({
+    await prisma.tagihanSiswa.update({
       where: { id: tagihanId },
       data: {
         status: StatusTagihan.DIBATALKAN,
@@ -725,7 +725,7 @@ export async function getLaporanKeuangan(
 
     // PENTEST FIX #1: Hanya hitung pembayaran yang sudah DIKONFIRMASI admin sebagai pemasukan sah
     // Pembayaran PENDING (menunggu verifikasi) TIDAK masuk ke laporan keuangan
-    const totalSpp = await prisma.pembayaranSpp.aggregate({
+    const totalSpp = await prisma.pembayaranSiswa.aggregate({
       where: {
         tanggalBayar: { gte: start, lte: end },
         statusPembayaran: StatusPembayaran.DIKONFIRMASI,
@@ -735,7 +735,7 @@ export async function getLaporanKeuangan(
     })
 
     // Hitung pembayaran pending di periode yang sama (untuk info, BUKAN pemasukan)
-    const totalSppPending = await prisma.pembayaranSpp.aggregate({
+    const totalSppPending = await prisma.pembayaranSiswa.aggregate({
       where: {
         tanggalBayar: { gte: start, lte: end },
         statusPembayaran: StatusPembayaran.PENDING,
@@ -834,7 +834,7 @@ export async function getRekapTunggakanSpp(
     ]
 
     // Ambil tunggakan murni (belum bayar sama sekali)
-    const tunggakanMurni = await prisma.tagihanSpp.findMany({
+    const tunggakanMurni = await prisma.tagihanSiswa.findMany({
       where: {
         ...baseFilter,
         status: { in: [StatusTagihan.BELUM_BAYAR, StatusTagihan.TERLAMBAT] },
@@ -844,7 +844,7 @@ export async function getRekapTunggakanSpp(
     })
 
     // Ambil tagihan yang dibayar sebagian (cicilan)
-    const dibayarSebagian = await prisma.tagihanSpp.findMany({
+    const dibayarSebagian = await prisma.tagihanSiswa.findMany({
       where: {
         ...baseFilter,
         status: StatusTagihan.DIBAYAR_SEBAGIAN,
@@ -854,7 +854,7 @@ export async function getRekapTunggakanSpp(
     })
 
     // Ambil tagihan yang menunggu verifikasi admin (bukan tunggakan, belum lunas)
-    const menungguVerifikasi = await prisma.tagihanSpp.findMany({
+    const menungguVerifikasi = await prisma.tagihanSiswa.findMany({
       where: {
         ...baseFilter,
         status: StatusTagihan.MENUNGGU_VERIFIKASI,
@@ -944,7 +944,7 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
       return { success: false, message: "Hak akses tidak valid" }
     }
 
-    const tagihanList = await prisma.tagihanSpp.findMany({
+    const tagihanList = await prisma.tagihanSiswa.findMany({
       where: { siswaId },
       include: {
         pembayaran: {

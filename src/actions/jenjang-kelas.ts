@@ -56,8 +56,7 @@ export async function getJenjangDenganKelas(): Promise<
       message: "Data jenjang berhasil diambil",
       data: jenjangs,
     }
-  } catch (error) {
-    console.error("Error getJenjangDenganKelas:", error)
+  } catch {
     return {
       success: false,
       message: "Gagal memuat data jenjang dan kelas",

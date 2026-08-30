@@ -1,4 +1,5 @@
 // src/app/api/auth/forgot-password/route.ts
+export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { requestPasswordReset } from "@/actions/password-reset"

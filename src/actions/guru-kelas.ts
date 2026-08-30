@@ -51,7 +51,7 @@ export async function assignGuruKeKelas(
 
     // Cek apakah kombinasi guru+kelas+mapel sudah ada
     const existing = await prisma.guruKelas.findFirst({
-      where: { guruId, kelasId, mataPelajaran },
+      where: { guruId, kelasId, mataPelajaran: { nama: mataPelajaran } },
     })
     if (existing) {
       return {
@@ -60,8 +60,14 @@ export async function assignGuruKeKelas(
       }
     }
 
+    // Cari mata pelajaran berdasarkan nama untuk create
+    const mapel = await prisma.mataPelajaran.findFirst({ where: { nama: mataPelajaran } })
+    if (!mapel) {
+      return { success: false, message: `Mata pelajaran "${mataPelajaran}" tidak ditemukan` }
+    }
+
     await prisma.guruKelas.create({
-      data: { guruId, kelasId, mataPelajaran },
+      data: { guruId, kelasId, mataPelajaranId: mapel.id },
     })
 
     revalidatePath("/dashboard/guru")
@@ -107,7 +113,7 @@ export async function removeGuruDariKelas(
     revalidatePath("/dashboard/guru")
     return {
       success: true,
-      message: `Penugasan ${guruKelas.guru.user.nama} di kelas ${guruKelas.kelas.nama} (${guruKelas.mataPelajaran}) berhasil dihapus`,
+      message: `Penugasan ${guruKelas.guru.user.nama} di kelas ${guruKelas.kelas.nama} berhasil dihapus`,
     }
   } catch (error: any) {
     return {
@@ -144,7 +150,7 @@ export async function getDaftarPengajarKelas(
           },
         },
       },
-      orderBy: { mataPelajaran: "asc" },
+      orderBy: { mataPelajaranId: "asc" },
     })
 
     const formatted = pengajarList.map((p) => ({
@@ -153,7 +159,7 @@ export async function getDaftarPengajarKelas(
       nama: p.guru.user.nama,
       email: p.guru.user.email,
       aktif: p.guru.user.aktif,
-      mataPelajaran: p.mataPelajaran,
+      mataPelajaranId: p.mataPelajaranId,
       createdAt: p.createdAt,
     }))
 
@@ -199,7 +205,7 @@ export async function getDaftarKelasYangDiajarGuru(
           },
         },
       },
-      orderBy: [{ kelas: { jenjang: { urutan: "asc" } } }, { mataPelajaran: "asc" }],
+      orderBy: [{ kelas: { jenjang: { urutan: "asc" } } }, { mataPelajaranId: "asc" }],
     })
 
     const formatted = kelasList.map((gk) => ({
@@ -207,7 +213,7 @@ export async function getDaftarKelasYangDiajarGuru(
       kelasId: gk.kelasId,
       namaKelas: gk.kelas.nama,
       jenjang: gk.kelas.jenjang.nama,
-      mataPelajaran: gk.mataPelajaran,
+      mataPelajaranId: gk.mataPelajaranId,
       jumlahSiswa: gk.kelas._count.siswa,
     }))
 
