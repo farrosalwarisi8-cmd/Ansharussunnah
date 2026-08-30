@@ -7,13 +7,13 @@ import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
 import { Role } from "@prisma/client"
-import { inputAbsensiBulk, getRekapKehadiranKelas, getRiwayatKehadiranSiswa, getRiwayatKehadiranAnak } from "@/actions/absensi"
+import { inputAbsensiBulk } from "@/actions/absensi"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { EmptyState } from "@/components/ui/empty-state"
-import { CalendarCheck2, Check, Clock, UserCheck, AlertCircle, Save, Loader2, RefreshCw } from "lucide-react"
+
+import { Check, UserCheck, Save, Loader2 } from "lucide-react"
 
 type StatusAbsensiType = "HADIR" | "IZIN" | "SAKIT" | "ALPHA"
 
@@ -27,7 +27,7 @@ interface SiswaAbsenItem {
 
 export default function AbsensiPage() {
   const { user, selectedChild } = useDashboard()
-  const { toast } = useToast()
+  useToast()
 
   const isTeacher = user.role === Role.GURU || user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN_AKADEMIK
   const isStudent = user.role === Role.SISWA
@@ -290,7 +290,7 @@ function GuruAbsensiView() {
 /* ========================================================================= */
 /* 2. SISWA & ORANG TUA ABSENSI VIEW (READ ONLY)                             */
 /* ========================================================================= */
-function SiswaAbsensiView({ siswaId, isParentView }: { siswaId: string; isParentView?: boolean }) {
+function SiswaAbsensiView({ siswaId: _siswaId, isParentView: _isParentView }: { siswaId: string; isParentView?: boolean }) {
   const history = [
     { tanggal: "2024-03-01", status: "HADIR", mapel: "Tahfidz & Fiqih", note: "Tertib" },
     { tanggal: "2024-02-29", status: "HADIR", mapel: "Bahasa Arab & Hadits", note: "Tertib" },
@@ -351,7 +351,7 @@ function SiswaAbsensiView({ siswaId, isParentView }: { siswaId: string; isParent
                 <div className="text-xs text-slate-500">{log.mapel}</div>
                 {log.note && <div className="text-xs text-slate-400 italic">{log.note}</div>}
               </div>
-              <StatusBadge status={log.status as any} />
+              <StatusBadge status={log.status as "HADIR" | "IZIN" | "SAKIT" | "ALPHA"} />
             </div>
           ))}
         </CardContent>

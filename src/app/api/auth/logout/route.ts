@@ -1,10 +1,10 @@
 // src/app/api/auth/logout/route.ts
 export const dynamic = "force-dynamic"
 
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const supabase = await createSupabaseServerClient()
     const { error } = await supabase.auth.signOut()
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "Logout berhasil",
     })
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { success: false, message: "Terjadi kesalahan saat logout" },
       { status: 500 }

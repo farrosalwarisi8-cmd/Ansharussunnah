@@ -108,10 +108,10 @@ export async function createTugas(
       message: "Tugas berhasil dibuat",
       data: { tugasId: tugas.id },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal membuat tugas",
+      message: error instanceof Error ? error.message : "Gagal membuat tugas",
     }
   }
 }
@@ -181,10 +181,10 @@ export async function updateTugas(
 
     revalidatePath("/dashboard/guru/tugas")
     return { success: true, message: "Tugas berhasil diperbarui" }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memperbarui tugas",
+      message: error instanceof Error ? error.message : "Gagal memperbarui tugas",
     }
   }
 }
@@ -218,10 +218,10 @@ export async function deleteTugas(tugasId: string): Promise<ActionResponse> {
 
     revalidatePath("/dashboard/guru/tugas")
     return { success: true, message: "Tugas berhasil dihapus" }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal menghapus tugas",
+      message: error instanceof Error ? error.message : "Gagal menghapus tugas",
     }
   }
 }
@@ -259,10 +259,10 @@ export async function getDaftarTugasGuru(kelasId: string): Promise<ActionRespons
       message: "Daftar tugas berhasil dimuat",
       data: formatted,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat daftar tugas",
+      message: error instanceof Error ? error.message : "Gagal memuat daftar tugas",
     }
   }
 }
@@ -325,10 +325,10 @@ export async function beriNilaiTugas(
       success: true,
       message: `Nilai ${nilai} berhasil disimpan`,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal menyimpan nilai tugas",
+      message: error instanceof Error ? error.message : "Gagal menyimpan nilai tugas",
     }
   }
 }
@@ -421,10 +421,10 @@ export async function getRekapPengumpulanTugas(
         rekap,
       },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat rekap pengumpulan",
+      message: error instanceof Error ? error.message : "Gagal memuat rekap pengumpulan",
     }
   }
 }
@@ -504,10 +504,10 @@ export async function getDaftarTugasSiswa(): Promise<ActionResponse> {
       message: "Daftar tugas berhasil dimuat",
       data: formatted,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat daftar tugas",
+      message: error instanceof Error ? error.message : "Gagal memuat daftar tugas",
     }
   }
 }
@@ -687,10 +687,10 @@ export async function submitTugas(
         ? "Jawaban berhasil dikumpulkan (TERLAMBAT dari deadline)"
         : "Jawaban berhasil dikumpulkan tepat waktu",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal mengirim jawaban tugas",
+      message: error instanceof Error ? error.message : "Gagal mengirim jawaban tugas",
     }
   }
 }
@@ -783,10 +783,10 @@ export async function getDetailTugasSiswa(
           : null,
       },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat detail tugas",
+      message: error instanceof Error ? error.message : "Gagal memuat detail tugas",
     }
   }
 }
@@ -876,10 +876,10 @@ export async function getTugasAnak(
         tugas: formatted,
       },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat data tugas anak",
+      message: error instanceof Error ? error.message : "Gagal memuat data tugas anak",
     }
   }
 }

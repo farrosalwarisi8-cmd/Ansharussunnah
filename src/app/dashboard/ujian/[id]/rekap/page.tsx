@@ -5,7 +5,7 @@
 import * as React from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
-import { getRekapHasilUjian, beriNilaiEsai } from "@/actions/ujian"
+import { beriNilaiEsai } from "@/actions/ujian"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,15 +18,24 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { ArrowLeft, BarChart3, CheckCircle2, FileEdit, Award, Loader2, Users } from "lucide-react"
+import { ArrowLeft, FileEdit, CheckCircle2, Loader2 } from "lucide-react"
 
 export default function RekapHasilUjianPage() {
-  const params = useParams()
+  useParams()
   const { toast } = useToast()
 
-  const ujianId = (params?.id as string) || "ujian-1"
 
-  const [selectedStudent, setSelectedStudent] = React.useState<any | null>(null)
+
+  const [selectedStudent, setSelectedStudent] = React.useState<{
+    id: string
+    nama: string
+    nisn: string
+    skorPG: number
+    skorEsai: number | null
+    totalNilai: number
+    status: string
+    jawabanEsai?: string[]
+  } | null>(null)
   const [nilaiEsai, setNilaiEsai] = React.useState("18")
   const [catatanEsai, setCatatanEsai] = React.useState("Penjelasan fiqih sangat lengkap dan sesuai matan.")
   const [savingEsai, setSavingEsai] = React.useState(false)
@@ -212,7 +221,7 @@ export default function RekapHasilUjianPage() {
                       </span>
                     </td>
                     <td className="p-4">
-                      <StatusBadge status={p.status as any} />
+                      <StatusBadge status={p.status as "DINILAI" | "SELESAI" | "SEDANG_MENGERJAKAN"} />
                     </td>
                     <td className="p-4 pr-6 text-right">
                       <Button
@@ -253,7 +262,7 @@ export default function RekapHasilUjianPage() {
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
-                  <StatusBadge status={p.status as any} size="sm" />
+                  <StatusBadge status={p.status as "DINILAI" | "SELESAI" | "SEDANG_MENGERJAKAN"} size="sm" />
                   <Button
                     size="sm"
                     onClick={() => setSelectedStudent(p)}

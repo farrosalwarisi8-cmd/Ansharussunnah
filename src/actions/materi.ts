@@ -14,7 +14,7 @@ import {
   type UpdateMateriValues,
 } from "@/lib/validations/materi"
 import type { ActionResponse } from "@/types"
-import { Role, Prisma } from "@prisma/client"
+import { Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
 // ========================================================
@@ -124,10 +124,10 @@ export async function createMateri(
       message: "Materi pembelajaran berhasil diunggah",
       data: { materiId: materi.id },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal mengunggah materi",
+      message: error instanceof Error ? error.message : "Gagal mengunggah materi",
     }
   }
 }
@@ -191,10 +191,10 @@ export async function updateMateri(
 
     revalidatePath("/dashboard/guru/materi")
     return { success: true, message: "Materi berhasil diperbarui" }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memperbarui materi",
+      message: error instanceof Error ? error.message : "Gagal memperbarui materi",
     }
   }
 }
@@ -217,10 +217,10 @@ export async function deleteMateri(materiId: string): Promise<ActionResponse> {
 
     revalidatePath("/dashboard/guru/materi")
     return { success: true, message: "Materi berhasil dihapus" }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal menghapus materi",
+      message: error instanceof Error ? error.message : "Gagal menghapus materi",
     }
   }
 }
@@ -274,16 +274,17 @@ export async function getDaftarMateriGuru(
       success: true,
       message: "Daftar materi berhasil dimuat",
       data: formatted,
-    }
-  } catch (error: any) {
+    }  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat daftar materi",
+      message: error instanceof Error ? error.message : "Gagal memuat daftar materi",
     }
   }
 }
 
 // ========================================================
+
+
 // 3. ACTIONS SISWA: LIHAT DAFTAR MATERI (Read-Only)
 // ========================================================
 
@@ -334,16 +335,17 @@ export async function getDaftarMateriSiswa(): Promise<ActionResponse> {
       success: true,
       message: "Daftar materi berhasil dimuat",
       data: formatted,
-    }
-  } catch (error: any) {
+    }  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat daftar materi",
+      message: error instanceof Error ? error.message : "Gagal memuat daftar materi",
     }
   }
 }
 
 // ========================================================
+
+
 // 4. ACTIONS ORANG TUA: LIHAT DAFTAR MATERI ANAK (Read-Only)
 // ========================================================
 
@@ -411,10 +413,10 @@ export async function getDaftarMateriAnak(
       message: "Daftar materi anak berhasil dimuat",
       data: formatted,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat daftar materi anak",
+      message: error instanceof Error ? error.message : "Gagal memuat daftar materi anak",
     }
   }
 }

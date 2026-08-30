@@ -7,14 +7,12 @@ import {
   LogIn,
   Search,
   BookOpen,
-  Award,
   ShieldCheck,
   Users,
   CheckCircle,
   ArrowRight,
   Sparkles,
   HeartHandshake,
-  Calendar,
   Building,
 } from "lucide-react"
 

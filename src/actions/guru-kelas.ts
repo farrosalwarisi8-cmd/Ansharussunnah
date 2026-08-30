@@ -4,7 +4,6 @@
 
 import prisma from "@/lib/prisma"
 import { requireGuru, requireGuruAdmin } from "@/lib/auth"
-import { verifyGuruAksesKelas } from "@/lib/guru-auth"
 import {
   assignGuruKeKelasSchema,
   type AssignGuruKeKelasValues,
@@ -75,10 +74,10 @@ export async function assignGuruKeKelas(
       success: true,
       message: `Guru berhasil ditugaskan ke kelas untuk mapel "${mataPelajaran}"`,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal menugaskan guru ke kelas",
+      message: error instanceof Error ? error.message : "Gagal menugaskan guru ke kelas",
     }
   }
 }
@@ -115,10 +114,10 @@ export async function removeGuruDariKelas(
       success: true,
       message: `Penugasan ${guruKelas.guru.user.nama} di kelas ${guruKelas.kelas.nama} berhasil dihapus`,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal menghapus penugasan guru",
+      message: error instanceof Error ? error.message : "Gagal menghapus penugasan guru",
     }
   }
 }
@@ -168,10 +167,10 @@ export async function getDaftarPengajarKelas(
       message: "Daftar pengajar kelas berhasil dimuat",
       data: formatted,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat daftar pengajar",
+      message: error instanceof Error ? error.message : "Gagal memuat daftar pengajar",
     }
   }
 }
@@ -222,10 +221,10 @@ export async function getDaftarKelasYangDiajarGuru(
       message: "Daftar kelas yang diajar berhasil dimuat",
       data: formatted,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat daftar kelas",
+      message: error instanceof Error ? error.message : "Gagal memuat daftar kelas",
     }
   }
 }

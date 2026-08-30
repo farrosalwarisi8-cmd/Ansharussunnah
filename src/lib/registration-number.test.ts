@@ -6,7 +6,7 @@ const mockFindFirst = vi.fn()
 vi.mock("@/lib/prisma", () => ({
   default: {
     pendaftaran: {
-      findFirst: (...args: any[]) => mockFindFirst(...args),
+      findFirst: (...args: unknown[]) => mockFindFirst(...args),
     },
   },
 }))

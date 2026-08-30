@@ -10,9 +10,9 @@ import { logout } from "@/actions/auth"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { User, Lock, Mail, Phone, ShieldCheck, Loader2, LogOut, CheckCircle2 } from "lucide-react"
+import { Lock, ShieldCheck, Loader2, LogOut } from "lucide-react"
 
 export default function ProfilPage() {
   const { user } = useDashboard()

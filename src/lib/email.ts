@@ -28,9 +28,9 @@ export async function sendEmail({ to, subject, html }: SendEmailParams) {
     }
 
     return { success: true, id: data?.id }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Email send exception:", error)
-    return { success: false, error: error.message }
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
 

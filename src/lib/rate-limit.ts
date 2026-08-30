@@ -18,10 +18,14 @@ export interface RateLimiterBackend {
 }
 
 // --- UPSTASH REDIS BACKEND (PRODUCTION) ---
-class UpstashRateLimiter implements RateLimiterBackend {
-  private ratelimit: any = null
+interface RatelimitInstance {
+  limit(identifier: string): Promise<{ success: boolean; remaining: number; reset: number }>
+}
 
-  private async getRatelimit(options: RateLimitOptions) {
+class UpstashRateLimiter implements RateLimiterBackend {
+  private ratelimit: RatelimitInstance | null = null
+
+  private async getRatelimit(options: RateLimitOptions): Promise<RatelimitInstance> {
     if (!this.ratelimit) {
       const { Ratelimit } = await import("@upstash/ratelimit")
       const { Redis } = await import("@upstash/redis")

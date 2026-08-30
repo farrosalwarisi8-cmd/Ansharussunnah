@@ -81,11 +81,11 @@ export async function changePassword(
       success: true,
       message: "Password berhasil diperbarui. Silakan login kembali.",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error changePassword:", error)
     return {
       success: false,
-      message: error.message || "Gagal mengganti password",
+      message: error instanceof Error ? error.message : "Gagal mengganti password",
     }
   }
 }

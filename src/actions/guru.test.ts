@@ -119,7 +119,7 @@ describe("updateAkunGuru - Otorisasi", () => {
     mockGuruFindUnique.mockResolvedValue(null)
 
     // Transaction berhasil
-    mockPrismaTransaction.mockImplementation(async (fn: Function) => {
+    mockPrismaTransaction.mockImplementation(async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
       return fn({
         user: { update: mockUserUpdate.mockResolvedValue({}) },
         guru: { update: mockGuruUpdate.mockResolvedValue({}) },
@@ -145,7 +145,7 @@ describe("updateAkunGuru - Otorisasi", () => {
     mockUserFindUnique.mockResolvedValue(targetUser)
     mockGuruFindUnique.mockResolvedValue(null)
 
-    mockPrismaTransaction.mockImplementation(async (fn: Function) => {
+    mockPrismaTransaction.mockImplementation(async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
       return fn({
         user: { update: mockUserUpdate.mockResolvedValue({}) },
         guru: { update: mockGuruUpdate.mockResolvedValue({}) },
@@ -297,7 +297,7 @@ describe("updateAkunGuru - Otorisasi", () => {
     })
     mockGuruFindUnique.mockResolvedValue(null)
 
-    mockPrismaTransaction.mockImplementation(async (fn: Function) => {
+    mockPrismaTransaction.mockImplementation(async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
       return fn({
         user: { update: mockUserUpdate.mockResolvedValue({}) },
         guru: { update: mockGuruUpdate.mockResolvedValue({}) },
@@ -347,7 +347,7 @@ describe("updateAkunGuru - Otorisasi", () => {
     // findUnique NIP tidak dipanggil karena NIP tidak berubah
     mockGuruFindUnique.mockResolvedValue(null)
 
-    mockPrismaTransaction.mockImplementation(async (fn: Function) => {
+    mockPrismaTransaction.mockImplementation(async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
       return fn({
         user: { update: mockUserUpdate.mockResolvedValue({}) },
         guru: { update: mockGuruUpdate.mockResolvedValue({}) },

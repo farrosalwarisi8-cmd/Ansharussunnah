@@ -4,7 +4,6 @@ import Link from "next/link"
 import {
   CheckCircle2,
   Copy,
-  Download,
   ArrowRight,
   GraduationCap,
 } from "lucide-react"

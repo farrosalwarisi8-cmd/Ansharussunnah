@@ -4,8 +4,8 @@
 
 import * as React from "react"
 import { useDashboard } from "./dashboard-context"
-import { Role } from "@prisma/client"
-import { Bell, Calendar, Sparkles } from "lucide-react"
+
+import { Calendar } from "lucide-react"
 
 interface DashboardHeaderProps {
   title?: string

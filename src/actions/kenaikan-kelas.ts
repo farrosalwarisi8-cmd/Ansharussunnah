@@ -172,10 +172,10 @@ export async function promosiSiswaMassal(
       message: `Promosi selesai. Berhasil: ${totalBerhasil} siswa, Gagal: ${totalGagal} siswa`,
       data: { totalBerhasil, totalGagal },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal melakukan promosi kelas",
+      message: error instanceof Error ? error.message : "Gagal melakukan promosi kelas",
     }
   }
 }
@@ -286,10 +286,10 @@ export async function getSiswaUntukPromosi(
         daftarSiswa: formatted,
       },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat data siswa untuk promosi",
+      message: error instanceof Error ? error.message : "Gagal memuat data siswa untuk promosi",
     }
   }
 }
@@ -345,10 +345,10 @@ export async function getRiwayatKelasSiswa(
       message: "Riwayat kelas siswa berhasil dimuat",
       data: formatted,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat riwayat kelas siswa",
+      message: error instanceof Error ? error.message : "Gagal memuat riwayat kelas siswa",
     }
   }
 }

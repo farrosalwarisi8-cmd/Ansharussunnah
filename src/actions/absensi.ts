@@ -3,7 +3,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireAuth, requireRole } from "@/lib/auth"
+import { requireRole } from "@/lib/auth"
 import { verifyGuruAksesKelas } from "@/lib/guru-auth"
 import {
   inputAbsensiSingleSchema,
@@ -18,7 +18,7 @@ import {
   type RiwayatKehadiranSiswaValues,
 } from "@/lib/validations/absensi"
 import type { ActionResponse } from "@/types"
-import { Role, StatusAbsensi, Prisma } from "@prisma/client"
+import { Role, StatusAbsensi } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
 // ========================================================
@@ -122,10 +122,10 @@ export async function inputAbsensiSingle(
       success: true,
       message: `Absensi siswa berhasil disimpan (${status})`,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal menyimpan absensi",
+      message: error instanceof Error ? error.message : "Gagal menyimpan absensi",
     }
   }
 }
@@ -219,10 +219,10 @@ export async function inputAbsensiBulk(
       message: `Absensi bulk berhasil: ${berhasil} siswa tercatat`,
       data: { berhasil, gagal: 0 },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal menyimpan absensi bulk",
+      message: error instanceof Error ? error.message : "Gagal menyimpan absensi bulk",
     }
   }
 }
@@ -268,10 +268,10 @@ export async function editAbsensi(
       success: true,
       message: "Absensi berhasil diperbarui",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memperbarui absensi",
+      message: error instanceof Error ? error.message : "Gagal memperbarui absensi",
     }
   }
 }
@@ -377,10 +377,10 @@ export async function getRekapKehadiranKelas(
         rekap,
       },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat rekap kehadiran",
+      message: error instanceof Error ? error.message : "Gagal memuat rekap kehadiran",
     }
   }
 }
@@ -450,10 +450,10 @@ export async function getRiwayatKehadiranSiswa(
         })),
       },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat riwayat kehadiran",
+      message: error instanceof Error ? error.message : "Gagal memuat riwayat kehadiran",
     }
   }
 }
@@ -550,10 +550,10 @@ export async function getRiwayatKehadiranAnak(
         })),
       },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat riwayat kehadiran anak",
+      message: error instanceof Error ? error.message : "Gagal memuat riwayat kehadiran anak",
     }
   }
 }

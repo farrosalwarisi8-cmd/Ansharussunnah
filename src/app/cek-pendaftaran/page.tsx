@@ -145,7 +145,7 @@ export default function CekPendaftaranPage() {
 
                 <div className="flex items-center justify-between pt-1">
                   <span className="text-xs font-semibold text-slate-500">Status Pendaftaran</span>
-                  <StatusBadge status={result.data.status as any} size="lg" />
+                  <StatusBadge status={result.data.status as "MENUNGGU_VERIFIKASI" | "DITERIMA" | "DITOLAK"} size="lg" />
                 </div>
 
                 {result.data.status === "DITOLAK" && result.data.alasanPenolakan && (

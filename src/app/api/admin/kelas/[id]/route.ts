@@ -40,9 +40,9 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
       message: "Kelas berhasil diperbarui",
       data: updated,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { success: false, message: error.message || "Gagal memperbarui kelas" },
+      { success: false, message: error instanceof Error ? error.message : "Gagal memperbarui kelas" },
       { status: 400 }
     )
   }
@@ -85,9 +85,9 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
       success: true,
       message: "Kelas berhasil dihapus",
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { success: false, message: error.message || "Gagal menghapus kelas" },
+      { success: false, message: error instanceof Error ? error.message : "Gagal menghapus kelas" },
       { status: 400 }
     )
   }

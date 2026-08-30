@@ -3,7 +3,7 @@
 "use client"
 
 import * as React from "react"
-import { Upload, X, FileText, Image } from "lucide-react"
+import { Upload, X, FileText, Image as ImageIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface FileUploadProps {
@@ -131,7 +131,7 @@ export function FileUpload({
               className="flex items-center gap-3 bg-gray-50 rounded-lg p-3"
             >
               {file.type.startsWith("image/") ? (
-                <Image className="h-5 w-5 text-gray-400" />
+                <ImageIcon className="h-5 w-5 text-gray-400" />
               ) : (
                 <FileText className="h-5 w-5 text-gray-400" />
               )}

@@ -89,7 +89,7 @@ export async function requestPasswordReset(
     })
 
     return genericSuccessResponse
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error requestPasswordReset:", error)
     return {
       success: false,
@@ -168,7 +168,7 @@ export async function verifyResetOtp(
       message: "Verifikasi kode berhasil",
       data: { resetToken: token.id },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error verifyResetOtp:", error)
     return { success: false, message: "Gagal memproses verifikasi OTP" }
   }
@@ -263,7 +263,7 @@ export async function resetPassword(
       success: true,
       message: "Password berhasil diubah. Silakan login kembali.",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error resetPassword:", error)
     return {
       success: false,

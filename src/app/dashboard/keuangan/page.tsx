@@ -3,36 +3,27 @@
 "use client"
 
 import * as React from "react"
-import { useDashboard } from "@/components/dashboard/dashboard-context"
+
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import {
   generateBulkSpp,
   konfirmasiPembayaranSppOlehAdmin,
   createTransaksiKeuangan,
-  batalkanTransaksiKeuangan,
-  getLaporanKeuangan,
 } from "@/actions/akuntansi"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { StatusBadge } from "@/components/ui/status-badge"
+
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+
 import {
-  DollarSign,
   CheckCircle2,
   XCircle,
   Plus,
   FileSpreadsheet,
-  TrendingUp,
-  TrendingDown,
-  Clock,
-  Building,
   Loader2,
   ExternalLink,
-  ShieldCheck,
-  Calendar,
 } from "lucide-react"
 
 export default function KeuanganPage() {
@@ -383,7 +374,7 @@ export default function KeuanganPage() {
                   <label className="text-xs font-semibold text-slate-600 uppercase block mb-1">Tipe</label>
                   <select
                     value={tipeTransaksi}
-                    onChange={(e) => setTipeTransaksi(e.target.value as any)}
+                    onChange={(e) => setTipeTransaksi(e.target.value as "PEMASUKAN" | "PENGELUARAN")}
                     className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold"
                   >
                     <option value="PEMASUKAN">Pemasukan (+)</option>

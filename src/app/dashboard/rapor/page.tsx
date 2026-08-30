@@ -6,18 +6,17 @@ import * as React from "react"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
-import { createOrUpdateCatatanRapor, getRaporSiswa, getRaporAnak } from "@/actions/rapor"
+import { createOrUpdateCatatanRapor } from "@/actions/rapor"
 import { useToast } from "@/hooks/use-toast"
 import { Role } from "@prisma/client"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { GraduationCap, Printer, Save, Loader2, Award, CheckCircle2, User } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { GraduationCap, Printer, Save, Loader2 } from "lucide-react"
 
 export default function RaporPage() {
   const { user, selectedChild } = useDashboard()
-  const { toast } = useToast()
+  useToast()
 
   const isTeacher = user.role === Role.GURU || user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN_AKADEMIK
   const isParent = user.role === Role.ORANG_TUA

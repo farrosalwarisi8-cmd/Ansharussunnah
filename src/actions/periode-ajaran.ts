@@ -30,10 +30,10 @@ export async function getDaftarPeriodeAjaran(): Promise<ActionResponse> {
       message: "Daftar periode ajaran berhasil dimuat",
       data: periodeList,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat periode ajaran",
+      message: error instanceof Error ? error.message : "Gagal memuat periode ajaran",
     }
   }
 }
@@ -98,10 +98,10 @@ export async function createPeriodeAjaran(
       message: `Periode ajaran "${nama}" berhasil dibuat`,
       data: { periodeId: periode.id },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal membuat periode ajaran",
+      message: error instanceof Error ? error.message : "Gagal membuat periode ajaran",
     }
   }
 }
@@ -160,10 +160,10 @@ export async function updatePeriodeAjaran(
 
     revalidatePath("/dashboard/guru/periode")
     return { success: true, message: "Periode ajaran berhasil diperbarui" }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memperbarui periode ajaran",
+      message: error instanceof Error ? error.message : "Gagal memperbarui periode ajaran",
     }
   }
 }
@@ -213,10 +213,10 @@ export async function deletePeriodeAjaran(
 
     revalidatePath("/dashboard/guru/periode")
     return { success: true, message: "Periode ajaran berhasil dihapus" }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal menghapus periode ajaran",
+      message: error instanceof Error ? error.message : "Gagal menghapus periode ajaran",
     }
   }
 }

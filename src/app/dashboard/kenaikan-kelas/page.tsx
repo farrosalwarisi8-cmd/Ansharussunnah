@@ -4,13 +4,13 @@
 
 import * as React from "react"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
-import { promosiSiswaMassal, getSiswaUntukPromosi } from "@/actions/kenaikan-kelas"
+import { promosiSiswaMassal } from "@/actions/kenaikan-kelas"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { ArrowUpRight, CheckCircle2, UserCheck, AlertTriangle, Loader2, Sparkles } from "lucide-react"
+import { ArrowUpRight, CheckCircle2 } from "lucide-react"
 
 interface SiswaPromosi {
   siswaId: string

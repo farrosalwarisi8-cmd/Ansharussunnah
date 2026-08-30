@@ -7,7 +7,7 @@ import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
 import { Role } from "@prisma/client"
-import { Award, Plus, Clock, FileText, CheckCircle2, Play, BarChart2, Calendar } from "lucide-react"
+import { Plus, Clock, FileText, Play, BarChart2, Calendar, Award } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -104,7 +104,7 @@ function GuruUjianView() {
                 <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
                   {item.mapel}
                 </span>
-                <StatusBadge status={item.status as any} />
+                <StatusBadge status={item.status as "DRAFT" | "AKTIF" | "SELESAI" | "PUBLISHED"} />
               </div>
               <CardTitle className="text-base font-bold text-slate-900 leading-snug">
                 {item.judul}
@@ -276,7 +276,7 @@ function SiswaUjianView() {
 /* ========================================================================= */
 /* 3. ORANG TUA UJIAN VIEW                                                   */
 /* ========================================================================= */
-function OrangTuaUjianView({ selectedChild }: { selectedChild: any }) {
+function OrangTuaUjianView({ selectedChild }: { selectedChild: { nama: string } | null }) {
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
       <CardHeader className="p-6 pb-4">

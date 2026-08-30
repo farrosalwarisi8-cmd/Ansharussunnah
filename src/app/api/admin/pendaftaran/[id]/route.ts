@@ -19,9 +19,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json(result, {
       status: result.success ? 200 : 404,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { success: false, message: error.message || "Gagal memuat detail pendaftaran" },
+      { success: false, message: error instanceof Error ? error.message : "Gagal memuat detail pendaftaran" },
       { status: 500 }
     )
   }

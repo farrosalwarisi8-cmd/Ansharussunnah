@@ -6,7 +6,7 @@ import * as React from "react"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
-import { createMateri, getDaftarMateriGuru, getDaftarMateriSiswa } from "@/actions/materi"
+import { createMateri } from "@/actions/materi"
 import { useToast } from "@/hooks/use-toast"
 import { Role } from "@prisma/client"
 import { Button } from "@/components/ui/button"
@@ -20,10 +20,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { BookOpen, Plus, FileText, ExternalLink, Download, Loader2, Sparkles, Folder, Calendar } from "lucide-react"
+import { Plus, ExternalLink, Loader2 } from "lucide-react"
 
 export default function MateriPage() {
-  const { user, selectedChild } = useDashboard()
+  const { user } = useDashboard()
   const { toast } = useToast()
 
   const isTeacher = user.role === Role.GURU || user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN_AKADEMIK

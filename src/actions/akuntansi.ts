@@ -68,7 +68,7 @@ export async function generateBulkSpp(
     const { bulan, tahun, kelasId } = validated.data
 
     // 1. Ambil semua siswa aktif yang masuk filter kelasId (jika ada)
-    const filterSiswa: Record<string, any> = {
+    const filterSiswa: Record<string, unknown> = {
       user: { aktif: true },
     }
     if (kelasId) {
@@ -155,10 +155,10 @@ export async function generateBulkSpp(
       message: `Pembuatan tagihan selesai. Terproses: ${totalSiswaTerproses} siswa, Dilewati (sudah ada/tanpa tarif): ${totalDilewati}`,
       data: { totalSiswaTerproses, totalDilewati },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal meng-generate tagihan SPP bulanan",
+      message: error instanceof Error ? error.message : "Gagal meng-generate tagihan SPP bulanan",
     }
   }
 }
@@ -286,10 +286,10 @@ export async function submitBuktiPembayaranSpp(
         "Bukti pembayaran berhasil dikirim dan sedang menunggu verifikasi oleh admin keuangan. " +
         "Status tagihan Anda akan diperbarui setelah pembayaran dikonfirmasi.",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal mencatatkan pembayaran SPP",
+      message: error instanceof Error ? error.message : "Gagal mencatatkan pembayaran SPP",
     }
   }
 }
@@ -453,8 +453,8 @@ export async function konfirmasiPembayaranSppOlehAdmin(
         selisihNominal,
       },
     }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal memproses konfirmasi pembayaran" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal memproses konfirmasi pembayaran" }
   }
 }
 
@@ -547,8 +547,8 @@ export async function konfirmasiPembayaranSppManual(
           ? "Konfirmasi pembayaran berhasil. Tagihan dinyatakan lunas."
           : `Konfirmasi pembayaran sebagian berhasil. Sisa tunggakan: Rp ${sisaTunggakan.toLocaleString("id-ID")}`,
     }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal memproses konfirmasi" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal memproses konfirmasi" }
   }
 }
 
@@ -605,8 +605,8 @@ export async function createTransaksiKeuangan(
       message: `Transaksi keuangan ${kategori.tipe.toLowerCase()} berhasil disimpan`,
       data: transaksi,
     }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal menyimpan transaksi keuangan" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal menyimpan transaksi keuangan" }
   }
 }
 
@@ -651,8 +651,8 @@ export async function batalkanTransaksiKeuangan(
 
     revalidatePath("/dashboard/finance/transaksi")
     return { success: true, message: "Transaksi berhasil dibatalkan (soft-delete)" }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal membatalkan transaksi" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal membatalkan transaksi" }
   }
 }
 
@@ -693,8 +693,8 @@ export async function batalkanTagihanSpp(
 
     revalidatePath("/dashboard/finance/spp")
     return { success: true, message: "Tagihan SPP berhasil dibatalkan" }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal membatalkan tagihan SPP" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal membatalkan tagihan SPP" }
   }
 }
 
@@ -795,8 +795,8 @@ export async function getLaporanKeuangan(
         transaksi: rincianTransaksi,
       },
     }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal menyusun laporan keuangan" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal menyusun laporan keuangan" }
   }
 }
 
@@ -809,7 +809,7 @@ export async function getRekapTunggakanSpp(
     await requireAdminKeuangan()
 
     // PENTEST FIX #1: Pisahkan tunggakan murni dan yang menunggu verifikasi
-    const baseFilter: Record<string, any> = {}
+    const baseFilter: Record<string, unknown> = {}
     if (bulan) baseFilter.bulan = bulan
     if (tahun) baseFilter.tahun = tahun
     if (kelasId) {
@@ -899,8 +899,8 @@ export async function getRekapTunggakanSpp(
         menungguVerifikasi: formatTagihan(menungguVerifikasi),
       },
     }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal menyusun rekap tunggakan" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal menyusun rekap tunggakan" }
   }
 }
 
@@ -1023,8 +1023,8 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
       message: "Data tagihan & riwayat SPP sukses dimuat",
       data: formatted,
     }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal memuat rincian tagihan" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal memuat rincian tagihan" }
   }
 }
 

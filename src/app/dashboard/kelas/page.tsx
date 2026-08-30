@@ -3,15 +3,15 @@
 "use client"
 
 import * as React from "react"
-import { useDashboard } from "@/components/dashboard/dashboard-context"
+
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
-import { createJenjang, createKelas, getAdminJenjangList } from "@/actions/jenjang-kelas"
-import { assignGuruKeKelas } from "@/actions/guru-kelas"
+import { createKelas } from "@/actions/jenjang-kelas"
+
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { StatusBadge } from "@/components/ui/status-badge"
+
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Layers, Plus, Users, UserCheck, GraduationCap, Loader2, BookOpen } from "lucide-react"
+import { Plus, UserCheck, Loader2 } from "lucide-react"
 
 export default function KelolaKelasPage() {
   const { toast } = useToast()

@@ -96,14 +96,14 @@ export async function createAkunGuru(
 
       const guru = await tx.guru.create({
         data: {
-          userId: (user as any).id,
+          userId: user.id,
           nip: nip || null,
           jabatan: jabatan || null,
           noHp: noHp || null,
         },
       })
 
-      return { userId: (user as any).id, guruId: (guru as any).id }
+      return { userId: user.id, guruId: guru.id }
     })
 
     // Kirim kredensial via email (fire-and-forget, jangan block response)
@@ -123,10 +123,10 @@ export async function createAkunGuru(
       message: `Akun guru "${nama}" berhasil dibuat. Kredensial telah dikirim ke ${email}.`,
       data: { userId: result.userId },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal membuat akun guru",
+      message: error instanceof Error ? error.message : "Gagal membuat akun guru",
     }
   }
 }
@@ -203,10 +203,10 @@ export async function updateAkunGuru(
 
     revalidatePath("/dashboard/guru")
     return { success: true, message: "Data guru berhasil diperbarui" }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memperbarui data guru",
+      message: error instanceof Error ? error.message : "Gagal memperbarui data guru",
     }
   }
 }
@@ -255,10 +255,10 @@ export async function nonaktifkanAkunGuru(
 
     revalidatePath("/dashboard/guru")
     return { success: true, message: `Akun guru "${user.nama}" berhasil dinonaktifkan` }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal menonaktifkan akun guru",
+      message: error instanceof Error ? error.message : "Gagal menonaktifkan akun guru",
     }
   }
 }
@@ -305,10 +305,10 @@ export async function aktifkanKembaliAkunGuru(
 
     revalidatePath("/dashboard/guru")
     return { success: true, message: `Akun guru "${user.nama}" berhasil diaktifkan kembali` }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal mengaktifkan kembali akun guru",
+      message: error instanceof Error ? error.message : "Gagal mengaktifkan kembali akun guru",
     }
   }
 }
@@ -350,10 +350,10 @@ export async function setGuruAdmin(
       success: true,
       message: `Guru "${user.nama}" berhasil ${action}`,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal mengubah status admin guru",
+      message: error instanceof Error ? error.message : "Gagal mengubah status admin guru",
     }
   }
 }
@@ -412,10 +412,10 @@ export async function getDaftarGuru(): Promise<ActionResponse> {
       message: "Daftar guru berhasil dimuat",
       data: formatted,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat daftar guru",
+      message: error instanceof Error ? error.message : "Gagal memuat daftar guru",
     }
   }
 }

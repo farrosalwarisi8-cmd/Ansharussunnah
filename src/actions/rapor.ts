@@ -16,7 +16,7 @@ import {
   type UpdateCatatanRaporValues,
 } from "@/lib/validations/rapor"
 import type { ActionResponse } from "@/types"
-import { Role, StatusPengerjaan, StatusPengumpulan, Prisma } from "@prisma/client"
+import { Role, StatusPengerjaan, StatusPengumpulan } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
 // ========================================================
@@ -295,10 +295,10 @@ export async function generateRaporSiswa(
           : null,
       },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal men-generate rapor",
+      message: error instanceof Error ? error.message : "Gagal men-generate rapor",
     }
   }
 }
@@ -404,10 +404,10 @@ export async function getRekapRaporKelas(
         rekap,
       },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat rekap rapor kelas",
+      message: error instanceof Error ? error.message : "Gagal memuat rekap rapor kelas",
     }
   }
 }
@@ -477,10 +477,10 @@ export async function createOrUpdateCatatanRapor(
       success: true,
       message: "Catatan rapor berhasil disimpan",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal menyimpan catatan rapor",
+      message: error instanceof Error ? error.message : "Gagal menyimpan catatan rapor",
     }
   }
 }
@@ -528,10 +528,10 @@ export async function updateCatatanRapor(
 
     revalidatePath(`/dashboard/guru/rapor`)
     return { success: true, message: "Catatan rapor berhasil diperbarui" }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memperbarui catatan rapor",
+      message: error instanceof Error ? error.message : "Gagal memperbarui catatan rapor",
     }
   }
 }
@@ -617,16 +617,17 @@ export async function getRaporSiswa(
         catatan: catatanRapor?.catatan || null,
         ranking: catatanRapor?.ranking || null,
       },
-    }
-  } catch (error: any) {
+    }  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat rapor",
+      message: error instanceof Error ? error.message : "Gagal memuat rapor",
     }
   }
 }
 
 // ========================================================
+
+
 // 5. ACTIONS ORANG TUA: LIHAT RAPOR ANAK (Read-Only)
 // ========================================================
 
@@ -716,10 +717,10 @@ export async function getRaporAnak(
         ranking: catatanRapor?.ranking || null,
       },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat rapor anak",
+      message: error instanceof Error ? error.message : "Gagal memuat rapor anak",
     }
   }
 }

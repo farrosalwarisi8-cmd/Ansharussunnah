@@ -3,20 +3,18 @@
 "use client"
 
 import * as React from "react"
-import { useDashboard } from "@/components/dashboard/dashboard-context"
+
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import {
   createAkunGuru,
-  updateAkunGuru,
   nonaktifkanAkunGuru,
   aktifkanKembaliAkunGuru,
   setGuruAdmin,
-  getDaftarGuru,
 } from "@/actions/guru"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import {
   Dialog,
@@ -26,7 +24,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { Users2, Plus, ShieldCheck, ShieldAlert, UserX, UserCheck, Loader2, Mail, Phone, Lock } from "lucide-react"
+import { Plus, ShieldCheck, Loader2 } from "lucide-react"
 
 export default function KelolaGuruPage() {
   const { toast } = useToast()
@@ -80,7 +78,17 @@ export default function KelolaGuruPage() {
   // Confirm Action Dialog
   const [confirmDialog, setConfirmDialog] = React.useState<{
     open: boolean
-    guru: any | null
+    guru: {
+      id: string
+      userId: string
+      nama: string
+      email: string
+      nip: string
+      jabatan: string
+      noHp: string
+      aktif: boolean
+      isAdmin: boolean
+    } | null
     type: "TOGGLE_ACTIVE" | "TOGGLE_ADMIN"
   }>({
     open: false,

@@ -4,11 +4,11 @@
 
 import * as React from "react"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
-import { getPendaftaranList, verifikasiPendaftaran } from "@/actions/verifikasi"
+import { verifikasiPendaftaran } from "@/actions/verifikasi"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import {
   Dialog,
@@ -18,13 +18,25 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { UserCheck, CheckCircle2, XCircle, ExternalLink, FileText, Loader2, Search, Filter } from "lucide-react"
+import { CheckCircle2, XCircle, ExternalLink, Loader2, Search } from "lucide-react"
 
 export default function VerifikasiPendaftaranPage() {
   const { toast } = useToast()
 
   const [search, setSearch] = React.useState("")
-  const [selectedPendaftar, setSelectedPendaftar] = React.useState<any | null>(null)
+  const [selectedPendaftar, setSelectedPendaftar] = React.useState<{
+    id: string
+    nomorPendaftaran: string
+    namaLengkap: string
+    jenjangTujuan: string
+    namaOrtu: string
+    noHpOrtu: string
+    emailOrtu: string
+    buktiTransferUrl?: string
+    dokumenKK?: string
+    dokumenAkta?: string
+    status: string
+  } | null>(null)
   const [alasanPenolakan, setAlasanPenolakan] = React.useState("Berkas Akta Kelahiran dan foto bukti transfer buram/tidak terbaca.")
   const [isRejectDialogOpen, setIsRejectDialogOpen] = React.useState(false)
   const [isApproveConfirmOpen, setIsApproveConfirmOpen] = React.useState(false)
@@ -230,7 +242,7 @@ export default function VerifikasiPendaftaranPage() {
                       <div className="text-slate-400">{p.noHpOrtu}</div>
                     </td>
                     <td className="p-4">
-                      <StatusBadge status={p.status as any} />
+                      <StatusBadge status={p.status as "MENUNGGU_VERIFIKASI" | "DITERIMA" | "DITOLAK"} />
                     </td>
                     <td className="p-4 pr-6 text-right">
                       <Button
@@ -258,7 +270,7 @@ export default function VerifikasiPendaftaranPage() {
                     </span>
                     <div className="font-bold text-slate-900 text-sm mt-0.5">{p.namaLengkap}</div>
                   </div>
-                  <StatusBadge status={p.status as any} size="sm" />
+                  <StatusBadge status={p.status as "MENUNGGU_VERIFIKASI" | "DITERIMA" | "DITOLAK"} size="sm" />
                 </div>
 
                 <div className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-100 space-y-1">

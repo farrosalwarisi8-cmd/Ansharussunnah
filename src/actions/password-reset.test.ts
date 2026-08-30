@@ -44,7 +44,6 @@ import { verifyOtp } from "@/lib/otp"
 import {
   requestPasswordReset,
   verifyResetOtp,
-  resetPassword,
 } from "@/actions/password-reset"
 
 const mockUser = {
@@ -70,11 +69,11 @@ describe("requestPasswordReset", () => {
   })
 
   it("harus membatasi request OTP baru dalam masa cooldown", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as any)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never)
     vi.mocked(prisma.passwordResetToken.findFirst).mockResolvedValue({
       id: "token-1",
       createdAt: new Date(),
-    } as any)
+    } as never)
 
     const result = await requestPasswordReset("test@example.com")
     expect(result.success).toBe(false)
@@ -93,12 +92,12 @@ describe("verifyResetOtp", () => {
   })
 
   it("harus mengunci token jika limit percobaan salah (lockout) terpenuhi", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as any)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never)
     vi.mocked(prisma.passwordResetToken.findFirst).mockResolvedValue({
       id: "token-1",
       jumlahGagal: 3,
       expiredAt: new Date(Date.now() + 600000),
-    } as any)
+    } as never)
 
     const result = await verifyResetOtp("test@example.com", "123456")
     expect(result.success).toBe(false)
@@ -106,13 +105,13 @@ describe("verifyResetOtp", () => {
   })
 
   it("harus menambah counter gagal jika OTP salah", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as any)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never)
     vi.mocked(prisma.passwordResetToken.findFirst).mockResolvedValue({
       id: "token-1",
       kodeOtpHash: "$2a$10$hashed",
       jumlahGagal: 0,
       expiredAt: new Date(Date.now() + 600000),
-    } as any)
+    } as never)
     vi.mocked(verifyOtp).mockResolvedValue(false)
 
     const result = await verifyResetOtp("test@example.com", "000000")

@@ -36,7 +36,7 @@ export async function getPendaftaranList(options?: {
     const limit = options?.limit || 10
     const skip = (page - 1) * limit
 
-    const whereCondition: Record<string, any> = {}
+    const whereCondition: Record<string, unknown> = {}
 
     if (options?.status) {
       whereCondition.status = options.status
@@ -77,10 +77,10 @@ export async function getPendaftaranList(options?: {
         totalPages: Math.ceil(total / limit),
       },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat data pendaftaran",
+      message: error instanceof Error ? error.message : "Gagal memuat data pendaftaran",
     }
   }
 }
@@ -146,10 +146,10 @@ export async function getPendaftaranDetail(
         },
       },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat detail pendaftaran",
+      message: error instanceof Error ? error.message : "Gagal memuat detail pendaftaran",
     }
   }
 }
@@ -421,11 +421,11 @@ export async function verifikasiPendaftaran(
     }
 
     return { success: false, message: "Status verifikasi tidak dikenali" }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error verifikasiPendaftaran:", error)
     return {
       success: false,
-      message: error.message || "Gagal memproses verifikasi pendaftaran",
+      message: error instanceof Error ? error.message : "Gagal memproses verifikasi pendaftaran",
     }
   }
 }

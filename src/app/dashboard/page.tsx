@@ -227,7 +227,7 @@ function GuruDashboardHome() {
                   </div>
                   <div className="text-sm font-bold text-slate-900">{item.judul}</div>
                 </div>
-                <StatusBadge status={item.status as any} />
+                <StatusBadge status={item.status as "DRAFT" | "AKTIF" | "SELESAI" | "PUBLISHED"} />
               </div>
             ))}
           </CardContent>

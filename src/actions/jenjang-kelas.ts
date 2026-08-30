@@ -97,10 +97,10 @@ export async function getAdminJenjangList(): Promise<ActionResponse<JenjangWithK
       message: "Daftar jenjang berhasil diambil",
       data: jenjangs as JenjangWithKelas[],
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat data jenjang",
+      message: error instanceof Error ? error.message : "Gagal memuat data jenjang",
     }
   }
 }
@@ -153,10 +153,10 @@ export async function createJenjang(
       success: true,
       message: `Jenjang "${nama}" berhasil ditambahkan`,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal menambahkan jenjang",
+      message: error instanceof Error ? error.message : "Gagal menambahkan jenjang",
     }
   }
 }
@@ -192,10 +192,10 @@ export async function updateJenjang(
       success: true,
       message: "Data jenjang berhasil diperbarui",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memperbarui data jenjang",
+      message: error instanceof Error ? error.message : "Gagal memperbarui data jenjang",
     }
   }
 }
@@ -241,10 +241,10 @@ export async function deleteJenjang(id: string): Promise<ActionResponse> {
       success: true,
       message: "Jenjang berhasil dihapus",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal menghapus jenjang",
+      message: error instanceof Error ? error.message : "Gagal menghapus jenjang",
     }
   }
 }
@@ -278,10 +278,10 @@ export async function getAdminKelasList(): Promise<ActionResponse<KelasWithRelat
       message: "Daftar kelas berhasil dimuat",
       data: kelas as KelasWithRelations[],
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memuat daftar kelas",
+      message: error instanceof Error ? error.message : "Gagal memuat daftar kelas",
     }
   }
 }
@@ -338,10 +338,10 @@ export async function createKelas(payload: KelasFormValues): Promise<ActionRespo
       success: true,
       message: `Kelas "${nama}" berhasil dibuat`,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal membuat kelas baru",
+      message: error instanceof Error ? error.message : "Gagal membuat kelas baru",
     }
   }
 }
@@ -379,10 +379,10 @@ export async function updateKelas(
       success: true,
       message: "Data kelas berhasil diperbarui",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal memperbarui kelas",
+      message: error instanceof Error ? error.message : "Gagal memperbarui kelas",
     }
   }
 }
@@ -427,10 +427,10 @@ export async function deleteKelas(id: string): Promise<ActionResponse> {
       success: true,
       message: "Kelas berhasil dihapus",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal menghapus kelas",
+      message: error instanceof Error ? error.message : "Gagal menghapus kelas",
     }
   }
 }

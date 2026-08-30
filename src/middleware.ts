@@ -17,8 +17,7 @@ const PUBLIC_ROUTES = [
   "/api/auth/login",
 ]
 
-// Route yang hanya boleh diakses saat SUDAH login
-const AUTH_ROUTES = ["/dashboard", "/ganti-password"]
+
 
 // Route yang TIDAK boleh diakses jika sudah login (redirect ke dashboard)
 const GUEST_ONLY_ROUTES = ["/login", "/lupa-password"]
@@ -32,9 +31,20 @@ function isPublicRoute(pathname: string): boolean {
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // If Supabase env vars are not configured, skip auth check entirely
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn(
+      "[middleware] NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set. Auth middleware is disabled."
+    )
+    return supabaseResponse
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {

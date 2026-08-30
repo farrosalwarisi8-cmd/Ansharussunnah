@@ -100,7 +100,7 @@ function setupHappyPath() {
   mockSiswaFindMany.mockResolvedValue(siswaList)
 
   // Transaction executor: panggil callback tx seperti Prisma
-  mockPrismaTransaction.mockImplementation(async (fn: Function) => {
+  mockPrismaTransaction.mockImplementation(async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
     return fn({
       riwayatKelasSiswa: { createMany: mockRiwayatCreateMany.mockResolvedValue({ count: 5 }) },
       siswa: { updateMany: mockSiswaUpdateMany.mockResolvedValue({ count: 5 }) },
@@ -228,7 +228,7 @@ describe("promosiSiswaMassal - Batch Optimization", () => {
       { id: "siswa-new", kelasId: null }, // Siswa baru, belum punya kelas
     ])
 
-    mockPrismaTransaction.mockImplementation(async (fn: Function) => {
+    mockPrismaTransaction.mockImplementation(async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
       return fn({
         riwayatKelasSiswa: { createMany: mockRiwayatCreateMany.mockResolvedValue({ count: 0 }) },
         siswa: { updateMany: mockSiswaUpdateMany.mockResolvedValue({ count: 1 }) },

@@ -148,7 +148,7 @@ export default function BuatUjianPage() {
     setLoading(true)
     try {
       // Direct call Server Action createUjian
-      const result = await createUjian({
+      await createUjian({
         judul,
         deskripsi,
         kelasId,

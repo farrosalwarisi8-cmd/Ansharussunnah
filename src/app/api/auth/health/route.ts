@@ -22,7 +22,7 @@ export async function GET() {
       },
       environment: process.env.NODE_ENV || "development",
     })
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         status: "unhealthy",

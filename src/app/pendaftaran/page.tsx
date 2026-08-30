@@ -7,7 +7,7 @@ import Link from "next/link"
 
 export default async function PendaftaranPage() {
   // Ambil data jenjang & kelas dari server
-  let jenjangData: { success: boolean; data?: any[] } = { success: false, data: [] }
+  let jenjangData: { success: boolean; data?: Array<{ id: string; nama: string; urutan: number; kelas: Array<{ id: string; nama: string; kapasitas: number }> }> } = { success: false, data: [] }
   try {
     jenjangData = await getJenjangDenganKelas()
   } catch {

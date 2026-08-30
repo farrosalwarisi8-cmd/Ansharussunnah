@@ -6,7 +6,7 @@ import * as React from "react"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
-import { submitBuktiPembayaranSpp, getTagihanSppSiswa } from "@/actions/akuntansi"
+import { submitBuktiPembayaranSpp } from "@/actions/akuntansi"
 import { useToast } from "@/hooks/use-toast"
 import { Role } from "@prisma/client"
 import { Button } from "@/components/ui/button"
@@ -20,14 +20,24 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { CreditCard, Upload, CheckCircle2, Clock, AlertCircle, Building2, Copy, Loader2, Sparkles } from "lucide-react"
+import { Upload, Clock, CheckCircle2, Building2, Copy, Loader2 } from "lucide-react"
 
 export default function TagihanPage() {
-  const { user, selectedChild } = useDashboard()
+  const { user } = useDashboard()
   const { toast } = useToast()
 
   const isParent = user.role === Role.ORANG_TUA
-  const [selectedTagihan, setSelectedTagihan] = React.useState<any | null>(null)
+  const [selectedTagihan, setSelectedTagihan] = React.useState<{
+    id: string
+    bulan: string
+    nominal: number
+    status: string
+    keterangan: string
+    jatuhTempo: string
+    pembayaranTerkini?: {
+      buktiUrl?: string | null
+    } | null
+  } | null>(null)
 
   // Upload Form State
   const [bankPengirim, setBankPengirim] = React.useState("BSI (Bank Syariah Indonesia)")
@@ -80,11 +90,17 @@ export default function TagihanPage() {
       return
     }
 
+    if (!selectedTagihan) {
+      toast({ variant: "destructive", title: "Tagihan tidak dipilih!" })
+      return
+    }
+    const selectedTagihanId = selectedTagihan.id
+
     setSubmitting(true)
     try {
       // Direct call Server Action submitBuktiPembayaranSpp
       await submitBuktiPembayaranSpp({
-        tagihanId: selectedTagihan.id,
+        tagihanId: selectedTagihanId,
         nominalDibayar: parseFloat(jumlahTransfer) || 500000,
         metodeBayar: bankPengirim || "Transfer Bank",
         urlBukti: buktiUrl,
@@ -94,7 +110,7 @@ export default function TagihanPage() {
 
       setTagihanList((prev) =>
         prev.map((t) =>
-          t.id === selectedTagihan.id ? { ...t, status: "MENUNGGU_VERIFIKASI" } : t
+          t.id === selectedTagihanId ? { ...t, status: "MENUNGGU_VERIFIKASI" } : t
         )
       )
 
@@ -106,7 +122,7 @@ export default function TagihanPage() {
     } catch {
       setTagihanList((prev) =>
         prev.map((t) =>
-          t.id === selectedTagihan.id ? { ...t, status: "MENUNGGU_VERIFIKASI" } : t
+          t.id === selectedTagihanId ? { ...t, status: "MENUNGGU_VERIFIKASI" } : t
         )
       )
       toast({
@@ -177,7 +193,7 @@ export default function TagihanPage() {
                   <span className="font-extrabold text-slate-900 text-base">
                     SPP {tag.bulan}
                   </span>
-                  <StatusBadge status={tag.status as any} />
+                  <StatusBadge status={tag.status as "BELUM_BAYAR" | "TERLAMBAT" | "MENUNGGU_VERIFIKASI" | "DIBAYAR_SEBAGIAN" | "SUDAH_BAYAR" | "DIBATALKAN"} />
                 </div>
                 <div className="text-xs text-slate-500">{tag.keterangan}</div>
                 <div className="text-xs text-slate-400 flex items-center gap-1.5">

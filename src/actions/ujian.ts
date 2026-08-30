@@ -3,7 +3,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireAuth, requireRole } from "@/lib/auth"
+import { requireRole } from "@/lib/auth"
 import { verifyGuruAksesKelas } from "@/lib/guru-auth"
 import {
   createUjianSchema,
@@ -87,10 +87,10 @@ export async function createUjian(
       message: "Ujian berhasil dibuat dalam status DRAFT",
       data: { ujianId: ujian.id },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || "Gagal membuat ujian",
+      message: error instanceof Error ? error.message : "Gagal membuat ujian",
     }
   }
 }
@@ -158,8 +158,8 @@ export async function updateUjian(
 
     revalidatePath("/dashboard/guru/ujian")
     return { success: true, message: "Data ujian berhasil diperbarui" }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal memperbarui ujian" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal memperbarui ujian" }
   }
 }
 
@@ -188,8 +188,8 @@ export async function deleteUjian(ujianId: string): Promise<ActionResponse> {
 
     revalidatePath("/dashboard/guru/ujian")
     return { success: true, message: "Ujian berhasil dihapus" }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal menghapus ujian" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal menghapus ujian" }
   }
 }
 
@@ -258,8 +258,8 @@ export async function addOrUpdateSoalUjian(
 
     revalidatePath(`/dashboard/guru/ujian/${ujianId}`)
     return { success: true, message: `Soal nomor ${nomorSoal} berhasil disimpan` }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal menyimpan soal ujian" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal menyimpan soal ujian" }
   }
 }
 
@@ -281,8 +281,8 @@ export async function deleteSoalUjian(
 
     revalidatePath(`/dashboard/guru/ujian/${ujianId}`)
     return { success: true, message: "Soal berhasil dihapus" }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal menghapus soal" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal menghapus soal" }
   }
 }
 
@@ -341,8 +341,8 @@ export async function getRekapHasilUjian(ujianId: string): Promise<ActionRespons
         })),
       },
     }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal memuat rekap ujian" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal memuat rekap ujian" }
   }
 }
 
@@ -443,8 +443,8 @@ export async function beriNilaiEsai(
       success: true,
       message: "Penilaian esai berhasil disimpan dan nilai total telah diperbarui",
     }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal menyimpan nilai esai" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal menyimpan nilai esai" }
   }
 }
 
@@ -510,8 +510,8 @@ export async function getDaftarUjianSiswa(): Promise<ActionResponse> {
       message: "Daftar ujian berhasil diambil",
       data: formatted,
     }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal memuat ujian siswa" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal memuat ujian siswa" }
   }
 }
 
@@ -620,8 +620,8 @@ export async function mulaiPengerjaanUjian(
         jawabanTersimpan: pengerjaan.jawaban,
       },
     }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal memulai ujian" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal memulai ujian" }
   }
 }
 
@@ -802,8 +802,8 @@ export async function submitPengerjaanUjian(
         submitTerlambat,
       },
     }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal mengumpulkan jawaban ujian" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal mengumpulkan jawaban ujian" }
   }
 }
 
@@ -840,7 +840,7 @@ export async function tutupPengerjaanUjianKedaluwarsa(
     const now = new Date()
 
     // Cari semua sesi yang masih SEDANG_MENGERJAKAN
-    const whereClause: Record<string, any> = {
+    const whereClause: Record<string, unknown> = {
       status: StatusPengerjaan.SEDANG_MENGERJAKAN,
     }
     if (ujianId) {
@@ -938,7 +938,7 @@ export async function tutupPengerjaanUjianKedaluwarsa(
           : `${totalDitutup} sesi pengerjaan kedaluwarsa berhasil ditutup`,
       data: { totalDitutup, detail },
     }
-  } catch (error: any) {
-    return { success: false, message: error.message || "Gagal menutup sesi ujian kedaluwarsa" }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal menutup sesi ujian kedaluwarsa" }
   }
 }
