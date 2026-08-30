@@ -21,6 +21,7 @@ export async function getPendaftaranList(options?: {
   search?: string
   limit?: number
   page?: number
+  sortBy?: "newest" | "oldest"
 }): Promise<
   ActionResponse<{
     items: PendaftaranWithRelations[]
@@ -51,10 +52,12 @@ export async function getPendaftaranList(options?: {
       ]
     }
 
+    const sortDirection = options?.sortBy === "oldest" ? "asc" : "desc"
+
     const [items, total] = await Promise.all([
       prisma.pendaftaran.findMany({
         where: whereCondition,
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: sortDirection },
         skip,
         take: limit,
         include: {
