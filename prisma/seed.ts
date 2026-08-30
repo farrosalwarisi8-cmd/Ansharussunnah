@@ -6,11 +6,12 @@ import * as dotenv from "dotenv"
 
 dotenv.config()
 
-// ✅ FIX P1017: Paksa Prisma Client Seeder memakai DIRECT_URL (Port 5432)
+// ✅ Prefer DATABASE_URL (port 6543 pooler) karena lebih stabil;
+// DIRECT_URL (port 5432) bisa diblokir firewall di beberapa jaringan.
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      url: process.env.DIRECT_URL || process.env.DATABASE_URL,
+      url: process.env.DATABASE_URL || process.env.DIRECT_URL,
     },
   },
 })

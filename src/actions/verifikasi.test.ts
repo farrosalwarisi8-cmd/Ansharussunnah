@@ -275,7 +275,7 @@ describe("verifikasiPendaftaran — EMIS Fields Copy (Field Lengkap)", () => {
     )
 
     expect(siswaCreateCall).toBeDefined()
-    const siswaData = siswaCreateCall[0].data.siswa.create
+    const siswaData = siswaCreateCall![0].data.siswa.create
 
     // ✅ Verifikasi SEMUA field EMIS ter-copy dengan benar
     expect(siswaData.agama).toBe("Islam")
@@ -326,7 +326,7 @@ describe("verifikasiPendaftaran — EMIS Fields Copy (Field Lengkap)", () => {
     const siswaCreateCall = userCreateCalls.find(
       (call) => call[0]?.data?.role === "SISWA"
     )
-    const siswaData = siswaCreateCall[0].data.siswa.create
+    const siswaData = siswaCreateCall![0].data.siswa.create
 
     // ✅ Semua field EMIS harus null
     expect(siswaData.agama).toBeNull()
@@ -369,7 +369,7 @@ describe("verifikasiPendaftaran — EMIS Fields Copy (Field Lengkap)", () => {
     const siswaCreateCall = userCreateCalls.find(
       (call) => call[0]?.data?.role === "SISWA"
     )
-    const siswaData = siswaCreateCall[0].data.siswa.create
+    const siswaData = siswaCreateCall![0].data.siswa.create
 
     // ✅ Field WNA ter-copy
     expect(siswaData.kewarganegaraan).toBe("WNA")
@@ -565,7 +565,7 @@ describe("verifikasiPendaftaran — Edge Cases", () => {
     const siswaCreateCall = userCreateCalls.find(
       (call) => call[0]?.data?.role === "SISWA"
     )
-    const siswaData = siswaCreateCall[0].data.siswa.create
+    const siswaData = siswaCreateCall![0].data.siswa.create
 
     expect(siswaData.kewarganegaraan).toBe("WNI")
   })
