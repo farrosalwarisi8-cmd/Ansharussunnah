@@ -218,11 +218,9 @@ export async function submitBuktiPembayaranSpp(
     }
 
     // ✅ Otorisasi: Siswa hanya bisa bayar tagihannya sendiri, Orang tua hanya bisa bayar tagihan anaknya
+    // KEPUTUSAN PRODUK: Siswa TIDAK BOLEH mengakses tagihan SPP sama sekali
     if (sessionUser.role === Role.SISWA) {
-      const siswa = await prisma.siswa.findUnique({ where: { userId: sessionUser.id } })
-      if (!siswa || tagihan.siswaId !== siswa.id) {
-        return { success: false, message: "Akses ditolak: Ini bukan tagihan Anda" }
-      }
+      return { success: false, message: "Akses ditolak: Siswa tidak memiliki akses ke data tagihan SPP" }
     } else if (sessionUser.role === Role.ORANG_TUA) {
       const ortu = await prisma.orangTua.findUnique({ where: { userId: sessionUser.id } })
       if (!ortu) return { success: false, message: "Profil orang tua tidak ditemukan" }
@@ -914,11 +912,9 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
     const sessionUser = await requireAuth()
 
     // Otorisasi read-only
+    // KEPUTUSAN PRODUK: Siswa TIDAK BOLEH melihat data akuntansi/tagihan SPP
     if (sessionUser.role === Role.SISWA) {
-      const siswa = await prisma.siswa.findUnique({ where: { userId: sessionUser.id } })
-      if (!siswa || siswa.id !== siswaId) {
-        return { success: false, message: "Akses ditolak: Anda hanya bisa melihat tagihan sendiri" }
-      }
+      return { success: false, message: "Akses ditolak: Siswa tidak memiliki akses ke data tagihan SPP" }
     } else if (sessionUser.role === Role.ORANG_TUA) {
       const ortu = await prisma.orangTua.findUnique({ where: { userId: sessionUser.id } })
       if (!ortu) return { success: false, message: "Profil orang tua tidak ditemukan" }

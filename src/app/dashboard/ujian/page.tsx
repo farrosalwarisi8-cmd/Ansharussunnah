@@ -7,12 +7,30 @@ import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
 import { Role } from "@prisma/client"
-import { Plus, Clock, FileText, Play, BarChart2, Calendar, Award } from "lucide-react"
+import { Plus, Clock, FileText, Play, BarChart2, Calendar, Award, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
+import { getDaftarUjianSiswa, getDaftarUjianAnak, getDaftarUjianGuru } from "@/actions/ujian"
+
+type UjianItem = {
+  id: string
+  judul: string
+  deskripsi?: string | null
+  mataPelajaran: string
+  durasiMenit: number
+  waktuMulai: Date
+  waktuSelesai: Date
+  totalSoal: number
+  guru: string
+  statusPengerjaan?: string
+  nilai?: number | null
+  status?: string
+  totalPeserta?: number
+  kelasId?: string
+}
 
 export default function UjianPage() {
   const { user, selectedChild } = useDashboard()
@@ -55,44 +73,58 @@ export default function UjianPage() {
 /* 1. GURU UJIAN VIEW                                                        */
 /* ========================================================================= */
 function GuruUjianView() {
-  const ujianList = [
-    {
-      id: "ujian-1",
-      judul: "Penilaian Harian Thaharah & Shalat Berjamaah",
-      mapel: "Fiqih Ibadah",
-      kelas: "Kelas 7A - Ikhwan",
-      status: "PUBLISHED",
-      durasi: 60,
-      totalSoal: 27,
-      totalPeserta: 30,
-      sudahMengerjakan: 28,
-      waktuMulai: "2024-03-05 08:00",
-    },
-    {
-      id: "ujian-2",
-      judul: "Kuis Rukun Iman & Tauhid Rububiyah",
-      mapel: "Aqidah Akhlak",
-      kelas: "Kelas 8A - Ikhwan",
-      status: "DRAFT",
-      durasi: 45,
-      totalSoal: 20,
-      totalPeserta: 28,
-      sudahMengerjakan: 0,
-      waktuMulai: "2024-03-10 09:00",
-    },
-    {
-      id: "ujian-3",
-      judul: "Ujian Tengah Semester: Kaidah Nahwu Dasar",
-      mapel: "Bahasa Arab",
-      kelas: "Kelas 9A - Ikhwan",
-      status: "SELESAI",
-      durasi: 90,
-      totalSoal: 35,
-      totalPeserta: 32,
-      sudahMengerjakan: 32,
-      waktuMulai: "2024-02-20 08:00",
-    },
-  ]
+  const { user } = useDashboard()
+  const [ujianList, setUjianList] = React.useState<UjianItem[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    async function fetchUjian() {
+      setLoading(true)
+      setError(null)
+      try {
+        const kelasId = user.kelas?.id
+        if (!kelasId) {
+          setError("Anda belum ditugaskan ke kelas manapun")
+          setLoading(false)
+          return
+        }
+        const result = await getDaftarUjianGuru(kelasId)
+        if (result.success && result.data) {
+          setUjianList(result.data as UjianItem[])
+        } else {
+          setError(result.message || "Gagal memuat data ujian")
+        }
+      } catch {
+        setError("Gagal memuat data ujian")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchUjian()
+  }, [user.kelas?.id])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <span className="ml-3 text-sm text-slate-500">Memuat data ujian...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return <EmptyState title="Gagal Memuat Data" description={error} />
+  }
+
+  if (ujianList.length === 0) {
+    return (
+      <EmptyState
+        title="Belum Ada Ujian"
+        description="Anda belum membuat ujian untuk kelas ini. Klik tombol di atas untuk membuat ujian baru."
+      />
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -102,23 +134,20 @@ function GuruUjianView() {
             <CardHeader className="p-5 pb-3">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
-                  {item.mapel}
+                  {item.mataPelajaran}
                 </span>
                 <StatusBadge status={item.status as "DRAFT" | "AKTIF" | "SELESAI" | "PUBLISHED"} />
               </div>
               <CardTitle className="text-base font-bold text-slate-900 leading-snug">
                 {item.judul}
               </CardTitle>
-              <CardDescription className="text-xs text-slate-500 font-medium">
-                {item.kelas}
-              </CardDescription>
             </CardHeader>
 
             <CardContent className="p-5 pt-0 space-y-4">
               <div className="grid grid-cols-2 gap-2 text-xs py-3 border-y border-slate-100 text-slate-600">
                 <div className="flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5 text-slate-400" />
-                  <span>{item.durasi} Menit</span>
+                  <span>{item.durasiMenit} Menit</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <FileText className="h-3.5 w-3.5 text-slate-400" />
@@ -126,14 +155,14 @@ function GuruUjianView() {
                 </div>
                 <div className="flex items-center gap-1.5 col-span-2">
                   <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                  <span>Mulai: {item.waktuMulai} WIB</span>
+                  <span>Mulai: {new Date(item.waktuMulai).toLocaleDateString("id-ID")} WIB</span>
                 </div>
               </div>
 
               <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>Partisipasi:</span>
+                <span>Peserta:</span>
                 <span className="font-bold text-slate-800">
-                  {item.sudahMengerjakan} / {item.totalPeserta} Santri
+                  {item.totalPeserta || 0} Santri
                 </span>
               </div>
 
@@ -162,36 +191,49 @@ function GuruUjianView() {
 /* 2. SISWA UJIAN VIEW                                                       */
 /* ========================================================================= */
 function SiswaUjianView() {
-  const activeExams = [
-    {
-      id: "ujian-1",
-      judul: "Penilaian Harian Thaharah & Shalat Berjamaah",
-      mapel: "Fiqih Ibadah",
-      durasi: 60,
-      totalSoal: 27,
-      deadline: "Hari Ini, 23:59 WIB",
-      status: "BELUM_MENGERJAKAN",
-    },
-  ]
+  const [ujianList, setUjianList] = React.useState<UjianItem[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
 
-  const finishedExams = [
-    {
-      id: "ujian-3",
-      judul: "Ujian Tengah Semester: Kaidah Nahwu Dasar",
-      mapel: "Bahasa Arab",
-      nilai: 92,
-      status: "SELESAI",
-      tanggal: "20 Februari 2024",
-    },
-    {
-      id: "ujian-past",
-      judul: "Penilaian Harian Surat Al-Mulk & Tajwid",
-      mapel: "Tahfidz & Tajwid",
-      nilai: 96,
-      status: "SELESAI",
-      tanggal: "12 Februari 2024",
-    },
-  ]
+  React.useEffect(() => {
+    async function fetchUjian() {
+      setLoading(true)
+      setError(null)
+      try {
+        const result = await getDaftarUjianSiswa()
+        if (result.success && result.data) {
+          setUjianList(result.data as UjianItem[])
+        } else {
+          setError(result.message || "Gagal memuat data ujian")
+        }
+      } catch {
+        setError("Gagal memuat data ujian")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchUjian()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <span className="ml-3 text-sm text-slate-500">Memuat data ujian...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return <EmptyState title="Gagal Memuat Data" description={error} />
+  }
+
+  const activeExams = ujianList.filter(
+    (u) => u.statusPengerjaan === "BELUM_MULAI" || u.statusPengerjaan === "SEDANG_MENGERJAKAN"
+  )
+  const finishedExams = ujianList.filter(
+    (u) => u.statusPengerjaan === "SELESAI" || u.statusPengerjaan === "DINILAI"
+  )
 
   return (
     <div className="space-y-6">
@@ -208,11 +250,11 @@ function SiswaUjianView() {
               <Card key={exam.id} className="rounded-3xl border-emerald-300 bg-gradient-to-br from-emerald-50/80 to-white shadow-md p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full">
-                    {exam.mapel}
+                    {exam.mataPelajaran}
                   </span>
                   <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5" />
-                    {exam.durasi} Menit
+                    {exam.durasiMenit} Menit
                   </span>
                 </div>
 
@@ -221,14 +263,14 @@ function SiswaUjianView() {
                     {exam.judul}
                   </h4>
                   <p className="text-xs text-slate-500 mt-1">
-                    {exam.totalSoal} Butir Soal • Batas: {exam.deadline}
+                    {exam.totalSoal} Butir Soal • Guru: {exam.guru}
                   </p>
                 </div>
 
                 <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-12 text-sm shadow-md min-h-[48px]">
                   <Link href={`/dashboard/ujian/${exam.id}/kerjakan`}>
                     <Play className="h-4 w-4 mr-2" />
-                    Mulai Kerjakan Ujian Sekarang
+                    {exam.statusPengerjaan === "SEDANG_MENGERJAKAN" ? "Lanjutkan Ujian" : "Mulai Kerjakan Ujian Sekarang"}
                   </Link>
                 </Button>
               </Card>
@@ -243,32 +285,34 @@ function SiswaUjianView() {
       </div>
 
       {/* Riwayat Nilai Ujian */}
-      <div>
-        <h3 className="text-base font-bold text-slate-900 mb-3">
-          Riwayat Nilai Ujian Sebelumnya
-        </h3>
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
-          <CardContent className="p-5 divide-y divide-slate-100">
-            {finishedExams.map((ex, idx) => (
-              <div key={idx} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-500">{ex.mapel}</span>
-                    <span className="text-slate-300">•</span>
-                    <span className="text-xs text-slate-400">{ex.tanggal}</span>
+      {finishedExams.length > 0 && (
+        <div>
+          <h3 className="text-base font-bold text-slate-900 mb-3">
+            Riwayat Nilai Ujian Sebelumnya
+          </h3>
+          <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+            <CardContent className="p-5 divide-y divide-slate-100">
+              {finishedExams.map((ex) => (
+                <div key={ex.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-500">{ex.mataPelajaran}</span>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-xs text-slate-400">{new Date(ex.waktuMulai).toLocaleDateString("id-ID")}</span>
+                    </div>
+                    <div className="font-bold text-slate-900 text-sm">{ex.judul}</div>
                   </div>
-                  <div className="font-bold text-slate-900 text-sm">{ex.judul}</div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-lg font-extrabold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
-                    {ex.nilai}
+                  <div className="text-right shrink-0">
+                    <div className="text-lg font-extrabold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+                      {ex.nilai != null ? Number(ex.nilai) : "-"}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
@@ -276,33 +320,88 @@ function SiswaUjianView() {
 /* ========================================================================= */
 /* 3. ORANG TUA UJIAN VIEW                                                   */
 /* ========================================================================= */
-function OrangTuaUjianView({ selectedChild }: { selectedChild: { nama: string } | null }) {
+function OrangTuaUjianView({ selectedChild }: { selectedChild: { id: string; nama: string } | null }) {
+  const [ujianList, setUjianList] = React.useState<UjianItem[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    async function fetchUjian() {
+      if (!selectedChild?.id) {
+        setLoading(false)
+        return
+      }
+      setLoading(true)
+      setError(null)
+      try {
+        const result = await getDaftarUjianAnak(selectedChild.id)
+        if (result.success && result.data) {
+          setUjianList(result.data as UjianItem[])
+        } else {
+          setError(result.message || "Gagal memuat data ujian anak")
+        }
+      } catch {
+        setError("Gagal memuat data ujian anak")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchUjian()
+  }, [selectedChild?.id])
+
+  if (!selectedChild) {
+    return (
+      <EmptyState
+        title="Pilih Anak Terlebih Dahulu"
+        description="Gunakan selector di atas untuk memilih anak yang ingin dipantau."
+      />
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <span className="ml-3 text-sm text-slate-500">Memuat data ujian...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return <EmptyState title="Gagal Memuat Data" description={error} />
+  }
+
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
       <CardHeader className="p-6 pb-4">
         <CardTitle className="text-base font-bold text-slate-900">
-          Hasil Ujian &amp; Evaluasi: {selectedChild?.nama || "Santri"}
+          Hasil Ujian &amp; Evaluasi: {selectedChild.nama}
         </CardTitle>
         <CardDescription className="text-xs text-slate-500">
-          Daftar ujian dan perolehan skor ujian santri
+          Daftar ujian dan perolehan skor ujian santri (hanya lihat — tidak bisa mengerjakan)
         </CardDescription>
       </CardHeader>
       <CardContent className="p-6 pt-0 space-y-3">
-        {[
-          { mapel: "Bahasa Arab", judul: "Ujian Tengah Semester: Nahwu", nilai: 92, tgl: "20 Feb 2024" },
-          { mapel: "Tahfidz Al-Qur'an", judul: "Penilaian Harian Surat Al-Mulk", nilai: 96, tgl: "12 Feb 2024" },
-          { mapel: "Aqidah Akhlak", judul: "Evaluasi Rukun Iman", nilai: 88, tgl: "05 Feb 2024" },
-        ].map((item, idx) => (
-          <div key={idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-3">
-            <div>
-              <div className="font-bold text-slate-900 text-sm">{item.judul}</div>
-              <div className="text-xs text-slate-500">{item.mapel} • {item.tgl}</div>
+        {ujianList.length === 0 ? (
+          <EmptyState
+            title="Belum Ada Ujian"
+            description="Belum ada ujian yang dipublikasikan untuk kelas anak Anda."
+          />
+        ) : (
+          ujianList.map((item) => (
+            <div key={item.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-3">
+              <div>
+                <div className="font-bold text-slate-900 text-sm">{item.judul}</div>
+                <div className="text-xs text-slate-500">
+                  {item.mataPelajaran} • {new Date(item.waktuMulai).toLocaleDateString("id-ID")}
+                </div>
+              </div>
+              <div className="text-base font-black text-emerald-800 bg-white px-3.5 py-1.5 rounded-xl border border-emerald-200 shadow-sm">
+                Skor: {item.nilai != null ? Number(item.nilai) : "-"}
+              </div>
             </div>
-            <div className="text-base font-black text-emerald-800 bg-white px-3.5 py-1.5 rounded-xl border border-emerald-200 shadow-sm">
-              Skor: {item.nilai}
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </CardContent>
     </Card>
   )

@@ -7,22 +7,42 @@ import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
 import { Role } from "@prisma/client"
-import { inputAbsensiBulk } from "@/actions/absensi"
+import { inputAbsensiBulk, getRiwayatKehadiranSiswa, getRiwayatKehadiranAnak, getSiswaByKelas } from "@/actions/absensi"
+import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
-
+import { EmptyState } from "@/components/ui/empty-state"
 import { Check, UserCheck, Save, Loader2 } from "lucide-react"
 
 type StatusAbsensiType = "HADIR" | "IZIN" | "SAKIT" | "ALPHA"
-
-interface SiswaAbsenItem {
+type SiswaItem = {
   siswaId: string
   nama: string
-  nisn?: string
-  status: StatusAbsensiType
-  catatan?: string
+  nisn?: string | null
+}
+type KelasItem = {
+  kelasId: string
+  namaKelas: string
+  jenjang: string
+  mataPelajaranId: string
+  jumlahSiswa: number
+}
+type RiwayatItem = {
+  id: string
+  tanggal: string | Date
+  status: string
+  keterangan?: string | null
+  kelas?: string
+  periode?: string
+}
+type RiwayatData = {
+  nama?: string
+  namaSiswa?: string
+  total: number
+  ringkasan: { HADIR: number; SAKIT: number; IZIN: number; ALPHA: number }
+  riwayat: RiwayatItem[]
 }
 
 export default function AbsensiPage() {
@@ -47,8 +67,14 @@ export default function AbsensiPage() {
       {isParent && <ChildSelector />}
 
       {isTeacher && <GuruAbsensiView />}
-      {isStudent && <SiswaAbsensiView siswaId={user.id} />}
-      {isParent && selectedChild && <SiswaAbsensiView siswaId={selectedChild.id} isParentView />}
+      {isStudent && <SiswaAbsensiView />}
+      {isParent && selectedChild && <OrangTuaAbsensiView selectedChild={selectedChild} />}
+      {isParent && !selectedChild && (
+        <EmptyState
+          title="Pilih Anak Terlebih Dahulu"
+          description="Gunakan selector di atas untuk memilih anak yang ingin dipantau."
+        />
+      )}
     </div>
   )
 }
@@ -58,26 +84,75 @@ export default function AbsensiPage() {
 /* ========================================================================= */
 function GuruAbsensiView() {
   const { toast } = useToast()
-  const [selectedKelas, setSelectedKelas] = React.useState("7A-IKHWAN")
+
+  // Kelas data
+  const [kelasList, setKelasList] = React.useState<KelasItem[]>([])
+  const [selectedKelasId, setSelectedKelasId] = React.useState<string>("")
+  const [loadingKelas, setLoadingKelas] = React.useState(true)
+
+  // Siswa data
+  const [students, setStudents] = React.useState<SiswaItem[]>([])
+  const [loadingSiswa, setLoadingSiswa] = React.useState(false)
+
+  // Attendance state
+  const [attendance, setAttendance] = React.useState<Record<string, StatusAbsensiType>>({})
   const [selectedTanggal, setSelectedTanggal] = React.useState(
     new Date().toISOString().split("T")[0]
   )
   const [saving, setSaving] = React.useState(false)
 
-  // Dummy list santri yang bisa langsung dioperasikan & terhubung ke Server Action
-  const [students, setStudents] = React.useState<SiswaAbsenItem[]>([
-    { siswaId: "s1", nama: "Ahmad Fauzi Ridwan", nisn: "0081234561", status: "HADIR" },
-    { siswaId: "s2", nama: "Muhammad Bilal Al-Banjari", nisn: "0081234562", status: "HADIR" },
-    { siswaId: "s3", nama: "Faris Zaidan Rahman", nisn: "0081234563", status: "HADIR" },
-    { siswaId: "s4", nama: "Zubair bin Awwam", nisn: "0081234564", status: "IZIN" },
-    { siswaId: "s5", nama: "Ibrahim Al-Khalil", nisn: "0081234565", status: "SAKIT" },
-    { siswaId: "s6", nama: "Thariq bin Ziyad", nisn: "0081234566", status: "HADIR" },
-    { siswaId: "s7", nama: "Hamzah Asadullah", nisn: "0081234567", status: "ALPHA" },
-    { siswaId: "s8", nama: "Salman Al-Farisi", nisn: "0081234568", status: "HADIR" },
-  ])
+  // Fetch guru's kelas list on mount
+  React.useEffect(() => {
+    async function fetchKelas() {
+      setLoadingKelas(true)
+      try {
+        const result = await getDaftarKelasYangDiajarGuru()
+        if (result.success && result.data) {
+          const data = result.data as KelasItem[]
+          setKelasList(data)
+          if (data.length > 0) {
+            setSelectedKelasId(data[0].kelasId)
+          }
+        }
+      } catch {
+        // Silently fail — will show empty state
+      } finally {
+        setLoadingKelas(false)
+      }
+    }
+    fetchKelas()
+  }, [])
+
+  // Fetch siswa when kelas changes
+  React.useEffect(() => {
+    if (!selectedKelasId) return
+    async function fetchSiswa() {
+      setLoadingSiswa(true)
+      try {
+        const result = await getSiswaByKelas(selectedKelasId)
+        if (result.success && result.data) {
+          const data = result.data as SiswaItem[]
+          setStudents(data)
+          // Initialize all attendance as HADIR
+          const initial: Record<string, StatusAbsensiType> = {}
+          data.forEach((s) => { initial[s.siswaId] = "HADIR" })
+          setAttendance(initial)
+        } else {
+          setStudents([])
+        }
+      } catch {
+        setStudents([])
+      } finally {
+        setLoadingSiswa(false)
+      }
+    }
+    fetchSiswa()
+  }, [selectedKelasId])
 
   const setAllStatus = (status: StatusAbsensiType) => {
-    setStudents((prev) => prev.map((s) => ({ ...s, status })))
+    const updated: Record<string, StatusAbsensiType> = {}
+    students.forEach((s) => { updated[s.siswaId] = status })
+    setAttendance(updated)
     toast({
       title: `Semua Diatur: ${status}`,
       description: "Status seluruh santri berhasil diubah serentak.",
@@ -85,23 +160,19 @@ function GuruAbsensiView() {
   }
 
   const setSingleStatus = (siswaId: string, status: StatusAbsensiType) => {
-    setStudents((prev) =>
-      prev.map((s) => (s.siswaId === siswaId ? { ...s, status } : s))
-    )
+    setAttendance((prev) => ({ ...prev, [siswaId]: status }))
   }
 
   const handleSaveBulk = async () => {
     setSaving(true)
     try {
-      // Panggil Server Action inputAbsensiBulk
       const result = await inputAbsensiBulk({
-        kelasId: selectedKelas,
+        kelasId: selectedKelasId,
         periodeAjaranId: "periode-aktif",
         tanggal: selectedTanggal,
         absensi: students.map((s) => ({
           siswaId: s.siswaId,
-          status: s.status,
-          keterangan: s.catatan,
+          status: attendance[s.siswaId] || "HADIR",
         })),
       })
 
@@ -118,10 +189,10 @@ function GuruAbsensiView() {
         })
       }
     } catch {
-      // Fallback feedback
       toast({
-        title: "Absensi Tersimpan (Demo Mode)",
-        description: "Data presensi santri berhasil diperbarui.",
+        variant: "destructive",
+        title: "Gagal Menyimpan",
+        description: "Terjadi kesalahan saat menyimpan absensi.",
       })
     } finally {
       setSaving(false)
@@ -129,10 +200,28 @@ function GuruAbsensiView() {
   }
 
   const stats = {
-    hadir: students.filter((s) => s.status === "HADIR").length,
-    izin: students.filter((s) => s.status === "IZIN").length,
-    sakit: students.filter((s) => s.status === "SAKIT").length,
-    alpha: students.filter((s) => s.status === "ALPHA").length,
+    hadir: Object.values(attendance).filter((s) => s === "HADIR").length,
+    izin: Object.values(attendance).filter((s) => s === "IZIN").length,
+    sakit: Object.values(attendance).filter((s) => s === "SAKIT").length,
+    alpha: Object.values(attendance).filter((s) => s === "ALPHA").length,
+  }
+
+  if (loadingKelas) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <span className="ml-3 text-sm text-slate-500">Memuat daftar kelas...</span>
+      </div>
+    )
+  }
+
+  if (kelasList.length === 0) {
+    return (
+      <EmptyState
+        title="Belum Ada Kelas"
+        description="Anda belum ditugaskan mengajar di kelas manapun."
+      />
+    )
   }
 
   return (
@@ -146,14 +235,15 @@ function GuruAbsensiView() {
                 Pilih Kelas
               </label>
               <select
-                value={selectedKelas}
-                onChange={(e) => setSelectedKelas(e.target.value)}
-                className="w-full sm:w-48 h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                value={selectedKelasId}
+                onChange={(e) => setSelectedKelasId(e.target.value)}
+                className="w-full sm:w-56 h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
-                <option value="7A-IKHWAN">Kelas 7A - Ikhwan</option>
-                <option value="7B-AKHWAT">Kelas 7B - Akhwat</option>
-                <option value="8A-IKHWAN">Kelas 8A - Ikhwan</option>
-                <option value="9A-IKHWAN">Kelas 9A - Ikhwan</option>
+                {kelasList.map((k) => (
+                  <option key={k.kelasId} value={k.kelasId}>
+                    {k.namaKelas} ({k.jumlahSiswa} siswa)
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -166,8 +256,7 @@ function GuruAbsensiView() {
                 value={selectedTanggal}
                 onChange={(e) => setSelectedTanggal(e.target.value)}
                 className="w-full sm:w-48 h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-              </input>
+              />
             </div>
           </div>
 
@@ -183,7 +272,7 @@ function GuruAbsensiView() {
             </Button>
             <Button
               type="button"
-              disabled={saving}
+              disabled={saving || loadingSiswa || students.length === 0}
               onClick={handleSaveBulk}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-11 min-h-[44px] px-6 flex-1 sm:flex-initial shadow-md"
             >
@@ -198,106 +287,157 @@ function GuruAbsensiView() {
         </CardContent>
       </Card>
 
+      {/* Loading Siswa */}
+      {loadingSiswa && (
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+          <span className="ml-3 text-sm text-slate-500">Memuat daftar siswa...</span>
+        </div>
+      )}
+
       {/* Summary KPI Strip */}
-      <div className="grid grid-cols-4 gap-2 sm:gap-4">
-        <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
-          <span className="text-[11px] font-bold text-emerald-800 uppercase block">Hadir</span>
-          <span className="text-xl sm:text-2xl font-black text-emerald-700">{stats.hadir}</span>
-        </div>
-        <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-center">
-          <span className="text-[11px] font-bold text-amber-800 uppercase block">Izin</span>
-          <span className="text-xl sm:text-2xl font-black text-amber-700">{stats.izin}</span>
-        </div>
-        <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200 text-center">
-          <span className="text-[11px] font-bold text-sky-800 uppercase block">Sakit</span>
-          <span className="text-xl sm:text-2xl font-black text-sky-700">{stats.sakit}</span>
-        </div>
-        <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-center">
-          <span className="text-[11px] font-bold text-rose-800 uppercase block">Alpa</span>
-          <span className="text-xl sm:text-2xl font-black text-rose-700">{stats.alpha}</span>
-        </div>
-      </div>
-
-      {/* Touch-First Attendance List */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
-        <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-base font-bold text-slate-900">
-              Daftar Santri ({students.length} Orang)
-            </CardTitle>
-            <CardDescription className="text-xs text-slate-500">
-              Tekan tombol status untuk mengganti kehadiran santri
-            </CardDescription>
+      {!loadingSiswa && students.length > 0 && (
+        <>
+          <div className="grid grid-cols-4 gap-2 sm:gap-4">
+            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
+              <span className="text-[11px] font-bold text-emerald-800 uppercase block">Hadir</span>
+              <span className="text-xl sm:text-2xl font-black text-emerald-700">{stats.hadir}</span>
+            </div>
+            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-center">
+              <span className="text-[11px] font-bold text-amber-800 uppercase block">Izin</span>
+              <span className="text-xl sm:text-2xl font-black text-amber-700">{stats.izin}</span>
+            </div>
+            <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200 text-center">
+              <span className="text-[11px] font-bold text-sky-800 uppercase block">Sakit</span>
+              <span className="text-xl sm:text-2xl font-black text-sky-700">{stats.sakit}</span>
+            </div>
+            <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-center">
+              <span className="text-[11px] font-bold text-rose-800 uppercase block">Alpa</span>
+              <span className="text-xl sm:text-2xl font-black text-rose-700">{stats.alpha}</span>
+            </div>
           </div>
-        </CardHeader>
 
-        <CardContent className="p-3 sm:p-5 space-y-2.5">
-          {students.map((student, idx) => (
-            <div
-              key={student.siswaId}
-              className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <span className="w-6 text-xs font-bold text-slate-400 text-center">
-                  {idx + 1}
-                </span>
-                <div>
-                  <div className="font-bold text-sm text-slate-900 leading-tight">
-                    {student.nama}
+          {/* Touch-First Attendance List */}
+          <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+            <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold text-slate-900">
+                  Daftar Santri ({students.length} Orang)
+                </CardTitle>
+                <CardDescription className="text-xs text-slate-500">
+                  Tekan tombol status untuk mengganti kehadiran santri
+                </CardDescription>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-3 sm:p-5 space-y-2.5">
+              {students.map((student, idx) => (
+                <div
+                  key={student.siswaId}
+                  className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-6 text-xs font-bold text-slate-400 text-center">
+                      {idx + 1}
+                    </span>
+                    <div>
+                      <div className="font-bold text-sm text-slate-900 leading-tight">
+                        {student.nama}
+                      </div>
+                      {student.nisn && (
+                        <div className="text-xs text-slate-500 font-mono mt-0.5">
+                          NISN: {student.nisn}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-500 font-mono mt-0.5">
-                    NISN: {student.nisn}
+
+                  {/* Mobile Fast Toggle Button Bar */}
+                  <div className="grid grid-cols-4 gap-1.5 sm:flex sm:items-center sm:gap-2 shrink-0">
+                    {(
+                      [
+                        { key: "HADIR" as const, label: "Hadir", color: "bg-emerald-600 text-white border-emerald-600 font-bold" },
+                        { key: "IZIN" as const, label: "Izin", color: "bg-amber-500 text-white border-amber-500 font-bold" },
+                        { key: "SAKIT" as const, label: "Sakit", color: "bg-sky-600 text-white border-sky-600 font-bold" },
+                        { key: "ALPHA" as const, label: "Alpa", color: "bg-rose-600 text-white border-rose-600 font-bold" },
+                      ]
+                    ).map((btn) => {
+                      const isSelected = (attendance[student.siswaId] || "HADIR") === btn.key
+                      return (
+                        <button
+                          key={btn.key}
+                          type="button"
+                          onClick={() => setSingleStatus(student.siswaId, btn.key)}
+                          className={`min-h-[44px] min-w-[44px] px-3 py-2 rounded-xl text-xs font-semibold border transition-all touch-manipulation flex items-center justify-center ${
+                            isSelected
+                              ? `${btn.color} shadow-sm scale-[1.02]`
+                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                          }`}
+                        >
+                          {isSelected && <Check className="h-3.5 w-3.5 mr-1 shrink-0" />}
+                          <span>{btn.label}</span>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
-              </div>
-
-              {/* Mobile Fast Toggle Button Bar (>= 44x44px touch targets) */}
-              <div className="grid grid-cols-4 gap-1.5 sm:flex sm:items-center sm:gap-2 shrink-0">
-                {(
-                  [
-                    { key: "HADIR", label: "Hadir [H]", color: "bg-emerald-600 text-white border-emerald-600 font-bold" },
-                    { key: "IZIN", label: "Izin [I]", color: "bg-amber-500 text-white border-amber-500 font-bold" },
-                    { key: "SAKIT", label: "Sakit [S]", color: "bg-sky-600 text-white border-sky-600 font-bold" },
-                    { key: "ALPHA", label: "Alpa [A]", color: "bg-rose-600 text-white border-rose-600 font-bold" },
-                  ] as const
-                ).map((btn) => {
-                  const isSelected = student.status === btn.key
-                  return (
-                    <button
-                      key={btn.key}
-                      type="button"
-                      onClick={() => setSingleStatus(student.siswaId, btn.key)}
-                      className={`min-h-[44px] min-w-[44px] px-3 py-2 rounded-xl text-xs font-semibold border transition-all touch-manipulation flex items-center justify-center ${
-                        isSelected
-                          ? `${btn.color} shadow-sm scale-[1.02]`
-                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                      }`}
-                    >
-                      {isSelected && <Check className="h-3.5 w-3.5 mr-1 shrink-0" />}
-                      <span>{btn.label.split(" ")[0]}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+              ))}
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   )
 }
 
 /* ========================================================================= */
-/* 2. SISWA & ORANG TUA ABSENSI VIEW (READ ONLY)                             */
+/* 2. SISWA ABSENSI VIEW (READ ONLY, REAL DATA)                              */
 /* ========================================================================= */
-function SiswaAbsensiView({ siswaId: _siswaId, isParentView: _isParentView }: { siswaId: string; isParentView?: boolean }) {
-  const history = [
-    { tanggal: "2024-03-01", status: "HADIR", mapel: "Tahfidz & Fiqih", note: "Tertib" },
-    { tanggal: "2024-02-29", status: "HADIR", mapel: "Bahasa Arab & Hadits", note: "Tertib" },
-    { tanggal: "2024-02-28", status: "IZIN", mapel: "Semua Pelajaran", note: "Izin keperluan keluarga" },
-    { tanggal: "2024-02-27", status: "HADIR", mapel: "Tauhid & Tarikh", note: "Tertib" },
-    { tanggal: "2024-02-26", status: "HADIR", mapel: "Tajwid & Fiqih", note: "Tertib" },
-  ]
+function SiswaAbsensiView() {
+  const [riwayatData, setRiwayatData] = React.useState<RiwayatData | null>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    async function fetchRiwayat() {
+      setLoading(true)
+      setError(null)
+      try {
+        const result = await getRiwayatKehadiranSiswa()
+        if (result.success && result.data) {
+          setRiwayatData(result.data as RiwayatData)
+        } else {
+          setError(result.message || "Gagal memuat riwayat kehadiran")
+        }
+      } catch {
+        setError("Gagal memuat riwayat kehadiran")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchRiwayat()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <span className="ml-3 text-sm text-slate-500">Memuat riwayat kehadiran...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return <EmptyState title="Gagal Memuat Data" description={error} />
+  }
+
+  if (!riwayatData || riwayatData.total === 0) {
+    return <EmptyState title="Belum Ada Data Kehadiran" description="Belum ada catatan presensi untuk periode ini." />
+  }
+
+  const persentase = riwayatData.total > 0
+    ? ((riwayatData.ringkasan.HADIR / riwayatData.total) * 100).toFixed(1)
+    : "0"
 
   return (
     <div className="space-y-6">
@@ -306,34 +446,30 @@ function SiswaAbsensiView({ siswaId: _siswaId, isParentView: _isParentView }: { 
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5 text-center">
             <span className="text-xs text-slate-500 font-semibold uppercase">Persentase Hadir</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1">97.8%</div>
-            <span className="text-xs text-emerald-600 mt-0.5 block">Sangat Baik</span>
+            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1">{persentase}%</div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5 text-center">
             <span className="text-xs text-slate-500 font-semibold uppercase">Total Hadir</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">45 Hari</div>
-            <span className="text-xs text-slate-400 mt-0.5 block">Semester Ini</span>
+            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">{riwayatData.ringkasan.HADIR} Hari</div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5 text-center">
             <span className="text-xs text-slate-500 font-semibold uppercase">Izin / Sakit</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-amber-600 mt-1">1 Hari</div>
-            <span className="text-xs text-slate-400 mt-0.5 block">Dengan Keterangan</span>
+            <div className="text-2xl sm:text-3xl font-extrabold text-amber-600 mt-1">{riwayatData.ringkasan.IZIN + riwayatData.ringkasan.SAKIT} Hari</div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5 text-center">
-            <span className="text-xs text-slate-500 font-semibold uppercase">Alpa / Tanpa Ket</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1">0 Hari</div>
-            <span className="text-xs text-emerald-600 mt-0.5 block">Nol Pelanggaran</span>
+            <span className="text-xs text-slate-500 font-semibold uppercase">Alpa</span>
+            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1">{riwayatData.ringkasan.ALPHA} Hari</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Riwayat Absensi Table / Card List */}
+      {/* Riwayat Absensi Table */}
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100">
           <CardTitle className="text-base font-bold text-slate-900">
@@ -344,12 +480,126 @@ function SiswaAbsensiView({ siswaId: _siswaId, isParentView: _isParentView }: { 
           </CardDescription>
         </CardHeader>
         <CardContent className="p-5 divide-y divide-slate-100">
-          {history.map((log, idx) => (
-            <div key={idx} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
+          {riwayatData.riwayat.map((log) => (
+            <div key={log.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
               <div className="space-y-1">
-                <div className="font-bold text-slate-900 text-sm">{log.tanggal}</div>
-                <div className="text-xs text-slate-500">{log.mapel}</div>
-                {log.note && <div className="text-xs text-slate-400 italic">{log.note}</div>}
+                <div className="font-bold text-slate-900 text-sm">
+                  {new Date(log.tanggal).toLocaleDateString("id-ID")}
+                </div>
+                {log.periode && (
+                  <div className="text-xs text-slate-500">{log.periode}</div>
+                )}
+                {log.keterangan && <div className="text-xs text-slate-400 italic">{log.keterangan}</div>}
+              </div>
+              <StatusBadge status={log.status as "HADIR" | "IZIN" | "SAKIT" | "ALPHA"} />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+/* ========================================================================= */
+/* 3. ORANG TUA ABSENSI VIEW (READ ONLY, REAL DATA)                          */
+/* ========================================================================= */
+function OrangTuaAbsensiView({ selectedChild }: { selectedChild: { id: string; nama: string } }) {
+  const [riwayatData, setRiwayatData] = React.useState<RiwayatData | null>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    async function fetchRiwayat() {
+      setLoading(true)
+      setError(null)
+      try {
+        const result = await getRiwayatKehadiranAnak({ siswaId: selectedChild.id })
+        if (result.success && result.data) {
+          setRiwayatData(result.data as RiwayatData)
+        } else {
+          setError(result.message || "Gagal memuat riwayat kehadiran anak")
+        }
+      } catch {
+        setError("Gagal memuat riwayat kehadiran anak")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchRiwayat()
+  }, [selectedChild.id])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <span className="ml-3 text-sm text-slate-500">Memuat riwayat kehadiran...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return <EmptyState title="Gagal Memuat Data" description={error} />
+  }
+
+  if (!riwayatData || riwayatData.total === 0) {
+    return <EmptyState title="Belum Ada Data Kehadiran" description="Belum ada catatan presensi untuk anak ini." />
+  }
+
+  const persentase = riwayatData.total > 0
+    ? ((riwayatData.ringkasan.HADIR / riwayatData.total) * 100).toFixed(1)
+    : "0"
+
+  return (
+    <div className="space-y-6">
+      {/* Kehadiran KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="rounded-2xl border-slate-200/80 bg-white">
+          <CardContent className="p-4 sm:p-5 text-center">
+            <span className="text-xs text-slate-500 font-semibold uppercase">Persentase Hadir</span>
+            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1">{persentase}%</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl border-slate-200/80 bg-white">
+          <CardContent className="p-4 sm:p-5 text-center">
+            <span className="text-xs text-slate-500 font-semibold uppercase">Total Hadir</span>
+            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">{riwayatData.ringkasan.HADIR} Hari</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl border-slate-200/80 bg-white">
+          <CardContent className="p-4 sm:p-5 text-center">
+            <span className="text-xs text-slate-500 font-semibold uppercase">Izin / Sakit</span>
+            <div className="text-2xl sm:text-3xl font-extrabold text-amber-600 mt-1">{riwayatData.ringkasan.IZIN + riwayatData.ringkasan.SAKIT} Hari</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl border-slate-200/80 bg-white">
+          <CardContent className="p-4 sm:p-5 text-center">
+            <span className="text-xs text-slate-500 font-semibold uppercase">Alpa</span>
+            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1">{riwayatData.ringkasan.ALPHA} Hari</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Riwayat Absensi Table */}
+      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <CardHeader className="p-5 pb-3 border-b border-slate-100">
+          <CardTitle className="text-base font-bold text-slate-900">
+            Log Riwayat Kehadiran: {selectedChild.nama}
+          </CardTitle>
+          <CardDescription className="text-xs text-slate-500">
+            Catatan presensi yang diinput oleh wali kelas &amp; pengajar
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-5 divide-y divide-slate-100">
+          {riwayatData.riwayat.map((log) => (
+            <div key={log.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="font-bold text-slate-900 text-sm">
+                  {new Date(log.tanggal).toLocaleDateString("id-ID")}
+                </div>
+                {log.periode && (
+                  <div className="text-xs text-slate-500">{log.periode}</div>
+                )}
+                {log.keterangan && <div className="text-xs text-slate-400 italic">{log.keterangan}</div>}
               </div>
               <StatusBadge status={log.status as "HADIR" | "IZIN" | "SAKIT" | "ALPHA"} />
             </div>

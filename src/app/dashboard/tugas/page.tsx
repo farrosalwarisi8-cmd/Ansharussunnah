@@ -7,12 +7,51 @@ import { useDashboard, type ChildStudent } from "@/components/dashboard/dashboar
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
 import { Role } from "@prisma/client"
-import { Plus, Clock, FileText, Upload } from "lucide-react"
+import { Plus, Clock, FileText, Upload, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge, type StatusType } from "@/components/ui/status-badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { EmptyState } from "@/components/ui/empty-state"
+import { getDaftarTugasSiswa, getDaftarTugasGuru, getTugasAnak } from "@/actions/tugas"
+import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
+
+type TugasItem = {
+  id: string
+  judul: string
+  deskripsi?: string
+  mataPelajaran: string
+  deadline: string | Date
+  guru?: string
+  isOverdue?: boolean
+  statusPengumpulan?: string
+  nilai?: number | null
+  feedback?: string | null
+  jumlahRevisi?: number
+  dapatSubmit?: boolean
+  hasLampiran?: boolean
+  periode?: string
+}
+
+type GuruTugasItem = {
+  id: string
+  judul: string
+  mataPelajaran: string
+  deadline: string | Date
+  periode: string
+  guru: string
+  totalPengumpulan: number
+  hasLampiran: boolean
+}
+
+type KelasItem = {
+  kelasId: string
+  namaKelas: string
+  jenjang: string
+  mataPelajaranId: string
+  jumlahSiswa: number
+}
 
 export default function TugasPage() {
   const { user, selectedChild } = useDashboard()
@@ -52,137 +91,214 @@ export default function TugasPage() {
 }
 
 /* ========================================================================= */
-/* 1. GURU TUGAS VIEW                                                        */
+/* 1. GURU TUGAS VIEW (REAL DATA)                                            */
 /* ========================================================================= */
 function GuruTugasView() {
-  const tugasList = [
-    {
-      id: "tugas-1",
-      judul: "Tashrif Fi'il Tsulatsi Mujarrad Bab 1 - 3",
-      mapel: "Bahasa Arab",
-      kelas: "Kelas 7A - Ikhwan",
-      deadline: "05 Maret 2024, 20:00 WIB",
-      totalSiswa: 30,
-      terkumpul: 24,
-      sudahDinilai: 18,
-      status: "AKTIF",
-    },
-    {
-      id: "tugas-2",
-      judul: "Setoran Video Rekaman Hafalan Surat Al-Mulk",
-      mapel: "Tahfidz & Tajwid",
-      kelas: "Kelas 8B - Akhwat",
-      deadline: "08 Maret 2024, 18:00 WIB",
-      totalSiswa: 28,
-      terkumpul: 15,
-      sudahDinilai: 0,
-      status: "AKTIF",
-    },
-    {
-      id: "tugas-3",
-      judul: "Resume Fiqih Thaharah dan Macam-macam Air",
-      mapel: "Fiqih Ibadah",
-      kelas: "Kelas 7A - Ikhwan",
-      deadline: "20 Februari 2024, 23:59 WIB",
-      totalSiswa: 30,
-      terkumpul: 30,
-      sudahDinilai: 30,
-      status: "SELESAI",
-    },
-  ]
+  // Kelas data
+  const [kelasList, setKelasList] = React.useState<KelasItem[]>([])
+  const [selectedKelasId, setSelectedKelasId] = React.useState<string>("")
+  const [loadingKelas, setLoadingKelas] = React.useState(true)
+
+  // Tugas data
+  const [tugasList, setTugasList] = React.useState<GuruTugasItem[]>([])
+  const [loadingTugas, setLoadingTugas] = React.useState(false)
+
+  // Fetch guru's kelas list on mount
+  React.useEffect(() => {
+    async function fetchKelas() {
+      setLoadingKelas(true)
+      try {
+        const result = await getDaftarKelasYangDiajarGuru()
+        if (result.success && result.data) {
+          const data = result.data as KelasItem[]
+          setKelasList(data)
+          if (data.length > 0) {
+            setSelectedKelasId(data[0].kelasId)
+          }
+        }
+      } catch {
+        // Silently fail
+      } finally {
+        setLoadingKelas(false)
+      }
+    }
+    fetchKelas()
+  }, [])
+
+  // Fetch tugas when kelas changes
+  React.useEffect(() => {
+    if (!selectedKelasId) return
+    async function fetchTugas() {
+      setLoadingTugas(true)
+      try {
+        const result = await getDaftarTugasGuru(selectedKelasId)
+        if (result.success && result.data) {
+          setTugasList(result.data as GuruTugasItem[])
+        } else {
+          setTugasList([])
+        }
+      } catch {
+        setTugasList([])
+      } finally {
+        setLoadingTugas(false)
+      }
+    }
+    fetchTugas()
+  }, [selectedKelasId])
+
+  if (loadingKelas) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <span className="ml-3 text-sm text-slate-500">Memuat daftar kelas...</span>
+      </div>
+    )
+  }
+
+  if (kelasList.length === 0) {
+    return (
+      <EmptyState
+        title="Belum Ada Kelas"
+        description="Anda belum ditugaskan mengajar di kelas manapun."
+      />
+    )
+  }
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        {tugasList.map((item) => (
-          <Card key={item.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
-            <CardHeader className="p-5 pb-3">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
-                  {item.mapel}
-                </span>
-                <StatusBadge status={item.status as StatusType} />
-              </div>
-              <CardTitle className="text-base font-bold text-slate-900 leading-snug">
-                {item.judul}
-              </CardTitle>
-              <CardDescription className="text-xs text-slate-500 font-medium">
-                {item.kelas}
-              </CardDescription>
-            </CardHeader>
+      {/* Class Selector */}
+      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Pilih Kelas:
+            </label>
+            <select
+              value={selectedKelasId}
+              onChange={(e) => setSelectedKelasId(e.target.value)}
+              className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+            >
+              {kelasList.map((k) => (
+                <option key={k.kelasId} value={k.kelasId}>
+                  {k.namaKelas} — {k.jumlahSiswa} siswa
+                </option>
+              ))}
+            </select>
+          </div>
+        </CardContent>
+      </Card>
 
-            <CardContent className="p-5 pt-0 space-y-4">
-              <div className="text-xs py-2.5 px-3 rounded-xl bg-slate-50 border border-slate-100 text-slate-600 flex items-center gap-2">
-                <Clock className="h-4 w-4 text-amber-500 shrink-0" />
-                <span>Deadline: <strong>{item.deadline}</strong></span>
-              </div>
+      {/* Loading Tugas */}
+      {loadingTugas && (
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+          <span className="ml-3 text-sm text-slate-500">Memuat daftar tugas...</span>
+        </div>
+      )}
 
-              {/* Progress Submisi */}
-              <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between font-semibold text-slate-700">
+      {/* Tugas List */}
+      {!loadingTugas && tugasList.length === 0 && (
+        <EmptyState
+          title="Belum Ada Tugas"
+          description="Belum ada tugas yang dibuat untuk kelas ini. Klik tombol di atas untuk membuat tugas baru."
+        />
+      )}
+
+      {!loadingTugas && tugasList.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          {tugasList.map((item) => (
+            <Card key={item.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
+              <CardHeader className="p-5 pb-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
+                    {item.mataPelajaran}
+                  </span>
+                  {item.hasLampiran && (
+                    <span className="text-[10px] font-semibold text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                      Ada Lampiran
+                    </span>
+                  )}
+                </div>
+                <CardTitle className="text-base font-bold text-slate-900 leading-snug">
+                  {item.judul}
+                </CardTitle>
+              </CardHeader>
+
+              <CardContent className="p-5 pt-0 space-y-4">
+                <div className="text-xs py-2.5 px-3 rounded-xl bg-slate-50 border border-slate-100 text-slate-600 flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-amber-500 shrink-0" />
+                  <span>Deadline: <strong>{new Date(item.deadline).toLocaleDateString("id-ID")}</strong></span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>Pengumpulan:</span>
-                  <span>{item.terkumpul} / {item.totalSiswa} Santri</span>
+                  <span className="font-bold text-slate-800">
+                    {item.totalPengumpulan} pengumpulan
+                  </span>
                 </div>
-                <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-emerald-600 transition-all"
-                    style={{ width: `${(item.terkumpul / item.totalSiswa) * 100}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[11px] text-slate-400">
-                  <span>Sudah Dinilai: {item.sudahDinilai}</span>
-                  <span>Belum Dinilai: {item.terkumpul - item.sudahDinilai}</span>
-                </div>
-              </div>
 
-              <Button asChild className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl min-h-[44px]">
-                <Link href={`/dashboard/tugas/${item.id}`}>
-                  <FileText className="h-4 w-4 mr-2" />
-                  Periksa &amp; Beri Nilai
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                <Button asChild className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl min-h-[44px]">
+                  <Link href={`/dashboard/tugas/${item.id}`}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Periksa &amp; Beri Nilai
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
 /* ========================================================================= */
-/* 2. SISWA TUGAS VIEW                                                       */
+/* 2. SISWA TUGAS VIEW (REAL DATA)                                           */
 /* ========================================================================= */
 function SiswaTugasView() {
-  const pendingTugas = [
-    {
-      id: "tugas-1",
-      judul: "Tashrif Fi'il Tsulatsi Mujarrad Bab 1 - 3",
-      mapel: "Bahasa Arab",
-      deadline: "Hari Ini, 20:00 WIB",
-      status: "BELUM_DIKUMPULKAN",
-      deskripsi: "Tuliskan tasrif lughawi dan tasrif ishthilahi untuk wazan fa'ala yaf'ulu pada buku catatan lalu upload foto hasil pengerjaan.",
-    },
-  ]
+  const [tugasList, setTugasList] = React.useState<TugasItem[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
 
-  const submittedTugas = [
-    {
-      id: "tugas-2",
-      judul: "Setoran Rekaman Hafalan Surat Al-Mulk",
-      mapel: "Tahfidz & Tajwid",
-      deadline: "08 Maret 2024",
-      status: "MENUNGGU_VERIFIKASI",
-      tglKumpul: "Kemarin, 14:30 WIB",
-    },
-    {
-      id: "tugas-3",
-      judul: "Resume Fiqih Thaharah dan Macam Air",
-      mapel: "Fiqih Ibadah",
-      deadline: "20 Feb 2024",
-      status: "DINILAI",
-      nilai: 95,
-      feedback: "Alhamdulillah sangat rapi dan lengkap dengan dalilnya.",
-    },
-  ]
+  React.useEffect(() => {
+    async function fetchTugas() {
+      setLoading(true)
+      setError(null)
+      try {
+        const result = await getDaftarTugasSiswa()
+        if (result.success && result.data) {
+          setTugasList(result.data as TugasItem[])
+        } else {
+          setError(result.message || "Gagal memuat daftar tugas")
+        }
+      } catch {
+        setError("Gagal memuat daftar tugas")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchTugas()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <span className="ml-3 text-sm text-slate-500">Memuat daftar tugas...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return <EmptyState title="Gagal Memuat Data" description={error} />
+  }
+
+  const pendingTugas = tugasList.filter(
+    (t) => t.statusPengumpulan === "BELUM_DIKUMPULKAN" || t.statusPengumpulan === "TERLAMBAT" || t.statusPengumpulan === "TEPAT_WAKTU"
+  )
+  const submittedTugas = tugasList.filter(
+    (t) => t.statusPengumpulan === "MENUNGGU_VERIFIKASI" || t.statusPengumpulan === "DINILAI"
+  )
 
   return (
     <div className="space-y-6">
@@ -193,64 +309,84 @@ function SiswaTugasView() {
         </TabsList>
 
         <TabsContent value="pending" className="mt-4 space-y-4">
-          {pendingTugas.map((tugas) => (
-            <Card key={tugas.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 sm:p-6 space-y-4">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full">
-                  {tugas.mapel}
-                </span>
-                <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200 flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  Batas: {tugas.deadline}
-                </span>
-              </div>
+          {pendingTugas.length === 0 ? (
+            <EmptyState
+              title="Semua Tugas Selesai! 🎉"
+              description="Tidak ada tugas yang perlu dikumpulkan saat ini."
+            />
+          ) : (
+            pendingTugas.map((tugas) => (
+              <Card key={tugas.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 sm:p-6 space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full">
+                    {tugas.mataPelajaran}
+                  </span>
+                  <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200 flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    Deadline: {new Date(tugas.deadline).toLocaleDateString("id-ID")}
+                  </span>
+                </div>
 
-              <div>
-                <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
-                  {tugas.judul}
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed">
-                  {tugas.deskripsi}
-                </p>
-              </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                    {tugas.judul}
+                  </h3>
+                  {tugas.deskripsi && (
+                    <p className="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed">
+                      {tugas.deskripsi}
+                    </p>
+                  )}
+                </div>
 
-              <div className="pt-2 flex justify-end">
-                <Button asChild className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[44px]">
-                  <Link href={`/dashboard/tugas/${tugas.id}`}>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Kumpulkan Tugas
-                  </Link>
-                </Button>
-              </div>
-            </Card>
-          ))}
+                {tugas.guru && (
+                  <p className="text-xs text-slate-400">Guru: {tugas.guru}</p>
+                )}
+
+                <div className="pt-2 flex justify-end">
+                  <Button asChild className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[44px]">
+                    <Link href={`/dashboard/tugas/${tugas.id}`}>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Kumpulkan Tugas
+                    </Link>
+                  </Button>
+                </div>
+              </Card>
+            ))
+          )}
         </TabsContent>
 
         <TabsContent value="history" className="mt-4 space-y-3">
-          {submittedTugas.map((tugas) => (
-            <Card key={tugas.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <span className="text-xs font-semibold text-slate-500">{tugas.mapel}</span>
-                  <h4 className="font-bold text-slate-900 text-sm sm:text-base">{tugas.judul}</h4>
-                </div>
-                {tugas.nilai ? (
-                  <div className="text-right">
-                    <span className="text-xs text-slate-400 block">Nilai</span>
-                    <span className="text-xl font-black text-emerald-700">{tugas.nilai}</span>
+          {submittedTugas.length === 0 ? (
+            <EmptyState
+              title="Belum Ada Riwayat"
+              description="Belum ada tugas yang dikumpulkan."
+            />
+          ) : (
+            submittedTugas.map((tugas) => (
+              <Card key={tugas.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <span className="text-xs font-semibold text-slate-500">{tugas.mataPelajaran}</span>
+                    <h4 className="font-bold text-slate-900 text-sm sm:text-base">{tugas.judul}</h4>
                   </div>
-                ) : (
-                  <StatusBadge status={tugas.status as StatusType} />
-                )}
-              </div>
-
-              {tugas.feedback && (
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-600">
-                  <strong>Catatan Ustadz:</strong> {tugas.feedback}
+                  {tugas.nilai != null ? (
+                    <div className="text-right">
+                      <span className="text-xs text-slate-400 block">Nilai</span>
+                      <span className="text-xl font-black text-emerald-700">{Number(tugas.nilai)}</span>
+                    </div>
+                  ) : (
+                    <StatusBadge status={tugas.statusPengumpulan as StatusType} />
+                  )}
                 </div>
-              )}
-            </Card>
-          ))}
+
+                {tugas.feedback && (
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-600">
+                    <strong>Catatan Ustadz:</strong> {tugas.feedback}
+                  </div>
+                )}
+              </Card>
+            ))
+          )}
         </TabsContent>
       </Tabs>
     </div>
@@ -258,39 +394,95 @@ function SiswaTugasView() {
 }
 
 /* ========================================================================= */
-/* 3. ORANG TUA TUGAS VIEW                                                   */
+/* 3. ORANG TUA TUGAS VIEW (REAL DATA)                                       */
 /* ========================================================================= */
 function OrangTuaTugasView({ selectedChild }: { selectedChild: ChildStudent | null }) {
+  const [tugasList, setTugasList] = React.useState<TugasItem[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    async function fetchTugas() {
+      if (!selectedChild?.id) {
+        setLoading(false)
+        return
+      }
+      setLoading(true)
+      setError(null)
+      try {
+        const result = await getTugasAnak(selectedChild.id)
+        if (result.success && result.data) {
+          const data = result.data as { tugas?: TugasItem[]; tugasList?: TugasItem[] }
+          setTugasList(data.tugas || data.tugasList || [])
+        } else {
+          setError(result.message || "Gagal memuat daftar tugas anak")
+        }
+      } catch {
+        setError("Gagal memuat daftar tugas anak")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchTugas()
+  }, [selectedChild?.id])
+
+  if (!selectedChild) {
+    return (
+      <EmptyState
+        title="Pilih Anak Terlebih Dahulu"
+        description="Gunakan selector di atas untuk memilih anak yang ingin dipantau."
+      />
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <span className="ml-3 text-sm text-slate-500">Memuat data tugas...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return <EmptyState title="Gagal Memuat Data" description={error} />
+  }
+
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
       <CardHeader className="p-6 pb-3">
         <CardTitle className="text-base font-bold text-slate-900">
-          Monitoring Tugas Santri: {selectedChild?.nama || "Santri"}
+          Monitoring Tugas Santri: {selectedChild.nama}
         </CardTitle>
         <CardDescription className="text-xs text-slate-500">
           Riwayat pengumpulan tugas dan catatan nilai dari asatidz
         </CardDescription>
       </CardHeader>
       <CardContent className="p-6 pt-0 divide-y divide-slate-100">
-        {[
-          { mapel: "Bahasa Arab", judul: "Tashrif Fi'il Tsulatsi", status: "BELUM_DIKUMPULKAN", deadline: "Hari Ini, 20:00 WIB" },
-          { mapel: "Fiqih Ibadah", judul: "Resume Fiqih Thaharah", status: "DINILAI", nilai: 95, deadline: "20 Feb 2024" },
-          { mapel: "Hadits", judul: "Hafalan Hadits Niat", status: "DINILAI", nilai: 90, deadline: "10 Feb 2024" },
-        ].map((item, idx) => (
-          <div key={idx} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
-            <div>
-              <div className="font-bold text-slate-900 text-sm">{item.judul}</div>
-              <div className="text-xs text-slate-500">{item.mapel} • {item.deadline}</div>
-            </div>
-            {item.nilai ? (
-              <div className="text-base font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
-                Nilai: {item.nilai}
+        {tugasList.length === 0 ? (
+          <EmptyState
+            title="Belum Ada Tugas"
+            description="Belum ada tugas yang tercatat untuk anak ini."
+          />
+        ) : (
+          tugasList.map((item) => (
+            <div key={item.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
+              <div>
+                <div className="font-bold text-slate-900 text-sm">{item.judul}</div>
+                <div className="text-xs text-slate-500">
+                  {item.mataPelajaran} • {new Date(item.deadline).toLocaleDateString("id-ID")}
+                </div>
               </div>
-            ) : (
-              <StatusBadge status={item.status as StatusType} />
-            )}
-          </div>
-        ))}
+              {item.nilai != null ? (
+                <div className="text-base font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+                  Nilai: {Number(item.nilai)}
+                </div>
+              ) : (
+                <StatusBadge status={item.statusPengumpulan as StatusType} />
+              )}
+            </div>
+          ))
+        )}
       </CardContent>
     </Card>
   )

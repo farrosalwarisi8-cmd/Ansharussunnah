@@ -942,3 +942,138 @@ export async function tutupPengerjaanUjianKedaluwarsa(
     return { success: false, message: error instanceof Error ? error.message : "Gagal menutup sesi ujian kedaluwarsa" }
   }
 }
+
+// ========================================================
+// 4. ACTIONS GURU: LIHAT DAFTAR UJIAN YANG DIBUAT
+// ========================================================
+
+export async function getDaftarUjianGuru(
+  kelasId: string
+): Promise<ActionResponse> {
+  try {
+    await verifyGuruAksesKelas(kelasId)
+
+    const now = new Date()
+
+    const ujianList = await prisma.ujian.findMany({
+      where: { kelasId },
+      include: {
+        periodeAjaran: { select: { nama: true } },
+        dibuatOleh: { select: { nama: true } },
+        _count: { select: { soal: true, pengerjaan: true } },
+      },
+      orderBy: { waktuMulai: "desc" },
+    })
+
+    const formatted = ujianList.map((u) => ({
+      id: u.id,
+      judul: u.judul,
+      mataPelajaran: u.mataPelajaranId,
+      kelasId: u.kelasId,
+      durasiMenit: u.durasiMenit,
+      waktuMulai: u.waktuMulai,
+      waktuSelesai: u.waktuSelesai,
+      status: u.status,
+      totalSoal: u._count.soal,
+      totalPeserta: u._count.pengerjaan,
+      guru: u.dibuatOleh.nama,
+      periode: u.periodeAjaran.nama,
+    }))
+
+    return {
+      success: true,
+      message: "Daftar ujian guru berhasil dimuat",
+      data: formatted,
+    }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal memuat daftar ujian guru" }
+  }
+}
+
+// ========================================================
+// 5. ACTIONS ORANG TUA: LIHAT DAFTAR UJIAN ANAK (Read-Only)
+// ========================================================
+
+/**
+ * Orang tua melihat daftar ujian dan hasil anaknya.
+ * ✅ KEAMANAN: Validasi relasi ParentStudent.
+ */
+export async function getDaftarUjianAnak(
+  siswaId: string
+): Promise<ActionResponse> {
+  try {
+    const user = await requireRole([Role.ORANG_TUA])
+    if (!user.orangTua) {
+      return { success: false, message: "Data orang tua tidak ditemukan" }
+    }
+
+    // ✅ Validasi relasi orang tua → siswa
+    const relasi = await prisma.parentStudent.findFirst({
+      where: { orangTuaId: user.orangTua.id, siswaId },
+    })
+    if (!relasi) {
+      return { success: false, message: "Akses ditolak: Siswa ini bukan anak Anda" }
+    }
+
+    const siswa = await prisma.siswa.findUnique({
+      where: { id: siswaId },
+      include: { kelas: { select: { id: true } } },
+    })
+    if (!siswa || !siswa.kelasId) {
+      return { success: false, message: "Data kelas siswa tidak valid" }
+    }
+
+    const now = new Date()
+
+    const ujianList = await prisma.ujian.findMany({
+      where: {
+        kelasId: siswa.kelasId,
+        status: StatusUjian.PUBLISHED,
+      },
+      include: {
+        periodeAjaran: { select: { nama: true } },
+        dibuatOleh: { select: { nama: true } },
+        pengerjaan: {
+          where: { siswaId },
+          select: {
+            id: true,
+            status: true,
+            waktuMulai: true,
+            waktuSubmit: true,
+            nilaiTotal: true,
+          },
+        },
+        _count: { select: { soal: true } },
+      },
+      orderBy: { waktuMulai: "desc" },
+    })
+
+    const formatted = ujianList.map((u) => {
+      const pengerjaan = u.pengerjaan[0] || null
+      const isExpired = now > u.waktuSelesai
+      const isStarted = now >= u.waktuMulai
+
+      return {
+        id: u.id,
+        judul: u.judul,
+        deskripsi: u.deskripsi,
+        mataPelajaran: u.mataPelajaranId,
+        durasiMenit: u.durasiMenit,
+        waktuMulai: u.waktuMulai,
+        waktuSelesai: u.waktuSelesai,
+        totalSoal: u._count.soal,
+        guru: u.dibuatOleh.nama,
+        statusPengerjaan: pengerjaan ? pengerjaan.status : "BELUM_MULAI",
+        nilai: pengerjaan?.status === StatusPengerjaan.DINILAI ? pengerjaan.nilaiTotal : null,
+      }
+    })
+
+    return {
+      success: true,
+      message: "Daftar ujian anak berhasil dimuat",
+      data: formatted,
+    }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal memuat daftar ujian anak" }
+  }
+}

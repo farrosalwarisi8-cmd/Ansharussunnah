@@ -78,13 +78,13 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
         { title: "Tugas", href: "/dashboard/tugas", icon: FileCheck2, isPrimaryMobile: true },
         { title: "Materi", href: "/dashboard/materi", icon: BookOpen },
         { title: "Rapor Saya", href: "/dashboard/rapor", icon: GraduationCap },
-        { title: "Tagihan SPP", href: "/dashboard/tagihan", icon: CreditCard },
       ]
 
     case Role.ORANG_TUA:
       return [
         { title: "Beranda", href: "/dashboard", icon: Home, isPrimaryMobile: true },
         { title: "Absensi Anak", href: "/dashboard/absensi", icon: CalendarCheck2, isPrimaryMobile: true },
+        { title: "Ujian Anak", href: "/dashboard/ujian", icon: Award, isPrimaryMobile: true },
         { title: "Tagihan SPP", href: "/dashboard/tagihan", icon: CreditCard, isPrimaryMobile: true },
         { title: "Rapor Anak", href: "/dashboard/rapor", icon: GraduationCap, isPrimaryMobile: true },
         { title: "Tugas Anak", href: "/dashboard/tugas", icon: FileCheck2 },

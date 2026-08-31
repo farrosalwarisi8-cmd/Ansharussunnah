@@ -6,13 +6,33 @@ import * as React from "react"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
-import { createOrUpdateCatatanRapor } from "@/actions/rapor"
+import { createOrUpdateCatatanRapor, getRaporSiswa, getRaporAnak } from "@/actions/rapor"
+import { getDaftarPeriodeAjaran } from "@/actions/periode-ajaran"
 import { useToast } from "@/hooks/use-toast"
 import { Role } from "@prisma/client"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
+import { EmptyState } from "@/components/ui/empty-state"
 import { GraduationCap, Printer, Save, Loader2 } from "lucide-react"
+
+type PeriodeItem = { id: string; nama: string; tahunAjaran: string; semester: string }
+type RaporData = {
+  identitas: { nama?: string; namaSiswa?: string; nisn: string; kelas: string; jenjang: string }
+  periode: { nama: string; tahunAjaran: string; semester: string }
+  nilaiPerMapel: Array<{
+    mataPelajaran: string
+    rataRataUjian: number
+    rataRataTugas: number
+    nilaiGabungan: number
+    jumlahUjian: number
+    jumlahTugas: number
+  }>
+  rataRataKeseluruhan: number
+  kehadiran: { total: number; hadir: number; sakit: number; izin: number; alpha: number; persentase: string }
+  catatan?: string | null
+  ranking?: number | null
+}
 
 export default function RaporPage() {
   const { user, selectedChild } = useDashboard()
@@ -46,7 +66,7 @@ export default function RaporPage() {
       {isParent && <ChildSelector />}
 
       {isTeacher && <GuruRaporView />}
-      {!isTeacher && <DigitalRaporCard studentName={isParent ? selectedChild?.nama : user.nama} />}
+      {!isTeacher && <SiswaOrangTuaRaporView isParent={isParent} selectedChild={selectedChild} />}
     </div>
   )
 }
@@ -58,20 +78,19 @@ function GuruRaporView() {
   const { toast } = useToast()
   const [selectedStudentId, setSelectedStudentId] = React.useState("s1")
   const [catatan, setCatatan] = React.useState(
-    "Alhamdulillah ananda Ahmad menunjukkan kesungguhan yang sangat luar biasa dalam menghafal Al-Qur'an dan penguasaan bahasa Arab. Pertahankan akhlak mulia dan ketertiban shalat berjamaah."
+    "Alhamdulillah ananda menunjukkan kesungguhan yang sangat luar biasa dalam menghafal Al-Qur'an dan penguasaan bahasa Arab. Pertahankan akhlak mulia dan ketertiban shalat berjamaah."
   )
   const [saving, setSaving] = React.useState(false)
 
+  // Note: Student list would need a getStudentsByKelas action for real data
+  // Currently using placeholder — to be connected when getStudentsByKelas is available
   const students = [
-    { id: "s1", nama: "Ahmad Fauzi Ridwan", nisn: "0081234561", rerata: 92.4, statusRapor: "Lengkap" },
-    { id: "s2", nama: "Muhammad Bilal Al-Banjari", nisn: "0081234562", rerata: 88.6, statusRapor: "Lengkap" },
-    { id: "s3", nama: "Faris Zaidan Rahman", nisn: "0081234563", rerata: 85.2, statusRapor: "Belum Ada Catatan" },
+    { id: "s1", nama: "Santri Binaan", nisn: "—" },
   ]
 
   const handleSaveCatatan = async () => {
     setSaving(true)
     try {
-      // Direct call Server Action createOrUpdateCatatanRapor
       await createOrUpdateCatatanRapor({
         siswaId: selectedStudentId,
         periodeAjaranId: "periode-aktif",
@@ -84,8 +103,9 @@ function GuruRaporView() {
       })
     } catch {
       toast({
-        title: "Catatan Tersimpan (Demo)",
-        description: "Catatan berhasil diperbarui.",
+        variant: "destructive",
+        title: "Gagal Menyimpan",
+        description: "Terjadi kesalahan saat menyimpan catatan rapor.",
       })
     } finally {
       setSaving(false)
@@ -101,7 +121,7 @@ function GuruRaporView() {
             <h3 className="text-base font-bold text-slate-900">
               Pilih Santri Binaan Wali Kelas
             </h3>
-            <p className="text-xs text-slate-500">Kelas 7A - Ikhwan (Tahun Ajaran 2024/2025)</p>
+            <p className="text-xs text-slate-500">Pilih santri untuk mengisi catatan rapor</p>
           </div>
 
           <select
@@ -111,7 +131,7 @@ function GuruRaporView() {
           >
             {students.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.nama} (Rata-rata: {s.rerata})
+                {s.nama}
               </option>
             ))}
           </select>
@@ -140,29 +160,155 @@ function GuruRaporView() {
           </div>
         </div>
       </Card>
-
-      {/* Preview Digital Rapor for selected student */}
-      <DigitalRaporCard
-        studentName={students.find((s) => s.id === selectedStudentId)?.nama || "Santri"}
-      />
     </div>
   )
 }
 
 /* ========================================================================= */
-/* 2. DIGITAL RAPOR FORMAL COMPONENT                                         */
+/* 2. SISWA & ORANG TUA RAPOR VIEW (READ-ONLY, REAL DATA)                    */
 /* ========================================================================= */
-function DigitalRaporCard({ studentName }: { studentName?: string }) {
-  const subjects = [
-    { mapel: "Tahfidz & Tajwid Al-Qur'an", kkm: 75, teori: 96, praktik: 95, akhir: 95.5, predikat: "A", capaian: "Sangat baik dalam kefasihan makhraj dan kelancaran hafalan juz 30." },
-    { mapel: "Bahasa Arab & Nahwu", kkm: 70, teori: 90, praktik: 92, akhir: 91.0, predikat: "A", capaian: "Memahami pola wazan tashrif fi'il dan kaidah mubtada' khobar." },
-    { mapel: "Fiqih Ibadah", kkm: 75, teori: 94, praktik: 90, akhir: 92.0, predikat: "A", capaian: "Sangat tertib mempraktikkan thaharah dan shalat sunnah." },
-    { mapel: "Aqidah Akhlak", kkm: 75, teori: 88, praktik: 90, akhir: 89.0, predikat: "B+", capaian: "Menghayati rukun iman dan berakhlak santun terhadap sesama." },
-    { mapel: "Hadits Arba'in", kkm: 70, teori: 92, praktik: 88, akhir: 90.0, predikat: "A", capaian: "Hafal 10 hadits pertama dengan sanad dan terjemahan." },
-  ]
+function SiswaOrangTuaRaporView({
+  isParent,
+  selectedChild,
+}: {
+  isParent: boolean
+  selectedChild: { id: string; nama: string } | null
+}) {
+  const [periodes, setPeriodes] = React.useState<PeriodeItem[]>([])
+  const [selectedPeriodeId, setSelectedPeriodeId] = React.useState<string>("")
+  const [raporData, setRaporData] = React.useState<RaporData | null>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [fetchingRapor, setFetchingRapor] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
 
-  const totalNilai = subjects.reduce((acc, curr) => acc + curr.akhir, 0)
-  const rerata = (totalNilai / subjects.length).toFixed(1)
+  // Fetch available periods
+  React.useEffect(() => {
+    async function fetchPeriodes() {
+      setLoading(true)
+      try {
+        const result = await getDaftarPeriodeAjaran()
+        if (result.success && result.data) {
+          const data = result.data as PeriodeItem[]
+          setPeriodes(data)
+          if (data.length > 0) {
+            setSelectedPeriodeId(data[0].id)
+          }
+        }
+      } catch {
+        // Ignore — periodes might not be available
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchPeriodes()
+  }, [])
+
+  // Fetch rapor when period or child changes
+  React.useEffect(() => {
+    async function fetchRapor() {
+      if (!selectedPeriodeId) {
+        setRaporData(null)
+        return
+      }
+
+      setFetchingRapor(true)
+      setError(null)
+      try {
+        let result
+        if (isParent && selectedChild) {
+          result = await getRaporAnak(selectedChild.id, selectedPeriodeId)
+        } else {
+          result = await getRaporSiswa(selectedPeriodeId)
+        }
+
+        if (result.success && result.data) {
+          setRaporData(result.data as RaporData)
+        } else {
+          setError(result.message || "Gagal memuat data rapor")
+          setRaporData(null)
+        }
+      } catch {
+        setError("Gagal memuat data rapor")
+        setRaporData(null)
+      } finally {
+        setFetchingRapor(false)
+      }
+    }
+    fetchRapor()
+  }, [selectedPeriodeId, isParent, selectedChild])
+
+  if (isParent && !selectedChild) {
+    return (
+      <EmptyState
+        title="Pilih Anak Terlebih Dahulu"
+        description="Gunakan selector di atas untuk memilih anak yang ingin dipantau."
+      />
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <span className="ml-3 text-sm text-slate-500">Memuat data...</span>
+      </div>
+    )
+  }
+
+  if (periodes.length === 0) {
+    return <EmptyState title="Belum Ada Periode Ajaran" description="Belum ada periode ajaran yang tersedia." />
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Period Selector */}
+      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Pilih Periode:
+          </label>
+          <select
+            value={selectedPeriodeId}
+            onChange={(e) => setSelectedPeriodeId(e.target.value)}
+            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+          >
+            {periodes.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nama} ({p.tahunAjaran})
+              </option>
+            ))}
+          </select>
+        </div>
+      </Card>
+
+      {fetchingRapor && (
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <span className="ml-3 text-sm text-slate-500">Memuat rapor...</span>
+        </div>
+      )}
+
+      {!fetchingRapor && error && (
+        <EmptyState title="Gagal Memuat Rapor" description={error} />
+      )}
+
+      {!fetchingRapor && !error && raporData && (
+        <DigitalRaporCard raporData={raporData} />
+      )}
+    </div>
+  )
+}
+
+/* ========================================================================= */
+/* 3. DIGITAL RAPOR FORMAL COMPONENT (REAL DATA)                             */
+/* ========================================================================= */
+function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
+  const studentName = raporData.identitas.nama || raporData.identitas.namaSiswa || "Santri"
+
+  const totalNilai = raporData.nilaiPerMapel.reduce((acc, curr) => acc + curr.nilaiGabungan, 0)
+  const rerata = raporData.nilaiPerMapel.length > 0
+    ? (totalNilai / raporData.nilaiPerMapel.length).toFixed(1)
+    : "0"
 
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white shadow-xl overflow-hidden print:border-none print:shadow-none">
@@ -184,85 +330,82 @@ function DigitalRaporCard({ studentName }: { studentName?: string }) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs">
           <div>
             <span className="text-slate-400 block">Nama Santri</span>
-            <span className="font-bold text-slate-900 text-sm">{studentName || "Ahmad Fauzi Ridwan"}</span>
+            <span className="font-bold text-slate-900 text-sm">{studentName}</span>
           </div>
           <div>
-            <span className="text-slate-400 block">NISN / NIS</span>
-            <span className="font-semibold text-slate-800 font-mono">0081234561 / 24001</span>
+            <span className="text-slate-400 block">NISN</span>
+            <span className="font-semibold text-slate-800 font-mono">{raporData.identitas.nisn}</span>
           </div>
           <div>
-            <span className="text-slate-400 block">Jenjang / Kelas</span>
-            <span className="font-semibold text-slate-800">MTs / 7A - Ikhwan</span>
+            <span className="text-slate-400 block">Kelas</span>
+            <span className="font-semibold text-slate-800">{raporData.identitas.kelas}</span>
           </div>
           <div>
             <span className="text-slate-400 block">Semester / T.A</span>
-            <span className="font-semibold text-slate-800">Genap (2024/2025)</span>
+            <span className="font-semibold text-slate-800">
+              {raporData.periode.nama} ({raporData.periode.tahunAjaran})
+            </span>
           </div>
         </div>
 
         {/* Subjects Table */}
-        <div className="overflow-x-auto rounded-2xl border border-slate-200">
-          <table className="w-full text-xs sm:text-sm text-left">
-            <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[11px] border-b border-slate-200">
-              <tr>
-                <th className="p-3 pl-4">Mata Pelajaran</th>
-                <th className="p-3 text-center">KKM</th>
-                <th className="p-3 text-center">Teori</th>
-                <th className="p-3 text-center">Praktik</th>
-                <th className="p-3 text-center">Nilai Akhir</th>
-                <th className="p-3 text-center">Predikat</th>
-                <th className="p-3 pr-4">Capaian Kompetensi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {subjects.map((sub, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/60">
-                  <td className="p-3 pl-4 font-bold text-slate-900">{sub.mapel}</td>
-                  <td className="p-3 text-center text-slate-500">{sub.kkm}</td>
-                  <td className="p-3 text-center font-medium text-slate-700">{sub.teori}</td>
-                  <td className="p-3 text-center font-medium text-slate-700">{sub.praktik}</td>
-                  <td className="p-3 text-center font-black text-emerald-800 bg-emerald-50/50">
-                    {sub.akhir}
-                  </td>
-                  <td className="p-3 text-center">
-                    <span className="px-2 py-0.5 rounded font-black text-xs bg-slate-100 text-slate-800">
-                      {sub.predikat}
-                    </span>
-                  </td>
-                  <td className="p-3 pr-4 text-xs text-slate-600 leading-relaxed max-w-xs">
-                    {sub.capaian}
-                  </td>
+        {raporData.nilaiPerMapel.length > 0 ? (
+          <div className="overflow-x-auto rounded-2xl border border-slate-200">
+            <table className="w-full text-xs sm:text-sm text-left">
+              <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[11px] border-b border-slate-200">
+                <tr>
+                  <th className="p-3 pl-4">Mata Pelajaran</th>
+                  <th className="p-3 text-center">Rata Ujian</th>
+                  <th className="p-3 text-center">Rata Tugas</th>
+                  <th className="p-3 text-center">Nilai Gabungan</th>
+                  <th className="p-3 text-center">Jumlah Ujian</th>
+                  <th className="p-3 text-center">Jumlah Tugas</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-slate-50 font-bold text-slate-900 border-t border-slate-200">
-              <tr>
-                <td colSpan={4} className="p-3 pl-4 uppercase text-xs">
-                  Rata-Rata Nilai Kumulatif
-                </td>
-                <td className="p-3 text-center text-base text-emerald-700 font-extrabold">
-                  {rerata}
-                </td>
-                <td className="p-3 text-center">A</td>
-                <td className="p-3 pr-4 text-xs font-normal text-emerald-700">
-                  Predikat Sangat Memuaskan (Mumtaz)
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {raporData.nilaiPerMapel.map((sub, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/60">
+                    <td className="p-3 pl-4 font-bold text-slate-900">{sub.mataPelajaran}</td>
+                    <td className="p-3 text-center font-medium text-slate-700">{sub.rataRataUjian}</td>
+                    <td className="p-3 text-center font-medium text-slate-700">{sub.rataRataTugas}</td>
+                    <td className="p-3 text-center font-black text-emerald-800 bg-emerald-50/50">
+                      {sub.nilaiGabungan}
+                    </td>
+                    <td className="p-3 text-center text-slate-500">{sub.jumlahUjian}</td>
+                    <td className="p-3 text-center text-slate-500">{sub.jumlahTugas}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-slate-50 font-bold text-slate-900 border-t border-slate-200">
+                <tr>
+                  <td colSpan={3} className="p-3 pl-4 uppercase text-xs">
+                    Rata-Rata Nilai Kumulatif
+                  </td>
+                  <td className="p-3 text-center text-base text-emerald-700 font-extrabold">
+                    {rerata}
+                  </td>
+                  <td className="p-3 text-center">{raporData.nilaiPerMapel.reduce((a, m) => a + m.jumlahUjian, 0)}</td>
+                  <td className="p-3 text-center">{raporData.nilaiPerMapel.reduce((a, m) => a + m.jumlahTugas, 0)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        ) : (
+          <EmptyState title="Belum Ada Data Nilai" description="Belum ada data penilaian untuk periode ini." />
+        )}
 
-        {/* Kehadiran & Catatan Homeroom */}
+        {/* Kehadiran & Catatan */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
               Rekapitulasi Kehadiran
             </span>
             <div className="text-xs space-y-1 text-slate-600">
-              <div className="flex justify-between"><span>Hadir:</span> <strong>48 Hari</strong></div>
-              <div className="flex justify-between"><span>Izin:</span> <strong>1 Hari</strong></div>
-              <div className="flex justify-between"><span>Sakit:</span> <strong>0 Hari</strong></div>
-              <div className="flex justify-between"><span>Alpa:</span> <strong>0 Hari</strong></div>
+              <div className="flex justify-between"><span>Hadir:</span> <strong>{raporData.kehadiran.hadir} Hari</strong></div>
+              <div className="flex justify-between"><span>Izin:</span> <strong>{raporData.kehadiran.izin} Hari</strong></div>
+              <div className="flex justify-between"><span>Sakit:</span> <strong>{raporData.kehadiran.sakit} Hari</strong></div>
+              <div className="flex justify-between"><span>Alpa:</span> <strong>{raporData.kehadiran.alpha} Hari</strong></div>
+              <div className="flex justify-between"><span>Persentase:</span> <strong>{raporData.kehadiran.persentase}</strong></div>
             </div>
           </div>
 
@@ -270,12 +413,18 @@ function DigitalRaporCard({ studentName }: { studentName?: string }) {
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 block">
               Catatan &amp; Bimbingan Wali Kelas
             </span>
-            <p className="text-xs sm:text-sm text-emerald-950 leading-relaxed italic">
-              &ldquo;Alhamdulillah ananda menunjukkan perkembangan hafalan yang sangat cepat dan adab yang mulia. Pertahankan semangat belajar kitab dan tingkatkan muroja&apos;ah di asrama.&rdquo;
-            </p>
-            <div className="pt-2 text-right text-[11px] font-bold text-emerald-800">
-              — Ustadz Abdullah, S.Pd.I (Wali Kelas 7A)
-            </div>
+            {raporData.catatan ? (
+              <p className="text-xs sm:text-sm text-emerald-950 leading-relaxed italic">
+                &ldquo;{raporData.catatan}&rdquo;
+              </p>
+            ) : (
+              <p className="text-xs text-emerald-700 italic">Belum ada catatan wali kelas.</p>
+            )}
+            {raporData.ranking && (
+              <div className="pt-2 text-right text-[11px] font-bold text-emerald-800">
+                Ranking: {raporData.ranking}
+              </div>
+            )}
           </div>
         </div>
       </CardContent>

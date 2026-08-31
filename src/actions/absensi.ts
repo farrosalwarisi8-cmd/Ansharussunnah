@@ -557,3 +557,45 @@ export async function getRiwayatKehadiranAnak(
     }
   }
 }
+
+// ========================================================
+// 5. ACTIONS GURU: AMBIL DAFTAR SISWA BERDASARKAN KELAS
+// ========================================================
+
+/**
+ * Guru mengambil daftar siswa di kelas tertentu untuk input absensi.
+ * ✅ Validasi akses guru terhadap kelas via verifyGuruAksesKelas.
+ */
+export async function getSiswaByKelas(
+  kelasId: string
+): Promise<ActionResponse> {
+  try {
+    await verifyGuruAksesKelas(kelasId)
+
+    const siswaList = await prisma.siswa.findMany({
+      where: { kelasId, user: { aktif: true } },
+      include: {
+        user: { select: { nama: true, email: true } },
+      },
+      orderBy: { user: { nama: "asc" } },
+    })
+
+    const formatted = siswaList.map((s) => ({
+      siswaId: s.id,
+      nama: s.user.nama,
+      nisn: s.nisn,
+      email: s.user.email,
+    }))
+
+    return {
+      success: true,
+      message: `Daftar siswa kelas berhasil dimuat (${formatted.length} siswa)`,
+      data: formatted,
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal memuat daftar siswa",
+    }
+  }
+}
