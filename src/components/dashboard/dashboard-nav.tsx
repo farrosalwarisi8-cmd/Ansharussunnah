@@ -20,6 +20,8 @@ import {
   ArrowUpRight,
   UserCheck,
   DollarSign,
+  CalendarDays,
+  Wallet,
   User,
   LogOut,
   Menu,
@@ -59,6 +61,8 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
         guruItems.push(
           { title: "Kelola Guru", href: "/dashboard/guru", icon: Users2, adminOnly: true },
           { title: "Kelola Kelas", href: "/dashboard/kelas", icon: Layers, adminOnly: true },
+          { title: "Periode Ajaran", href: "/dashboard/periode-ajaran", icon: CalendarDays, adminOnly: true },
+          { title: "Kelola Akun Keuangan", href: "/dashboard/kelola-akun-keuangan", icon: Wallet, adminOnly: true },
           { title: "Kenaikan Kelas", href: "/dashboard/kenaikan-kelas", icon: ArrowUpRight, adminOnly: true },
           { title: "Verifikasi Pendaftar", href: "/dashboard/verifikasi-pendaftaran", icon: UserCheck, adminOnly: true }
         )
@@ -107,6 +111,8 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
         { title: "Keuangan", href: "/dashboard/keuangan", icon: DollarSign },
         { title: "Kelola Guru", href: "/dashboard/guru", icon: Users2 },
         { title: "Kelola Kelas", href: "/dashboard/kelas", icon: Layers },
+        { title: "Periode Ajaran", href: "/dashboard/periode-ajaran", icon: CalendarDays },
+        { title: "Kelola Akun Keuangan", href: "/dashboard/kelola-akun-keuangan", icon: Wallet },
         { title: "Kenaikan Kelas", href: "/dashboard/kenaikan-kelas", icon: ArrowUpRight },
         { title: "Verifikasi Pendaftar", href: "/dashboard/verifikasi-pendaftaran", icon: UserCheck },
       ]

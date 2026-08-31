@@ -148,6 +148,9 @@ export async function getDaftarPengajarKelas(
             user: { select: { nama: true, email: true, aktif: true } },
           },
         },
+        mataPelajaran: {
+          select: { id: true, nama: true, kode: true },
+        },
       },
       orderBy: { mataPelajaranId: "asc" },
     })
@@ -158,7 +161,11 @@ export async function getDaftarPengajarKelas(
       nama: p.guru.user.nama,
       email: p.guru.user.email,
       aktif: p.guru.user.aktif,
-      mataPelajaranId: p.mataPelajaranId,
+      mataPelajaran: {
+        id: p.mataPelajaran.id,
+        nama: p.mataPelajaran.nama,
+        kode: p.mataPelajaran.kode,
+      },
       createdAt: p.createdAt,
     }))
 
