@@ -59,6 +59,7 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
       ]
       if (isAdmin) {
         guruItems.push(
+          { title: "Kelola Siswa", href: "/dashboard/siswa", icon: GraduationCap, adminOnly: true },
           { title: "Kelola Guru", href: "/dashboard/guru", icon: Users2, adminOnly: true },
           { title: "Kelola Kelas", href: "/dashboard/kelas", icon: Layers, adminOnly: true },
           { title: "Periode Ajaran", href: "/dashboard/periode-ajaran", icon: CalendarDays, adminOnly: true },
@@ -109,6 +110,7 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
         { title: "Materi", href: "/dashboard/materi", icon: BookOpen },
         { title: "Rapor", href: "/dashboard/rapor", icon: GraduationCap },
         { title: "Keuangan", href: "/dashboard/keuangan", icon: DollarSign },
+        { title: "Kelola Siswa", href: "/dashboard/siswa", icon: GraduationCap },
         { title: "Kelola Guru", href: "/dashboard/guru", icon: Users2 },
         { title: "Kelola Kelas", href: "/dashboard/kelas", icon: Layers },
         { title: "Periode Ajaran", href: "/dashboard/periode-ajaran", icon: CalendarDays },
