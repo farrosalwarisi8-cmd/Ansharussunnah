@@ -41,8 +41,8 @@ export default async function SuksesPage({ searchParams }: SuksesPageProps) {
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="bg-primary rounded-xl p-2">
-            <GraduationCap className="h-5 w-5 text-white" />
+          <div className="w-9 h-9 rounded-xl overflow-hidden">
+            <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
           </div>
           <span className="font-bold text-gray-900">Pendaftaran Siswa Baru</span>
         </div>

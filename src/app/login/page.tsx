@@ -26,8 +26,8 @@ export default function LoginPage() {
 
         <Card className="border-slate-800 bg-slate-900/90 backdrop-blur-xl shadow-2xl text-white rounded-3xl overflow-hidden">
           <CardHeader className="text-center pt-8 pb-6 px-6">
-            <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-lg shadow-emerald-900/50 mb-4">
-              <GraduationCap className="h-8 w-8" />
+            <div className="mx-auto w-14 h-14 rounded-2xl overflow-hidden shadow-lg shadow-emerald-900/50 mb-4">
+              <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
             </div>
             <CardTitle className="text-2xl font-extrabold text-white tracking-tight flex items-center justify-center gap-2">
               <span>Masuk Portal LMS</span>

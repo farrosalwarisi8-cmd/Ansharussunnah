@@ -56,8 +56,8 @@ export default function CekPendaftaranPage() {
       <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur-md sticky top-0 z-50">
         <div className="container mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <div className="bg-emerald-600 rounded-xl p-2 text-white">
-              <GraduationCap className="h-5 w-5" />
+            <div className="w-9 h-9 rounded-xl overflow-hidden">
+              <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
             </div>
             <span className="font-extrabold text-base text-slate-900">Ansharussunnah</span>
           </Link>

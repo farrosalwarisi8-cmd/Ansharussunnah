@@ -418,8 +418,8 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
     <Card className="rounded-3xl border-slate-200/80 bg-white shadow-xl overflow-hidden print:border-none print:shadow-none">
       {/* Formal Header */}
       <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950 text-white p-6 sm:p-8 text-center border-b border-emerald-500/20">
-        <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center text-white mx-auto mb-3 shadow-md">
-          <GraduationCap className="h-7 w-7" />
+        <div className="w-12 h-12 rounded-2xl overflow-hidden mx-auto mb-3 shadow-md">
+          <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
         </div>
         <h2 className="text-xl sm:text-2xl font-black tracking-tight uppercase">
           Laporan Hasil Penilaian Santri (Rapor)

@@ -154,8 +154,8 @@ export function DashboardNav() {
         {/* Brand Header */}
         <div className="h-20 flex items-center px-6 border-b border-slate-800/80 bg-slate-950/40">
           <Link href="/dashboard" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-md shadow-emerald-900/30 group-hover:scale-105 transition-transform">
-              <GraduationCap className="h-6 w-6" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md shadow-emerald-900/30 group-hover:scale-105 transition-transform">
+              <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
             </div>
             <div>
               <div className="font-extrabold text-base tracking-tight text-white flex items-center gap-1.5">
@@ -255,8 +255,8 @@ export function DashboardNav() {
       {/* ========================================================================= */}
       <header className="lg:hidden sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md text-white border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-sm">
         <Link href="/dashboard" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white shadow-sm">
-            <GraduationCap className="h-5 w-5" />
+          <div className="w-8 h-8 rounded-lg overflow-hidden shadow-sm">
+            <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
           </div>
           <div>
             <div className="font-bold text-sm text-white leading-tight">Ansharussunnah</div>
