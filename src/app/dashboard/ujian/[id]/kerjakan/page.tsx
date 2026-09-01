@@ -9,7 +9,8 @@ import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import dynamic from "next/dynamic"
+const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
 import { EmptyState } from "@/components/ui/empty-state"
 import { Clock, ArrowLeft, ArrowRight, Send, Loader2, AlertCircle } from "lucide-react"
 

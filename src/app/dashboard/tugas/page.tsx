@@ -15,8 +15,13 @@ import { Input } from "@/components/ui/input"
 import { StatusBadge, type StatusType } from "@/components/ui/status-badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { EmptyState } from "@/components/ui/empty-state"
-import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import dynamic from "next/dynamic"
+const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
+const Dialog = dynamic(() => import("@/components/ui/dialog").then(m => m.Dialog), { ssr: false })
+const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogContent), { ssr: false })
+const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogHeader), { ssr: false })
+const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
+const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 import { useToast } from "@/hooks/use-toast"
 import { getDaftarTugasSiswa, getDaftarTugasGuru, getTugasAnak, deleteTugas, updateTugas } from "@/actions/tugas"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"

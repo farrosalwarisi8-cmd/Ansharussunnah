@@ -14,7 +14,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
-import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import dynamic from "next/dynamic"
+const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
 import { getDaftarUjianSiswa, getDaftarUjianAnak, getDaftarUjianGuru, deleteUjian } from "@/actions/ujian"
 import { useToast } from "@/hooks/use-toast"
 
