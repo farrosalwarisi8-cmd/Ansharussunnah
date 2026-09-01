@@ -3,9 +3,9 @@
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { Toaster } from "@/components/ui/toaster"
+import { Providers } from "@/components/providers"
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({ subsets: ["latin"], display: "swap" })
 
 export const metadata: Metadata = {
   title: "Ansharussunnah - Sistem Manajemen Sekolah & LMS",
@@ -20,8 +20,7 @@ export default function RootLayout({
   return (
     <html lang="id" className="scroll-smooth">
       <body className={`${inter.className} min-h-screen bg-slate-50/50 antialiased text-slate-800 selection:bg-yellow-100 selection:text-yellow-800`}>
-        {children}
-        <Toaster />
+        <Providers>{children}</Providers>
       </body>
     </html>
   )

@@ -3,7 +3,8 @@
 import * as React from "react"
 import { Suspense } from "react"
 import Link from "next/link"
-import { GraduationCap, ArrowLeft, ShieldCheck } from "lucide-react"
+import Image from "next/image"
+import { ArrowLeft, ShieldCheck } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import LoginForm from "@/components/login-form"
 
@@ -26,8 +27,8 @@ export default function LoginPage() {
 
         <Card className="border-slate-700 bg-slate-800/90 backdrop-blur-xl shadow-2xl text-white rounded-3xl overflow-hidden">
           <CardHeader className="text-center pt-8 pb-6 px-6">
-            <div className="mx-auto w-14 h-14 rounded-2xl overflow-hidden shadow-lg shadow-yellow-800/50 mb-4">
-              <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
+            <div className="mx-auto w-14 h-14 rounded-2xl overflow-hidden relative shadow-lg shadow-yellow-800/50 mb-4">
+              <Image src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" fill sizes="56px" className="object-cover" priority />
             </div>
             <CardTitle className="text-2xl font-extrabold text-white tracking-tight flex items-center justify-center gap-2">
               <span>Masuk Portal LMS</span>

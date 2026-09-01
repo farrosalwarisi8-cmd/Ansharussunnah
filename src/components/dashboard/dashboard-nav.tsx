@@ -4,6 +4,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useDashboard } from "./dashboard-context"
 import { Role } from "@prisma/client"
@@ -121,7 +122,7 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
   }
 }
 
-export function DashboardNav() {
+function DashboardNavInner() {
   const pathname = usePathname()
   const { user, isMobileMenuOpen, setIsMobileMenuOpen } = useDashboard()
   const navItems = getNavItems(user.role, user.isAdmin)
@@ -154,8 +155,8 @@ export function DashboardNav() {
         {/* Brand Header */}
         <div className="h-20 flex items-center px-6 border-b border-slate-700/80 bg-slate-800/40">
           <Link href="/dashboard" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md shadow-yellow-800/30 group-hover:scale-105 transition-transform">
-              <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden relative shadow-md shadow-yellow-800/30 group-hover:scale-105 transition-transform">
+              <Image src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" fill sizes="40px" className="object-cover" />
             </div>
             <div>
               <div className="font-extrabold text-base tracking-tight text-white flex items-center gap-1.5">
@@ -255,8 +256,8 @@ export function DashboardNav() {
       {/* ========================================================================= */}
       <header className="lg:hidden sticky top-0 z-40 bg-slate-800/95 backdrop-blur-md text-white border-b border-slate-700 px-4 py-3 flex items-center justify-between shadow-sm">
         <Link href="/dashboard" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg overflow-hidden shadow-sm">
-            <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
+          <div className="w-8 h-8 rounded-lg overflow-hidden relative shadow-sm">
+            <Image src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" fill sizes="32px" className="object-cover" />
           </div>
           <div>
             <div className="font-bold text-sm text-white leading-tight">Ansharussunnah</div>
@@ -411,3 +412,5 @@ export function DashboardNav() {
     </>
   )
 }
+
+export const DashboardNav = React.memo(DashboardNavInner)

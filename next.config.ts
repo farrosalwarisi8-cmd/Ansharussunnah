@@ -24,6 +24,14 @@ const nextConfig: NextConfig = {
     },
   },
 
+  // ✅ Turbopack for faster dev builds
+  turbopack: {},
+
+  // ✅ Compiler optimizations — remove console.log in production
+  compiler: {
+    removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false,
+  },
+
   // ✅ Security Headers untuk Production
   async headers() {
     return [
@@ -49,6 +57,10 @@ const nextConfig: NextConfig = {
           {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=()",
+          },
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
           },
           {
             key: "Content-Security-Policy",

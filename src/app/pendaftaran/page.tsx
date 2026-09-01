@@ -2,8 +2,9 @@
 
 import { PendaftaranForm } from "@/components/pendaftaran/pendaftaran-form"
 import { getJenjangDenganKelas } from "@/actions/jenjang-kelas"
-import { GraduationCap, ArrowLeft } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
 
 export default async function PendaftaranPage() {
   // Ambil data jenjang & kelas dari server
@@ -20,8 +21,8 @@ export default async function PendaftaranPage() {
       <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl overflow-hidden">
-              <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
+            <div className="w-9 h-9 rounded-xl overflow-hidden relative">
+              <Image src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" fill sizes="36px" className="object-cover" priority />
             </div>
             <span className="font-bold text-gray-900">Pendaftaran Siswa Baru</span>
           </Link>

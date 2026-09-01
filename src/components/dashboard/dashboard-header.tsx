@@ -13,7 +13,7 @@ interface DashboardHeaderProps {
   action?: React.ReactNode
 }
 
-export function DashboardHeader({
+function DashboardHeaderInner({
   title,
   subtitle,
   action,
@@ -54,3 +54,5 @@ export function DashboardHeader({
     </div>
   )
 }
+
+export const DashboardHeader = React.memo(DashboardHeaderInner)

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Role } from "@prisma/client"
 
-export function ChildSelector() {
+function ChildSelectorInner() {
   const { user, selectedChild, setSelectedChild } = useDashboard()
 
   if (user.role !== Role.ORANG_TUA || !user.children || user.children.length === 0) {
@@ -142,3 +142,5 @@ export function ChildSelector() {
     </div>
   )
 }
+
+export const ChildSelector = React.memo(ChildSelectorInner)

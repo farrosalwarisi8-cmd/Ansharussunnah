@@ -14,7 +14,8 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
-import { GraduationCap, Printer, Save, Loader2, BarChart2 } from "lucide-react"
+import Image from "next/image"
+import { Printer, Save, Loader2, BarChart2 } from "lucide-react"
 
 type PeriodeItem = { id: string; nama: string; tahunAjaran: string; semester: string }
 type RaporData = {
@@ -418,8 +419,8 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
     <Card className="rounded-3xl border-slate-200/80 bg-white shadow-xl overflow-hidden print:border-none print:shadow-none">
       {/* Formal Header */}
       <div className="bg-gradient-to-r from-yellow-900 via-slate-800 to-yellow-900 text-white p-6 sm:p-8 text-center border-b border-yellow-500/20">
-        <div className="w-12 h-12 rounded-2xl overflow-hidden mx-auto mb-3 shadow-md">
-          <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
+        <div className="w-12 h-12 rounded-2xl overflow-hidden relative mx-auto mb-3 shadow-md">
+          <Image src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" fill sizes="48px" className="object-cover" />
         </div>
         <h2 className="text-xl sm:text-2xl font-black tracking-tight uppercase">
           Laporan Hasil Penilaian Santri (Rapor)

@@ -1,11 +1,11 @@
 // src/app/pendaftaran/sukses/page.tsx
 
 import Link from "next/link"
+import Image from "next/image"
 import {
   CheckCircle2,
   Copy,
   ArrowRight,
-  GraduationCap,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -41,8 +41,8 @@ export default async function SuksesPage({ searchParams }: SuksesPageProps) {
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl overflow-hidden">
-            <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
+          <div className="w-9 h-9 rounded-xl overflow-hidden relative">
+            <Image src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" fill sizes="36px" className="object-cover" priority />
           </div>
           <span className="font-bold text-gray-900">Pendaftaran Siswa Baru</span>
         </div>

@@ -4,7 +4,7 @@ import { getCurrentUser, enforcePasswordChange } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { Role } from "@prisma/client"
 import { DashboardProvider, type DashboardUser, type ChildStudent } from "@/components/dashboard/dashboard-context"
-import { DashboardNav } from "@/components/dashboard/dashboard-nav"
+import { DashboardNavWrapper } from "@/components/dashboard/dashboard-nav-wrapper"
 
 export default async function DashboardLayout({
   children,
@@ -83,7 +83,7 @@ export default async function DashboardLayout({
   return (
     <DashboardProvider user={dashboardUser}>
       <div className="min-h-screen bg-slate-50/60 flex flex-col">
-        <DashboardNav />
+        <DashboardNavWrapper />
         <main className="lg:pl-64 xl:pl-72 flex-1 pb-24 lg:pb-12 pt-4 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full transition-all">
           {children}
         </main>
