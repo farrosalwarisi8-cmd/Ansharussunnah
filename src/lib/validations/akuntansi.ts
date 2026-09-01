@@ -93,3 +93,11 @@ export const queryLaporanKeuanganSchema = z.object({
 })
 
 export type QueryLaporanKeuanganValues = z.infer<typeof queryLaporanKeuanganSchema>
+
+export const rekapSppFilterSchema = z.object({
+  periodeAjaranId: z.string().min(1).optional(),
+  bulan: z.number().int().min(1).max(12).optional(),
+  tahun: z.number().int().min(2024).max(2100).optional(),
+})
+
+export type RekapSppFilterValues = z.infer<typeof rekapSppFilterSchema>

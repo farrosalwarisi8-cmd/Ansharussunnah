@@ -17,6 +17,7 @@ import {
   cancelTransaksiSchema,
   cancelTagihanSchema,
   queryLaporanKeuanganSchema,
+  rekapSppFilterSchema,
   type GenerateBulkSppValues,
   type SubmitBuktiSppValues,
   type KonfirmasiPembayaranSppValues,
@@ -25,11 +26,14 @@ import {
   type CancelTransaksiValues,
   type CancelTagihanValues,
   type QueryLaporanKeuanganValues,
+  type RekapSppFilterValues,
 } from "@/lib/validations/akuntansi"
 import type { ActionResponse } from "@/types"
 import { Role, StatusTagihan, StatusPembayaran, StatusTransaksi, TipeTransaksi } from "@prisma/client"
 import { Prisma } from "@prisma/client"
 import { revalidatePath } from "next/cache"
+
+const BULAN_NAMES = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
 
 // ========================================================
 // HELPER OTORISASI
@@ -102,7 +106,6 @@ export async function generateBulkSpp(
     await prisma.$transaction(async (tx) => {
       for (const siswa of siswaList) {
         // Cek apakah tagihan bulan+tahun ini sudah ada untuk siswa terkait (Idempotency)
-        const bulanNames = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
         const existing = await tx.tagihanSiswa.findFirst({
           where: {
             siswaId: siswa.id,
@@ -136,7 +139,7 @@ export async function generateBulkSpp(
         await tx.tagihanSiswa.create({
           data: {
             siswaId: siswa.id,
-            namaTagihan: `SPP ${bulanNames[bulan]} ${tahun}`,
+            namaTagihan: `SPP ${BULAN_NAMES[bulan]} ${tahun}`,
             bulan,
             tahun,
             nominal: nominalSpp,
@@ -899,6 +902,388 @@ export async function getRekapTunggakanSpp(
     }
   } catch (error: unknown) {
     return { success: false, message: error instanceof Error ? error.message : "Gagal menyusun rekap tunggakan" }
+  }
+}
+
+// ========================================================
+// 7B. ADMIN KEUANGAN: DAFTAR PEMBAYARAN PENDING VERIFIKASI
+//     Mengembalikan list pembayaran SPP yang berstatus PENDING
+//     untuk ditampilkan di tab Verifikasi Pembayaran Masuk.
+// ========================================================
+
+export async function getDaftarPembayaranPendingVerifikasi(): Promise<
+  ActionResponse<{
+    total: number
+    items: {
+      id: string
+      tagihanId: string
+      santriNama: string
+      kelas: string
+      jenjang: string
+      bulanTagihan: string
+      nominalTagihan: number
+      nominalDibayar: number
+      metodeBayar: string
+      namaBukti: string | null
+      urlBukti: string | null
+      catatan: string | null
+      waktuUpload: Date
+    }[]
+  }>
+> {
+  try {
+    await requireAdminKeuangan()
+
+    const pendingPembayaran = await prisma.pembayaranSiswa.findMany({
+      where: {
+        statusPembayaran: StatusPembayaran.PENDING,
+      },
+      include: {
+        tagihan: {
+          include: {
+            siswa: {
+              include: {
+                user: { select: { nama: true } },
+                kelas: {
+                  include: { jenjang: true },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    })
+
+    const items = pendingPembayaran.map((p) => ({
+      id: p.id,
+      tagihanId: p.tagihanId,
+      santriNama: p.tagihan.siswa.user.nama,
+      kelas: p.tagihan.siswa.kelas?.nama || "Tanpa Kelas",
+      jenjang: p.tagihan.siswa.kelas?.jenjang?.nama || "-",
+      bulanTagihan: p.tagihan.bulan && p.tagihan.tahun
+        ? `${BULAN_NAMES[p.tagihan.bulan]} ${p.tagihan.tahun}`
+        : p.tagihan.namaTagihan,
+      nominalTagihan: Number(p.tagihan.nominal),
+      nominalDibayar: Number(p.nominalDibayar),
+      metodeBayar: p.metodeBayar,
+      namaBukti: p.namaBukti,
+      urlBukti: p.urlBukti,
+      catatan: p.catatan,
+      waktuUpload: p.createdAt,
+    }))
+
+    return {
+      success: true,
+      message: `Ditemukan ${items.length} pembayaran menunggu verifikasi`,
+      data: { total: items.length, items },
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal mengambil daftar pembayaran pending",
+    }
+  }
+}
+
+// ========================================================
+// 7C. ADMIN KEUANGAN: REKAP SPP PER KELAS
+//     Mengelompokkan data tagihan SPP berdasarkan kelas,
+//     efisien dengan 2 query (siswa + tagihan) lalu diolah di JS.
+// ========================================================
+
+export async function getRekapSppPerKelas(
+  filter?: RekapSppFilterValues
+): Promise<ActionResponse<{
+  periodeDipakai: string
+  items: {
+    kelasId: string
+    namaKelas: string
+    namaJenjang: string
+    jumlahSiswa: number
+    totalTagihan: number
+    totalLunas: number
+    totalNunggak: number
+    persentaseKepatuhan: number
+  }[]
+}>> {
+  try {
+    await requireAdminKeuangan()
+
+    const validated = filter ? rekapSppFilterSchema.safeParse(filter) : { success: true as const, data: {} }
+    if (!validated.success) {
+      return {
+        success: false,
+        message: "Parameter filter tidak valid",
+        errors: validated.error.flatten().fieldErrors,
+      }
+    }
+
+    const { periodeAjaranId, bulan, tahun } = validated.data
+
+    // Ambil semua siswa aktif beserta kelas dan jenjang (1 query)
+    const siswaList = await prisma.siswa.findMany({
+      where: {
+        user: { aktif: true },
+      },
+      include: {
+        kelas: {
+          include: { jenjang: true },
+        },
+      },
+    })
+
+    // Kelompokkan siswa per kelas
+    const siswaPerKelas = new Map<string, typeof siswaList>()
+    for (const siswa of siswaList) {
+      const kelasId = siswa.kelasId || "no-class"
+      if (!siswaPerKelas.has(kelasId)) {
+        siswaPerKelas.set(kelasId, [])
+      }
+      siswaPerKelas.get(kelasId)!.push(siswa)
+    }
+
+    // Ambil semua tagihan SPP yang relevan (1 query)
+    const tagihanFilter: Record<string, unknown> = {
+      jenisTagihan: "SPP",
+    }
+    if (bulan) tagihanFilter.bulan = bulan
+    if (tahun) tagihanFilter.tahun = tahun
+
+    const allTagihan = await prisma.tagihanSiswa.findMany({
+      where: tagihanFilter,
+      select: {
+        siswaId: true,
+        nominal: true,
+        status: true,
+      },
+    })
+
+    // Hitung jumlah siswa per status per kelas
+    const lunasPerKelas = new Map<string, number>()
+    const belumLunasPerKelas = new Map<string, number>()
+    for (const t of allTagihan) {
+      if (t.status === StatusTagihan.SUDAH_BAYAR) {
+        lunasPerKelas.set(t.siswaId, (lunasPerKelas.get(t.siswaId) || 0) + Number(t.nominal))
+      } else if (
+        t.status === StatusTagihan.BELUM_BAYAR ||
+        t.status === StatusTagihan.TERLAMBAT ||
+        t.status === StatusTagihan.DIBAYAR_SEBAGIAN
+      ) {
+        belumLunasPerKelas.set(t.siswaId, (belumLunasPerKelas.get(t.siswaId) || 0) + Number(t.nominal))
+      }
+    }
+
+    // Bangun rekap per kelas
+    const rekapList: {
+      kelasId: string
+      namaKelas: string
+      namaJenjang: string
+      jumlahSiswa: number
+      totalTagihan: number
+      totalLunas: number
+      totalNunggak: number
+      persentaseKepatuhan: number
+    }[] = []
+
+    for (const [kelasId, siswaDiKelas] of siswaPerKelas) {
+      if (kelasId === "no-class") continue
+
+      const namaKelas = siswaDiKelas[0]?.kelas?.nama || "-"
+      const namaJenjang = siswaDiKelas[0]?.kelas?.jenjang?.nama || "-"
+      const jumlahSiswa = siswaDiKelas.length
+
+      let totalTagihan = 0
+      let totalLunas = 0
+      let totalNunggak = 0
+
+      for (const siswa of siswaDiKelas) {
+        totalLunas += lunasPerKelas.get(siswa.id) || 0
+        totalNunggak += belumLunasPerKelas.get(siswa.id) || 0
+      }
+
+      totalTagihan = totalLunas + totalNunggak
+
+      rekapList.push({
+        kelasId,
+        namaKelas,
+        namaJenjang,
+        jumlahSiswa,
+        totalTagihan,
+        totalLunas,
+        totalNunggak,
+        persentaseKepatuhan: totalTagihan > 0 ? Math.round((totalLunas / totalTagihan) * 100) : 0,
+      })
+    }
+
+    // Sort by jenjang then kelas name
+    rekapList.sort((a, b) => a.namaKelas.localeCompare(b.namaKelas, "id-ID"))
+
+    const bulanLabel = bulan && tahun ? `${BULAN_NAMES[bulan]} ${tahun}` : "Semua Periode"
+
+    return {
+      success: true,
+      message: "Rekap SPP per kelas berhasil dihitung",
+      data: {
+        periodeDipakai: bulanLabel,
+        items: rekapList,
+      },
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal menghitung rekap SPP per kelas",
+    }
+  }
+}
+
+// ========================================================
+// 7D. ADMIN KEUANGAN: REKAP SPP PER JENJANG
+//     Reuses query yang sama dengan getRekapSppPerKelas,
+//     lalu di-agregasi lebih tinggi ke level Jenjang.
+// ========================================================
+
+export async function getRekapSppPerJenjang(
+  filter?: RekapSppFilterValues
+): Promise<ActionResponse<{
+  periodeDipakai: string
+  items: {
+    jenjangId: string
+    namaJenjang: string
+    jumlahKelas: number
+    jumlahSiswa: number
+    totalTagihan: number
+    totalLunas: number
+    totalNunggak: number
+    persentaseKepatuhan: number
+  }[]
+}>> {
+  try {
+    await requireAdminKeuangan()
+
+    const validated = filter ? rekapSppFilterSchema.safeParse(filter) : { success: true as const, data: {} }
+    if (!validated.success) {
+      return {
+        success: false,
+        message: "Parameter filter tidak valid",
+        errors: validated.error.flatten().fieldErrors,
+      }
+    }
+
+    const { bulan, tahun } = validated.data
+
+    // Ambil semua siswa aktif beserta kelas dan jenjang (1 query)
+    const siswaList = await prisma.siswa.findMany({
+      where: {
+        user: { aktif: true },
+      },
+      include: {
+        kelas: {
+          include: { jenjang: true },
+        },
+      },
+    })
+
+    // Kelompokkan siswa per jenjang
+    const siswaPerJenjang = new Map<string, typeof siswaList>()
+    for (const siswa of siswaList) {
+      const jenjangId = siswa.kelas?.jenjangId || "no-jenjang"
+      if (!siswaPerJenjang.has(jenjangId)) {
+        siswaPerJenjang.set(jenjangId, [])
+      }
+      siswaPerJenjang.get(jenjangId)!.push(siswa)
+    }
+
+    // Ambil semua tagihan SPP (1 query)
+    const tagihanFilter: Record<string, unknown> = {
+      jenisTagihan: "SPP",
+    }
+    if (bulan) tagihanFilter.bulan = bulan
+    if (tahun) tagihanFilter.tahun = tahun
+
+    const allTagihan = await prisma.tagihanSiswa.findMany({
+      where: tagihanFilter,
+      select: {
+        siswaId: true,
+        nominal: true,
+        status: true,
+      },
+    })
+
+    // Map siswaId -> { jenjangId } untuk lookup cepat
+    const siswaToJenjang = new Map<string, string>()
+    for (const siswa of siswaList) {
+      siswaToJenjang.set(siswa.id, siswa.kelas?.jenjangId || "no-jenjang")
+    }
+
+    // Agregasi tagihan per jenjang
+    const lunasPerJenjang = new Map<string, number>()
+    const belumLunasPerJenjang = new Map<string, number>()
+    for (const t of allTagihan) {
+      const jenjangId = siswaToJenjang.get(t.siswaId) || "no-jenjang"
+      if (t.status === StatusTagihan.SUDAH_BAYAR) {
+        lunasPerJenjang.set(jenjangId, (lunasPerJenjang.get(jenjangId) || 0) + Number(t.nominal))
+      } else if (
+        t.status === StatusTagihan.BELUM_BAYAR ||
+        t.status === StatusTagihan.TERLAMBAT ||
+        t.status === StatusTagihan.DIBAYAR_SEBAGIAN
+      ) {
+        belumLunasPerJenjang.set(jenjangId, (belumLunasPerJenjang.get(jenjangId) || 0) + Number(t.nominal))
+      }
+    }
+
+    // Bangun rekap per jenjang
+    const rekapList: {
+      jenjangId: string
+      namaJenjang: string
+      jumlahKelas: number
+      jumlahSiswa: number
+      totalTagihan: number
+      totalLunas: number
+      totalNunggak: number
+      persentaseKepatuhan: number
+    }[] = []
+
+    for (const [jenjangId, siswaDiJenjang] of siswaPerJenjang) {
+      if (jenjangId === "no-jenjang") continue
+
+      const namaJenjang = siswaDiJenjang[0]?.kelas?.jenjang?.nama || "-"
+      const jumlahKelas = new Set(siswaDiJenjang.map((s) => s.kelasId).filter(Boolean)).size
+      const jumlahSiswa = siswaDiJenjang.length
+
+      const totalLunas = lunasPerJenjang.get(jenjangId) || 0
+      const totalNunggak = belumLunasPerJenjang.get(jenjangId) || 0
+      const totalTagihan = totalLunas + totalNunggak
+
+      rekapList.push({
+        jenjangId,
+        namaJenjang,
+        jumlahKelas,
+        jumlahSiswa,
+        totalTagihan,
+        totalLunas,
+        totalNunggak,
+        persentaseKepatuhan: totalTagihan > 0 ? Math.round((totalLunas / totalTagihan) * 100) : 0,
+      })
+    }
+
+    rekapList.sort((a, b) => a.namaJenjang.localeCompare(b.namaJenjang, "id-ID"))
+
+    const bulanLabel = bulan && tahun ? `${BULAN_NAMES[bulan]} ${tahun}` : "Semua Periode"
+
+    return {
+      success: true,
+      message: "Rekap SPP per jenjang berhasil dihitung",
+      data: {
+        periodeDipakai: bulanLabel,
+        items: rekapList,
+      },
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal menghitung rekap SPP per jenjang",
+    }
   }
 }
 
