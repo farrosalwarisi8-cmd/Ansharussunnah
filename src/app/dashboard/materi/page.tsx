@@ -38,65 +38,15 @@ type MateriItem = {
 
 export default function MateriPage() {
   const { user } = useDashboard()
-  const { toast } = useToast()
 
   const isTeacher = user.role === Role.GURU || user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN_AKADEMIK
   const isParent = user.role === Role.ORANG_TUA
-
-  const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
-  const [loading, setLoading] = React.useState(false)
-  const [selectedMapelFilter, setSelectedMapelFilter] = React.useState("SEMUA")
-
-  // Form State
-  const [judul, setJudul] = React.useState("")
-  const [deskripsi, setDeskripsi] = React.useState("")
-  const [mapel, setMapel] = React.useState("Fiqih Ibadah")
-  const [kelasId, setKelasId] = React.useState("7A-IKHWAN")
-  const [fileUrl, setFileUrl] = React.useState("")
-
-  // Real data state
-  const [materiList, setMateriList] = React.useState<MateriItem[]>([])
-  const [fetchingMateri, setFetchingMateri] = React.useState(true)
-  const [materiError, setMateriError] = React.useState<string | null>(null)
-
-  // Fetch materi data for Siswa/OrangTua
-  React.useEffect(() => {
-    if (isTeacher) return // Guru view uses its own data pattern
-
-    async function fetchMateri() {
-      setFetchingMateri(true)
-      setMateriError(null)
-      try {
-        let result
-        if (isParent) {
-          // For OrangTua, we need selectedChild - handled via dashboard context
-          const { selectedChild } = await import("@/components/dashboard/dashboard-context").then((m) => {
-            // This is accessed via the provider, but since we're in a child component we use useDashboard
-            return { selectedChild: null }
-          })
-          // We'll handle this in a separate effect with selectedChild dependency
-          return
-        }
-        result = await getDaftarMateriSiswa()
-        if (result.success && result.data) {
-          setMateriList(result.data as MateriItem[])
-        } else {
-          setMateriError(result.message || "Gagal memuat daftar materi")
-        }
-      } catch {
-        setMateriError("Gagal memuat daftar materi")
-      } finally {
-        setFetchingMateri(false)
-      }
-    }
-    fetchMateri()
-  }, [isTeacher, isParent])
 
   return <MateriPageContent isTeacher={isTeacher} isParent={isParent} />
 }
 
 function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isParent: boolean }) {
-  const { user, selectedChild } = useDashboard()
+  const { selectedChild } = useDashboard()
   const { toast } = useToast()
 
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
@@ -121,19 +71,20 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
       setFetchingMateri(true)
       setMateriError(null)
       try {
-        let result
-        if (isParent && selectedChild) {
-          result = await getDaftarMateriAnak(selectedChild.id)
-        } else if (!isParent) {
-          result = await getDaftarMateriSiswa()
-        } else {
+        const result = isParent && selectedChild
+          ? await getDaftarMateriAnak(selectedChild.id)
+          : !isParent
+            ? await getDaftarMateriSiswa()
+            : null
+
+        if (!result) {
           setFetchingMateri(false)
           return
         }
 
-        if (result && result.success && result.data) {
+        if (result.success && result.data) {
           setMateriList(result.data as MateriItem[])
-        } else if (result) {
+        } else {
           setMateriError(result.message || "Gagal memuat daftar materi")
         }
       } catch {
