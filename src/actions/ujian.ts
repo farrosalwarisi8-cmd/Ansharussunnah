@@ -449,6 +449,75 @@ export async function beriNilaiEsai(
 }
 
 // ========================================================
+// 1b. ACTIONS GURU: DETAIL UJIAN (UNTUK EDIT)
+// ========================================================
+
+export async function getUjianDetail(
+  ujianId: string
+): Promise<ActionResponse> {
+  try {
+    const ujian = await prisma.ujian.findUnique({
+      where: { id: ujianId },
+      include: {
+        mataPelajaran: { select: { nama: true } },
+        soal: {
+          orderBy: { nomorSoal: "asc" },
+          include: {
+            opsi: {
+              orderBy: { label: "asc" },
+            },
+          },
+        },
+      },
+    })
+
+    if (!ujian) {
+      return { success: false, message: "Ujian tidak ditemukan" }
+    }
+
+    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
+
+    return {
+      success: true,
+      message: "Detail ujian berhasil dimuat",
+      data: {
+        id: ujian.id,
+        judul: ujian.judul,
+        deskripsi: ujian.deskripsi,
+        mataPelajaran: ujian.mataPelajaran.nama,
+        kelasId: ujian.kelasId,
+        periodeAjaranId: ujian.periodeAjaranId,
+        durasiMenit: ujian.durasiMenit,
+        waktuMulai: ujian.waktuMulai.toISOString(),
+        waktuSelesai: ujian.waktuSelesai.toISOString(),
+        status: ujian.status,
+        soal: ujian.soal.map((s) => ({
+          id: s.id,
+          nomor: s.nomorSoal,
+          tipe: s.tipe as "PILIHAN_GANDA" | "ESAI",
+          pertanyaan: s.pertanyaan,
+          bobotNilai: s.bobot,
+          opsi: s.tipe === "ESAI"
+            ? s.kunciEsai
+              ? [{ teks: s.kunciEsai, benar: false }]
+              : []
+            : s.opsi.map((o) => ({
+                id: o.id,
+                teks: o.teks,
+                benar: o.benar,
+              })),
+        })),
+      },
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal memuat detail ujian",
+    }
+  }
+}
+
+// ========================================================
 // 2. ACTIONS SISWA: PENGERJAAN UJIAN
 // ========================================================
 

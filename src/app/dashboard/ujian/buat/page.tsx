@@ -3,8 +3,8 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
-import { createUjian, addOrUpdateSoalUjian, deleteSoalUjian } from "@/actions/ujian"
+import { useRouter, useSearchParams } from "next/navigation"
+import { createUjian, updateUjian, getUjianDetail, addOrUpdateSoalUjian, deleteSoalUjian } from "@/actions/ujian"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,8 +30,13 @@ interface SoalItem {
 
 export default function BuatUjianPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const editId = searchParams.get("edit")
+  const isEditMode = Boolean(editId)
+
   const { toast } = useToast()
   const [loading, setLoading] = React.useState(false)
+  const [loadingEdit, setLoadingEdit] = React.useState(isEditMode)
 
   // Step state
   const [step, setStep] = React.useState<1 | 2>(1)
@@ -119,7 +124,7 @@ export default function BuatUjianPage() {
   }
 
   // Ref to store ujianId after creation (for edit mode)
-  const ujianIdRef = React.useRef<string | null>(null)
+  const ujianIdRef = React.useRef<string | null>(editId)
 
   const updatePertanyaan = (index: number, text: string) => {
     setSoalList((prev) =>
@@ -157,6 +162,64 @@ export default function BuatUjianPage() {
     )
   }
 
+  // Fetch existing ujian data when in edit mode
+  React.useEffect(() => {
+    if (!editId) return
+
+    async function loadUjian() {
+      setLoadingEdit(true)
+      try {
+        const result = await getUjianDetail(editId!)
+        if (!result.success || !result.data) {
+          toast({
+            variant: "destructive",
+            title: "Gagal Memuat Data Ujian",
+            description: result.message || "Ujian tidak ditemukan.",
+          })
+          router.push("/dashboard/ujian")
+          return
+        }
+        const data = result.data as {
+          judul: string
+          deskripsi?: string | null
+          mataPelajaran: string
+          kelasId: string
+          durasiMenit: number
+          waktuMulai: string
+          waktuSelesai: string
+          soal: {
+            id?: string
+            nomor: number
+            tipe: "PILIHAN_GANDA" | "ESAI"
+            pertanyaan: string
+            bobotNilai: number
+            opsi: { id?: string; teks: string; benar: boolean }[]
+          }[]
+        }
+        setJudul(data.judul)
+        setDeskripsi(data.deskripsi || "")
+        setMapel(data.mataPelajaran)
+        setKelasId(data.kelasId)
+        setDurasi(String(data.durasiMenit))
+        setWaktuMulai(data.waktuMulai ? new Date(data.waktuMulai).toISOString().slice(0, 16) : "")
+        setWaktuSelesai(data.waktuSelesai ? new Date(data.waktuSelesai).toISOString().slice(0, 16) : "")
+        if (data.soal.length > 0) {
+          setSoalList(data.soal)
+        }
+      } catch {
+        toast({
+          variant: "destructive",
+          title: "Gagal Memuat Data Ujian",
+          description: "Terjadi kesalahan saat memuat data ujian.",
+        })
+        router.push("/dashboard/ujian")
+      } finally {
+        setLoadingEdit(false)
+      }
+    }
+    loadUjian()
+  }, [editId, router, toast])
+
   const handleSaveUjian = async (publish: boolean = false) => {
     if (!judul.trim()) {
       toast({ variant: "destructive", title: "Judul ujian wajib diisi!" })
@@ -165,30 +228,54 @@ export default function BuatUjianPage() {
 
     setLoading(true)
     try {
-      // Step 1: Create the ujian record
-      const result = await createUjian({
-        judul,
-        deskripsi,
-        kelasId,
-        periodeAjaranId: "periode-aktif",
-        mataPelajaran: mapel,
-        durasiMenit: parseInt(durasi) || 60,
-        waktuMulai: waktuMulai ? new Date(waktuMulai).toISOString() : new Date().toISOString(),
-        waktuSelesai: waktuSelesai ? new Date(waktuSelesai).toISOString() : new Date(Date.now() + 86400000).toISOString(),
+      let ujianId: string
 
-      })
-
-      if (!result.success || !result.data?.ujianId) {
-        toast({
-          variant: "destructive",
-          title: "Gagal Membuat Ujian",
-          description: result.message || "Terjadi kesalahan saat membuat ujian.",
+      if (isEditMode && ujianIdRef.current) {
+        // Edit mode: update existing ujian
+        const result = await updateUjian(ujianIdRef.current, {
+          judul,
+          deskripsi,
+          kelasId,
+          periodeAjaranId: "periode-aktif",
+          mataPelajaran: mapel,
+          durasiMenit: parseInt(durasi) || 60,
+          waktuMulai: waktuMulai ? new Date(waktuMulai).toISOString() : undefined,
+          waktuSelesai: waktuSelesai ? new Date(waktuSelesai).toISOString() : undefined,
         })
-        return
-      }
 
-      const ujianId = result.data.ujianId
-      ujianIdRef.current = ujianId
+        if (!result.success) {
+          toast({
+            variant: "destructive",
+            title: "Gagal Memperbarui Ujian",
+            description: result.message || "Terjadi kesalahan saat memperbarui ujian.",
+          })
+          return
+        }
+        ujianId = ujianIdRef.current
+      } else {
+        // Create mode: create new ujian
+        const result = await createUjian({
+          judul,
+          deskripsi,
+          kelasId,
+          periodeAjaranId: "periode-aktif",
+          mataPelajaran: mapel,
+          durasiMenit: parseInt(durasi) || 60,
+          waktuMulai: waktuMulai ? new Date(waktuMulai).toISOString() : new Date().toISOString(),
+          waktuSelesai: waktuSelesai ? new Date(waktuSelesai).toISOString() : new Date(Date.now() + 86400000).toISOString(),
+        })
+
+        if (!result.success || !result.data?.ujianId) {
+          toast({
+            variant: "destructive",
+            title: "Gagal Membuat Ujian",
+            description: result.message || "Terjadi kesalahan saat membuat ujian.",
+          })
+          return
+        }
+        ujianId = result.data.ujianId
+        ujianIdRef.current = ujianId
+      }
 
       // Step 2: Save each soal
       const failedSoal: number[] = []
@@ -239,7 +326,9 @@ export default function BuatUjianPage() {
       }
 
       toast({
-        title: publish ? "Ujian Berhasil Dipublikasikan! 🎉" : "Draft Ujian Tersimpan! 📝",
+        title: publish
+          ? (isEditMode ? "Ujian Berhasil Diperbarui! 🎉" : "Ujian Berhasil Dipublikasikan! 🎉")
+          : (isEditMode ? "Ujian Berhasil Diperbarui! 📝" : "Draft Ujian Tersimpan! 📝"),
         description: `${savedSoal.length} dari ${soalList.length} soal berhasil disimpan ke ujian "${judul}".`,
       })
 
@@ -255,6 +344,25 @@ export default function BuatUjianPage() {
     }
   }
 
+  if (loadingEdit) {
+    return (
+      <div className="space-y-6 max-w-4xl mx-auto">
+        <div className="flex items-center gap-3">
+          <Button asChild variant="outline" size="sm" className="rounded-xl min-h-[40px]">
+            <Link href="/dashboard/ujian">
+              <ArrowLeft className="h-4 w-4 mr-1.5" />
+              Kembali
+            </Link>
+          </Button>
+        </div>
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <span className="ml-3 text-sm text-slate-500">Memuat data ujian...</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center gap-3">
@@ -266,12 +374,16 @@ export default function BuatUjianPage() {
         </Button>
         <div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
-            {step === 1 ? "Langkah 1: Pengaturan Ujian" : "Langkah 2: Pembuat Bank Soal"}
+            {isEditMode
+              ? "Edit Ujian"
+              : (step === 1 ? "Langkah 1: Pengaturan Ujian" : "Langkah 2: Pembuat Bank Soal")}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500">
-            {step === 1
-              ? "Tentukan detail mapel, kelas, dan batas waktu pengerjaan"
-              : `Kelola ${soalList.length} butir soal dan kunci jawaban`}
+            {isEditMode
+              ? "Perbarui data ujian, soal, dan kunci jawaban"
+              : (step === 1
+                ? "Tentukan detail mapel, kelas, dan batas waktu pengerjaan"
+                : `Kelola ${soalList.length} butir soal dan kunci jawaban`)}
           </p>
         </div>
       </div>
@@ -408,7 +520,7 @@ export default function BuatUjianPage() {
                 }}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 px-8 rounded-xl min-h-[48px]"
               >
-                Lanjut ke Pembuat Soal ({soalList.length} Soal) &rarr;
+                {isEditMode ? "Lanjut ke Edit Soal" : `Lanjut ke Pembuat Soal (${soalList.length} Soal)`} &rarr;
               </Button>
             </div>
           </CardContent>
@@ -562,7 +674,7 @@ export default function BuatUjianPage() {
                 onClick={() => handleSaveUjian(false)}
                 className="bg-slate-800 hover:bg-slate-700 text-white font-bold h-11 px-5 rounded-xl flex-1 sm:flex-initial"
               >
-                Simpan Draft
+                {isEditMode ? "Simpan Perubahan" : "Simpan Draft"}
               </Button>
               <Button
                 type="button"
@@ -571,7 +683,7 @@ export default function BuatUjianPage() {
                 className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold h-11 px-6 rounded-xl flex-1 sm:flex-initial shadow-md"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                Publikasikan Ujian
+                {isEditMode ? "Perbarui & Publikasikan" : "Publikasikan Ujian"}
               </Button>
             </div>
           </div>
