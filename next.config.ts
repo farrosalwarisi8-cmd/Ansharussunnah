@@ -1,9 +1,23 @@
 // next.config.ts
 
 import type { NextConfig } from "next"
+import createBundleAnalyzer from "@next/bundle-analyzer"
+
+const withBundleAnalyzer = createBundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+})
 
 const nextConfig: NextConfig = {
-  // ✅ Konfigurasi batas upload server actions (5MB)
+  // ✅ Output standalone untuk deployment lebih ringan (~80% lebih kecil)
+  output: "standalone",
+
+  // ✅ React Strict Mode — membantu mendeteksi masalah di development
+  reactStrictMode: true,
+
+  // ✅ Aktifkan gzip compression
+  compress: true,
+
+  // ✅ Server Actions — body size limit (5MB untuk upload file)
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",
@@ -55,8 +69,9 @@ const nextConfig: NextConfig = {
     ]
   },
 
-  // ✅ Konfigurasi Whitelist Supabase Storage domain
+  // ✅ Konfigurasi Image Optimization — gunakan AVIF + WebP untuk gambar lebih ringan
   images: {
+    formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
         protocol: "https",
@@ -67,4 +82,4 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default nextConfig
+export default withBundleAnalyzer(nextConfig)
