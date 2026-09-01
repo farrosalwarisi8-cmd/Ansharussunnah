@@ -190,7 +190,7 @@ export default function DetailTugasPage() {
     return (
       <div className="space-y-6 max-w-5xl mx-auto">
         <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
           <span className="ml-3 text-sm text-slate-500">Memuat detail tugas...</span>
         </div>
       </div>
@@ -224,7 +224,7 @@ export default function DetailTugasPage() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">
             {rekapData?.tugas?.judul || "Detail Tugas"}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500">
@@ -239,13 +239,13 @@ export default function DetailTugasPage() {
           <Card className="rounded-2xl border-slate-200/80 bg-white">
             <CardContent className="p-4 text-center">
               <span className="text-xs text-slate-500 font-semibold uppercase">Total Siswa</span>
-              <div className="text-2xl font-extrabold text-slate-900 mt-1">{statistik.totalSiswa}</div>
+              <div className="text-2xl font-extrabold text-slate-800 mt-1">{statistik.totalSiswa}</div>
             </CardContent>
           </Card>
           <Card className="rounded-2xl border-slate-200/80 bg-white">
             <CardContent className="p-4 text-center">
               <span className="text-xs text-slate-500 font-semibold uppercase">Sudah Kumpul</span>
-              <div className="text-2xl font-extrabold text-emerald-700 mt-1">{statistik.sudahKumpul}</div>
+              <div className="text-2xl font-extrabold text-yellow-600 mt-1">{statistik.sudahKumpul}</div>
             </CardContent>
           </Card>
           <Card className="rounded-2xl border-slate-200/80 bg-white">
@@ -268,7 +268,7 @@ export default function DetailTugasPage() {
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base font-bold text-slate-900">
+              <CardTitle className="text-base font-bold text-slate-800">
                 Pengumpulan Santri ({statistik?.sudahKumpul || 0} Terkumpul)
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
@@ -300,7 +300,7 @@ export default function DetailTugasPage() {
                     <tbody className="divide-y divide-slate-100">
                       {rekapData.rekap.map((sub) => (
                         <tr key={sub.siswaId} className="hover:bg-slate-50/80">
-                          <td className="p-4 pl-6 font-bold text-slate-900">
+                          <td className="p-4 pl-6 font-bold text-slate-800">
                             {sub.nama}
                             <div className="text-xs font-normal text-slate-500 font-mono">NISN: {sub.nisn}</div>
                           </td>
@@ -310,7 +310,7 @@ export default function DetailTugasPage() {
                           <td className="p-4 text-xs text-slate-600">{sub.jumlahRevisi}</td>
                           <td className="p-4 text-center">
                             {sub.nilai !== null ? (
-                              <span className="font-extrabold text-base text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                              <span className="font-extrabold text-base text-yellow-600 bg-yellow-50 px-2.5 py-1 rounded-lg border border-yellow-200">
                                 {Number(sub.nilai)}
                               </span>
                             ) : (
@@ -329,7 +329,7 @@ export default function DetailTugasPage() {
                                   setSkorNilai(sub.nilai !== null ? String(Number(sub.nilai)) : "")
                                   setFeedbackGuru(sub.feedback || "")
                                 }}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl min-h-[36px] text-xs font-bold"
+                                className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl min-h-[36px] text-xs font-bold"
                               >
                                 {sub.nilai !== null ? "Edit Nilai" : "Beri Nilai"}
                               </Button>
@@ -347,11 +347,11 @@ export default function DetailTugasPage() {
                     <div key={sub.siswaId} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <div className="font-bold text-slate-900 text-sm">{sub.nama}</div>
+                          <div className="font-bold text-slate-800 text-sm">{sub.nama}</div>
                           <div className="text-xs text-slate-500 font-mono">NISN: {sub.nisn}</div>
                         </div>
                         {sub.nilai !== null ? (
-                          <span className="font-black text-lg text-emerald-700 bg-white px-2.5 py-1 rounded-xl border border-emerald-200">
+                          <span className="font-black text-lg text-yellow-600 bg-white px-2.5 py-1 rounded-xl border border-yellow-200">
                             {Number(sub.nilai)}
                           </span>
                         ) : (
@@ -371,7 +371,7 @@ export default function DetailTugasPage() {
                               setSkorNilai(sub.nilai !== null ? String(Number(sub.nilai)) : "")
                               setFeedbackGuru(sub.feedback || "")
                             }}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl min-h-[40px] text-xs font-bold"
+                            className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl min-h-[40px] text-xs font-bold"
                           >
                             {sub.nilai !== null ? "Edit Nilai" : "Beri Nilai"}
                           </Button>
@@ -390,7 +390,7 @@ export default function DetailTugasPage() {
       {!isTeacher && (
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 sm:p-8 space-y-5">
           <div className="border-b border-slate-100 pb-3">
-            <h3 className="text-base font-bold text-slate-900">
+            <h3 className="text-base font-bold text-slate-800">
               Formulir Pengumpulan Tugas Santri
             </h3>
             <p className="text-xs text-slate-500">
@@ -399,10 +399,10 @@ export default function DetailTugasPage() {
           </div>
 
           {alreadySubmitted ? (
-            <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-2">
-              <CheckCircle2 className="h-10 w-10 text-emerald-600 mx-auto" />
-              <h4 className="font-bold text-emerald-950 text-base">Tugas Anda Sudah Dikumpulkan!</h4>
-              <p className="text-xs text-emerald-700 max-w-sm mx-auto">
+            <div className="p-6 rounded-2xl bg-yellow-50 border border-yellow-200 text-center space-y-2">
+              <CheckCircle2 className="h-10 w-10 text-yellow-500 mx-auto" />
+              <h4 className="font-bold text-yellow-900 text-base">Tugas Anda Sudah Dikumpulkan!</h4>
+              <p className="text-xs text-yellow-600 max-w-sm mx-auto">
                 Asatidz akan memeriksa pengerjaan Anda dan memberikan nilai serta catatan koreksi.
               </p>
             </div>
@@ -437,7 +437,7 @@ export default function DetailTugasPage() {
               <Button
                 type="submit"
                 disabled={submitting}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 rounded-xl text-base shadow-md min-h-[48px]"
+                className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold h-12 rounded-xl text-base shadow-md min-h-[48px]"
               >
                 {submitting ? (
                   <>
@@ -461,7 +461,7 @@ export default function DetailTugasPage() {
         <Dialog open={!!selectedSubmisi} onOpenChange={() => setSelectedSubmisi(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle className="text-base font-bold text-slate-900">
+              <DialogTitle className="text-base font-bold text-slate-800">
                 Nilai Tugas: {selectedSubmisi.nama}
               </DialogTitle>
               <p className="text-xs text-slate-500">
@@ -520,7 +520,7 @@ export default function DetailTugasPage() {
               <Button
                 onClick={handleBeriNilai}
                 disabled={savingGrade}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
               >
                 {savingGrade ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <CheckCircle2 className="h-4 w-4 mr-1.5" />}
                 Simpan Penilaian

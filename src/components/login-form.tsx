@@ -58,7 +58,7 @@ export default function LoginForm() {
               type="email"
               placeholder="nama@ansharussunnah.sch.id"
               required
-              className="pl-10 h-12 bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus-visible:ring-emerald-500 text-base sm:text-sm"
+              className="pl-10 h-12 bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus-visible:ring-yellow-500 text-base sm:text-sm"
             />
           </div>
         </div>
@@ -70,7 +70,7 @@ export default function LoginForm() {
             </Label>
             <Link
               href="/lupa-password"
-              className="text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
+              className="text-xs text-yellow-400 hover:text-yellow-300 font-medium transition-colors"
             >
               Lupa password?
             </Link>
@@ -83,7 +83,7 @@ export default function LoginForm() {
               type="password"
               placeholder="••••••••"
               required
-              className="pl-10 h-12 bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus-visible:ring-emerald-500 text-base sm:text-sm"
+              className="pl-10 h-12 bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus-visible:ring-yellow-500 text-base sm:text-sm"
             />
           </div>
         </div>
@@ -91,7 +91,7 @@ export default function LoginForm() {
         <Button
           type="submit"
           disabled={loading}
-          className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base shadow-lg shadow-emerald-900/50 transition-all active:scale-[0.99] mt-2"
+          className="w-full h-12 rounded-xl bg-yellow-500 hover:bg-yellow-500 text-white font-bold text-base shadow-lg shadow-yellow-800/50 transition-all active:scale-[0.99] mt-2"
         >
           {loading ? (
             <>
@@ -105,14 +105,14 @@ export default function LoginForm() {
       </form>
 
       {/* Quick Links Section */}
-      <div className="mt-8 pt-6 border-t border-slate-800 text-center space-y-3">
+      <div className="mt-8 pt-6 border-t border-slate-700 text-center space-y-3">
         <p className="text-xs text-slate-400">
           Calon santri baru belum punya akun?
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
           <Link
             href="/pendaftaran"
-            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 min-h-[40px]"
+            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-yellow-300 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 min-h-[40px]"
           >
             Daftar Santri Baru
           </Link>

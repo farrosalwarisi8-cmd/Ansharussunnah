@@ -71,7 +71,7 @@ export default function BuatTugasPage() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">
             Buat Tugas Baru
           </h1>
           <p className="text-xs sm:text-sm text-slate-500">
@@ -104,7 +104,7 @@ export default function BuatTugasPage() {
                 <select
                   value={mapel}
                   onChange={(e) => setMapel(e.target.value)}
-                  className="w-full h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
+                  className="w-full h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-yellow-500"
                 >
                   <option value="Bahasa Arab">Bahasa Arab</option>
                   <option value="Fiqih Ibadah">Fiqih Ibadah</option>
@@ -121,7 +121,7 @@ export default function BuatTugasPage() {
                 <select
                   value={kelasId}
                   onChange={(e) => setKelasId(e.target.value)}
-                  className="w-full h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
+                  className="w-full h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-yellow-500"
                 >
                   <option value="7A-IKHWAN">Kelas 7A - Ikhwan</option>
                   <option value="7B-AKHWAT">Kelas 7B - Akhwat</option>
@@ -177,7 +177,7 @@ export default function BuatTugasPage() {
               <Button
                 type="submit"
                 disabled={loading}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 rounded-xl min-h-[48px] px-8 shadow-md"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold h-12 rounded-xl min-h-[48px] px-8 shadow-md"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                 Terbitkan Tugas

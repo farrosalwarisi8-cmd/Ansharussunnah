@@ -512,13 +512,13 @@ export default function KeuanganPage() {
   // ============================================================
 
   const getComplianceColor = (pct: number) => {
-    if (pct >= 80) return "text-emerald-700 bg-emerald-50"
+    if (pct >= 80) return "text-yellow-600 bg-yellow-50"
     if (pct >= 70) return "text-amber-700 bg-amber-50"
     return "text-rose-700 bg-rose-50"
   }
 
   const getComplianceBadge = (pct: number) => {
-    if (pct >= 80) return { bg: "bg-emerald-500", label: "Tinggi", text: "text-emerald-700" }
+    if (pct >= 80) return { bg: "bg-yellow-500", label: "Tinggi", text: "text-yellow-600" }
     if (pct >= 70) return { bg: "bg-amber-500", label: "Sedang", text: "text-amber-700" }
     return { bg: "bg-rose-500", label: "Rendah", text: "text-rose-700" }
   }
@@ -560,7 +560,7 @@ export default function KeuanganPage() {
             <CardHeader className="p-5 pb-3 border-b border-slate-100">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base font-bold text-slate-900">
+                  <CardTitle className="text-base font-bold text-slate-800">
                     Antrean Bukti Transfer Menunggu Verifikasi
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-500">
@@ -594,8 +594,8 @@ export default function KeuanganPage() {
                   >
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-slate-900 text-base">{p.santriNama}</span>
-                        <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded">
+                        <span className="font-bold text-slate-800 text-base">{p.santriNama}</span>
+                        <span className="text-xs bg-yellow-100 text-yellow-700 font-bold px-2 py-0.5 rounded">
                           {p.kelas}
                         </span>
                         <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded">
@@ -618,7 +618,7 @@ export default function KeuanganPage() {
                           href={p.urlBukti}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-emerald-700 font-bold hover:underline pt-1"
+                          className="inline-flex items-center gap-1 text-xs text-yellow-600 font-bold hover:underline pt-1"
                         >
                           <ExternalLink className="h-3 w-3" />
                           Buka Foto Bukti Transfer
@@ -629,7 +629,7 @@ export default function KeuanganPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-200">
                       <div className="text-left sm:text-right">
                         <span className="text-xs text-slate-400 block">Nominal Dibayar:</span>
-                        <span className="text-lg font-black text-emerald-800">
+                        <span className="text-lg font-black text-yellow-700">
                           {formatRp(p.nominalDibayar)}
                         </span>
                         {p.nominalDibayar !== p.nominalTagihan && (
@@ -656,7 +656,7 @@ export default function KeuanganPage() {
                         <Button
                           onClick={() => handleVerifyPayment(p.id, true)}
                           disabled={processingId === p.id}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[44px] text-xs px-5 flex-1 sm:flex-initial shadow-md"
+                          className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px] text-xs px-5 flex-1 sm:flex-initial shadow-md"
                         >
                           {processingId === p.id ? (
                             <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
@@ -684,7 +684,7 @@ export default function KeuanganPage() {
         <TabsContent value="generate" className="mt-4">
           <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 sm:p-8 max-w-2xl">
             <CardHeader className="p-0 pb-4">
-              <CardTitle className="text-lg font-bold text-slate-900">
+              <CardTitle className="text-lg font-bold text-slate-800">
                 Penerbitan Tagihan SPP Bulanan Massal
               </CardTitle>
               <CardDescription className="text-xs sm:text-sm text-slate-500 leading-relaxed">
@@ -701,7 +701,7 @@ export default function KeuanganPage() {
                   <select
                     value={bulanGenerate}
                     onChange={(e) => setBulanGenerate(e.target.value)}
-                    className="w-full h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-emerald-500"
+                    className="w-full h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-yellow-500"
                   >
                     <option value="Maret 2024">Maret 2024</option>
                     <option value="April 2024">April 2024</option>
@@ -731,7 +731,7 @@ export default function KeuanganPage() {
                 <Button
                   onClick={handleGenerateSpp}
                   disabled={generating}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 px-8 rounded-xl min-h-[48px] shadow-md"
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold h-12 px-8 rounded-xl min-h-[48px] shadow-md"
                 >
                   {generating ? (
                     <>
@@ -764,7 +764,7 @@ export default function KeuanganPage() {
                     onClick={() => setRekapView("kelas")}
                     className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                       rekapView === "kelas"
-                        ? "bg-white text-emerald-700 shadow-sm"
+                        ? "bg-white text-yellow-600 shadow-sm"
                         : "text-slate-500 hover:text-slate-700"
                     }`}
                   >
@@ -774,7 +774,7 @@ export default function KeuanganPage() {
                     onClick={() => setRekapView("jenjang")}
                     className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                       rekapView === "jenjang"
-                        ? "bg-white text-emerald-700 shadow-sm"
+                        ? "bg-white text-yellow-600 shadow-sm"
                         : "text-slate-500 hover:text-slate-700"
                     }`}
                   >
@@ -831,7 +831,7 @@ export default function KeuanganPage() {
               {/* Desktop Table */}
               <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden hidden md:block">
                 <CardHeader className="p-5 pb-3 border-b border-slate-100">
-                  <CardTitle className="text-base font-bold text-slate-900">
+                  <CardTitle className="text-base font-bold text-slate-800">
                     Rekap SPP Per Kelas
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-500">
@@ -862,11 +862,11 @@ export default function KeuanganPage() {
                         const badge = getComplianceBadge(item.persentaseKepatuhan)
                         return (
                           <TableRow key={item.kelasId}>
-                            <TableCell className="font-bold text-slate-900">{item.namaKelas}</TableCell>
+                            <TableCell className="font-bold text-slate-800">{item.namaKelas}</TableCell>
                             <TableCell className="text-sm text-slate-600">{item.namaJenjang}</TableCell>
                             <TableCell className="text-center text-sm">{item.jumlahSiswa}</TableCell>
                             <TableCell className="text-right text-sm font-semibold">{formatRp(item.totalTagihan)}</TableCell>
-                            <TableCell className="text-right text-sm text-emerald-700 font-semibold">{formatRp(item.totalLunas)}</TableCell>
+                            <TableCell className="text-right text-sm text-yellow-600 font-semibold">{formatRp(item.totalLunas)}</TableCell>
                             <TableCell className="text-right text-sm text-rose-600 font-semibold">
                               {item.totalNunggak > 0 ? formatRp(item.totalNunggak) : "-"}
                             </TableCell>
@@ -904,7 +904,7 @@ export default function KeuanganPage() {
                       <Card key={item.kelasId} className="rounded-2xl border-slate-200/80 bg-white shadow-sm p-4">
                         <div className="flex items-center justify-between mb-3">
                           <div>
-                            <div className="font-bold text-slate-900 text-sm">{item.namaKelas}</div>
+                            <div className="font-bold text-slate-800 text-sm">{item.namaKelas}</div>
                             <div className="text-xs text-slate-500">{item.namaJenjang} &bull; {item.jumlahSiswa} siswa</div>
                           </div>
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getComplianceColor(item.persentaseKepatuhan)}`}>
@@ -920,11 +920,11 @@ export default function KeuanganPage() {
                         <div className="grid grid-cols-3 gap-2 text-xs">
                           <div>
                             <div className="text-slate-400">Tagihan</div>
-                            <div className="font-bold text-slate-900">{formatRp(item.totalTagihan)}</div>
+                            <div className="font-bold text-slate-800">{formatRp(item.totalTagihan)}</div>
                           </div>
                           <div>
                             <div className="text-slate-400">Lunas</div>
-                            <div className="font-bold text-emerald-700">{formatRp(item.totalLunas)}</div>
+                            <div className="font-bold text-yellow-600">{formatRp(item.totalLunas)}</div>
                           </div>
                           <div>
                             <div className="text-slate-400">Nunggak</div>
@@ -943,7 +943,7 @@ export default function KeuanganPage() {
               {/* Desktop Table */}
               <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden hidden md:block">
                 <CardHeader className="p-5 pb-3 border-b border-slate-100">
-                  <CardTitle className="text-base font-bold text-slate-900">
+                  <CardTitle className="text-base font-bold text-slate-800">
                     Rekap SPP Per Jenjang
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-500">
@@ -974,11 +974,11 @@ export default function KeuanganPage() {
                         const badge = getComplianceBadge(item.persentaseKepatuhan)
                         return (
                           <TableRow key={item.jenjangId}>
-                            <TableCell className="font-bold text-slate-900">{item.namaJenjang}</TableCell>
+                            <TableCell className="font-bold text-slate-800">{item.namaJenjang}</TableCell>
                             <TableCell className="text-center text-sm">{item.jumlahKelas}</TableCell>
                             <TableCell className="text-center text-sm">{item.jumlahSiswa}</TableCell>
                             <TableCell className="text-right text-sm font-semibold">{formatRp(item.totalTagihan)}</TableCell>
-                            <TableCell className="text-right text-sm text-emerald-700 font-semibold">{formatRp(item.totalLunas)}</TableCell>
+                            <TableCell className="text-right text-sm text-yellow-600 font-semibold">{formatRp(item.totalLunas)}</TableCell>
                             <TableCell className="text-right text-sm text-rose-600 font-semibold">
                               {item.totalNunggak > 0 ? formatRp(item.totalNunggak) : "-"}
                             </TableCell>
@@ -1016,7 +1016,7 @@ export default function KeuanganPage() {
                       <Card key={item.jenjangId} className="rounded-2xl border-slate-200/80 bg-white shadow-sm p-4">
                         <div className="flex items-center justify-between mb-3">
                           <div>
-                            <div className="font-bold text-slate-900 text-sm">{item.namaJenjang}</div>
+                            <div className="font-bold text-slate-800 text-sm">{item.namaJenjang}</div>
                             <div className="text-xs text-slate-500">{item.jumlahKelas} kelas &bull; {item.jumlahSiswa} siswa</div>
                           </div>
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getComplianceColor(item.persentaseKepatuhan)}`}>
@@ -1032,11 +1032,11 @@ export default function KeuanganPage() {
                         <div className="grid grid-cols-3 gap-2 text-xs">
                           <div>
                             <div className="text-slate-400">Tagihan</div>
-                            <div className="font-bold text-slate-900">{formatRp(item.totalTagihan)}</div>
+                            <div className="font-bold text-slate-800">{formatRp(item.totalTagihan)}</div>
                           </div>
                           <div>
                             <div className="text-slate-400">Lunas</div>
-                            <div className="font-bold text-emerald-700">{formatRp(item.totalLunas)}</div>
+                            <div className="font-bold text-yellow-600">{formatRp(item.totalLunas)}</div>
                           </div>
                           <div>
                             <div className="text-slate-400">Nunggak</div>
@@ -1059,7 +1059,7 @@ export default function KeuanganPage() {
           {/* Pembayaran Manual (Cash/Offline) */}
           <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6">
             <CardHeader className="p-0 pb-4 border-b border-slate-100">
-              <CardTitle className="text-base font-bold text-slate-900">
+              <CardTitle className="text-base font-bold text-slate-800">
                 💰 Pembayaran Tunai / Manual (Tanpa Upload Bukti)
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
@@ -1114,7 +1114,7 @@ export default function KeuanganPage() {
                   <Button
                     type="submit"
                     disabled={processingManual}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 px-4 rounded-xl shrink-0"
+                    className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold h-11 px-4 rounded-xl shrink-0"
                   >
                     {processingManual ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                   </Button>
@@ -1126,7 +1126,7 @@ export default function KeuanganPage() {
           {/* Form Input Kasir */}
           <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6">
             <CardHeader className="p-0 pb-4 border-b border-slate-100">
-              <CardTitle className="text-base font-bold text-slate-900">
+              <CardTitle className="text-base font-bold text-slate-800">
                 Pencatatan Kas &amp; Transaksi Non-SPP
               </CardTitle>
             </CardHeader>
@@ -1184,7 +1184,7 @@ export default function KeuanganPage() {
                     <Button
                       type="submit"
                       disabled={savingTrx}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 px-4 rounded-xl shrink-0"
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold h-11 px-4 rounded-xl shrink-0"
                     >
                       <Plus className="h-4 w-4" />
                     </Button>
@@ -1197,7 +1197,7 @@ export default function KeuanganPage() {
           {/* List Transaksi */}
           <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
             <CardHeader className="p-5 pb-3 border-b border-slate-100">
-              <CardTitle className="text-base font-bold text-slate-900">
+              <CardTitle className="text-base font-bold text-slate-800">
                 Riwayat Transaksi Terakhir
               </CardTitle>
             </CardHeader>
@@ -1211,14 +1211,14 @@ export default function KeuanganPage() {
                         {trx.kategori}
                       </span>
                     </div>
-                    <div className="font-bold text-slate-900 text-sm">{trx.deskripsi}</div>
+                    <div className="font-bold text-slate-800 text-sm">{trx.deskripsi}</div>
                     <div className="text-xs text-slate-400">{trx.tanggal}</div>
                   </div>
 
                   <div className="text-right shrink-0 flex items-center gap-2">
                     <span
                       className={`text-base font-black ${
-                        trx.tipe === "PEMASUKAN" ? "text-emerald-700" : "text-rose-600"
+                        trx.tipe === "PEMASUKAN" ? "text-yellow-600" : "text-rose-600"
                       }`}
                     >
                       {trx.tipe === "PEMASUKAN" ? "+" : "-"} Rp {trx.nominal.toLocaleString("id-ID")}
@@ -1284,7 +1284,7 @@ export default function KeuanganPage() {
           {/* Loading */}
           {loadingLaporan && (
             <div className="flex items-center justify-center p-8">
-              <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+              <Loader2 className="h-6 w-6 animate-spin text-yellow-500" />
               <span className="ml-3 text-sm text-slate-500">Memuat laporan keuangan...</span>
             </div>
           )}
@@ -1294,7 +1294,7 @@ export default function KeuanganPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card className="rounded-2xl border-slate-200/80 bg-white p-5">
                 <span className="text-xs font-semibold text-slate-500 uppercase">Total Pemasukan</span>
-                <div className="text-2xl font-black text-emerald-700 mt-2">
+                <div className="text-2xl font-black text-yellow-600 mt-2">
                   Rp {laporanData.ringkasan.totalPemasukan.toLocaleString("id-ID")}
                 </div>
                 <span className="text-xs text-slate-500 mt-0.5 block font-medium">
@@ -1314,10 +1314,10 @@ export default function KeuanganPage() {
               </Card>
               <Card className="rounded-2xl border-slate-200/80 bg-white p-5">
                 <span className="text-xs font-semibold text-slate-500 uppercase">Saldo Bersih</span>
-                <div className={`text-2xl font-black mt-2 ${laporanData.ringkasan.saldoBersih >= 0 ? 'text-slate-900' : 'text-rose-700'}`}>
+                <div className={`text-2xl font-black mt-2 ${laporanData.ringkasan.saldoBersih >= 0 ? 'text-slate-800' : 'text-rose-700'}`}>
                   Rp {laporanData.ringkasan.saldoBersih.toLocaleString("id-ID")}
                 </div>
-                <span className={`text-xs mt-0.5 block font-medium ${laporanData.ringkasan.saldoBersih >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                <span className={`text-xs mt-0.5 block font-medium ${laporanData.ringkasan.saldoBersih >= 0 ? 'text-yellow-500' : 'text-rose-600'}`}>
                   {laporanData.ringkasan.saldoBersih >= 0 ? 'Kondisi Kas Sehat' : 'Perlu Perhatian'}
                 </span>
               </Card>
@@ -1328,7 +1328,7 @@ export default function KeuanganPage() {
           {!loadingLaporan && laporanData && laporanData.transaksi.length > 0 && (
             <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
               <CardHeader className="p-5 pb-3 border-b border-slate-100">
-                <CardTitle className="text-base font-bold text-slate-900">Rincian Transaksi Non-SPP</CardTitle>
+                <CardTitle className="text-base font-bold text-slate-800">Rincian Transaksi Non-SPP</CardTitle>
               </CardHeader>
               <CardContent className="p-5 divide-y divide-slate-100">
                 {laporanData.transaksi.map((trx) => (
@@ -1339,13 +1339,13 @@ export default function KeuanganPage() {
                           {trx.kategori}
                         </span>
                       </div>
-                      <div className="font-bold text-slate-900 text-sm">{trx.deskripsi}</div>
+                      <div className="font-bold text-slate-800 text-sm">{trx.deskripsi}</div>
                       <div className="text-xs text-slate-400">
                         {new Date(trx.tanggal).toLocaleDateString("id-ID")}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <span className={`text-base font-black ${trx.tipe === "PEMASUKAN" ? "text-emerald-700" : "text-rose-600"}`}>
+                      <span className={`text-base font-black ${trx.tipe === "PEMASUKAN" ? "text-yellow-600" : "text-rose-600"}`}>
                         {trx.tipe === "PEMASUKAN" ? "+" : "-"} Rp {trx.nominal.toLocaleString("id-ID")}
                       </span>
                     </div>
@@ -1359,7 +1359,7 @@ export default function KeuanganPage() {
           {tunggakanData && (
             <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
               <CardHeader className="p-5 pb-3 border-b border-slate-100">
-                <CardTitle className="text-base font-bold text-slate-900">Rekap Tunggakan SPP</CardTitle>
+                <CardTitle className="text-base font-bold text-slate-800">Rekap Tunggakan SPP</CardTitle>
                 <CardDescription className="text-xs text-slate-500">
                   Daftar siswa yang belum membayar atau membayar sebagian
                 </CardDescription>
@@ -1380,9 +1380,9 @@ export default function KeuanganPage() {
                     <span className="text-[11px] font-bold text-sky-800 uppercase block">Verifikasi</span>
                     <span className="text-xl font-black text-sky-700">{tunggakanData.ringkasan.totalMenungguVerifikasi}</span>
                   </div>
-                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
-                    <span className="text-[11px] font-bold text-emerald-800 uppercase block">Total Tagihan</span>
-                    <span className="text-xl font-black text-emerald-700">
+                  <div className="p-3 rounded-xl bg-yellow-50 border border-yellow-200 text-center">
+                    <span className="text-[11px] font-bold text-yellow-700 uppercase block">Total Tagihan</span>
+                    <span className="text-xl font-black text-yellow-600">
                       {tunggakanData.ringkasan.totalTunggakanMurni + tunggakanData.ringkasan.totalDibayarSebagian}
                     </span>
                   </div>
@@ -1395,7 +1395,7 @@ export default function KeuanganPage() {
                     {tunggakanData.tunggakanMurni.map((t) => (
                       <div key={t.tagihanId} className="py-3 flex items-center justify-between gap-4">
                         <div className="space-y-0.5">
-                          <div className="font-bold text-slate-900 text-sm">{t.namaSiswa}</div>
+                          <div className="font-bold text-slate-800 text-sm">{t.namaSiswa}</div>
                           <div className="text-xs text-slate-500">
                             {t.kelas} • Periode: {t.periode}
                           </div>
@@ -1439,7 +1439,7 @@ export default function KeuanganPage() {
       <Dialog open={cancelDialogOpen} onOpenChange={(open) => { setCancelDialogOpen(open); if (!open) { setCancelTargetId(""); setCancelAlasan("") } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">
+            <DialogTitle className="text-base font-bold text-slate-800">
               Batalkan {cancelType === "transaksi" ? "Transaksi" : "Tagihan SPP"}?
             </DialogTitle>
             <p className="text-xs text-slate-500">

@@ -356,7 +356,7 @@ export default function BuatUjianPage() {
           </Button>
         </div>
         <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
           <span className="ml-3 text-sm text-slate-500">Memuat data ujian...</span>
         </div>
       </div>
@@ -373,7 +373,7 @@ export default function BuatUjianPage() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">
             {isEditMode
               ? "Edit Ujian"
               : (step === 1 ? "Langkah 1: Pengaturan Ujian" : "Langkah 2: Pembuat Bank Soal")}
@@ -392,7 +392,7 @@ export default function BuatUjianPage() {
       {step === 1 && (
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
           <CardHeader className="p-6 pb-4 border-b border-slate-100">
-            <CardTitle className="text-base font-bold text-slate-900">
+            <CardTitle className="text-base font-bold text-slate-800">
               Informasi Umum Ujian
             </CardTitle>
           </CardHeader>
@@ -418,7 +418,7 @@ export default function BuatUjianPage() {
                 <select
                   value={mapel}
                   onChange={(e) => setMapel(e.target.value)}
-                  className="w-full h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
+                  className="w-full h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-yellow-500"
                 >
                   <option value="Fiqih Ibadah">Fiqih Ibadah</option>
                   <option value="Aqidah Akhlak">Aqidah Akhlak</option>
@@ -435,7 +435,7 @@ export default function BuatUjianPage() {
                 <select
                   value={kelasId}
                   onChange={(e) => setKelasId(e.target.value)}
-                  className="w-full h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
+                  className="w-full h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-yellow-500"
                 >
                   <option value="7A-IKHWAN">Kelas 7A - Ikhwan</option>
                   <option value="7B-AKHWAT">Kelas 7B - Akhwat</option>
@@ -501,7 +501,7 @@ export default function BuatUjianPage() {
                 id="acakSoal"
                 checked={acakSoal}
                 onChange={(e) => setAcakSoal(e.target.checked)}
-                className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                className="h-4 w-4 rounded text-yellow-500 focus:ring-yellow-500"
               />
               <label htmlFor="acakSoal" className="text-sm font-medium text-slate-700">
                 Acak urutan soal untuk setiap santri
@@ -518,7 +518,7 @@ export default function BuatUjianPage() {
                   }
                   setStep(2)
                 }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 px-8 rounded-xl min-h-[48px]"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold h-12 px-8 rounded-xl min-h-[48px]"
               >
                 {isEditMode ? "Lanjut ke Edit Soal" : `Lanjut ke Pembuat Soal (${soalList.length} Soal)`} &rarr;
               </Button>
@@ -536,7 +536,7 @@ export default function BuatUjianPage() {
               <Card key={sIdx} className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
                 <CardHeader className="p-4 sm:p-5 pb-3 bg-slate-50/80 border-b border-slate-100 flex flex-row items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-xl bg-emerald-700 text-white font-black text-sm flex items-center justify-center">
+                    <span className="w-8 h-8 rounded-xl bg-yellow-600 text-white font-black text-sm flex items-center justify-center">
                       {sIdx + 1}
                     </span>
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-700 bg-white px-2.5 py-1 rounded-lg border">
@@ -591,7 +591,7 @@ export default function BuatUjianPage() {
                             key={oIdx}
                             className={`flex items-center gap-2.5 p-2 rounded-xl border transition-colors ${
                               opsi.benar
-                                ? "bg-emerald-50/70 border-emerald-300"
+                                ? "bg-yellow-50/70 border-yellow-300"
                                 : "bg-white border-slate-200"
                             }`}
                           >
@@ -600,7 +600,7 @@ export default function BuatUjianPage() {
                               onClick={() => setKunciJawaban(sIdx, oIdx)}
                               className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
                                 opsi.benar
-                                  ? "bg-emerald-600 text-white shadow-sm"
+                                  ? "bg-yellow-500 text-white shadow-sm"
                                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                               }`}
                               title={opsi.benar ? "Kunci Jawaban Benar" : "Tandai sebagai kunci benar"}
@@ -614,7 +614,7 @@ export default function BuatUjianPage() {
                               className="h-10 border-0 shadow-none focus-visible:ring-0 text-sm bg-transparent"
                             />
                             {opsi.benar && (
-                              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full shrink-0">
+                              <span className="text-[11px] font-bold text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full shrink-0">
                                 Kunci Benar
                               </span>
                             )}
@@ -640,7 +640,7 @@ export default function BuatUjianPage() {
               type="button"
               variant="outline"
               onClick={addPilihanGanda}
-              className="flex-1 h-12 rounded-xl border-dashed border-2 border-emerald-300 text-emerald-800 hover:bg-emerald-50 font-bold min-h-[48px]"
+              className="flex-1 h-12 rounded-xl border-dashed border-2 border-yellow-300 text-yellow-700 hover:bg-yellow-50 font-bold min-h-[48px]"
             >
               <Plus className="h-4 w-4 mr-2" />
               Tambah Soal Pilihan Ganda
@@ -649,7 +649,7 @@ export default function BuatUjianPage() {
               type="button"
               variant="outline"
               onClick={addEsai}
-              className="flex-1 h-12 rounded-xl border-dashed border-2 border-teal-300 text-teal-800 hover:bg-teal-50 font-bold min-h-[48px]"
+              className="flex-1 h-12 rounded-xl border-dashed border-2 border-yellow-300 text-teal-800 hover:bg-teal-50 font-bold min-h-[48px]"
             >
               <Plus className="h-4 w-4 mr-2" />
               Tambah Soal Esai
@@ -657,7 +657,7 @@ export default function BuatUjianPage() {
           </div>
 
           {/* Action Bar */}
-          <div className="p-4 rounded-3xl bg-slate-900 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+          <div className="p-4 rounded-3xl bg-slate-800 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
             <Button
               type="button"
               variant="ghost"
@@ -680,7 +680,7 @@ export default function BuatUjianPage() {
                 type="button"
                 disabled={loading}
                 onClick={() => handleSaveUjian(true)}
-                className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold h-11 px-6 rounded-xl flex-1 sm:flex-initial shadow-md"
+                className="bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-bold h-11 px-6 rounded-xl flex-1 sm:flex-initial shadow-md"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                 {isEditMode ? "Perbarui & Publikasikan" : "Publikasikan Ujian"}

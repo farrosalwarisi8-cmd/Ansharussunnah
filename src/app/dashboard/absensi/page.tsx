@@ -247,7 +247,7 @@ function GuruAbsensiView() {
   if (loadingKelas) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
         <span className="ml-3 text-sm text-slate-500">Memuat daftar kelas...</span>
       </div>
     )
@@ -275,7 +275,7 @@ function GuruAbsensiView() {
               <select
                 value={selectedKelasId}
                 onChange={(e) => setSelectedKelasId(e.target.value)}
-                className="w-full sm:w-56 h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full sm:w-56 h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-yellow-500"
               >
                 {kelasList.map((k) => (
                   <option key={k.kelasId} value={k.kelasId}>
@@ -293,7 +293,7 @@ function GuruAbsensiView() {
                 type="date"
                 value={selectedTanggal}
                 onChange={(e) => setSelectedTanggal(e.target.value)}
-                className="w-full sm:w-48 h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full sm:w-48 h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-yellow-500"
               />
             </div>
           </div>
@@ -303,7 +303,7 @@ function GuruAbsensiView() {
               type="button"
               variant="outline"
               onClick={() => setAllStatus("HADIR")}
-              className="text-xs font-bold text-emerald-700 hover:bg-emerald-50 border-emerald-200 rounded-xl h-11 min-h-[44px] flex-1 sm:flex-initial"
+              className="text-xs font-bold text-yellow-600 hover:bg-yellow-50 border-yellow-200 rounded-xl h-11 min-h-[44px] flex-1 sm:flex-initial"
             >
               <UserCheck className="h-4 w-4 mr-1.5" />
               Set Semua Hadir
@@ -321,7 +321,7 @@ function GuruAbsensiView() {
                 type="button"
                 disabled={saving || loadingSiswa || students.length === 0}
                 onClick={handleSaveBulk}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-11 min-h-[44px] px-6 flex-1 sm:flex-initial shadow-md"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl h-11 min-h-[44px] px-6 flex-1 sm:flex-initial shadow-md"
               >
               {saving ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
@@ -337,7 +337,7 @@ function GuruAbsensiView() {
       {/* Loading Siswa */}
       {loadingSiswa && (
         <div className="flex items-center justify-center p-8">
-          <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+          <Loader2 className="h-6 w-6 animate-spin text-yellow-500" />
           <span className="ml-3 text-sm text-slate-500">Memuat daftar siswa...</span>
         </div>
       )}
@@ -346,9 +346,9 @@ function GuruAbsensiView() {
       {!loadingSiswa && students.length > 0 && (
         <>
           <div className="grid grid-cols-4 gap-2 sm:gap-4">
-            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
-              <span className="text-[11px] font-bold text-emerald-800 uppercase block">Hadir</span>
-              <span className="text-xl sm:text-2xl font-black text-emerald-700">{stats.hadir}</span>
+            <div className="p-3 rounded-2xl bg-yellow-50 border border-yellow-200 text-center">
+              <span className="text-[11px] font-bold text-yellow-700 uppercase block">Hadir</span>
+              <span className="text-xl sm:text-2xl font-black text-yellow-600">{stats.hadir}</span>
             </div>
             <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-center">
               <span className="text-[11px] font-bold text-amber-800 uppercase block">Izin</span>
@@ -368,7 +368,7 @@ function GuruAbsensiView() {
           <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
             <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-base font-bold text-slate-900">
+                <CardTitle className="text-base font-bold text-slate-800">
                   Daftar Santri ({students.length} Orang)
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-500">
@@ -388,7 +388,7 @@ function GuruAbsensiView() {
                       {idx + 1}
                     </span>
                     <div>
-                      <div className="font-bold text-sm text-slate-900 leading-tight">
+                      <div className="font-bold text-sm text-slate-800 leading-tight">
                         {student.nama}
                       </div>
                       {student.nisn && (
@@ -403,7 +403,7 @@ function GuruAbsensiView() {
                   <div className="grid grid-cols-4 gap-1.5 sm:flex sm:items-center sm:gap-2 shrink-0">
                     {(
                       [
-                        { key: "HADIR" as const, label: "Hadir", color: "bg-emerald-600 text-white border-emerald-600 font-bold" },
+                        { key: "HADIR" as const, label: "Hadir", color: "bg-yellow-500 text-white border-yellow-500 font-bold" },
                         { key: "IZIN" as const, label: "Izin", color: "bg-amber-500 text-white border-amber-500 font-bold" },
                         { key: "SAKIT" as const, label: "Sakit", color: "bg-sky-600 text-white border-sky-600 font-bold" },
                         { key: "ALPHA" as const, label: "Alpa", color: "bg-rose-600 text-white border-rose-600 font-bold" },
@@ -449,7 +449,7 @@ function GuruAbsensiView() {
                           toast({ variant: "destructive", title: "Gagal", description: "Gagal menyimpan absensi." })
                         }
                       }}
-                      className="min-h-[44px] min-w-[44px] px-2 text-[10px] font-bold rounded-lg bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                      className="min-h-[44px] min-w-[44px] px-2 text-[10px] font-bold rounded-lg bg-yellow-50 text-yellow-600 border-yellow-200 hover:bg-yellow-100"
                     >
                       Simpan
                     </Button>
@@ -463,7 +463,7 @@ function GuruAbsensiView() {
           {showRekap && (
             <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
               <CardHeader className="p-5 pb-3 border-b border-slate-100">
-                <CardTitle className="text-base font-bold text-slate-900">
+                <CardTitle className="text-base font-bold text-slate-800">
                   Rekap Kehadiran Kelas
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-500">
@@ -488,14 +488,14 @@ function GuruAbsensiView() {
                       <tbody className="divide-y divide-slate-100">
                         {rekapData.map((r) => (
                           <tr key={r.siswaId} className="hover:bg-slate-50/80">
-                            <td className="p-4 pl-6 font-bold text-slate-900">{r.nama}</td>
+                            <td className="p-4 pl-6 font-bold text-slate-800">{r.nama}</td>
                             <td className="p-4 text-center text-slate-600">{r.totalHari}</td>
-                            <td className="p-4 text-center text-emerald-700 font-semibold">{r.hadir}</td>
+                            <td className="p-4 text-center text-yellow-600 font-semibold">{r.hadir}</td>
                             <td className="p-4 text-center text-amber-700 font-semibold">{r.izin}</td>
                             <td className="p-4 text-center text-sky-700 font-semibold">{r.sakit}</td>
                             <td className="p-4 text-center text-rose-700 font-semibold">{r.alpha}</td>
                             <td className="p-4 text-center pr-6">
-                              <span className="font-extrabold text-sm text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                              <span className="font-extrabold text-sm text-yellow-600 bg-yellow-50 px-2.5 py-1 rounded-lg border border-yellow-200">
                                 {r.persentaseKehadiran}
                               </span>
                             </td>
@@ -549,7 +549,7 @@ function SiswaAbsensiView() {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
         <span className="ml-3 text-sm text-slate-500">Memuat riwayat kehadiran...</span>
       </div>
     )
@@ -574,13 +574,13 @@ function SiswaAbsensiView() {
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5 text-center">
             <span className="text-xs text-slate-500 font-semibold uppercase">Persentase Hadir</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1">{persentase}%</div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-1">{persentase}%</div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5 text-center">
             <span className="text-xs text-slate-500 font-semibold uppercase">Total Hadir</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">{riwayatData.ringkasan.HADIR} Hari</div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">{riwayatData.ringkasan.HADIR} Hari</div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border-slate-200/80 bg-white">
@@ -592,7 +592,7 @@ function SiswaAbsensiView() {
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5 text-center">
             <span className="text-xs text-slate-500 font-semibold uppercase">Alpa</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1">{riwayatData.ringkasan.ALPHA} Hari</div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-1">{riwayatData.ringkasan.ALPHA} Hari</div>
           </CardContent>
         </Card>
       </div>
@@ -600,7 +600,7 @@ function SiswaAbsensiView() {
       {/* Riwayat Absensi Table */}
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100">
-          <CardTitle className="text-base font-bold text-slate-900">
+          <CardTitle className="text-base font-bold text-slate-800">
             Log Riwayat Kehadiran Harian
           </CardTitle>
           <CardDescription className="text-xs text-slate-500">
@@ -611,7 +611,7 @@ function SiswaAbsensiView() {
           {riwayatData.riwayat.map((log) => (
             <div key={log.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
               <div className="space-y-1">
-                <div className="font-bold text-slate-900 text-sm">
+                <div className="font-bold text-slate-800 text-sm">
                   {new Date(log.tanggal).toLocaleDateString("id-ID")}
                 </div>
                 {log.periode && (
@@ -659,7 +659,7 @@ function OrangTuaAbsensiView({ selectedChild }: { selectedChild: { id: string; n
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
         <span className="ml-3 text-sm text-slate-500">Memuat riwayat kehadiran...</span>
       </div>
     )
@@ -684,13 +684,13 @@ function OrangTuaAbsensiView({ selectedChild }: { selectedChild: { id: string; n
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5 text-center">
             <span className="text-xs text-slate-500 font-semibold uppercase">Persentase Hadir</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1">{persentase}%</div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-1">{persentase}%</div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5 text-center">
             <span className="text-xs text-slate-500 font-semibold uppercase">Total Hadir</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">{riwayatData.ringkasan.HADIR} Hari</div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">{riwayatData.ringkasan.HADIR} Hari</div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border-slate-200/80 bg-white">
@@ -702,7 +702,7 @@ function OrangTuaAbsensiView({ selectedChild }: { selectedChild: { id: string; n
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5 text-center">
             <span className="text-xs text-slate-500 font-semibold uppercase">Alpa</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1">{riwayatData.ringkasan.ALPHA} Hari</div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-1">{riwayatData.ringkasan.ALPHA} Hari</div>
           </CardContent>
         </Card>
       </div>
@@ -710,7 +710,7 @@ function OrangTuaAbsensiView({ selectedChild }: { selectedChild: { id: string; n
       {/* Riwayat Absensi Table */}
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100">
-          <CardTitle className="text-base font-bold text-slate-900">
+          <CardTitle className="text-base font-bold text-slate-800">
             Log Riwayat Kehadiran: {selectedChild.nama}
           </CardTitle>
           <CardDescription className="text-xs text-slate-500">
@@ -721,7 +721,7 @@ function OrangTuaAbsensiView({ selectedChild }: { selectedChild: { id: string; n
           {riwayatData.riwayat.map((log) => (
             <div key={log.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
               <div className="space-y-1">
-                <div className="font-bold text-slate-900 text-sm">
+                <div className="font-bold text-slate-800 text-sm">
                   {new Date(log.tanggal).toLocaleDateString("id-ID")}
                 </div>
                 {log.periode && (

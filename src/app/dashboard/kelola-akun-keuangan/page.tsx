@@ -277,7 +277,7 @@ export default function KelolaAkunKeuanganPage() {
     return (
       <div className="space-y-6 max-w-6xl mx-auto">
         <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
         </div>
       </div>
     )
@@ -291,7 +291,7 @@ export default function KelolaAkunKeuanganPage() {
         action={
           <Button
             onClick={() => setIsAddOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md min-h-[44px]"
+            className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl shadow-md min-h-[44px]"
           >
             <Plus className="h-4 w-4 mr-1.5" />
             Tambah Admin Keuangan Baru
@@ -303,7 +303,7 @@ export default function KelolaAkunKeuanganPage() {
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-base font-bold text-slate-900">
+            <CardTitle className="text-base font-bold text-slate-800">
               Daftar Admin Keuangan ({adminList.length} Akun)
             </CardTitle>
           </div>
@@ -339,7 +339,7 @@ export default function KelolaAkunKeuanganPage() {
                     {adminList.map((a) => (
                       <tr key={a.id} className="hover:bg-slate-50/80">
                         <td className="p-4 pl-6">
-                          <div className="font-bold text-slate-900">
+                          <div className="font-bold text-slate-800">
                             {a.nama}
                           </div>
                         </td>
@@ -402,7 +402,7 @@ export default function KelolaAkunKeuanganPage() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="font-bold text-slate-900 text-sm">
+                        <div className="font-bold text-slate-800 text-sm">
                           {a.nama}
                         </div>
                         <div className="text-xs text-slate-500 mt-0.5">
@@ -463,7 +463,7 @@ export default function KelolaAkunKeuanganPage() {
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900">
+            <DialogTitle className="text-lg font-bold text-slate-800">
               Tambah Akun Admin Keuangan Baru
             </DialogTitle>
             <p className="text-xs text-slate-500">
@@ -530,7 +530,7 @@ export default function KelolaAkunKeuanganPage() {
               <Button
                 type="submit"
                 disabled={submitting}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
               >
                 {submitting ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
@@ -548,7 +548,7 @@ export default function KelolaAkunKeuanganPage() {
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900">
+            <DialogTitle className="text-lg font-bold text-slate-800">
               Edit Profil Admin Keuangan
             </DialogTitle>
             <p className="text-xs text-slate-500">
@@ -582,7 +582,7 @@ export default function KelolaAkunKeuanganPage() {
               <Button
                 type="submit"
                 disabled={editing}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
               >
                 {editing ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1.5" />

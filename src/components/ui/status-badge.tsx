@@ -11,14 +11,14 @@ const statusBadgeVariants = cva(
     variants: {
       status: {
         // Success (Hijau)
-        HADIR: "bg-emerald-50 text-emerald-700 border border-emerald-200/80",
-        DITERIMA: "bg-emerald-50 text-emerald-700 border border-emerald-200/80",
-        SUDAH_BAYAR: "bg-emerald-50 text-emerald-700 border border-emerald-200/80",
-        DIKONFIRMASI: "bg-emerald-50 text-emerald-700 border border-emerald-200/80",
-        SELESAI: "bg-emerald-50 text-emerald-700 border border-emerald-200/80",
-        TEPAT_WAKTU: "bg-emerald-50 text-emerald-700 border border-emerald-200/80",
-        AKTIF: "bg-emerald-50 text-emerald-700 border border-emerald-200/80",
-        LUNAS: "bg-emerald-50 text-emerald-700 border border-emerald-200/80",
+        HADIR: "bg-yellow-50 text-yellow-600 border border-yellow-200/80",
+        DITERIMA: "bg-yellow-50 text-yellow-600 border border-yellow-200/80",
+        SUDAH_BAYAR: "bg-yellow-50 text-yellow-600 border border-yellow-200/80",
+        DIKONFIRMASI: "bg-yellow-50 text-yellow-600 border border-yellow-200/80",
+        SELESAI: "bg-yellow-50 text-yellow-600 border border-yellow-200/80",
+        TEPAT_WAKTU: "bg-yellow-50 text-yellow-600 border border-yellow-200/80",
+        AKTIF: "bg-yellow-50 text-yellow-600 border border-yellow-200/80",
+        LUNAS: "bg-yellow-50 text-yellow-600 border border-yellow-200/80",
 
         // Warning (Kuning/Amber)
         IZIN: "bg-amber-50 text-amber-700 border border-amber-200/80",

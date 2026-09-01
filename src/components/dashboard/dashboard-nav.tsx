@@ -150,19 +150,19 @@ export function DashboardNav() {
       {/* ========================================================================= */}
       {/* 1. DESKTOP PERMANENT SIDEBAR (>= 1024px)                                  */}
       {/* ========================================================================= */}
-      <aside className="hidden lg:flex flex-col w-64 xl:w-72 bg-slate-900 text-slate-200 fixed inset-y-0 left-0 z-40 border-r border-slate-800 selection:bg-emerald-500 selection:text-white">
+      <aside className="hidden lg:flex flex-col w-64 xl:w-72 bg-slate-800 text-slate-200 fixed inset-y-0 left-0 z-40 border-r border-slate-700 selection:bg-yellow-500 selection:text-white">
         {/* Brand Header */}
-        <div className="h-20 flex items-center px-6 border-b border-slate-800/80 bg-slate-950/40">
+        <div className="h-20 flex items-center px-6 border-b border-slate-700/80 bg-slate-800/40">
           <Link href="/dashboard" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md shadow-emerald-900/30 group-hover:scale-105 transition-transform">
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md shadow-yellow-800/30 group-hover:scale-105 transition-transform">
               <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
             </div>
             <div>
               <div className="font-extrabold text-base tracking-tight text-white flex items-center gap-1.5">
                 <span>Ansharussunnah</span>
-                <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                <Sparkles className="h-3.5 w-3.5 text-amber-400" />
               </div>
-              <span className="text-[11px] font-medium text-emerald-400/90 tracking-wide uppercase">
+              <span className="text-[11px] font-medium text-amber-400/90 tracking-wide uppercase">
                 LMS & Akademik
               </span>
             </div>
@@ -171,9 +171,9 @@ export function DashboardNav() {
 
         {/* User Card Mini */}
         <div className="p-4 mx-3 my-3 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center gap-3">
-          <Avatar className="h-10 w-10 border-2 border-emerald-500/40">
+          <Avatar className="h-10 w-10 border-2 border-yellow-500/40">
             <AvatarImage src={user.avatar || ""} />
-            <AvatarFallback className="bg-emerald-800 text-emerald-100 font-bold text-xs">
+            <AvatarFallback className="bg-yellow-700 text-yellow-100 font-bold text-xs">
               {user.nama
                 ?.split(" ")
                 .map((n) => n[0])
@@ -185,8 +185,8 @@ export function DashboardNav() {
             <div className="font-semibold text-sm text-white truncate">
               {user.nama}
             </div>
-            <div className="text-[11px] font-medium text-emerald-400 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="text-[11px] font-medium text-yellow-400 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
               {roleLabel}
             </div>
           </div>
@@ -206,31 +206,31 @@ export function DashboardNav() {
                 href={item.href}
                 className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all group ${
                   active
-                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/40 font-semibold"
+                    ? "bg-yellow-500 text-white shadow-md shadow-yellow-800/40 font-semibold"
                     : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <Icon
                     className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-110 ${
-                      active ? "text-white" : "text-slate-400 group-hover:text-emerald-400"
+                      active ? "text-white" : "text-slate-400 group-hover:text-yellow-400"
                     }`}
                   />
                   <span>{item.title}</span>
                 </div>
                 {item.adminOnly && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/50">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/80 text-yellow-300 border border-yellow-700/50">
                     Admin
                   </span>
                 )}
-                {active && <ChevronRight className="h-4 w-4 text-emerald-200 ml-auto" />}
+                {active && <ChevronRight className="h-4 w-4 text-yellow-200 ml-auto" />}
               </Link>
             )
           })}
         </div>
 
         {/* Bottom Profile & Logout */}
-        <div className="p-3 border-t border-slate-800 bg-slate-950/50 space-y-1">
+        <div className="p-3 border-t border-slate-700 bg-slate-800/50 space-y-1">
           <Link
             href="/dashboard/profil"
             className="flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
@@ -253,14 +253,14 @@ export function DashboardNav() {
       {/* ========================================================================= */}
       {/* 2. MOBILE TOP BAR (< 1024px)                                              */}
       {/* ========================================================================= */}
-      <header className="lg:hidden sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md text-white border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-sm">
+      <header className="lg:hidden sticky top-0 z-40 bg-slate-800/95 backdrop-blur-md text-white border-b border-slate-700 px-4 py-3 flex items-center justify-between shadow-sm">
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg overflow-hidden shadow-sm">
             <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
           </div>
           <div>
             <div className="font-bold text-sm text-white leading-tight">Ansharussunnah</div>
-            <div className="text-[10px] text-emerald-400 font-medium">{roleLabel}</div>
+            <div className="text-[10px] text-amber-400 font-medium">{roleLabel}</div>
           </div>
         </Link>
 
@@ -271,7 +271,7 @@ export function DashboardNav() {
           >
             <Avatar className="h-7 w-7">
               <AvatarImage src={user.avatar || ""} />
-              <AvatarFallback className="bg-emerald-800 text-white text-[10px] font-bold">
+              <AvatarFallback className="bg-yellow-700 text-white text-[10px] font-bold">
                 {user.nama?.slice(0, 2).toUpperCase() || "U"}
               </AvatarFallback>
             </Avatar>
@@ -302,14 +302,14 @@ export function DashboardNav() {
                 href={item.href}
                 className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all min-h-[48px] min-w-[44px] touch-manipulation ${
                   active
-                    ? "text-emerald-700 font-bold bg-emerald-50/80"
-                    : "text-slate-500 hover:text-slate-900 active:bg-slate-100"
+                    ? "text-yellow-600 font-bold bg-yellow-50/80"
+                    : "text-slate-500 hover:text-slate-800 active:bg-slate-100"
                 }`}
               >
                 <div className="relative">
                   <Icon className={`h-5 w-5 ${active ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
                   {active && (
-                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-emerald-600" />
+                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-yellow-500" />
                   )}
                 </div>
                 <span className="text-[10px] mt-1 tracking-tight truncate max-w-[68px]">
@@ -324,7 +324,7 @@ export function DashboardNav() {
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(true)}
-              className="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-500 hover:text-slate-900 active:bg-slate-100 min-h-[48px] min-w-[44px] touch-manipulation"
+              className="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-500 hover:text-slate-800 active:bg-slate-100 min-h-[48px] min-w-[44px] touch-manipulation"
             >
               <Menu className="h-5 w-5 stroke-[1.75]" />
               <span className="text-[10px] mt-1 tracking-tight">Lainnya</span>
@@ -337,12 +337,12 @@ export function DashboardNav() {
       {/* 4. MOBILE DRAWER SHEET (FULL MENU)                                        */}
       {/* ========================================================================= */}
       <Dialog open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-        <DialogContent className="p-0 overflow-hidden bg-slate-900 text-white border-slate-800 max-w-sm rounded-3xl">
-          <DialogHeader className="p-5 border-b border-slate-800 bg-slate-950 flex flex-row items-center justify-between text-left">
+        <DialogContent className="p-0 overflow-hidden bg-slate-800 text-white border-slate-700 max-w-sm rounded-3xl">
+          <DialogHeader className="p-5 border-b border-slate-700 bg-slate-800 flex flex-row items-center justify-between text-left">
             <div className="flex items-center gap-3">
-              <Avatar className="h-10 w-10 border border-emerald-500/40">
+              <Avatar className="h-10 w-10 border border-yellow-500/40">
                 <AvatarImage src={user.avatar || ""} />
-                <AvatarFallback className="bg-emerald-800 text-white font-bold text-xs">
+                <AvatarFallback className="bg-yellow-700 text-white font-bold text-xs">
                   {user.nama?.slice(0, 2).toUpperCase() || "U"}
                 </AvatarFallback>
               </Avatar>
@@ -350,7 +350,7 @@ export function DashboardNav() {
                 <DialogTitle className="text-base font-bold text-white truncate max-w-[180px]">
                   {user.nama}
                 </DialogTitle>
-                <span className="text-xs text-emerald-400">{roleLabel}</span>
+                <span className="text-xs text-amber-400">{roleLabel}</span>
               </div>
             </div>
           </DialogHeader>
@@ -369,7 +369,7 @@ export function DashboardNav() {
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`flex items-center justify-between p-3 rounded-xl text-sm font-medium transition-colors min-h-[44px] ${
                     active
-                      ? "bg-emerald-600 text-white font-semibold shadow-sm"
+                      ? "bg-yellow-500 text-white font-semibold shadow-sm"
                       : "text-slate-300 hover:bg-slate-800 hover:text-white"
                   }`}
                 >
@@ -378,7 +378,7 @@ export function DashboardNav() {
                     <span>{item.title}</span>
                   </div>
                   {item.adminOnly && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900 text-yellow-300 border border-yellow-700">
                       Admin
                     </span>
                   )}
@@ -387,7 +387,7 @@ export function DashboardNav() {
             })}
           </div>
 
-          <div className="p-4 border-t border-slate-800 bg-slate-950/80 space-y-2">
+          <div className="p-4 border-t border-slate-700 bg-slate-800/80 space-y-2">
             <Link
               href="/dashboard/profil"
               onClick={() => setIsMobileMenuOpen(false)}

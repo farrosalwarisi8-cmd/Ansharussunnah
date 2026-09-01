@@ -33,7 +33,7 @@ export function EmptyState({
         className
       )}
     >
-      <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4 shadow-sm">
+      <div className="w-14 h-14 rounded-2xl bg-yellow-50 text-yellow-500 flex items-center justify-center mb-4 shadow-sm">
         <Icon className="h-7 w-7 stroke-[1.75]" />
       </div>
       <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-1">
@@ -47,13 +47,13 @@ export function EmptyState({
       {actionLabel && (
         <div>
           {actionHref ? (
-            <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
+            <Button asChild className="bg-yellow-500 hover:bg-yellow-600 text-white shadow-sm">
               <a href={actionHref}>{actionLabel}</a>
             </Button>
           ) : (
             <Button
               onClick={onAction}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+              className="bg-yellow-500 hover:bg-yellow-600 text-white shadow-sm"
             >
               {actionLabel}
             </Button>

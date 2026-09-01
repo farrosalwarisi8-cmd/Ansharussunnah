@@ -371,7 +371,7 @@ export default function PeriodeAjaranPage() {
     return (
       <div className="space-y-6 max-w-6xl mx-auto">
         <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
         </div>
       </div>
     )
@@ -385,7 +385,7 @@ export default function PeriodeAjaranPage() {
         action={
           <Button
             onClick={() => setIsAddOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md min-h-[44px]"
+            className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl shadow-md min-h-[44px]"
           >
             <Plus className="h-4 w-4 mr-1.5" />
             Tambah Periode Ajaran
@@ -397,7 +397,7 @@ export default function PeriodeAjaranPage() {
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-base font-bold text-slate-900">
+            <CardTitle className="text-base font-bold text-slate-800">
               Daftar Periode Ajaran ({periodeList.length} Periode)
             </CardTitle>
           </div>
@@ -435,7 +435,7 @@ export default function PeriodeAjaranPage() {
                     {periodeList.map((p) => (
                       <tr key={p.id} className="hover:bg-slate-50/80">
                         <td className="p-4 pl-6">
-                          <div className="font-bold text-slate-900">
+                          <div className="font-bold text-slate-800">
                             {p.nama}
                           </div>
                         </td>
@@ -447,7 +447,7 @@ export default function PeriodeAjaranPage() {
                             className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
                               p.semester === "GANJIL"
                                 ? "bg-indigo-100 text-indigo-800"
-                                : "bg-teal-100 text-teal-800"
+                                : "bg-yellow-100 text-teal-800"
                             }`}
                           >
                             {p.semester === "GANJIL" ? "Ganjil" : "Genap"}
@@ -472,7 +472,7 @@ export default function PeriodeAjaranPage() {
                             className={`rounded-xl text-xs font-semibold ${
                               p.aktif
                                 ? "border-amber-200 text-amber-700 hover:bg-amber-50"
-                                : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                : "border-yellow-200 text-yellow-600 hover:bg-yellow-50"
                             }`}
                           >
                             <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
@@ -513,7 +513,7 @@ export default function PeriodeAjaranPage() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="font-bold text-slate-900 text-sm">
+                        <div className="font-bold text-slate-800 text-sm">
                           {p.nama}
                         </div>
                         <div className="text-xs text-slate-500 mt-0.5">
@@ -545,7 +545,7 @@ export default function PeriodeAjaranPage() {
                         className={`flex-1 rounded-xl text-xs min-h-[40px] ${
                           p.aktif
                             ? "border-amber-200 text-amber-700"
-                            : "border-emerald-200 text-emerald-700"
+                            : "border-yellow-200 text-yellow-600"
                         }`}
                       >
                         {p.aktif ? "Nonaktifkan" : "Aktifkan"}
@@ -582,7 +582,7 @@ export default function PeriodeAjaranPage() {
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900">
+            <DialogTitle className="text-lg font-bold text-slate-800">
               Tambah Periode Ajaran Baru
             </DialogTitle>
             <p className="text-xs text-slate-500">
@@ -630,7 +630,7 @@ export default function PeriodeAjaranPage() {
                   onChange={(e) =>
                     setSemester(e.target.value as "GANJIL" | "GENAP")
                   }
-                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-emerald-500"
+                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-yellow-500"
                 >
                   <option value="GANJIL">Ganjil (1)</option>
                   <option value="GENAP">Genap (2)</option>
@@ -672,7 +672,7 @@ export default function PeriodeAjaranPage() {
                 id="aktifCheck"
                 checked={aktif}
                 onChange={(e) => setAktif(e.target.checked)}
-                className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                className="h-4 w-4 rounded text-yellow-500 focus:ring-yellow-500"
               />
               <label
                 htmlFor="aktifCheck"
@@ -695,7 +695,7 @@ export default function PeriodeAjaranPage() {
               <Button
                 type="submit"
                 disabled={submitting}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
               >
                 {submitting ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
@@ -713,7 +713,7 @@ export default function PeriodeAjaranPage() {
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900">
+            <DialogTitle className="text-lg font-bold text-slate-800">
               Edit Periode Ajaran
             </DialogTitle>
             <p className="text-xs text-slate-500">
@@ -758,7 +758,7 @@ export default function PeriodeAjaranPage() {
                   onChange={(e) =>
                     setEditSemester(e.target.value as "GANJIL" | "GENAP")
                   }
-                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-emerald-500"
+                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-yellow-500"
                 >
                   <option value="GANJIL">Ganjil (1)</option>
                   <option value="GENAP">Genap (2)</option>
@@ -798,7 +798,7 @@ export default function PeriodeAjaranPage() {
                 id="editAktifCheck"
                 checked={editAktif}
                 onChange={(e) => setEditAktif(e.target.checked)}
-                className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                className="h-4 w-4 rounded text-yellow-500 focus:ring-yellow-500"
               />
               <label
                 htmlFor="editAktifCheck"
@@ -820,7 +820,7 @@ export default function PeriodeAjaranPage() {
               <Button
                 type="submit"
                 disabled={editing}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
               >
                 {editing ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1.5" />

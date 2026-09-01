@@ -188,7 +188,7 @@ export default function KerjakanUjianPage() {
     return (
       <div className="space-y-4 max-w-5xl mx-auto pb-12">
         <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
           <span className="ml-3 text-sm text-slate-500">Memuat soal ujian...</span>
         </div>
       </div>
@@ -234,12 +234,12 @@ export default function KerjakanUjianPage() {
   return (
     <div className="space-y-4 max-w-5xl mx-auto pb-12">
       {/* Sticky Exam Top Bar */}
-      <header className="sticky top-0 z-30 bg-slate-900 text-white rounded-2xl p-3.5 sm:p-4 shadow-xl flex items-center justify-between gap-3 backdrop-blur-md">
+      <header className="sticky top-0 z-30 bg-slate-800 text-white rounded-2xl p-3.5 sm:p-4 shadow-xl flex items-center justify-between gap-3 backdrop-blur-md">
         <div>
           <h2 className="font-extrabold text-sm sm:text-base tracking-tight truncate max-w-[200px] sm:max-w-md">
             {ujianData.judul}
           </h2>
-          <span className="text-xs text-emerald-400 font-medium hidden sm:inline">
+          <span className="text-xs text-yellow-400 font-medium hidden sm:inline">
             Soal {currentIdx + 1} dari {questions.length} • Terjawab: {totalAnswered}/{questions.length}
           </span>
         </div>
@@ -250,7 +250,7 @@ export default function KerjakanUjianPage() {
             className={`px-3.5 py-1.5 rounded-xl font-mono font-black text-sm sm:text-base flex items-center gap-1.5 shadow-inner ${
               timeLeft < 300
                 ? "bg-rose-600 text-white animate-pulse"
-                : "bg-emerald-800 text-emerald-100"
+                : "bg-yellow-700 text-yellow-100"
             }`}
           >
             <Clock className="h-4 w-4" />
@@ -260,7 +260,7 @@ export default function KerjakanUjianPage() {
           <Button
             type="button"
             onClick={() => setIsSubmitDialogOpen(true)}
-            className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs sm:text-sm h-10 px-4 min-h-[40px]"
+            className="bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-bold rounded-xl text-xs sm:text-sm h-10 px-4 min-h-[40px]"
           >
             <Send className="h-4 w-4 mr-1.5 hidden sm:inline" />
             Selesai
@@ -274,7 +274,7 @@ export default function KerjakanUjianPage() {
         <div className="lg:col-span-3 space-y-4">
           <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 sm:p-7 space-y-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg">
+              <span className="text-xs font-bold uppercase tracking-wider text-yellow-600 bg-yellow-50 px-3 py-1 rounded-lg">
                 Soal Nomor {currentQ.nomor}
               </span>
               <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
@@ -297,7 +297,7 @@ export default function KerjakanUjianPage() {
                     onClick={() => handlePilihJawaban(currentQ.id, opt.id, "PILIHAN_GANDA")}
                     className={`w-full text-left p-3.5 sm:p-4 rounded-xl border-2 transition-all text-sm font-medium ${
                       jawaban[currentQ.id]?.opsiDipilihId === opt.id
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                        ? "border-yellow-500 bg-yellow-50 text-yellow-700"
                         : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300"
                     }`}
                   >
@@ -331,7 +331,7 @@ export default function KerjakanUjianPage() {
               type="button"
               onClick={() => setCurrentIdx((prev) => Math.min(questions.length - 1, prev + 1))}
               disabled={currentIdx === questions.length - 1}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl"
+              className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl"
             >
               Selanjutnya
               <ArrowRight className="h-4 w-4 ml-1.5" />
@@ -351,9 +351,9 @@ export default function KerjakanUjianPage() {
                   onClick={() => setCurrentIdx(idx)}
                   className={`w-full aspect-square rounded-xl text-xs font-bold transition-all ${
                     idx === currentIdx
-                      ? "bg-emerald-600 text-white shadow-md"
+                      ? "bg-yellow-500 text-white shadow-md"
                       : jawaban[q.id]?.opsiDipilihId || jawaban[q.id]?.jawabanEsai
-                      ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
+                      ? "bg-yellow-100 text-yellow-600 border border-yellow-300"
                       : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                   }`}
                 >

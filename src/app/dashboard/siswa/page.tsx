@@ -198,7 +198,7 @@ function NikInput({
           className={error ? "border-destructive focus-visible:ring-destructive" : ""}
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
-          <span className={digitCount === 16 ? "text-emerald-600 font-medium" : ""}>
+          <span className={digitCount === 16 ? "text-yellow-500 font-medium" : ""}>
             {digitCount}
           </span>
           /16
@@ -265,7 +265,7 @@ function CopyButton({ text }: { text: string }) {
     >
       {copied ? (
         <>
-          <Check className="h-3.5 w-3.5 text-emerald-600" />
+          <Check className="h-3.5 w-3.5 text-yellow-500" />
           Tersalin!
         </>
       ) : (
@@ -522,7 +522,7 @@ export default function KelolaSiswaPage() {
         action={
           <Button
             onClick={openAddModal}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md min-h-[44px]"
+            className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl shadow-md min-h-[44px]"
           >
             <Plus className="h-4 w-4 mr-1.5" />
             Tambah Siswa Lama
@@ -562,7 +562,7 @@ export default function KelolaSiswaPage() {
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-base font-bold text-slate-900">
+            <CardTitle className="text-base font-bold text-slate-800">
               Daftar Siswa ({filteredSiswa.length} Siswa)
             </CardTitle>
           </div>
@@ -571,7 +571,7 @@ export default function KelolaSiswaPage() {
         <CardContent className="p-0">
           {loadingData ? (
             <div className="flex items-center justify-center p-12">
-              <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+              <Loader2 className="h-6 w-6 animate-spin text-yellow-500" />
               <span className="ml-2 text-sm text-slate-500">Memuat data...</span>
             </div>
           ) : filteredSiswa.length === 0 ? (
@@ -579,7 +579,7 @@ export default function KelolaSiswaPage() {
               <div className="w-14 h-14 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-4">
                 <UserCheck className="h-7 w-7" />
               </div>
-              <h3 className="text-base font-semibold text-slate-900 mb-1">
+              <h3 className="text-base font-semibold text-slate-800 mb-1">
                 Belum Ada Siswa
               </h3>
               <p className="text-sm text-slate-500 max-w-sm">
@@ -605,7 +605,7 @@ export default function KelolaSiswaPage() {
                     {filteredSiswa.map((s) => (
                       <tr key={s.id} className="hover:bg-slate-50/80">
                         <td className="p-4 pl-6">
-                          <div className="font-bold text-slate-900">{s.nama}</div>
+                          <div className="font-bold text-slate-800">{s.nama}</div>
                           <div className="text-xs text-slate-400 font-mono">
                             {s.nisn && `NISN: ${s.nisn}`}
                             {s.nisn && s.nis && " | "}
@@ -685,7 +685,7 @@ export default function KelolaSiswaPage() {
                   <div key={s.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="font-bold text-slate-900 text-sm">{s.nama}</div>
+                        <div className="font-bold text-slate-800 text-sm">{s.nama}</div>
                         <div className="text-xs text-slate-500">
                           {s.kelasNama
                             ? `${s.jenjangNama ? s.jenjangNama + " " : ""}${s.kelasNama}`
@@ -754,7 +754,7 @@ export default function KelolaSiswaPage() {
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900">
+            <DialogTitle className="text-lg font-bold text-slate-800">
               Tambah Siswa Lama
             </DialogTitle>
             <p className="text-xs text-slate-500">
@@ -768,13 +768,13 @@ export default function KelolaSiswaPage() {
               <span className="text-sm font-medium text-slate-600">
                 Step {currentStep} dari {STEPS.length}
               </span>
-              <span className="text-sm text-emerald-600 font-medium">
+              <span className="text-sm text-yellow-500 font-medium">
                 {Math.round((currentStep / STEPS.length) * 100)}%
               </span>
             </div>
             <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden mb-3">
               <div
-                className="h-full bg-emerald-600 rounded-full transition-all duration-500 ease-in-out"
+                className="h-full bg-yellow-500 rounded-full transition-all duration-500 ease-in-out"
                 style={{ width: `${(currentStep / STEPS.length) * 100}%` }}
               />
             </div>
@@ -795,9 +795,9 @@ export default function KelolaSiswaPage() {
                     className={
                       "flex flex-col items-center gap-1 transition-colors duration-200 " +
                       (isActive
-                        ? "text-emerald-600"
+                        ? "text-yellow-500"
                         : isCompleted
-                          ? "text-emerald-600/70 cursor-pointer hover:text-emerald-600"
+                          ? "text-yellow-500/70 cursor-pointer hover:text-yellow-500"
                           : "text-slate-400")
                     }
                     disabled={step.id > currentStep}
@@ -806,9 +806,9 @@ export default function KelolaSiswaPage() {
                       className={
                         "rounded-full p-1.5 transition-all duration-200 " +
                         (isActive
-                          ? "bg-emerald-600 text-white"
+                          ? "bg-yellow-500 text-white"
                           : isCompleted
-                            ? "bg-emerald-200 text-emerald-700"
+                            ? "bg-yellow-200 text-yellow-600"
                             : "bg-slate-200 text-slate-400")
                       }
                     >
@@ -1205,8 +1205,8 @@ export default function KelolaSiswaPage() {
                         "flex items-center justify-center rounded-xl border-2 py-3 px-4 text-sm font-medium " +
                         "transition-all duration-200 cursor-pointer " +
                         (kewarganegaraan !== "WNA"
-                          ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-emerald-400")
+                          ? "border-yellow-500 bg-yellow-500 text-white shadow-sm"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-yellow-400")
                       }
                     >
                       🇮🇩 WNI
@@ -1218,8 +1218,8 @@ export default function KelolaSiswaPage() {
                         "flex items-center justify-center rounded-xl border-2 py-3 px-4 text-sm font-medium " +
                         "transition-all duration-200 cursor-pointer " +
                         (kewarganegaraan === "WNA"
-                          ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-emerald-400")
+                          ? "border-yellow-500 bg-yellow-500 text-white shadow-sm"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-yellow-400")
                       }
                     >
                       🌍 WNA
@@ -1359,7 +1359,7 @@ export default function KelolaSiswaPage() {
                   <Button
                     type="button"
                     onClick={goToNextStep}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                    className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl"
                   >
                     Selanjutnya
                     <ChevronRight className="ml-2 h-4 w-4" />
@@ -1368,7 +1368,7 @@ export default function KelolaSiswaPage() {
                   <Button
                     type="submit"
                     disabled={isSubmitting}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                    className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl"
                   >
                     {isSubmitting ? (
                       <>
@@ -1395,8 +1395,8 @@ export default function KelolaSiswaPage() {
       <Dialog open={!!passwordDisplay} onOpenChange={() => setPasswordDisplay(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <Key className="h-5 w-5 text-emerald-600" />
+            <DialogTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <Key className="h-5 w-5 text-yellow-500" />
               Password Berhasil Dibuat!
             </DialogTitle>
           </DialogHeader>
@@ -1418,7 +1418,7 @@ export default function KelolaSiswaPage() {
                   Password Siswa — {passwordDisplay.namaSiswa}
                 </div>
                 <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
-                  <code className="flex-1 text-sm font-mono font-bold text-slate-900 break-all">
+                  <code className="flex-1 text-sm font-mono font-bold text-slate-800 break-all">
                     {passwordDisplay.passwordSiswa}
                   </code>
                   <CopyButton text={passwordDisplay.passwordSiswa} />
@@ -1432,7 +1432,7 @@ export default function KelolaSiswaPage() {
                   Password Orang Tua — {passwordDisplay.namaOrangTua}
                 </div>
                 <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
-                  <code className="flex-1 text-sm font-mono font-bold text-slate-900 break-all">
+                  <code className="flex-1 text-sm font-mono font-bold text-slate-800 break-all">
                     {passwordDisplay.passwordOrangTua}
                   </code>
                   <CopyButton text={passwordDisplay.passwordOrangTua} />
@@ -1444,7 +1444,7 @@ export default function KelolaSiswaPage() {
           <DialogFooter>
             <Button
               onClick={() => setPasswordDisplay(null)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl w-full"
+              className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl w-full"
             >
               <Check className="mr-2 h-4 w-4" />
               Saya sudah mencatat, Tutup

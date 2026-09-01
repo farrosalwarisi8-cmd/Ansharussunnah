@@ -19,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" className="scroll-smooth">
-      <body className={`${inter.className} min-h-screen bg-slate-50/50 antialiased text-slate-900 selection:bg-emerald-100 selection:text-emerald-900`}>
+      <body className={`${inter.className} min-h-screen bg-slate-50/50 antialiased text-slate-800 selection:bg-yellow-100 selection:text-yellow-800`}>
         {children}
         <Toaster />
       </body>

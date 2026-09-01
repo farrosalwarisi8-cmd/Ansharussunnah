@@ -80,20 +80,20 @@ export default function ProfilPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* User Identity Card */}
         <Card className="md:col-span-1 rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 text-center space-y-4">
-          <Avatar className="h-24 w-24 mx-auto border-4 border-emerald-100 shadow-md">
+          <Avatar className="h-24 w-24 mx-auto border-4 border-yellow-100 shadow-md">
             <AvatarImage src={user.avatar || ""} />
-            <AvatarFallback className="bg-emerald-800 text-white font-extrabold text-2xl">
+            <AvatarFallback className="bg-yellow-700 text-white font-extrabold text-2xl">
               {user.nama?.slice(0, 2).toUpperCase() || "U"}
             </AvatarFallback>
           </Avatar>
 
           <div>
-            <h2 className="font-extrabold text-lg text-slate-900 leading-snug">{user.nama}</h2>
+            <h2 className="font-extrabold text-lg text-slate-800 leading-snug">{user.nama}</h2>
             <p className="text-xs text-slate-500 font-mono mt-0.5">{user.email}</p>
           </div>
 
           <div className="pt-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold text-xs">
               <ShieldCheck className="h-3.5 w-3.5" />
               Role: {user.role}
             </span>
@@ -116,8 +116,8 @@ export default function ProfilPage() {
         {/* Change Password Form Card */}
         <Card className="md:col-span-2 rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 sm:p-8 space-y-6">
           <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Lock className="h-4 w-4 text-emerald-600" />
+            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <Lock className="h-4 w-4 text-yellow-500" />
               <span>Ganti Kata Sandi (Password)</span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -172,7 +172,7 @@ export default function ProfilPage() {
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 rounded-xl min-h-[44px]"
+                className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold h-11 rounded-xl min-h-[44px]"
               >
                 {loading ? (
                   <>

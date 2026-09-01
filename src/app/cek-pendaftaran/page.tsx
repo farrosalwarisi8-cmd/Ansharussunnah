@@ -59,11 +59,11 @@ export default function CekPendaftaranPage() {
             <div className="w-9 h-9 rounded-xl overflow-hidden">
               <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
             </div>
-            <span className="font-extrabold text-base text-slate-900">Ansharussunnah</span>
+            <span className="font-extrabold text-base text-slate-800">Ansharussunnah</span>
           </Link>
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-500 hover:text-emerald-700 transition-colors min-h-[44px]"
+            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-500 hover:text-yellow-600 transition-colors min-h-[44px]"
           >
             <ArrowLeft className="h-4 w-4" />
             <span>Kembali</span>
@@ -75,10 +75,10 @@ export default function CekPendaftaranPage() {
       <main className="container mx-auto px-4 py-8 sm:py-16 max-w-xl flex-1 flex flex-col justify-center">
         <Card className="border-slate-200/80 bg-white shadow-xl rounded-3xl overflow-hidden">
           <CardHeader className="text-center pb-4 pt-8">
-            <div className="mx-auto w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+            <div className="mx-auto w-12 h-12 rounded-2xl bg-yellow-50 text-yellow-500 flex items-center justify-center mb-3">
               <Search className="h-6 w-6" />
             </div>
-            <CardTitle className="text-xl sm:text-2xl font-extrabold text-slate-900">
+            <CardTitle className="text-xl sm:text-2xl font-extrabold text-slate-800">
               Cek Status Pendaftaran
             </CardTitle>
             <CardDescription className="text-slate-500 text-xs sm:text-sm max-w-md mx-auto">
@@ -98,7 +98,7 @@ export default function CekPendaftaranPage() {
               <Button
                 type="submit"
                 disabled={loading || !nomor.trim()}
-                className="h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shrink-0 min-h-[48px]"
+                className="h-12 px-6 rounded-xl bg-yellow-500 hover:bg-yellow-600 text-white font-bold shrink-0 min-h-[48px]"
               >
                 {loading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -128,14 +128,14 @@ export default function CekPendaftaranPage() {
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     No. Registrasi
                   </span>
-                  <span className="font-mono font-bold text-emerald-800 text-sm">
+                  <span className="font-mono font-bold text-yellow-700 text-sm">
                     {result.data.nomorPendaftaran}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
                   <span className="text-xs font-semibold text-slate-500">Nama Calon Santri</span>
-                  <span className="font-bold text-slate-900 text-sm">{result.data.namaLengkap}</span>
+                  <span className="font-bold text-slate-800 text-sm">{result.data.namaLengkap}</span>
                 </div>
 
                 <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
@@ -156,7 +156,7 @@ export default function CekPendaftaranPage() {
                 )}
 
                 {(result.data.status === "MENUNGGU_PEMBAYARAN" || result.data.status === "DITOLAK") && (
-                  <Button asChild className="w-full h-11 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm mt-2">
+                  <Button asChild className="w-full h-11 rounded-xl bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-sm mt-2">
                     <Link href={`/pendaftaran/${result.data.nomorPendaftaran}/upload-bukti`}>
                       <FileText className="h-4 w-4 mr-2" />
                       Unggah Bukti Pembayaran

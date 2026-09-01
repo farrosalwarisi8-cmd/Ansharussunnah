@@ -257,7 +257,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
           isTeacher ? (
             <Button
               onClick={() => setIsAddModalOpen(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md min-h-[44px]"
+              className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl shadow-md min-h-[44px]"
             >
               <Plus className="h-4 w-4 mr-1.5" />
               Unggah Materi Baru
@@ -279,7 +279,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
               <select
                 value={kelasId}
                 onChange={(e) => setKelasId(e.target.value)}
-                className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-yellow-500"
               >
                 {kelasList.map((k) => (
                   <option key={k.kelasId} value={k.kelasId}>
@@ -295,7 +295,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
       {/* Loading State */}
       {fetchingMateri && (
         <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
           <span className="ml-3 text-sm text-slate-500">Memuat materi pembelajaran...</span>
         </div>
       )}
@@ -317,7 +317,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
                 onClick={() => setSelectedMapelFilter(m)}
                 className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all min-h-[40px] touch-manipulation ${
                   selectedMapelFilter === m
-                    ? "bg-emerald-700 text-white shadow-sm"
+                    ? "bg-yellow-600 text-white shadow-sm"
                     : "bg-white border border-slate-200/80 text-slate-600 hover:bg-slate-50"
                 }`}
               >
@@ -338,11 +338,11 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
                 <Card key={mat.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
                   <CardHeader className="p-5 pb-3">
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
+                      <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2.5 py-1 rounded-lg border border-yellow-100">
                         {mat.mataPelajaran}
                       </span>
                     </div>
-                    <CardTitle className="text-base font-bold text-slate-900 leading-snug">
+                    <CardTitle className="text-base font-bold text-slate-800 leading-snug">
                       {mat.judul}
                     </CardTitle>
                     {mat.deskripsi && (
@@ -369,9 +369,9 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
                     </div>
 
                     {(mat.signedUrl || mat.urlFile || mat.urlLink) && (
-                      <Button asChild className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl min-h-[44px] text-xs">
+                      <Button asChild className="w-full bg-slate-800 hover:bg-slate-800 text-white font-bold rounded-xl min-h-[44px] text-xs">
                         <a href={mat.signedUrl || mat.urlFile || mat.urlLink || "#"} target="_blank" rel="noreferrer">
-                          <ExternalLink className="h-3.5 w-3.5 mr-2 text-emerald-400" />
+                          <ExternalLink className="h-3.5 w-3.5 mr-2 text-yellow-400" />
                           Buka &amp; Unduh Materi
                         </a>
                       </Button>
@@ -421,7 +421,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900">
+            <DialogTitle className="text-lg font-bold text-slate-800">
               Unggah Materi Pembelajaran Baru
             </DialogTitle>
             <p className="text-xs text-slate-500">
@@ -451,7 +451,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
                 <select
                   value={mapel}
                   onChange={(e) => setMapel(e.target.value)}
-                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-emerald-500"
+                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-yellow-500"
                 >
                   <option value="Fiqih Ibadah">Fiqih Ibadah</option>
                   <option value="Bahasa Arab">Bahasa Arab</option>
@@ -468,7 +468,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
                 <select
                   value={kelasId}
                   onChange={(e) => setKelasId(e.target.value)}
-                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-emerald-500"
+                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-yellow-500"
                 >
                   {kelasList.length > 0 ? (
                     kelasList.map((k) => (
@@ -520,7 +520,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
               <Button
                 type="submit"
                 disabled={loading}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
                 Unggah Materi
@@ -534,7 +534,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
       <Dialog open={isEditModalOpen} onOpenChange={(open) => { setIsEditModalOpen(open); if (!open) setEditMateri(null) }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900">
+            <DialogTitle className="text-lg font-bold text-slate-800">
               Edit Materi Pembelajaran
             </DialogTitle>
           </DialogHeader>
@@ -554,7 +554,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
               <select
                 value={editMapel}
                 onChange={(e) => setEditMapel(e.target.value)}
-                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-emerald-500"
+                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-yellow-500"
               >
                 <option value="Fiqih Ibadah">Fiqih Ibadah</option>
                 <option value="Bahasa Arab">Bahasa Arab</option>
@@ -586,7 +586,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
               <Button type="button" variant="outline" onClick={() => { setIsEditModalOpen(false); setEditMateri(null) }} className="rounded-xl min-h-[40px]">
                 Batal
               </Button>
-              <Button type="submit" disabled={editing} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]">
+              <Button type="submit" disabled={editing} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]">
                 {editing ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Pencil className="h-4 w-4 mr-1.5" />}
                 Simpan Perubahan
               </Button>

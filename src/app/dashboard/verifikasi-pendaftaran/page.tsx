@@ -285,7 +285,7 @@ export default function VerifikasiPendaftaranPage() {
       {/* Pendaftar List / Table */}
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100">
-          <CardTitle className="text-base font-bold text-slate-900">
+          <CardTitle className="text-base font-bold text-slate-800">
             Antrean Calon Santri
           </CardTitle>
         </CardHeader>
@@ -322,12 +322,12 @@ export default function VerifikasiPendaftaranPage() {
                   <tbody className="divide-y divide-slate-100">
                     {pendaftaranList.map((p) => (
                       <tr key={p.id} className="hover:bg-slate-50/80">
-                        <td className="p-4 pl-6 font-mono font-bold text-emerald-800 text-xs">
+                        <td className="p-4 pl-6 font-mono font-bold text-yellow-700 text-xs">
                           {p.nomorPendaftaran}
                           <div className="text-[10px] text-slate-400 font-sans font-normal">{formatDate(p.createdAt)}</div>
                         </td>
                         <td className="p-4">
-                          <div className="font-bold text-slate-900">{p.namaLengkap}</div>
+                          <div className="font-bold text-slate-800">{p.namaLengkap}</div>
                           <div className="text-xs text-slate-400 font-mono">NISN: {p.nisn || "-"}</div>
                         </td>
                         <td className="p-4 text-xs font-semibold text-slate-700">
@@ -345,7 +345,7 @@ export default function VerifikasiPendaftaranPage() {
                           <Button
                             size="sm"
                             onClick={() => handleOpenDetail(p.id)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl min-h-[36px] text-xs font-bold"
+                            className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl min-h-[36px] text-xs font-bold"
                           >
                             Periksa Berkas
                           </Button>
@@ -361,10 +361,10 @@ export default function VerifikasiPendaftaranPage() {
                   <div key={p.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <span className="font-mono text-xs font-bold text-emerald-800 block">
+                        <span className="font-mono text-xs font-bold text-yellow-700 block">
                           {p.nomorPendaftaran}
                         </span>
-                        <div className="font-bold text-slate-900 text-sm mt-0.5">{p.namaLengkap}</div>
+                        <div className="font-bold text-slate-800 text-sm mt-0.5">{p.namaLengkap}</div>
                       </div>
                       <StatusBadge status={p.status} size="sm" />
                     </div>
@@ -375,7 +375,7 @@ export default function VerifikasiPendaftaranPage() {
                     <Button
                       size="sm"
                       onClick={() => handleOpenDetail(p.id)}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl min-h-[40px] text-xs font-bold"
+                      className="w-full bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl min-h-[40px] text-xs font-bold"
                     >
                       Periksa Berkas
                     </Button>
@@ -425,7 +425,7 @@ export default function VerifikasiPendaftaranPage() {
           {!loadingDetail && pendaftar && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-lg font-bold text-slate-900">
+                <DialogTitle className="text-lg font-bold text-slate-800">
                   Detail Berkas: {pendaftar.namaLengkap}
                 </DialogTitle>
                 <p className="text-xs text-slate-500 font-mono">
@@ -454,7 +454,7 @@ export default function VerifikasiPendaftaranPage() {
 
                 {/* ---- DATA KONTAK ORANG TUA ---- */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                  <h4 className="font-bold text-slate-900 uppercase text-xs">Data Kontak Orang Tua</h4>
+                  <h4 className="font-bold text-slate-800 uppercase text-xs">Data Kontak Orang Tua</h4>
                   <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
                     <DetailRow label="Nama" value={pendaftar.namaOrangTua} />
                     <DetailRow label="No. HP / WA" value={pendaftar.noHpOrangTua} />
@@ -528,7 +528,7 @@ export default function VerifikasiPendaftaranPage() {
 
                 {/* ---- DOKUMEN TERLAMPIR ---- */}
                 <div className="space-y-2">
-                  <h4 className="font-bold text-slate-900 uppercase text-xs">Dokumen Terlampir:</h4>
+                  <h4 className="font-bold text-slate-800 uppercase text-xs">Dokumen Terlampir:</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {signedUrls?.buktiTransfer?.map((bt) => (
                       <a
@@ -536,7 +536,7 @@ export default function VerifikasiPendaftaranPage() {
                         href={bt.url || "#"}
                         target="_blank"
                         rel="noreferrer"
-                        className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 font-bold flex items-center justify-between hover:bg-emerald-100 transition-colors"
+                        className="p-3 rounded-xl bg-yellow-50 border border-yellow-200 text-yellow-800 font-bold flex items-center justify-between hover:bg-yellow-100 transition-colors"
                       >
                         <span>Foto Bukti Transfer</span>
                         <ExternalLink className="h-4 w-4" />
@@ -584,7 +584,7 @@ export default function VerifikasiPendaftaranPage() {
                   <XCircle className="h-4 w-4 mr-1.5" />
                   Tolak Pendaftaran
                 </Button>
-                <Button type="button" onClick={() => setIsApproveConfirmOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[44px] text-xs px-6">
+                <Button type="button" onClick={() => setIsApproveConfirmOpen(true)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px] text-xs px-6">
                   <CheckCircle2 className="h-4 w-4 mr-1.5" />
                   Terima Santri &amp; Terbitkan Akun
                 </Button>

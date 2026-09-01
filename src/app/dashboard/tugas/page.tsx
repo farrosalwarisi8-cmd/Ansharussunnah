@@ -75,7 +75,7 @@ export default function TugasPage() {
         }
         action={
           isTeacher ? (
-            <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md min-h-[44px]">
+            <Button asChild className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl shadow-md min-h-[44px]">
               <Link href="/dashboard/tugas/buat">
                 <Plus className="h-4 w-4 mr-1.5" />
                 Buat Tugas Baru
@@ -219,7 +219,7 @@ function GuruTugasView() {
   if (loadingKelas) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
         <span className="ml-3 text-sm text-slate-500">Memuat daftar kelas...</span>
       </div>
     )
@@ -246,7 +246,7 @@ function GuruTugasView() {
             <select
               value={selectedKelasId}
               onChange={(e) => setSelectedKelasId(e.target.value)}
-              className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+              className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-yellow-500"
             >
               {kelasList.map((k) => (
                 <option key={k.kelasId} value={k.kelasId}>
@@ -261,7 +261,7 @@ function GuruTugasView() {
       {/* Loading Tugas */}
       {loadingTugas && (
         <div className="flex items-center justify-center p-8">
-          <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+          <Loader2 className="h-6 w-6 animate-spin text-yellow-500" />
           <span className="ml-3 text-sm text-slate-500">Memuat daftar tugas...</span>
         </div>
       )}
@@ -280,7 +280,7 @@ function GuruTugasView() {
             <Card key={item.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
               <CardHeader className="p-5 pb-3">
                 <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
+                  <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2.5 py-1 rounded-lg border border-yellow-100">
                     {item.mataPelajaran}
                   </span>
                   {item.hasLampiran && (
@@ -289,7 +289,7 @@ function GuruTugasView() {
                     </span>
                   )}
                 </div>
-                <CardTitle className="text-base font-bold text-slate-900 leading-snug">
+                <CardTitle className="text-base font-bold text-slate-800 leading-snug">
                   {item.judul}
                 </CardTitle>
               </CardHeader>
@@ -308,7 +308,7 @@ function GuruTugasView() {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button asChild className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl min-h-[44px]">
+                  <Button asChild className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-xl min-h-[44px]">
                     <Link href={`/dashboard/tugas/${item.id}`}>
                       <FileText className="h-4 w-4 mr-2" />
                       Periksa &amp; Beri Nilai
@@ -345,7 +345,7 @@ function GuruTugasView() {
                 <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) setEditTugas(null) }}>
                   <DialogContent className="max-w-lg">
                     <DialogHeader>
-                      <DialogTitle className="text-lg font-bold text-slate-900">Edit Tugas</DialogTitle>
+                      <DialogTitle className="text-lg font-bold text-slate-800">Edit Tugas</DialogTitle>
                       <p className="text-xs text-slate-500">Perbarui data tugas {editTugas?.judul}</p>
                     </DialogHeader>
                     <form onSubmit={handleEditTugas} className="space-y-4 py-2">
@@ -378,7 +378,7 @@ function GuruTugasView() {
                         <Button type="button" variant="outline" onClick={() => { setIsEditOpen(false); setEditTugas(null) }} className="rounded-xl min-h-[40px]">
                           Batal
                         </Button>
-                        <Button type="submit" disabled={editing} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]">
+                        <Button type="submit" disabled={editing} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]">
                           {editing ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Pencil className="h-4 w-4 mr-1.5" />}
                           Simpan
                         </Button>
@@ -442,7 +442,7 @@ function SiswaTugasView() {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
         <span className="ml-3 text-sm text-slate-500">Memuat daftar tugas...</span>
       </div>
     )
@@ -477,7 +477,7 @@ function SiswaTugasView() {
             pendingTugas.map((tugas) => (
               <Card key={tugas.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 sm:p-6 space-y-4">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full">
+                  <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-3 py-1 rounded-full">
                     {tugas.mataPelajaran}
                   </span>
                   <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200 flex items-center gap-1">
@@ -487,7 +487,7 @@ function SiswaTugasView() {
                 </div>
 
                 <div>
-                  <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-800 leading-snug">
                     {tugas.judul}
                   </h3>
                   {tugas.deskripsi && (
@@ -502,7 +502,7 @@ function SiswaTugasView() {
                 )}
 
                 <div className="pt-2 flex justify-end">
-                  <Button asChild className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[44px]">
+                  <Button asChild className="w-full sm:w-auto bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px]">
                     <Link href={`/dashboard/tugas/${tugas.id}`}>
                       <Upload className="h-4 w-4 mr-2" />
                       Kumpulkan Tugas
@@ -526,12 +526,12 @@ function SiswaTugasView() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <span className="text-xs font-semibold text-slate-500">{tugas.mataPelajaran}</span>
-                    <h4 className="font-bold text-slate-900 text-sm sm:text-base">{tugas.judul}</h4>
+                    <h4 className="font-bold text-slate-800 text-sm sm:text-base">{tugas.judul}</h4>
                   </div>
                   {tugas.nilai != null ? (
                     <div className="text-right">
                       <span className="text-xs text-slate-400 block">Nilai</span>
-                      <span className="text-xl font-black text-emerald-700">{Number(tugas.nilai)}</span>
+                      <span className="text-xl font-black text-yellow-600">{Number(tugas.nilai)}</span>
                     </div>
                   ) : (
                     <StatusBadge status={tugas.statusPengumpulan as StatusType} />
@@ -597,7 +597,7 @@ function OrangTuaTugasView({ selectedChild }: { selectedChild: ChildStudent | nu
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
         <span className="ml-3 text-sm text-slate-500">Memuat data tugas...</span>
       </div>
     )
@@ -610,7 +610,7 @@ function OrangTuaTugasView({ selectedChild }: { selectedChild: ChildStudent | nu
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
       <CardHeader className="p-6 pb-3">
-        <CardTitle className="text-base font-bold text-slate-900">
+        <CardTitle className="text-base font-bold text-slate-800">
           Monitoring Tugas Santri: {selectedChild.nama}
         </CardTitle>
         <CardDescription className="text-xs text-slate-500">
@@ -627,13 +627,13 @@ function OrangTuaTugasView({ selectedChild }: { selectedChild: ChildStudent | nu
           tugasList.map((item) => (
             <div key={item.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
               <div>
-                <div className="font-bold text-slate-900 text-sm">{item.judul}</div>
+                <div className="font-bold text-slate-800 text-sm">{item.judul}</div>
                 <div className="text-xs text-slate-500">
                   {item.mataPelajaran} • {new Date(item.deadline).toLocaleDateString("id-ID")}
                 </div>
               </div>
               {item.nilai != null ? (
-                <div className="text-base font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+                <div className="text-base font-black text-yellow-600 bg-yellow-50 px-3 py-1 rounded-xl border border-yellow-200">
                   Nilai: {Number(item.nilai)}
                 </div>
               ) : (

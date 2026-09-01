@@ -67,14 +67,14 @@ export default function TagihanPage() {
         <div className="w-16 h-16 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
           <ShieldX className="h-8 w-8" />
         </div>
-        <h1 className="text-xl font-bold text-slate-900 mb-2">Akses Ditolak</h1>
+        <h1 className="text-xl font-bold text-slate-800 mb-2">Akses Ditolak</h1>
         <p className="text-sm text-slate-500 max-w-md mb-6">
           Halaman ini hanya dapat diakses oleh orang tua/wali santri dan admin keuangan.
           Data tagihan SPP bukan ranah akses siswa.
         </p>
         <Button
           onClick={() => router.push("/dashboard")}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[44px]"
+          className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px]"
         >
           Kembali ke Beranda
         </Button>
@@ -200,17 +200,17 @@ function TagihanContent() {
       {isParent && <ChildSelector />}
 
       {/* Info Rekening Resmi Sekolah */}
-      <Card className="rounded-3xl border-emerald-500/20 bg-gradient-to-r from-emerald-900 to-teal-950 text-white p-6 shadow-xl">
+      <Card className="rounded-3xl border-yellow-500/20 bg-gradient-to-r from-yellow-800 to-teal-950 text-white p-6 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-300">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-yellow-300">
               <Building2 className="h-4 w-4" />
               <span>Rekening Resmi Pesantren Ansharussunnah</span>
             </div>
             <div className="text-xl sm:text-2xl font-black font-mono tracking-wider text-white">
               7700 8899 0011
             </div>
-            <p className="text-xs text-emerald-200/80">
+            <p className="text-xs text-yellow-200/80">
               Bank Syariah Indonesia (BSI) • a.n Yayasan Ansharussunnah
             </p>
           </div>
@@ -218,7 +218,7 @@ function TagihanContent() {
           <Button
             type="button"
             onClick={() => copyToClipboard("770088990011")}
-            className="bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold rounded-xl h-11 px-5 text-xs shrink-0 min-h-[44px]"
+            className="bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold rounded-xl h-11 px-5 text-xs shrink-0 min-h-[44px]"
           >
             <Copy className="h-4 w-4 mr-1.5" />
             Salin No. Rekening
@@ -229,7 +229,7 @@ function TagihanContent() {
       {/* Loading State */}
       {loading && (
         <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
           <span className="ml-3 text-sm text-slate-500">Memuat data tagihan...</span>
         </div>
       )}
@@ -251,7 +251,7 @@ function TagihanContent() {
       {!loading && !error && tagihanList.length > 0 && (
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-slate-100">
-            <CardTitle className="text-base font-bold text-slate-900">
+            <CardTitle className="text-base font-bold text-slate-800">
               Daftar Tagihan SPP Bulanan
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
@@ -267,7 +267,7 @@ function TagihanContent() {
               >
                 <div className="space-y-1">
                   <div className="flex items-center gap-2.5">
-                    <span className="font-extrabold text-slate-900 text-base">
+                    <span className="font-extrabold text-slate-800 text-base">
                       SPP {BULAN_NAMES[tag.bulan] || tag.bulan} {tag.tahun}
                     </span>
                     <StatusBadge status={tag.status as "BELUM_BAYAR" | "TERLAMBAT" | "MENUNGGU_VERIFIKASI" | "DIBAYAR_SEBAGIAN" | "SUDAH_BAYAR" | "DIBATALKAN"} />
@@ -278,7 +278,7 @@ function TagihanContent() {
                     <span>Jatuh Tempo: {new Date(tag.jatuhTempo).toLocaleDateString("id-ID")}</span>
                   </div>
                   {tag.totalTerbayar > 0 && (
-                    <div className="text-xs text-emerald-600">
+                    <div className="text-xs text-yellow-500">
                       Total terbayar: Rp {tag.totalTerbayar.toLocaleString("id-ID")} | Sisa: Rp {tag.sisaTunggakan.toLocaleString("id-ID")}
                     </div>
                   )}
@@ -287,7 +287,7 @@ function TagihanContent() {
                 <div className="flex items-center justify-between sm:justify-end gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200">
                   <div className="text-left sm:text-right">
                     <span className="text-[11px] text-slate-400 block">Nominal Tagihan</span>
-                    <span className="font-black text-lg text-emerald-800">
+                    <span className="font-black text-lg text-yellow-700">
                       Rp {tag.nominal.toLocaleString("id-ID")}
                     </span>
                   </div>
@@ -298,7 +298,7 @@ function TagihanContent() {
                         setSelectedTagihan(tag)
                         setJumlahTransfer(String(tag.nominal))
                       }}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[44px] text-xs px-5 shadow-sm"
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px] text-xs px-5 shadow-sm"
                     >
                       <Upload className="h-4 w-4 mr-1.5" />
                       Bayar &amp; Upload Bukti
@@ -312,7 +312,7 @@ function TagihanContent() {
                   )}
 
                   {(tag.status === "SUDAH_BAYAR" || tag.status === "LUNAS") && (
-                    <span className="text-xs text-emerald-700 bg-emerald-50 px-3 py-2 rounded-xl font-bold border border-emerald-200 flex items-center gap-1">
+                    <span className="text-xs text-yellow-600 bg-yellow-50 px-3 py-2 rounded-xl font-bold border border-yellow-200 flex items-center gap-1">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Lunas
                     </span>
@@ -329,7 +329,7 @@ function TagihanContent() {
         <Dialog open={!!selectedTagihan} onOpenChange={() => setSelectedTagihan(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle className="text-lg font-bold text-slate-900">
+              <DialogTitle className="text-lg font-bold text-slate-800">
                 Konfirmasi Pembayaran: SPP {BULAN_NAMES[selectedTagihan.bulan] || selectedTagihan.bulan} {selectedTagihan.tahun}
               </DialogTitle>
               <p className="text-xs text-slate-500">
@@ -338,9 +338,9 @@ function TagihanContent() {
             </DialogHeader>
 
             <form onSubmit={handleUploadBukti} className="space-y-4 py-2">
-              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex justify-between items-center text-xs font-bold text-emerald-950">
+              <div className="p-3.5 rounded-xl bg-yellow-50 border border-yellow-200 flex justify-between items-center text-xs font-bold text-yellow-900">
                 <span>Total yang Harus Ditransfer:</span>
-                <span className="text-base text-emerald-800">
+                <span className="text-base text-yellow-700">
                   Rp {selectedTagihan.nominal.toLocaleString("id-ID")}
                 </span>
               </div>
@@ -396,7 +396,7 @@ function TagihanContent() {
                 <Button
                   type="submit"
                   disabled={submitting}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]"
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Upload className="h-4 w-4 mr-1.5" />}
                   Kirim Bukti Pembayaran

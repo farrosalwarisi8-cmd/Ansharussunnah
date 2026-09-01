@@ -64,11 +64,11 @@ function GuruDashboardHome() {
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Kelas Diampu
               </span>
-              <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+              <div className="p-2 rounded-xl bg-yellow-50 text-yellow-500">
                 <Users2 className="h-4 w-4" />
               </div>
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">
+            <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-2">
               4 Kelas
             </div>
             <span className="text-xs text-slate-500 mt-1 block">Total 120 Santri</span>
@@ -98,11 +98,11 @@ function GuruDashboardHome() {
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Ujian Aktif
               </span>
-              <div className="p-2 rounded-xl bg-teal-50 text-teal-600">
+              <div className="p-2 rounded-xl bg-teal-50 text-yellow-500">
                 <Award className="h-4 w-4" />
               </div>
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">
+            <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-2">
               2 Ujian
             </div>
             <span className="text-xs text-slate-500 mt-1 block">Pekan UTS Ganjil</span>
@@ -115,32 +115,32 @@ function GuruDashboardHome() {
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Kehadiran Hari Ini
               </span>
-              <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+              <div className="p-2 rounded-xl bg-yellow-50 text-yellow-500">
                 <CalendarCheck2 className="h-4 w-4" />
               </div>
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-2">
+            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-2">
               96.5%
             </div>
-            <span className="text-xs text-emerald-600 mt-1 block font-medium">3 kelas terinput</span>
+            <span className="text-xs text-yellow-500 mt-1 block font-medium">3 kelas terinput</span>
           </CardContent>
         </Card>
       </div>
 
       {/* Quick Action Banner */}
-      <div className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 rounded-3xl p-5 sm:p-6 text-white shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-yellow-800 via-yellow-700 to-teal-900 rounded-3xl p-5 sm:p-6 text-white shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-700/60 text-emerald-200 text-xs font-semibold">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-yellow-600/60 text-yellow-200 text-xs font-semibold">
             <Sparkles className="h-3.5 w-3.5" />
             <span>Aksi Cepat Guru</span>
           </div>
           <h2 className="text-lg sm:text-xl font-bold">Isi Absensi Kelas Hari Ini</h2>
-          <p className="text-xs sm:text-sm text-emerald-200/80 max-w-xl">
+          <p className="text-xs sm:text-sm text-yellow-200/80 max-w-xl">
             Pastikan seluruh kehadiran santri tercatat tepat waktu untuk laporan harian wali santri.
           </p>
         </div>
         <div className="flex flex-wrap gap-2.5 w-full sm:w-auto">
-          <Button asChild className="bg-emerald-400 hover:bg-emerald-300 text-slate-900 font-bold rounded-xl min-h-[44px]">
+          <Button asChild className="bg-yellow-400 hover:bg-yellow-300 text-slate-800 font-bold rounded-xl min-h-[44px]">
             <Link href="/dashboard/absensi">
               <CalendarCheck2 className="h-4 w-4 mr-1.5" />
               Buka Absensi Cepat
@@ -161,14 +161,14 @@ function GuruDashboardHome() {
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base font-bold text-slate-900">
+              <CardTitle className="text-base font-bold text-slate-800">
                 Tugas Memerlukan Penilaian
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
                 Pengumpulan tugas terbaru santri
               </CardDescription>
             </div>
-            <Button asChild variant="ghost" size="sm" className="text-xs text-emerald-700 hover:text-emerald-800">
+            <Button asChild variant="ghost" size="sm" className="text-xs text-yellow-600 hover:text-yellow-700">
               <Link href="/dashboard/tugas">Lihat Semua</Link>
             </Button>
           </CardHeader>
@@ -180,12 +180,12 @@ function GuruDashboardHome() {
               <div key={idx} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                    <span className="text-xs font-semibold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded">
                       {item.mapel}
                     </span>
                     <span className="text-xs text-slate-500">{item.kelas}</span>
                   </div>
-                  <div className="text-sm font-bold text-slate-900">{item.judul}</div>
+                  <div className="text-sm font-bold text-slate-800">{item.judul}</div>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
@@ -201,14 +201,14 @@ function GuruDashboardHome() {
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base font-bold text-slate-900">
+              <CardTitle className="text-base font-bold text-slate-800">
                 Jadwal Ujian Aktif
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
                 Monitoring pelaksanaan evaluasi
               </CardDescription>
             </div>
-            <Button asChild variant="ghost" size="sm" className="text-xs text-emerald-700 hover:text-emerald-800">
+            <Button asChild variant="ghost" size="sm" className="text-xs text-yellow-600 hover:text-yellow-700">
               <Link href="/dashboard/ujian">Kelola Ujian</Link>
             </Button>
           </CardHeader>
@@ -225,7 +225,7 @@ function GuruDashboardHome() {
                     </span>
                     <span className="text-xs text-slate-500">{item.durasi}</span>
                   </div>
-                  <div className="text-sm font-bold text-slate-900">{item.judul}</div>
+                  <div className="text-sm font-bold text-slate-800">{item.judul}</div>
                 </div>
                 <StatusBadge status={item.status as "DRAFT" | "AKTIF" | "SELESAI" | "PUBLISHED"} />
               </div>
@@ -244,20 +244,20 @@ function SiswaDashboardHome({ user }: { user: DashboardUser }) {
   return (
     <div className="space-y-6">
       {/* Top Banner with Student Class & Quick Motivation */}
-      <div className="bg-gradient-to-tr from-emerald-800 to-teal-700 rounded-3xl p-5 sm:p-7 text-white shadow-lg">
+      <div className="bg-gradient-to-tr from-yellow-700 to-teal-700 rounded-3xl p-5 sm:p-7 text-white shadow-lg">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <span className="text-xs uppercase font-bold text-emerald-200 tracking-wider">
+            <span className="text-xs uppercase font-bold text-yellow-200 tracking-wider">
               {user.kelas ? `${user.kelas.jenjang?.nama} - ${user.kelas.nama}` : "Santri Ansharussunnah"}
             </span>
             <h2 className="text-xl sm:text-2xl font-black">
               Tetap Semangat Menuntut Ilmu, {user.nama.split(" ")[0]}!
             </h2>
-            <p className="text-xs sm:text-sm text-emerald-100 max-w-lg leading-relaxed">
+            <p className="text-xs sm:text-sm text-yellow-100 max-w-lg leading-relaxed">
               &ldquo;Barangsiapa menempuh jalan untuk menuntut ilmu, Allah mudahkan jalannya menuju Surga.&rdquo; (HR. Muslim)
             </p>
           </div>
-          <Button asChild className="bg-emerald-400 hover:bg-emerald-300 text-slate-900 font-bold rounded-xl shrink-0 min-h-[44px]">
+          <Button asChild className="bg-yellow-400 hover:bg-yellow-300 text-slate-800 font-bold rounded-xl shrink-0 min-h-[44px]">
             <Link href="/dashboard/ujian">
               <Award className="h-4 w-4 mr-1.5" />
               Kerjakan Ujian
@@ -285,12 +285,12 @@ function SiswaDashboardHome({ user }: { user: DashboardUser }) {
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-500">Ujian Menunggu</span>
-              <Award className="h-4 w-4 text-emerald-500" />
+              <Award className="h-4 w-4 text-yellow-500" />
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">
+            <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-2">
               1 Ujian
             </div>
-            <span className="text-xs text-emerald-600 mt-1 block font-medium">Fiqih Ibadah</span>
+            <span className="text-xs text-yellow-500 mt-1 block font-medium">Fiqih Ibadah</span>
           </CardContent>
         </Card>
 
@@ -298,7 +298,7 @@ function SiswaDashboardHome({ user }: { user: DashboardUser }) {
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-500">Kehadiran Bulan Ini</span>
-              <CalendarCheck2 className="h-4 w-4 text-teal-500" />
+              <CalendarCheck2 className="h-4 w-4 text-yellow-500" />
             </div>
             <div className="text-2xl sm:text-3xl font-extrabold text-teal-700 mt-2">
               98.2%
@@ -311,9 +311,9 @@ function SiswaDashboardHome({ user }: { user: DashboardUser }) {
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-500">Status SPP</span>
-              <CreditCard className="h-4 w-4 text-emerald-600" />
+              <CreditCard className="h-4 w-4 text-yellow-500" />
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-2">
+            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-2">
               Lunas
             </div>
             <span className="text-xs text-slate-500 mt-1 block">Bulan Berjalan</span>
@@ -326,25 +326,25 @@ function SiswaDashboardHome({ user }: { user: DashboardUser }) {
         {/* Tugas Pending */}
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
           <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-            <CardTitle className="text-base font-bold text-slate-900">
+            <CardTitle className="text-base font-bold text-slate-800">
               Tugas Mendatang
             </CardTitle>
-            <Button asChild variant="ghost" size="sm" className="text-xs text-emerald-700">
+            <Button asChild variant="ghost" size="sm" className="text-xs text-yellow-600">
               <Link href="/dashboard/tugas">Buka Tugas</Link>
             </Button>
           </CardHeader>
           <CardContent className="p-5 divide-y divide-slate-100">
             <div className="py-3 first:pt-0 flex items-center justify-between gap-3">
               <div className="space-y-1">
-                <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                <span className="text-xs font-semibold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded">
                   Bahasa Arab
                 </span>
-                <div className="text-sm font-bold text-slate-900">
+                <div className="text-sm font-bold text-slate-800">
                   Latihan Tashrif Fi&apos;il Tsulatsi
                 </div>
                 <div className="text-xs text-slate-500">Deadline: 20:00 WIB Hari Ini</div>
               </div>
-              <Button asChild size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl min-h-[38px]">
+              <Button asChild size="sm" className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl min-h-[38px]">
                 <Link href="/dashboard/tugas">Kirim</Link>
               </Button>
             </div>
@@ -353,7 +353,7 @@ function SiswaDashboardHome({ user }: { user: DashboardUser }) {
                 <span className="text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
                   Hadits Arba&apos;in
                 </span>
-                <div className="text-sm font-bold text-slate-900">
+                <div className="text-sm font-bold text-slate-800">
                   Resume Hadits Ke-1 &amp; Ke-2
                 </div>
                 <div className="text-xs text-slate-500">Deadline: 2 Hari Lagi</div>
@@ -368,32 +368,32 @@ function SiswaDashboardHome({ user }: { user: DashboardUser }) {
         {/* Ujian Tersedia */}
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
           <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-            <CardTitle className="text-base font-bold text-slate-900">
+            <CardTitle className="text-base font-bold text-slate-800">
               Ujian Tersedia
             </CardTitle>
-            <Button asChild variant="ghost" size="sm" className="text-xs text-emerald-700">
+            <Button asChild variant="ghost" size="sm" className="text-xs text-yellow-600">
               <Link href="/dashboard/ujian">Semua Ujian</Link>
             </Button>
           </CardHeader>
           <CardContent className="p-5">
-            <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/60 space-y-3">
+            <div className="p-4 rounded-2xl bg-yellow-50/70 border border-yellow-200/60 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-emerald-800 bg-white px-2.5 py-1 rounded-full shadow-sm">
+                <span className="text-xs font-bold text-yellow-700 bg-white px-2.5 py-1 rounded-full shadow-sm">
                   Fiqih Ibadah
                 </span>
-                <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
+                <span className="text-xs font-semibold text-yellow-600 flex items-center gap-1">
                   <Clock className="h-3.5 w-3.5" /> 60 Menit
                 </span>
               </div>
               <div>
-                <h4 className="font-bold text-slate-900 text-sm">
+                <h4 className="font-bold text-slate-800 text-sm">
                   Penilaian Harian Thaharah &amp; Shalat Berjamaah
                 </h4>
                 <p className="text-xs text-slate-500 mt-0.5">
                   25 Soal Pilihan Ganda &amp; 2 Soal Esai
                 </p>
               </div>
-              <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[44px]">
+              <Button asChild className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px]">
                 <Link href="/dashboard/ujian">Mulai Ujian Sekarang</Link>
               </Button>
             </div>
@@ -419,9 +419,9 @@ function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildStudent 
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-500">Kehadiran Santri</span>
-              <CalendarCheck2 className="h-4 w-4 text-emerald-600" />
+              <CalendarCheck2 className="h-4 w-4 text-yellow-500" />
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-2">
+            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-2">
               98.5%
             </div>
             <span className="text-xs text-slate-500 mt-1 block">Hadir aktif bulan ini</span>
@@ -432,9 +432,9 @@ function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildStudent 
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-500">Tugas Santri</span>
-              <FileCheck2 className="h-4 w-4 text-teal-600" />
+              <FileCheck2 className="h-4 w-4 text-yellow-500" />
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">
+            <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-2">
               100%
             </div>
             <span className="text-xs text-slate-500 mt-1 block">Semua tugas dikumpulkan</span>
@@ -445,9 +445,9 @@ function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildStudent 
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-500">Rata-rata Nilai</span>
-              <Award className="h-4 w-4 text-emerald-600" />
+              <Award className="h-4 w-4 text-yellow-500" />
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-800 mt-2">
+            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-700 mt-2">
               88.4
             </div>
             <span className="text-xs text-slate-500 mt-1 block">Predikat Sangat Baik (A)</span>
@@ -458,12 +458,12 @@ function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildStudent 
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-500">Tagihan SPP</span>
-              <CreditCard className="h-4 w-4 text-emerald-600" />
+              <CreditCard className="h-4 w-4 text-yellow-500" />
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-2">
+            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-2">
               Lunas
             </div>
-            <span className="text-xs text-emerald-600 mt-1 block font-medium">Tidak ada tunggakan</span>
+            <span className="text-xs text-yellow-500 mt-1 block font-medium">Tidak ada tunggakan</span>
           </CardContent>
         </Card>
       </div>
@@ -474,12 +474,12 @@ function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildStudent 
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
           <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base font-bold text-slate-900">
+              <CardTitle className="text-base font-bold text-slate-800">
                 Perkembangan Belajar {childName.split(" ")[0]}
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">{childClass}</CardDescription>
             </div>
-            <Button asChild variant="ghost" size="sm" className="text-xs text-emerald-700">
+            <Button asChild variant="ghost" size="sm" className="text-xs text-yellow-600">
               <Link href="/dashboard/rapor">Buka Rapor</Link>
             </Button>
           </CardHeader>
@@ -491,10 +491,10 @@ function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildStudent 
             ].map((n, idx) => (
               <div key={idx} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-3">
                 <div className="space-y-0.5">
-                  <div className="font-bold text-slate-900 text-sm">{n.mapel}</div>
+                  <div className="font-bold text-slate-800 text-sm">{n.mapel}</div>
                   <div className="text-xs text-slate-500">{n.note}</div>
                 </div>
-                <div className="text-base font-extrabold text-emerald-700 bg-white px-3 py-1.5 rounded-xl border border-emerald-100 shadow-sm shrink-0">
+                <div className="text-base font-extrabold text-yellow-600 bg-white px-3 py-1.5 rounded-xl border border-yellow-100 shadow-sm shrink-0">
                   {n.skor}
                 </div>
               </div>
@@ -506,25 +506,25 @@ function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildStudent 
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
           <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base font-bold text-slate-900">
+              <CardTitle className="text-base font-bold text-slate-800">
                 Administrasi &amp; SPP
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">Status kewajiban SPP santri</CardDescription>
             </div>
-            <Button asChild variant="ghost" size="sm" className="text-xs text-emerald-700">
+            <Button asChild variant="ghost" size="sm" className="text-xs text-yellow-600">
               <Link href="/dashboard/tagihan">Riwayat SPP</Link>
             </Button>
           </CardHeader>
           <CardContent className="p-5 space-y-4">
-            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-between">
+            <div className="p-4 rounded-2xl bg-yellow-50 border border-yellow-200/80 flex items-center justify-between">
               <div>
-                <span className="text-xs font-semibold text-emerald-800">SPP Bulan Ini</span>
-                <div className="text-base font-extrabold text-emerald-900">Rp 500.000</div>
+                <span className="text-xs font-semibold text-yellow-700">SPP Bulan Ini</span>
+                <div className="text-base font-extrabold text-yellow-800">Rp 500.000</div>
               </div>
               <StatusBadge status="LUNAS" />
             </div>
 
-            <Button asChild className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl min-h-[44px]">
+            <Button asChild className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-xl min-h-[44px]">
               <Link href="/dashboard/tagihan">
                 <CreditCard className="h-4 w-4 mr-2" />
                 Lihat Tagihan &amp; Upload Bukti Transfer
@@ -547,7 +547,7 @@ function KeuanganDashboardHome() {
         <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
           <CardContent className="p-4 sm:p-5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Penerimaan SPP Bulan Ini</span>
-            <div className="text-xl sm:text-2xl font-extrabold text-emerald-700 mt-2">Rp 48.500.000</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-yellow-600 mt-2">Rp 48.500.000</div>
             <span className="text-xs text-slate-500 mt-1 block">97 dari 120 Santri</span>
           </CardContent>
         </Card>
@@ -571,14 +571,14 @@ function KeuanganDashboardHome() {
         <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
           <CardContent className="p-4 sm:p-5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Saldo Kas Operasional</span>
-            <div className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-2">Rp 142.800.000</div>
-            <span className="text-xs text-emerald-600 mt-1 block font-medium">+8.2% bulan lalu</span>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-800 mt-2">Rp 142.800.000</div>
+            <span className="text-xs text-yellow-500 mt-1 block font-medium">+8.2% bulan lalu</span>
           </CardContent>
         </Card>
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[44px]">
+        <Button asChild className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px]">
           <Link href="/dashboard/keuangan">
             <DollarSign className="h-4 w-4 mr-1.5" />
             Kelola Transaksi &amp; Generate SPP
@@ -605,13 +605,13 @@ function AdminDashboardHome() {
         <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
           <CardContent className="p-4 sm:p-5">
             <span className="text-xs font-semibold text-slate-500">Total Santri</span>
-            <div className="text-2xl font-extrabold text-slate-900 mt-1">240 Santri</div>
+            <div className="text-2xl font-extrabold text-slate-800 mt-1">240 Santri</div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
           <CardContent className="p-4 sm:p-5">
             <span className="text-xs font-semibold text-slate-500">Total Guru</span>
-            <div className="text-2xl font-extrabold text-emerald-700 mt-1">18 Ustadz/ah</div>
+            <div className="text-2xl font-extrabold text-yellow-600 mt-1">18 Ustadz/ah</div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
@@ -629,7 +629,7 @@ function AdminDashboardHome() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Button asChild className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold h-12 rounded-xl">
+        <Button asChild className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold h-12 rounded-xl">
           <Link href="/dashboard/guru">Manajemen Akun Guru</Link>
         </Button>
         <Button asChild variant="outline" className="h-12 rounded-xl font-bold">

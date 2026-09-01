@@ -230,7 +230,7 @@ export default function KelolaGuruPage() {
         action={
           <Button
             onClick={() => setIsAddOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md min-h-[44px]"
+            className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl shadow-md min-h-[44px]"
           >
             <Plus className="h-4 w-4 mr-1.5" />
             Tambah Guru Baru
@@ -242,7 +242,7 @@ export default function KelolaGuruPage() {
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-base font-bold text-slate-900">
+            <CardTitle className="text-base font-bold text-slate-800">
               Daftar Asatidz Terdaftar ({guruList.length} Guru)
             </CardTitle>
           </div>
@@ -266,7 +266,7 @@ export default function KelolaGuruPage() {
                 {guruList.map((g) => (
                   <tr key={g.id} className="hover:bg-slate-50/80">
                     <td className="p-4 pl-6">
-                      <div className="font-bold text-slate-900">{g.nama}</div>
+                      <div className="font-bold text-slate-800">{g.nama}</div>
                       <div className="text-xs text-slate-400 font-mono">NIP: {g.nip}</div>
                     </td>
                     <td className="p-4 text-xs text-slate-600">
@@ -276,7 +276,7 @@ export default function KelolaGuruPage() {
                     <td className="p-4 text-xs font-semibold text-slate-700">{g.jabatan}</td>
                     <td className="p-4">
                       {g.isAdmin ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-yellow-700 bg-yellow-100 px-2.5 py-0.5 rounded-full">
                           <ShieldCheck className="h-3 w-3" />
                           Guru Admin
                         </span>
@@ -345,7 +345,7 @@ export default function KelolaGuruPage() {
               <div key={g.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="font-bold text-slate-900 text-sm">{g.nama}</div>
+                    <div className="font-bold text-slate-800 text-sm">{g.nama}</div>
                     <div className="text-xs text-slate-500">{g.jabatan}</div>
                   </div>
                   <StatusBadge status={g.aktif ? "AKTIF" : "NONAKTIF"} size="sm" />
@@ -413,7 +413,7 @@ export default function KelolaGuruPage() {
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900">
+            <DialogTitle className="text-lg font-bold text-slate-800">
               Tambah Akun Tenaga Pendidik / Guru
             </DialogTitle>
             <p className="text-xs text-slate-500">
@@ -483,7 +483,7 @@ export default function KelolaGuruPage() {
                 id="isAdminCheck"
                 checked={isAdminInput}
                 onChange={(e) => setIsAdminInput(e.target.checked)}
-                className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                className="h-4 w-4 rounded text-yellow-500 focus:ring-yellow-500"
               />
               <label htmlFor="isAdminCheck" className="text-xs font-semibold text-slate-700">
                 Berikan Hak Akses Admin (Dapat mengelola kelas, guru, dan kenaikan kelas)
@@ -497,7 +497,7 @@ export default function KelolaGuruPage() {
               <Button
                 type="submit"
                 disabled={submitting}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
                 Buat Akun Guru
@@ -511,7 +511,7 @@ export default function KelolaGuruPage() {
       <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) setEditGuru(null) }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900">
+            <DialogTitle className="text-lg font-bold text-slate-800">
               Edit Profil Guru
             </DialogTitle>
             <p className="text-xs text-slate-500">
@@ -565,7 +565,7 @@ export default function KelolaGuruPage() {
               <Button
                 type="submit"
                 disabled={editing}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
               >
                 {editing ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Pencil className="h-4 w-4 mr-1.5" />}
                 Simpan Perubahan

@@ -18,7 +18,7 @@ import {
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen bg-slate-50 text-slate-800 selection:bg-yellow-100 selection:text-yellow-800">
       {/* 1. Header / Navbar */}
       <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur-md sticky top-0 z-50 transition-all">
         <div className="container mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
@@ -27,9 +27,9 @@ export default function HomePage() {
               <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
             </div>
             <div>
-              <div className="font-extrabold text-base sm:text-lg text-slate-900 tracking-tight flex items-center gap-1.5">
+              <div className="font-extrabold text-base sm:text-lg text-slate-800 tracking-tight flex items-center gap-1.5">
                 <span>Ansharussunnah</span>
-                <span className="hidden sm:inline-block text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                <span className="hidden sm:inline-block text-xs bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
                   Pesantren & Sekolah
                 </span>
               </div>
@@ -40,7 +40,7 @@ export default function HomePage() {
           <nav className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/cek-pendaftaran"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-600 hover:text-emerald-700 transition-colors min-h-[44px]"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-600 hover:text-yellow-600 transition-colors min-h-[44px]"
             >
               <Search className="h-4 w-4" />
               <span className="hidden md:inline">Cek Status</span>
@@ -54,7 +54,7 @@ export default function HomePage() {
             </Link>
             <Link
               href="/pendaftaran"
-              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-md shadow-emerald-700/20 min-h-[44px]"
+              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-yellow-600 hover:bg-yellow-700 rounded-xl transition-all shadow-md shadow-yellow-700/20 min-h-[44px]"
             >
               <UserPlus className="h-4 w-4" />
               <span>Daftar Sekarang</span>
@@ -64,17 +64,17 @@ export default function HomePage() {
       </header>
 
       {/* 2. Hero Section */}
-      <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28 bg-gradient-to-b from-emerald-950 via-slate-900 to-slate-950 text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:24px_24px] opacity-10" />
+      <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28 bg-gradient-to-b from-yellow-900 via-slate-800 to-slate-800 text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(#22c55e_1px,transparent_1px)] [background-size:24px_24px] opacity-10" />
         <div className="container mx-auto px-4 sm:px-6 relative z-10 text-center max-w-4xl">
-          <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold mb-8 backdrop-blur-sm animate-in fade-in">
-            <Sparkles className="h-4 w-4 text-emerald-400" />
+          <div className="inline-flex items-center gap-2 bg-amber-500/15 border border-amber-500/30 text-amber-300 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold mb-8 backdrop-blur-sm animate-in fade-in">
+            <Sparkles className="h-4 w-4 text-amber-400" />
             <span>Penerimaan Santri Baru (PSB) Tahun Ajaran 2024/2025 Dibuka</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
             Membina Generasi Qurani Berakhlak Mulia &amp;{" "}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-yellow-300">
               Unggul Akademik
             </span>
           </h1>
@@ -86,7 +86,7 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
             <Link
               href="/pendaftaran"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-slate-900 bg-emerald-400 hover:bg-emerald-300 rounded-2xl transition-all shadow-lg shadow-emerald-500/20 hover:scale-[1.02] min-h-[50px]"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-slate-800 bg-amber-400 hover:bg-amber-300 rounded-2xl transition-all shadow-lg shadow-amber-500/20 hover:scale-[1.02] min-h-[50px]"
             >
               <UserPlus className="h-5 w-5" />
               <span>Daftar Santri Baru</span>
@@ -97,7 +97,7 @@ export default function HomePage() {
               href="/login"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-2xl transition-all backdrop-blur-sm min-h-[50px]"
             >
-              <LogIn className="h-5 w-5 text-emerald-400" />
+              <LogIn className="h-5 w-5 text-yellow-400" />
               <span>Masuk Portal LMS</span>
             </Link>
           </div>
@@ -113,7 +113,7 @@ export default function HomePage() {
               const Icon = stat.icon
               return (
                 <div key={idx} className="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 backdrop-blur-sm">
-                  <Icon className="h-5 w-5 text-emerald-400 mb-2" />
+                  <Icon className="h-5 w-5 text-amber-400 mb-2" />
                   <div className="font-bold text-white text-sm sm:text-base">{stat.value}</div>
                   <div className="text-xs text-slate-400">{stat.label}</div>
                 </div>
@@ -127,10 +127,10 @@ export default function HomePage() {
       <section className="py-16 sm:py-24 bg-white border-b border-slate-200/80">
         <div className="container mx-auto px-4 sm:px-6 max-w-5xl">
           <div className="text-center max-w-2xl mx-auto mb-14">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200/60">
+            <span className="text-xs font-bold uppercase tracking-wider text-yellow-600 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200/60">
               Alur Pendaftaran Cepat
             </span>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 mt-3">
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-800 mt-3">
               4 Langkah Mudah Menjadi Santri
             </h2>
             <p className="text-slate-500 text-sm sm:text-base mt-2">
@@ -163,12 +163,12 @@ export default function HomePage() {
             ].map((item, idx) => (
               <div
                 key={idx}
-                className="relative p-6 rounded-3xl bg-slate-50 border border-slate-200/80 hover:border-emerald-300 hover:shadow-lg transition-all group"
+                className="relative p-6 rounded-3xl bg-slate-50 border border-slate-200/80              hover:border-amber-300 hover:shadow-lg transition-all group"
               >
-                <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white font-extrabold text-lg flex items-center justify-center mb-4 shadow-md shadow-emerald-700/20 group-hover:scale-105 transition-transform">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-yellow-600 to-yellow-700 text-white font-extrabold text-lg flex items-center justify-center mb-4 shadow-md shadow-yellow-700/20 group-hover:scale-105 transition-transform">
                   {item.step}
                 </div>
-                <h3 className="font-bold text-lg text-slate-900 mb-2">{item.title}</h3>
+                <h3 className="font-bold text-lg text-slate-800 mb-2">{item.title}</h3>
                 <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">{item.desc}</p>
               </div>
             ))}
@@ -177,7 +177,7 @@ export default function HomePage() {
           <div className="mt-12 text-center">
             <Link
               href="/pendaftaran"
-              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm shadow-md transition-all min-h-[44px]"
+              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-sm shadow-md transition-all min-h-[44px]"
             >
               <UserPlus className="h-4 w-4" />
               <span>Mulai Isi Formulir Pendaftaran Sekarang</span>
@@ -190,31 +190,31 @@ export default function HomePage() {
       <section className="py-16 sm:py-24 bg-slate-50">
         <div className="container mx-auto px-4 sm:px-6 max-w-5xl">
           <div className="text-center max-w-2xl mx-auto mb-14">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/60 px-3 py-1 rounded-full">
+            <span className="text-xs font-bold uppercase tracking-wider text-yellow-600 bg-yellow-100/60 px-3 py-1 rounded-full">
               Fitur Lengkap Terintegrasi
             </span>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 mt-3">
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-800 mt-3">
               Portal Akademik Modern untuk Semua Role
             </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+              <div className="w-12 h-12 rounded-2xl bg-yellow-100 text-yellow-600 flex items-center justify-center font-bold">
                 <Users className="h-6 w-6" />
               </div>
-              <h3 className="font-bold text-lg text-slate-900">Untuk Asatidz &amp; Guru</h3>
+              <h3 className="font-bold text-lg text-slate-800">Untuk Asatidz &amp; Guru</h3>
               <ul className="text-xs sm:text-sm text-slate-600 space-y-2.5">
                 <li className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <CheckCircle className="h-4 w-4 text-yellow-500 shrink-0" />
                   <span>Input absensi kelas cepat di mobile</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <CheckCircle className="h-4 w-4 text-yellow-500 shrink-0" />
                   <span>Buat ujian online (PG &amp; Esai)</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <CheckCircle className="h-4 w-4 text-yellow-500 shrink-0" />
                   <span>Kelola tugas &amp; input nilai rapor</span>
                 </li>
               </ul>
@@ -224,18 +224,18 @@ export default function HomePage() {
               <div className="w-12 h-12 rounded-2xl overflow-hidden">
                 <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
               </div>
-              <h3 className="font-bold text-lg text-slate-900">Untuk Santri / Siswa</h3>
+              <h3 className="font-bold text-lg text-slate-800">Untuk Santri / Siswa</h3>
               <ul className="text-xs sm:text-sm text-slate-600 space-y-2.5">
                 <li className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-teal-600 shrink-0" />
+                  <CheckCircle className="h-4 w-4 text-yellow-500 shrink-0" />
                   <span>Kerjakan ujian dengan countdown timer</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-teal-600 shrink-0" />
+                  <CheckCircle className="h-4 w-4 text-yellow-500 shrink-0" />
                   <span>Kirim tugas &amp; unduh materi belajar</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-teal-600 shrink-0" />
+                  <CheckCircle className="h-4 w-4 text-yellow-500 shrink-0" />
                   <span>Lihat rapor hasil belajar digital</span>
                 </li>
               </ul>
@@ -245,7 +245,7 @@ export default function HomePage() {
               <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
                 <HeartHandshake className="h-6 w-6" />
               </div>
-              <h3 className="font-bold text-lg text-slate-900">Untuk Wali Santri</h3>
+              <h3 className="font-bold text-lg text-slate-800">Untuk Wali Santri</h3>
               <ul className="text-xs sm:text-sm text-slate-600 space-y-2.5">
                 <li className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-indigo-600 shrink-0" />
@@ -266,7 +266,7 @@ export default function HomePage() {
       </section>
 
       {/* 5. Footer */}
-      <footer className="bg-slate-950 text-slate-400 py-12 border-t border-slate-800">
+      <footer className="bg-slate-800 text-slate-400 py-12 border-t border-slate-700">
         <div className="container mx-auto px-4 sm:px-6 max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl overflow-hidden">
@@ -279,13 +279,13 @@ export default function HomePage() {
           </div>
 
           <div className="flex items-center gap-6 text-xs font-medium">
-            <Link href="/pendaftaran" className="hover:text-emerald-400 transition-colors">
+            <Link href="/pendaftaran" className="hover:text-amber-400 transition-colors">
               Pendaftaran Baru
             </Link>
-            <Link href="/cek-pendaftaran" className="hover:text-emerald-400 transition-colors">
+            <Link href="/cek-pendaftaran" className="hover:text-amber-400 transition-colors">
               Cek Status
             </Link>
-            <Link href="/login" className="hover:text-emerald-400 transition-colors">
+            <Link href="/login" className="hover:text-amber-400 transition-colors">
               Portal LMS
             </Link>
           </div>

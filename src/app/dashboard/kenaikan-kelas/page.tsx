@@ -229,7 +229,7 @@ export default function KenaikanKelasPage() {
               value={kelasAsalId}
               onChange={(e) => setKelasAsalId(e.target.value)}
               disabled={loadingKelas}
-              className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+              className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-yellow-500"
             >
               <option value="">— Pilih Kelas —</option>
               {kelasOptions.map((k) => (
@@ -247,7 +247,7 @@ export default function KenaikanKelasPage() {
               value={periodeAjaranId}
               onChange={(e) => setPeriodeAjaranId(e.target.value)}
               placeholder="periode-aktif"
-              className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+              className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-yellow-500"
             />
           </div>
 
@@ -255,7 +255,7 @@ export default function KenaikanKelasPage() {
             <Button
               onClick={() => setIsConfirmOpen(true)}
               disabled={siswaList.length === 0 || processing}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-11 min-h-[44px] shadow-md"
+              className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl h-11 min-h-[44px] shadow-md"
             >
               <ArrowUpRight className="h-4 w-4 mr-1.5" />
               Proses Promosi ({totalValidSiswa} Santri)
@@ -265,7 +265,7 @@ export default function KenaikanKelasPage() {
 
         {/* Kelas Asal Info */}
         {kelasAsalInfo && (
-          <div className="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
+          <div className="mt-4 p-3 rounded-xl bg-yellow-50 border border-yellow-200 text-xs text-yellow-700">
             <strong>Kelas Asal:</strong> {kelasAsalInfo.nama} ({kelasAsalInfo.jenjang}) — {kelasAsalInfo.totalSiswa} siswa aktif
           </div>
         )}
@@ -274,7 +274,7 @@ export default function KenaikanKelasPage() {
       {/* Loading State */}
       {loadingSiswa && (
         <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
           <span className="ml-3 text-sm text-slate-500">Memuat daftar siswa untuk promosi...</span>
         </div>
       )}
@@ -301,7 +301,7 @@ export default function KenaikanKelasPage() {
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base font-bold text-slate-900">
+              <CardTitle className="text-base font-bold text-slate-800">
                 Daftar Santri &amp; Rekomendasi Kelas Tujuan ({siswaList.length} Siswa)
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
@@ -325,14 +325,14 @@ export default function KenaikanKelasPage() {
                 <tbody className="divide-y divide-slate-100">
                   {siswaList.map((s) => (
                     <tr key={s.siswaId} className="hover:bg-slate-50/80">
-                      <td className="p-4 pl-6 font-bold text-slate-900">{s.nama}</td>
+                      <td className="p-4 pl-6 font-bold text-slate-800">{s.nama}</td>
                       <td className="p-4 text-xs font-mono text-slate-500">{s.nisn}</td>
                       <td className="p-4 text-xs text-slate-600">{s.kelasAsal}</td>
                       <td className="p-4 pr-6">
                         <select
                           value={s.kelasTujuanId || ""}
                           onChange={(e) => updateKelasTujuan(s.siswaId, e.target.value)}
-                          className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500"
+                          className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-yellow-800 focus:ring-2 focus:ring-yellow-500"
                         >
                           <option value="">— Pilih —</option>
                           {kelasTujuanList.map((kt) => (
@@ -354,7 +354,7 @@ export default function KenaikanKelasPage() {
                 <div key={s.siswaId} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="font-bold text-slate-900 text-sm">{s.nama}</div>
+                      <div className="font-bold text-slate-800 text-sm">{s.nama}</div>
                       <div className="text-xs text-slate-500 font-mono">NISN: {s.nisn}</div>
                       <div className="text-xs text-slate-400">Kelas: {s.kelasAsal}</div>
                     </div>
@@ -365,7 +365,7 @@ export default function KenaikanKelasPage() {
                     <select
                       value={s.kelasTujuanId || ""}
                       onChange={(e) => updateKelasTujuan(s.siswaId, e.target.value)}
-                      className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-emerald-900"
+                      className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-yellow-800"
                     >
                       <option value="">— Pilih —</option>
                       {kelasTujuanList.map((kt) => (

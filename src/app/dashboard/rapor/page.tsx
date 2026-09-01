@@ -156,7 +156,7 @@ function GuruRaporView() {
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 sm:p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="text-base font-bold text-slate-900">
+            <h3 className="text-base font-bold text-slate-800">
               Pilih Santri Binaan Wali Kelas
             </h3>
             <p className="text-xs text-slate-500">Pilih santri untuk mengisi catatan rapor</p>
@@ -165,7 +165,7 @@ function GuruRaporView() {
           <select
             value={selectedStudentId}
             onChange={(e) => setSelectedStudentId(e.target.value)}
-            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-yellow-500"
           >
             {students.map((s) => (
               <option key={s.id} value={s.id}>
@@ -190,7 +190,7 @@ function GuruRaporView() {
             <Button
               onClick={handleSaveCatatan}
               disabled={saving}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[44px] px-6"
+              className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px] px-6"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Save className="h-4 w-4 mr-1.5" />}
               Simpan Catatan Rapor
@@ -203,7 +203,7 @@ function GuruRaporView() {
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-base font-bold text-slate-900">
+            <CardTitle className="text-base font-bold text-slate-800">
               Rekap Rapor Kelas
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
@@ -241,9 +241,9 @@ function GuruRaporView() {
                 <tbody className="divide-y divide-slate-100">
                   {rekapData.rekap.map((r) => (
                     <tr key={r.siswaId} className="hover:bg-slate-50/80">
-                      <td className="p-3 pl-5 font-bold text-slate-900 text-sm">{r.nama}</td>
+                      <td className="p-3 pl-5 font-bold text-slate-800 text-sm">{r.nama}</td>
                       <td className="p-3 text-center">
-                        <span className="font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200 text-sm">
+                        <span className="font-extrabold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-lg border border-yellow-200 text-sm">
                           {r.rataRataKeseluruhan}
                         </span>
                       </td>
@@ -353,7 +353,7 @@ function SiswaOrangTuaRaporView({
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
         <span className="ml-3 text-sm text-slate-500">Memuat data...</span>
       </div>
     )
@@ -374,7 +374,7 @@ function SiswaOrangTuaRaporView({
           <select
             value={selectedPeriodeId}
             onChange={(e) => setSelectedPeriodeId(e.target.value)}
-            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-yellow-500"
           >
             {periodes.map((p) => (
               <option key={p.id} value={p.id}>
@@ -387,7 +387,7 @@ function SiswaOrangTuaRaporView({
 
       {fetchingRapor && (
         <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
           <span className="ml-3 text-sm text-slate-500">Memuat rapor...</span>
         </div>
       )}
@@ -417,14 +417,14 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white shadow-xl overflow-hidden print:border-none print:shadow-none">
       {/* Formal Header */}
-      <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950 text-white p-6 sm:p-8 text-center border-b border-emerald-500/20">
+      <div className="bg-gradient-to-r from-yellow-900 via-slate-800 to-yellow-900 text-white p-6 sm:p-8 text-center border-b border-yellow-500/20">
         <div className="w-12 h-12 rounded-2xl overflow-hidden mx-auto mb-3 shadow-md">
           <img src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" className="w-full h-full object-cover" />
         </div>
         <h2 className="text-xl sm:text-2xl font-black tracking-tight uppercase">
           Laporan Hasil Penilaian Santri (Rapor)
         </h2>
-        <p className="text-xs sm:text-sm text-emerald-300/90 font-medium mt-1">
+        <p className="text-xs sm:text-sm text-yellow-300/90 font-medium mt-1">
           Pondok Pesantren &amp; Sekolah Islam Terpadu Ansharussunnah
         </p>
       </div>
@@ -434,7 +434,7 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs">
           <div>
             <span className="text-slate-400 block">Nama Santri</span>
-            <span className="font-bold text-slate-900 text-sm">{studentName}</span>
+            <span className="font-bold text-slate-800 text-sm">{studentName}</span>
           </div>
           <div>
             <span className="text-slate-400 block">NISN</span>
@@ -469,10 +469,10 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
               <tbody className="divide-y divide-slate-100">
                 {raporData.nilaiPerMapel.map((sub, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/60">
-                    <td className="p-3 pl-4 font-bold text-slate-900">{sub.mataPelajaran}</td>
+                    <td className="p-3 pl-4 font-bold text-slate-800">{sub.mataPelajaran}</td>
                     <td className="p-3 text-center font-medium text-slate-700">{sub.rataRataUjian}</td>
                     <td className="p-3 text-center font-medium text-slate-700">{sub.rataRataTugas}</td>
-                    <td className="p-3 text-center font-black text-emerald-800 bg-emerald-50/50">
+                    <td className="p-3 text-center font-black text-yellow-700 bg-yellow-50/50">
                       {sub.nilaiGabungan}
                     </td>
                     <td className="p-3 text-center text-slate-500">{sub.jumlahUjian}</td>
@@ -480,12 +480,12 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="bg-slate-50 font-bold text-slate-900 border-t border-slate-200">
+              <tfoot className="bg-slate-50 font-bold text-slate-800 border-t border-slate-200">
                 <tr>
                   <td colSpan={3} className="p-3 pl-4 uppercase text-xs">
                     Rata-Rata Nilai Kumulatif
                   </td>
-                  <td className="p-3 text-center text-base text-emerald-700 font-extrabold">
+                  <td className="p-3 text-center text-base text-yellow-600 font-extrabold">
                     {rerata}
                   </td>
                   <td className="p-3 text-center">{raporData.nilaiPerMapel.reduce((a, m) => a + m.jumlahUjian, 0)}</td>
@@ -513,19 +513,19 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
             </div>
           </div>
 
-          <div className="md:col-span-2 p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-1.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 block">
+          <div className="md:col-span-2 p-4 rounded-2xl bg-yellow-50/70 border border-yellow-200 space-y-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-yellow-800 block">
               Catatan &amp; Bimbingan Wali Kelas
             </span>
             {raporData.catatan ? (
-              <p className="text-xs sm:text-sm text-emerald-950 leading-relaxed italic">
+              <p className="text-xs sm:text-sm text-yellow-900 leading-relaxed italic">
                 &ldquo;{raporData.catatan}&rdquo;
               </p>
             ) : (
-              <p className="text-xs text-emerald-700 italic">Belum ada catatan wali kelas.</p>
+              <p className="text-xs text-yellow-600 italic">Belum ada catatan wali kelas.</p>
             )}
             {raporData.ranking && (
-              <div className="pt-2 text-right text-[11px] font-bold text-emerald-800">
+              <div className="pt-2 text-right text-[11px] font-bold text-yellow-700">
                 Ranking: {raporData.ranking}
               </div>
             )}

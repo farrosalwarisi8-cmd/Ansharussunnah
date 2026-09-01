@@ -142,7 +142,7 @@ export default function RekapHasilUjianPage() {
     return (
       <div className="space-y-6 max-w-5xl mx-auto">
         <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
           <span className="ml-3 text-sm text-slate-500">Memuat rekap hasil ujian...</span>
         </div>
       </div>
@@ -174,7 +174,7 @@ export default function RekapHasilUjianPage() {
             </Link>
           </Button>
           <div>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">
               Rekap Hasil Ujian
             </h1>
           </div>
@@ -220,7 +220,7 @@ export default function RekapHasilUjianPage() {
             </Link>
           </Button>
           <div>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">
               Rekap Hasil Ujian: {ujian.judul}
             </h1>
             <p className="text-xs sm:text-sm text-slate-500">
@@ -235,7 +235,7 @@ export default function RekapHasilUjianPage() {
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rata-Rata Kelas</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1">{rataRata}</div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-1">{rataRata}</div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border-slate-200/80 bg-white">
@@ -253,7 +253,7 @@ export default function RekapHasilUjianPage() {
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Selesai Menilai</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">{sudahDinilai} / {peserta.length} Santri</div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">{sudahDinilai} / {peserta.length} Santri</div>
           </CardContent>
         </Card>
       </div>
@@ -262,7 +262,7 @@ export default function RekapHasilUjianPage() {
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-base font-bold text-slate-900">
+            <CardTitle className="text-base font-bold text-slate-800">
               Daftar Skor Santri
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
@@ -289,7 +289,7 @@ export default function RekapHasilUjianPage() {
               <tbody className="divide-y divide-slate-100">
                 {peserta.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50/80">
-                    <td className="p-4 pl-6 font-bold text-slate-900">{p.siswa.user.nama}</td>
+                    <td className="p-4 pl-6 font-bold text-slate-800">{p.siswa.user.nama}</td>
                     <td className="p-4 text-xs font-mono text-slate-500">{p.siswa.nisn}</td>
                     <td className="p-4 text-center font-semibold text-slate-700">
                       {p.nilaiPg !== null ? Number(p.nilaiPg) : "-"}
@@ -298,7 +298,7 @@ export default function RekapHasilUjianPage() {
                       {p.nilaiEsai !== null ? Number(p.nilaiEsai) : <span className="text-amber-500">Belum</span>}
                     </td>
                     <td className="p-4 text-center">
-                      <span className="font-extrabold text-base text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                      <span className="font-extrabold text-base text-yellow-600 bg-yellow-50 px-2.5 py-1 rounded-lg border border-yellow-200">
                         {p.nilaiTotal !== null ? Number(p.nilaiTotal) : "-"}
                       </span>
                     </td>
@@ -317,7 +317,7 @@ export default function RekapHasilUjianPage() {
                           }}
                           className="rounded-xl min-h-[36px] text-xs font-bold"
                         >
-                          <FileEdit className="h-3.5 w-3.5 mr-1 text-emerald-700" />
+                          <FileEdit className="h-3.5 w-3.5 mr-1 text-yellow-600" />
                           Koreksi Esai
                         </Button>
                       )}
@@ -334,11 +334,11 @@ export default function RekapHasilUjianPage() {
               <div key={p.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="font-bold text-slate-900 text-sm">{p.siswa.user.nama}</div>
+                    <div className="font-bold text-slate-800 text-sm">{p.siswa.user.nama}</div>
                     <div className="text-xs text-slate-500 font-mono">NISN: {p.siswa.nisn}</div>
                   </div>
                   <div className="text-right">
-                    <span className="font-extrabold text-lg text-emerald-700 bg-white px-2.5 py-1 rounded-xl border border-emerald-200 shadow-sm">
+                    <span className="font-extrabold text-lg text-yellow-600 bg-white px-2.5 py-1 rounded-xl border border-yellow-200 shadow-sm">
                       {p.nilaiTotal !== null ? Number(p.nilaiTotal) : "-"}
                     </span>
                   </div>
@@ -359,7 +359,7 @@ export default function RekapHasilUjianPage() {
                         setNilaiEsai("")
                         setCatatanEsai("")
                       }}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl min-h-[40px] text-xs font-bold"
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl min-h-[40px] text-xs font-bold"
                     >
                       <FileEdit className="h-3.5 w-3.5 mr-1" />
                       Koreksi Esai
@@ -377,7 +377,7 @@ export default function RekapHasilUjianPage() {
         <Dialog open={!!selectedStudent} onOpenChange={() => setSelectedStudent(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle className="text-base font-bold text-slate-900">
+              <DialogTitle className="text-base font-bold text-slate-800">
                 Penilaian Esai: {selectedStudent.siswa.user.nama}
               </DialogTitle>
               <p className="text-xs text-slate-500">
@@ -434,7 +434,7 @@ export default function RekapHasilUjianPage() {
               <Button
                 onClick={handleSimpanNilaiEsai}
                 disabled={savingEsai}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
               >
                 {savingEsai ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <CheckCircle2 className="h-4 w-4 mr-1.5" />}
                 Simpan Penilaian

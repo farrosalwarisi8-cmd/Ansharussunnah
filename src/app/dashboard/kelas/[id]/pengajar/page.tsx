@@ -212,7 +212,7 @@ export default function PengajarKelasPage() {
     return (
       <div className="space-y-6 max-w-6xl mx-auto">
         <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
         </div>
       </div>
     )
@@ -227,14 +227,14 @@ export default function PengajarKelasPage() {
           <div className="flex items-center gap-2">
             <Link
               href="/dashboard/kelas"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-800"
             >
               <ArrowLeft className="h-4 w-4" />
               Kembali
             </Link>
             <Button
               onClick={() => setIsAddOpen(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md min-h-[44px]"
+              className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl shadow-md min-h-[44px]"
             >
               <Plus className="h-4 w-4 mr-1.5" />
               Tambah Pengajar
@@ -247,7 +247,7 @@ export default function PengajarKelasPage() {
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-base font-bold text-slate-900">
+            <CardTitle className="text-base font-bold text-slate-800">
               Daftar Pengajar di Kelas Ini ({pengajarList.length} Penugasan)
             </CardTitle>
           </div>
@@ -282,7 +282,7 @@ export default function PengajarKelasPage() {
                     {pengajarList.map((p) => (
                       <tr key={p.id} className="hover:bg-slate-50/80">
                         <td className="p-4 pl-6">
-                          <div className="font-bold text-slate-900">
+                          <div className="font-bold text-slate-800">
                             {p.nama}
                           </div>
                         </td>
@@ -331,7 +331,7 @@ export default function PengajarKelasPage() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="font-bold text-slate-900 text-sm">
+                        <div className="font-bold text-slate-800 text-sm">
                           {p.nama}
                         </div>
                         <div className="text-xs text-blue-700 font-semibold flex items-center gap-1 mt-0.5">
@@ -377,7 +377,7 @@ export default function PengajarKelasPage() {
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900">
+            <DialogTitle className="text-lg font-bold text-slate-800">
               Tambah Pengajar ke Kelas
             </DialogTitle>
             <p className="text-xs text-slate-500">
@@ -393,7 +393,7 @@ export default function PengajarKelasPage() {
               <select
                 value={selectedGuruId}
                 onChange={(e) => setSelectedGuruId(e.target.value)}
-                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-emerald-500"
+                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-yellow-500"
                 required
               >
                 <option value="">— Pilih Guru —</option>
@@ -434,7 +434,7 @@ export default function PengajarKelasPage() {
               <Button
                 type="submit"
                 disabled={submitting || !selectedGuruId || !mataPelajaran.trim()}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
               >
                 {submitting ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1.5" />

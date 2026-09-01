@@ -74,7 +74,7 @@ export default function UploadBuktiPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-white to-blue-50 flex items-center justify-center">
         <Card className="max-w-md w-full mx-4 text-center">
           <CardContent className="p-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-success/10 rounded-full mb-4">
