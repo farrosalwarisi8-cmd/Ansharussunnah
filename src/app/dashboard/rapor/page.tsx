@@ -6,15 +6,15 @@ import * as React from "react"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
-import { createOrUpdateCatatanRapor, getRaporSiswa, getRaporAnak } from "@/actions/rapor"
+import { createOrUpdateCatatanRapor, getRaporSiswa, getRaporAnak, getRekapRaporKelas } from "@/actions/rapor"
 import { getDaftarPeriodeAjaran } from "@/actions/periode-ajaran"
 import { useToast } from "@/hooks/use-toast"
 import { Role } from "@prisma/client"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
-import { GraduationCap, Printer, Save, Loader2 } from "lucide-react"
+import { GraduationCap, Printer, Save, Loader2, BarChart2 } from "lucide-react"
 
 type PeriodeItem = { id: string; nama: string; tahunAjaran: string; semester: string }
 type RaporData = {
@@ -82,6 +82,24 @@ function GuruRaporView() {
   )
   const [saving, setSaving] = React.useState(false)
 
+  // Rekap Kelas state
+  const [showRekap, setShowRekap] = React.useState(false)
+  const [rekapData, setRekapData] = React.useState<{
+    totalSiswa: number
+    rekap: Array<{
+      siswaId: string
+      nama: string
+      nisn: string
+      rataRataKeseluruhan: number
+      jumlahMapel: number
+      kehadiran: string
+      totalAlpha: number
+      ranking: number | null
+      hasCatatan: boolean
+    }>
+  } | null>(null)
+  const [loadingRekap, setLoadingRekap] = React.useState(false)
+
   // Note: Student list would need a getStudentsByKelas action for real data
   // Currently using placeholder — to be connected when getStudentsByKelas is available
   const students = [
@@ -109,6 +127,26 @@ function GuruRaporView() {
       })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleLoadRekap = async () => {
+    setLoadingRekap(true)
+    try {
+      const result = await getRekapRaporKelas({
+        kelasId: "7A-IKHWAN",
+        periodeAjaranId: "periode-aktif",
+      })
+      if (result.success && result.data) {
+        setRekapData(result.data as typeof rekapData)
+        setShowRekap(true)
+      } else {
+        toast({ variant: "destructive", title: "Gagal", description: result.message })
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Gagal", description: "Gagal memuat rekap rapor kelas." })
+    } finally {
+      setLoadingRekap(false)
     }
   }
 
@@ -159,6 +197,72 @@ function GuruRaporView() {
             </Button>
           </div>
         </div>
+      </Card>
+
+      {/* Rekap Rapor Kelas */}
+      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-base font-bold text-slate-900">
+              Rekap Rapor Kelas
+            </CardTitle>
+            <CardDescription className="text-xs text-slate-500">
+              Gambaran umum performa seluruh siswa dalam satu kelas
+            </CardDescription>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleLoadRekap}
+            disabled={loadingRekap}
+            className="rounded-xl min-h-[38px] text-xs font-bold"
+          >
+            {loadingRekap ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <BarChart2 className="h-4 w-4 mr-1.5" />}
+            {showRekap ? "Refresh" : "Lihat Rekap"}
+          </Button>
+        </CardHeader>
+
+        {showRekap && rekapData && (
+          <CardContent className="p-0">
+            <div className="p-4 mb-2 text-xs text-slate-500">
+              Total {rekapData.totalSiswa} siswa
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
+                  <tr>
+                    <th className="p-3 pl-5">Nama</th>
+                    <th className="p-3 text-center">Rata-rata</th>
+                    <th className="p-3 text-center">Kehadiran</th>
+                    <th className="p-3 text-center">Alpha</th>
+                    <th className="p-3 text-center">Ranking</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rekapData.rekap.map((r) => (
+                    <tr key={r.siswaId} className="hover:bg-slate-50/80">
+                      <td className="p-3 pl-5 font-bold text-slate-900 text-sm">{r.nama}</td>
+                      <td className="p-3 text-center">
+                        <span className="font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200 text-sm">
+                          {r.rataRataKeseluruhan}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center text-xs text-slate-600">{r.kehadiran}</td>
+                      <td className="p-3 text-center">
+                        <span className={`text-xs font-bold ${r.totalAlpha > 3 ? 'text-rose-600' : 'text-slate-600'}`}>
+                          {r.totalAlpha}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center text-xs font-bold text-slate-700">
+                        {r.ranking || '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        )}
       </Card>
     </div>
   )

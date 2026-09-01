@@ -8,6 +8,10 @@ import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import {
   getAdminJenjangList,
   createKelas,
+  createJenjang,
+  updateJenjang,
+  deleteJenjang,
+  deleteKelas,
 } from "@/actions/jenjang-kelas"
 import { getDaftarGuru } from "@/actions/guru"
 
@@ -23,8 +27,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import Link from "next/link"
-import { Plus, UserCheck, Loader2, Users, AlertCircle } from "lucide-react"
+import { Plus, UserCheck, Loader2, Users, AlertCircle, Pencil, Trash2, GraduationCap } from "lucide-react"
 
 interface GuruOption {
   id: string
@@ -65,6 +70,19 @@ export default function KelolaKelasPage() {
   const [selectedWaliKelasId, setSelectedWaliKelasId] = React.useState("")
   const [loading, setLoading] = React.useState(false)
 
+  // Modal Tambah/Edit Jenjang
+  const [isJenjangOpen, setIsJenjangOpen] = React.useState(false)
+  const [editJenjang, setEditJenjang] = React.useState<JenjangItem | null>(null)
+  const [namaJenjang, setNamaJenjang] = React.useState("")
+  const [urutanJenjang, setUrutanJenjang] = React.useState("1")
+  const [loadingJenjang, setLoadingJenjang] = React.useState(false)
+
+  // Delete confirmation
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+  const [deleteType, setDeleteType] = React.useState<"jenjang" | "kelas">("jenjang")
+  const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; nama: string } | null>(null)
+  const [deleting, setDeleting] = React.useState(false)
+
   // Fetch real data from database
   const fetchData = React.useCallback(async () => {
     try {
@@ -103,7 +121,6 @@ export default function KelolaKelasPage() {
         }))
         setJenjangList(mapped)
 
-        // Set default selected jenjang if available
         if (mapped.length > 0 && !selectedJenjangId) {
           setSelectedJenjangId(mapped[0].id)
         }
@@ -119,7 +136,7 @@ export default function KelolaKelasPage() {
         setGuruList(gurus)
       }
     } catch {
-      // Silent fail — UI stays in loading/empty state
+      // Silent fail
     }
   }, [selectedJenjangId])
 
@@ -131,6 +148,7 @@ export default function KelolaKelasPage() {
     init()
   }, [fetchData])
 
+  // Handle Add Kelas
   const handleAddKelas = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!namaKelas.trim() || !selectedJenjangId) return
@@ -145,35 +163,95 @@ export default function KelolaKelasPage() {
       })
 
       if (result.success) {
-        toast({
-          title: "Kelas Baru Berhasil Dibuat! 🏫",
-          description: result.message,
-        })
-        // Refetch data from server so the new kelas appears immediately
+        toast({ title: "Kelas Baru Berhasil Dibuat! 🏫", description: result.message })
         await fetchData()
         setIsAddKelasOpen(false)
         setNamaKelas("")
         setKapasitas("30")
         setSelectedWaliKelasId("")
       } else {
-        toast({
-          title: "Gagal Membuat Kelas ❌",
-          description: result.message,
-          variant: "destructive",
-        })
+        toast({ title: "Gagal Membuat Kelas ❌", description: result.message, variant: "destructive" })
       }
     } catch {
-      toast({
-        title: "Kelas Dibuat (Demo Mode)",
-        description: `Kelas "${namaKelas}" telah dibuat.`,
-      })
-      setIsAddKelasOpen(false)
+      toast({ title: "Gagal Membuat Kelas", description: "Terjadi kesalahan server.", variant: "destructive" })
     } finally {
       setLoading(false)
     }
   }
 
-  // Loading state
+  // Handle Add/Edit Jenjang
+  const handleSaveJenjang = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!namaJenjang.trim()) return
+    setLoadingJenjang(true)
+    try {
+      let result
+      if (editJenjang) {
+        result = await updateJenjang(editJenjang.id, {
+          nama: namaJenjang,
+          urutan: parseInt(urutanJenjang) || 1,
+        })
+      } else {
+        result = await createJenjang({
+          nama: namaJenjang,
+          urutan: parseInt(urutanJenjang) || 1,
+        })
+      }
+
+      if (result.success) {
+        toast({
+          title: editJenjang ? "Jenjang Diperbarui! ✅" : "Jenjang Baru Dibuat! 🎓",
+          description: result.message,
+        })
+        await fetchData()
+        setIsJenjangOpen(false)
+        setEditJenjang(null)
+        setNamaJenjang("")
+        setUrutanJenjang("1")
+      } else {
+        toast({ title: "Gagal", description: result.message, variant: "destructive" })
+      }
+    } catch {
+      toast({ title: "Gagal", description: "Terjadi kesalahan server.", variant: "destructive" })
+    } finally {
+      setLoadingJenjang(false)
+    }
+  }
+
+  // Handle Delete
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      let result
+      if (deleteType === "jenjang") {
+        result = await deleteJenjang(deleteTarget.id)
+      } else {
+        result = await deleteKelas(deleteTarget.id)
+      }
+
+      if (result.success) {
+        toast({
+          title: deleteType === "jenjang" ? "Jenjang Dihapus" : "Kelas Dihapus",
+          description: result.message,
+        })
+        await fetchData()
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Gagal Menghapus",
+          description: result.message,
+        })
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Gagal", description: "Terjadi kesalahan server." })
+    } finally {
+      setDeleting(false)
+      setDeleteDialogOpen(false)
+      setDeleteTarget(null)
+    }
+  }
+
   if (pageLoading) {
     return (
       <div className="space-y-6 max-w-6xl mx-auto">
@@ -212,13 +290,28 @@ export default function KelolaKelasPage() {
         title="Struktur Jenjang &amp; Kelas Belajar"
         subtitle="Manajemen rombel santri, wali kelas pembina, dan penetapan guru mata pelajaran."
         action={
-          <Button
-            onClick={() => setIsAddKelasOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md min-h-[44px]"
-          >
-            <Plus className="h-4 w-4 mr-1.5" />
-            Tambah Kelas Rombel
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              onClick={() => {
+                setEditJenjang(null)
+                setNamaJenjang("")
+                setUrutanJenjang(String(jenjangList.length + 1))
+                setIsJenjangOpen(true)
+              }}
+              variant="outline"
+              className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-bold rounded-xl shadow-sm min-h-[44px]"
+            >
+              <GraduationCap className="h-4 w-4 mr-1.5" />
+              Tambah Jenjang
+            </Button>
+            <Button
+              onClick={() => setIsAddKelasOpen(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md min-h-[44px]"
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              Tambah Kelas Rombel
+            </Button>
+          </div>
         }
       />
 
@@ -231,7 +324,7 @@ export default function KelolaKelasPage() {
               Belum ada data jenjang yang terdaftar di database.
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              Silakan jalankan seed database atau buat jenjang baru melalui panel admin.
+              Klik &quot;Tambah Jenjang&quot; di atas untuk membuat jenjang baru.
             </p>
           </CardContent>
         </Card>
@@ -258,10 +351,36 @@ export default function KelolaKelasPage() {
                   </CardDescription>
                 </div>
 
-                <div className="text-right">
+                <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-700 bg-white px-3 py-1.5 rounded-xl border shadow-sm">
-                    {jenjang.kelasList.length} Rombel Aktif
+                    {jenjang.kelasList.length} Rombel
                   </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditJenjang(jenjang)
+                      setNamaJenjang(jenjang.nama)
+                      setUrutanJenjang(String(jenjang.urutan))
+                      setIsJenjangOpen(true)
+                    }}
+                    className="rounded-xl min-h-[36px] text-xs"
+                  >
+                    <Pencil className="h-3.5 w-3.5 mr-1" />
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setDeleteType("jenjang")
+                      setDeleteTarget({ id: jenjang.id, nama: jenjang.nama })
+                      setDeleteDialogOpen(true)
+                    }}
+                    className="rounded-xl min-h-[36px] text-xs text-rose-600 border-rose-200 hover:bg-rose-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </CardHeader>
 
@@ -299,13 +418,27 @@ export default function KelolaKelasPage() {
                           />
                         </div>
 
-                        <Link
-                          href={`/dashboard/kelas/${k.id}/pengajar`}
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl transition-colors"
-                        >
-                          <Users className="h-3.5 w-3.5" />
-                          Kelola Pengajar
-                        </Link>
+                        <div className="flex items-center justify-between">
+                          <Link
+                            href={`/dashboard/kelas/${k.id}/pengajar`}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl transition-colors"
+                          >
+                            <Users className="h-3.5 w-3.5" />
+                            Kelola Pengajar
+                          </Link>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setDeleteType("kelas")
+                              setDeleteTarget({ id: k.id, nama: k.nama })
+                              setDeleteDialogOpen(true)
+                            }}
+                            className="rounded-xl min-h-[32px] text-xs text-rose-600 border-rose-200 hover:bg-rose-50"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -418,6 +551,91 @@ export default function KelolaKelasPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Modal Tambah/Edit Jenjang */}
+      <Dialog open={isJenjangOpen} onOpenChange={(open) => {
+        setIsJenjangOpen(open)
+        if (!open) setEditJenjang(null)
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-900">
+              {editJenjang ? "Edit Jenjang" : "Tambah Jenjang Baru"}
+            </DialogTitle>
+            <p className="text-xs text-slate-500">
+              {editJenjang ? "Perbarui data jenjang pendidikan" : "Buat jenjang pendidikan baru (misal: Tingkat 1, Tingkat 2, dll)"}
+            </p>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveJenjang} className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                Nama Jenjang *
+              </label>
+              <Input
+                placeholder="Contoh: Tingkat 1 / Madrasah Tsanawiyah"
+                value={namaJenjang}
+                onChange={(e) => setNamaJenjang(e.target.value)}
+                className="h-11 rounded-xl text-sm"
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                Urutan / Tingkat *
+              </label>
+              <Input
+                type="number"
+                min={1}
+                value={urutanJenjang}
+                onChange={(e) => setUrutanJenjang(e.target.value)}
+                className="h-11 rounded-xl text-sm"
+                required
+              />
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { setIsJenjangOpen(false); setEditJenjang(null) }}
+                className="rounded-xl min-h-[40px]"
+              >
+                Batal
+              </Button>
+              <Button
+                type="submit"
+                disabled={loadingJenjang}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]"
+              >
+                {loadingJenjang ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
+                {editJenjang ? "Simpan Perubahan" : "Buat Jenjang"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open)
+          if (!open) setDeleteTarget(null)
+        }}
+        title={`Hapus ${deleteType === "jenjang" ? "Jenjang" : "Kelas"}?`}
+        description={
+          deleteType === "jenjang"
+            ? `Apakah Anda yakin ingin menghapus jenjang "${deleteTarget?.nama}"? Jenjang hanya bisa dihapus jika belum memiliki kelas atau data pendaftaran.`
+            : `Apakah Anda yakin ingin menghapus kelas "${deleteTarget?.nama}"? Kelas hanya bisa dihapus jika belum memiliki siswa atau pendaftar aktif.`
+        }
+        confirmText={deleting ? "Menghapus..." : "Ya, Hapus"}
+        cancelText="Batal"
+        variant="destructive"
+        isLoading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

@@ -4,20 +4,44 @@
 
 import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
-import { submitPengerjaanUjian } from "@/actions/ujian"
+import { mulaiPengerjaanUjian, submitPengerjaanUjian } from "@/actions/ujian"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { Clock, ArrowLeft, ArrowRight, Send } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
+import { Clock, ArrowLeft, ArrowRight, Send, Loader2, AlertCircle } from "lucide-react"
+
+interface OpsiSoal {
+  id: string
+  label: string
+  teks: string
+}
 
 interface SoalExam {
   id: string
   nomor: number
   tipe: "PILIHAN_GANDA" | "ESAI"
   pertanyaan: string
-  opsi: { id: string; label: string; teks: string }[]
+  bobot: number
+  opsi: OpsiSoal[]
+}
+
+interface UjianData {
+  id: string
+  judul: string
+  mataPelajaran: string
+  durasiMenit: number
+  waktuMulaiSiswa: string | Date
+  deadlineSelesai: string | Date
+  soal: SoalExam[]
+}
+
+interface JawabanTersimpan {
+  soalId: string
+  opsiDipilihId?: string | null
+  jawabanEsai?: string | null
 }
 
 export default function KerjakanUjianPage() {
@@ -25,73 +49,76 @@ export default function KerjakanUjianPage() {
   const router = useRouter()
   const { toast } = useToast()
 
-  const ujianId = (params?.id as string) || "ujian-1"
+  const ujianId = params?.id as string
 
-  // 60 minutes = 3600 seconds
-  const [timeLeft, setTimeLeft] = React.useState(3600)
+  // Loading states
+  const [initializing, setInitializing] = React.useState(true)
+  const [initError, setInitError] = React.useState<string | null>(null)
+
+  // Ujian data (from server)
+  const [ujianData, setUjianData] = React.useState<UjianData | null>(null)
+  const [pengerjaanId, setPengerjaanId] = React.useState<string | null>(null)
+
+  // Timer: calculate from deadlineSelesai
+  const [timeLeft, setTimeLeft] = React.useState(0)
   const [currentIdx, setCurrentIdx] = React.useState(0)
-  const [jawaban, setJawaban] = React.useState<Record<string, string>>({})
+  const [jawaban, setJawaban] = React.useState<Record<string, { opsiDipilihId?: string; jawabanEsai?: string }>>({})
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
 
-  // Dummy questions for exam execution
-  const questions: SoalExam[] = [
-    {
-      id: "soal-1",
-      nomor: 1,
-      tipe: "PILIHAN_GANDA",
-      pertanyaan: "Berapakah jumlah rukun wudhu yang wajib menurut madzhab Syafi'i?",
-      opsi: [
-        { id: "opt-1", label: "A", teks: "4 Rukun" },
-        { id: "opt-2", label: "B", teks: "6 Rukun" },
-        { id: "opt-3", label: "C", teks: "8 Rukun" },
-        { id: "opt-4", label: "D", teks: "10 Rukun" },
-      ],
-    },
-    {
-      id: "soal-2",
-      nomor: 2,
-      tipe: "PILIHAN_GANDA",
-      pertanyaan: "Manakah yang BUKAN termasuk rukun shalat?",
-      opsi: [
-        { id: "opt-5", label: "A", teks: "Ikhlas" },
-        { id: "opt-6", label: "B", teks: "Takbiratul Ihram" },
-        { id: "opt-7", label: "C", teks: "Ruku" },
-        { id: "opt-8", label: "D", teks: "Sujud" },
-      ],
-    },
-    {
-      id: "soal-3",
-      nomor: 3,
-      tipe: "PILIHAN_GANDA",
-      pertanyaan: "Apa hukumnya shalat berjamaah di masjid bagi laki-laki?",
-      opsi: [
-        { id: "opt-9", label: "A", teks: "Wajib" },
-        { id: "opt-10", label: "B", teks: "Sunnah Mu'akkadah" },
-        { id: "opt-11", label: "C", teks: "Makruh" },
-        { id: "opt-12", label: "D", teks: "Haram" },
-      ],
-    },
-    {
-      id: "soal-4",
-      nomor: 4,
-      tipe: "PILIHAN_GANDA",
-      pertanyaan: "Berapa kali minimal kita membaca Al-Fatihah dalam setiap rakaat shalat?",
-      opsi: [
-        { id: "opt-13", label: "A", teks: "1 kali" },
-        { id: "opt-14", label: "B", teks: "2 kali" },
-        { id: "opt-15", label: "C", teks: "3 kali" },
-        { id: "opt-16", label: "D", teks: "Tidak wajib membaca" },
-      ],
-    },
-    {
-      id: "soal-5",
-      nomor: 5,
-      tipe: "ESAI",
-      pertanyaan: "Tuliskan dalil Al-Qur'an atau Hadits yang memerintahkan pelaksanaan shalat berjamaah di masjid bagi laki-laki baligh!",
-      opsi: [],
-    },
-  ]
+  // Initialize ujian data from server
+  React.useEffect(() => {
+    if (!ujianId) {
+      setInitError("ID ujian tidak valid")
+      setInitializing(false)
+      return
+    }
+
+    async function initUjian() {
+      setInitializing(true)
+      setInitError(null)
+      try {
+        const result = await mulaiPengerjaanUjian(ujianId)
+        if (!result.success || !result.data) {
+          setInitError(result.message || "Gagal memuat data ujian")
+          setInitializing(false)
+          return
+        }
+
+        const data = result.data as {
+          pengerjaanId: string
+          ujian: UjianData
+          jawabanTersimpan: JawabanTersimpan[]
+        }
+
+        setUjianData(data.ujian)
+        setPengerjaanId(data.pengerjaanId)
+
+        // Pre-fill saved answers
+        const savedJawaban: Record<string, { opsiDipilihId?: string; jawabanEsai?: string }> = {}
+        if (data.jawabanTersimpan && Array.isArray(data.jawabanTersimpan)) {
+          for (const jwb of data.jawabanTersimpan) {
+            savedJawaban[jwb.soalId] = {
+              opsiDipilihId: jwb.opsiDipilihId || undefined,
+              jawabanEsai: jwb.jawabanEsai || undefined,
+            }
+          }
+        }
+        setJawaban(savedJawaban)
+
+        // Calculate time left from deadline
+        const deadline = new Date(data.ujian.deadlineSelesai)
+        const now = new Date()
+        const diffMs = deadline.getTime() - now.getTime()
+        setTimeLeft(Math.max(0, Math.floor(diffMs / 1000)))
+      } catch {
+        setInitError("Terjadi kesalahan saat memuat ujian")
+      } finally {
+        setInitializing(false)
+      }
+    }
+    initUjian()
+  }, [ujianId])
 
   const formatTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -99,52 +126,110 @@ export default function KerjakanUjianPage() {
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
   }
 
-  const handlePilihJawaban = (soalId: string, val: string) => {
-    setJawaban((prev) => ({ ...prev, [soalId]: val }))
+  const handlePilihJawaban = (soalId: string, val: string, tipe: "PILIHAN_GANDA" | "ESAI") => {
+    setJawaban((prev) => ({
+      ...prev,
+      [soalId]: tipe === "PILIHAN_GANDA"
+        ? { opsiDipilihId: val }
+        : { jawabanEsai: val },
+    }))
   }
 
   const handleFinalSubmit = React.useCallback(async () => {
+    if (!ujianId || !pengerjaanId) return
     setSubmitting(true)
     try {
-      await submitPengerjaanUjian({
+      // Build jawaban array: include ALL soal, even unanswered ones
+      const jawabanArray = ujianData?.soal.map((soal) => {
+        const jwb = jawaban[soal.id]
+        return {
+          soalId: soal.id,
+          opsiDipilihId: jwb?.opsiDipilihId || undefined,
+          jawabanEsai: jwb?.jawabanEsai || undefined,
+        }
+      }) || []
+
+      const result = await submitPengerjaanUjian({
         ujianId,
-        jawaban: Object.entries(jawaban).map(([soalId, teksJawaban]) => ({
-          soalId,
-          jawabanEsai: typeof teksJawaban === 'string' ? teksJawaban : undefined,
-        })),
+        jawaban: jawabanArray,
       })
 
       toast({
         title: "Ujian Berhasil Dikumpulkan! 🏆",
-        description: "Jawaban Anda telah tersimpan dan terkirim ke server.",
+        description: result.message || "Jawaban Anda telah tersimpan dan terkirim ke server.",
       })
       router.push("/dashboard/ujian")
     } catch {
       toast({
-        title: "Ujian Dikumpulkan (Demo)",
-        description: "Terima kasih, pengerjaan ujian Anda telah selesai.",
+        variant: "destructive",
+        title: "Gagal Mengumpulkan Ujian",
+        description: "Terjadi kesalahan saat mengirim jawaban. Silakan coba lagi.",
       })
-      router.push("/dashboard/ujian")
     } finally {
       setSubmitting(false)
       setIsSubmitDialogOpen(false)
     }
-  }, [ujianId, jawaban, toast, router])
+  }, [ujianId, pengerjaanId, ujianData, jawaban, toast, router])
 
   // Countdown timer effect
   React.useEffect(() => {
-    if (timeLeft <= 0) {
+    if (timeLeft <= 0 && !initializing && ujianData) {
       handleFinalSubmit()
       return
     }
     const interval = setInterval(() => {
-      setTimeLeft((prev) => prev - 1)
+      setTimeLeft((prev) => Math.max(0, prev - 1))
     }, 1000)
     return () => clearInterval(interval)
-  }, [timeLeft, handleFinalSubmit])
+  }, [timeLeft, initializing, ujianData, handleFinalSubmit])
 
+  // Loading state
+  if (initializing) {
+    return (
+      <div className="space-y-4 max-w-5xl mx-auto pb-12">
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <span className="ml-3 text-sm text-slate-500">Memuat soal ujian...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (initError) {
+    return (
+      <div className="space-y-4 max-w-5xl mx-auto pb-12">
+        <EmptyState
+          icon={AlertCircle}
+          title="Gagal Memuat Ujian"
+          description={initError}
+          actionLabel="Kembali ke Daftar Ujian"
+          actionHref="/dashboard/ujian"
+        />
+      </div>
+    )
+  }
+
+  if (!ujianData || !ujianData.soal || ujianData.soal.length === 0) {
+    return (
+      <div className="space-y-4 max-w-5xl mx-auto pb-12">
+        <EmptyState
+          icon={AlertCircle}
+          title="Tidak Ada Soal"
+          description="Ujian ini belum memiliki soal. Hubungi guru pembuat ujian."
+          actionLabel="Kembali ke Daftar Ujian"
+          actionHref="/dashboard/ujian"
+        />
+      </div>
+    )
+  }
+
+  const questions = ujianData.soal
   const currentQ = questions[currentIdx]
-  const totalAnswered = Object.keys(jawaban).length
+  const totalAnswered = Object.keys(jawaban).filter((key) => {
+    const jwb = jawaban[key]
+    return jwb?.opsiDipilihId || jwb?.jawabanEsai
+  }).length
 
   return (
     <div className="space-y-4 max-w-5xl mx-auto pb-12">
@@ -152,7 +237,7 @@ export default function KerjakanUjianPage() {
       <header className="sticky top-0 z-30 bg-slate-900 text-white rounded-2xl p-3.5 sm:p-4 shadow-xl flex items-center justify-between gap-3 backdrop-blur-md">
         <div>
           <h2 className="font-extrabold text-sm sm:text-base tracking-tight truncate max-w-[200px] sm:max-w-md">
-            Penilaian Harian Fiqih Ibadah
+            {ujianData.judul}
           </h2>
           <span className="text-xs text-emerald-400 font-medium hidden sm:inline">
             Soal {currentIdx + 1} dari {questions.length} • Terjawab: {totalAnswered}/{questions.length}
@@ -209,9 +294,9 @@ export default function KerjakanUjianPage() {
                   <button
                     key={opt.id}
                     type="button"
-                    onClick={() => handlePilihJawaban(currentQ.id, opt.id)}
+                    onClick={() => handlePilihJawaban(currentQ.id, opt.id, "PILIHAN_GANDA")}
                     className={`w-full text-left p-3.5 sm:p-4 rounded-xl border-2 transition-all text-sm font-medium ${
-                      jawaban[currentQ.id] === opt.id
+                      jawaban[currentQ.id]?.opsiDipilihId === opt.id
                         ? "border-emerald-500 bg-emerald-50 text-emerald-800"
                         : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300"
                     }`}
@@ -223,8 +308,8 @@ export default function KerjakanUjianPage() {
             ) : (
               <Textarea
                 placeholder="Tuliskan jawaban esai Anda di sini..."
-                value={jawaban[currentQ.id] || ""}
-                onChange={(e) => handlePilihJawaban(currentQ.id, e.target.value)}
+                value={jawaban[currentQ.id]?.jawabanEsai || ""}
+                onChange={(e) => handlePilihJawaban(currentQ.id, e.target.value, "ESAI")}
                 className="min-h-[200px] rounded-xl border-slate-200 text-sm"
               />
             )}
@@ -267,7 +352,7 @@ export default function KerjakanUjianPage() {
                   className={`w-full aspect-square rounded-xl text-xs font-bold transition-all ${
                     idx === currentIdx
                       ? "bg-emerald-600 text-white shadow-md"
-                      : jawaban[q.id]
+                      : jawaban[q.id]?.opsiDipilihId || jawaban[q.id]?.jawabanEsai
                       ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
                       : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                   }`}
@@ -289,6 +374,7 @@ export default function KerjakanUjianPage() {
         onConfirm={handleFinalSubmit}
         confirmText={submitting ? "Mengirim..." : "Ya, Selesai!"}
         cancelText="Kembali Mengerjakan"
+        isLoading={submitting}
       />
     </div>
   )

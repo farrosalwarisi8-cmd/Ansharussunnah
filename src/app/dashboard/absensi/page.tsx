@@ -7,7 +7,7 @@ import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
 import { Role } from "@prisma/client"
-import { inputAbsensiBulk, getRiwayatKehadiranSiswa, getRiwayatKehadiranAnak, getSiswaByKelas } from "@/actions/absensi"
+import { inputAbsensiBulk, inputAbsensiSingle, editAbsensi, getRiwayatKehadiranSiswa, getRiwayatKehadiranAnak, getSiswaByKelas, getRekapKehadiranKelas } from "@/actions/absensi"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -100,6 +100,44 @@ function GuruAbsensiView() {
     new Date().toISOString().split("T")[0]
   )
   const [saving, setSaving] = React.useState(false)
+
+  // Rekap state
+  const [showRekap, setShowRekap] = React.useState(false)
+  const [rekapData, setRekapData] = React.useState<Array<{
+    siswaId: string
+    nama: string
+    nisn: string
+    totalHari: number
+    hadir: number
+    sakit: number
+    izin: number
+    alpha: number
+    persentaseKehadiran: string
+  }> | null>(null)
+  const [loadingRekap, setLoadingRekap] = React.useState(false)
+  const [periodeAjaranId, setPeriodeAjaranId] = React.useState("periode-aktif")
+
+  const handleLoadRekap = async () => {
+    if (!selectedKelasId) return
+    setLoadingRekap(true)
+    try {
+      const result = await getRekapKehadiranKelas({
+        kelasId: selectedKelasId,
+        periodeAjaranId,
+      })
+      if (result.success && result.data) {
+        const data = result.data as { rekap: typeof rekapData }
+        setRekapData(data.rekap)
+        setShowRekap(true)
+      } else {
+        toast({ variant: "destructive", title: "Gagal", description: result.message })
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Gagal", description: "Gagal memuat rekap kehadiran." })
+    } finally {
+      setLoadingRekap(false)
+    }
+  }
 
   // Fetch guru's kelas list on mount
   React.useEffect(() => {
@@ -269,13 +307,22 @@ function GuruAbsensiView() {
             >
               <UserCheck className="h-4 w-4 mr-1.5" />
               Set Semua Hadir
-            </Button>
-            <Button
-              type="button"
-              disabled={saving || loadingSiswa || students.length === 0}
-              onClick={handleSaveBulk}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-11 min-h-[44px] px-6 flex-1 sm:flex-initial shadow-md"
-            >
+            </Button>              <Button
+                type="button"
+                variant="outline"
+                onClick={handleLoadRekap}
+                disabled={loadingRekap || !selectedKelasId}
+                className="text-xs font-bold text-teal-700 hover:bg-teal-50 border-teal-200 rounded-xl h-11 min-h-[44px] flex-1 sm:flex-initial"
+              >
+                {loadingRekap ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+                Lihat Rekap
+              </Button>
+              <Button
+                type="button"
+                disabled={saving || loadingSiswa || students.length === 0}
+                onClick={handleSaveBulk}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-11 min-h-[44px] px-6 flex-1 sm:flex-initial shadow-md"
+              >
               {saving ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
               ) : (
@@ -378,12 +425,93 @@ function GuruAbsensiView() {
                           <span>{btn.label}</span>
                         </button>
                       )
-                    })}
+                    }                    )}
+
+                    {/* Individual Save Button */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          const result = await inputAbsensiSingle({
+                            siswaId: student.siswaId,
+                            kelasId: selectedKelasId,
+                            periodeAjaranId: "periode-aktif",
+                            tanggal: selectedTanggal,
+                            status: attendance[student.siswaId] || "HADIR",
+                          })
+                          if (result.success) {
+                            toast({ title: "Tersimpan", description: `${student.nama}: ${attendance[student.siswaId] || "HADIR"}` })
+                          } else {
+                            toast({ variant: "destructive", title: "Gagal", description: result.message })
+                          }
+                        } catch {
+                          toast({ variant: "destructive", title: "Gagal", description: "Gagal menyimpan absensi." })
+                        }
+                      }}
+                      className="min-h-[44px] min-w-[44px] px-2 text-[10px] font-bold rounded-lg bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                    >
+                      Simpan
+                    </Button>
                   </div>
                 </div>
               ))}
             </CardContent>
           </Card>
+
+          {/* Rekap Kehadiran Section */}
+          {showRekap && (
+            <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+              <CardHeader className="p-5 pb-3 border-b border-slate-100">
+                <CardTitle className="text-base font-bold text-slate-900">
+                  Rekap Kehadiran Kelas
+                </CardTitle>
+                <CardDescription className="text-xs text-slate-500">
+                  Persentase kehadiran per siswa dalam periode yang dipilih
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                {rekapData && rekapData.length > 0 ? (
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
+                        <tr>
+                          <th className="p-4 pl-6">Nama Santri</th>
+                          <th className="p-4 text-center">Total Hari</th>
+                          <th className="p-4 text-center">Hadir</th>
+                          <th className="p-4 text-center">Izin</th>
+                          <th className="p-4 text-center">Sakit</th>
+                          <th className="p-4 text-center">Alpa</th>
+                          <th className="p-4 text-center pr-6">Persentase</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {rekapData.map((r) => (
+                          <tr key={r.siswaId} className="hover:bg-slate-50/80">
+                            <td className="p-4 pl-6 font-bold text-slate-900">{r.nama}</td>
+                            <td className="p-4 text-center text-slate-600">{r.totalHari}</td>
+                            <td className="p-4 text-center text-emerald-700 font-semibold">{r.hadir}</td>
+                            <td className="p-4 text-center text-amber-700 font-semibold">{r.izin}</td>
+                            <td className="p-4 text-center text-sky-700 font-semibold">{r.sakit}</td>
+                            <td className="p-4 text-center text-rose-700 font-semibold">{r.alpha}</td>
+                            <td className="p-4 text-center pr-6">
+                              <span className="font-extrabold text-sm text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                                {r.persentaseKehadiran}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-slate-400 text-sm">
+                    Belum ada data kehadiran untuk periode ini.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>

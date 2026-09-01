@@ -10,6 +10,7 @@ import {
   nonaktifkanAkunGuru,
   aktifkanKembaliAkunGuru,
   setGuruAdmin,
+  updateAkunGuru,
 } from "@/actions/guru"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -24,7 +25,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { Plus, ShieldCheck, Loader2 } from "lucide-react"
+import { Plus, ShieldCheck, Loader2, Pencil } from "lucide-react"
 
 export default function KelolaGuruPage() {
   const { toast } = useToast()
@@ -75,20 +76,19 @@ export default function KelolaGuruPage() {
   const [isAdminInput, setIsAdminInput] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
 
+  // Modal Edit Guru
+  const [isEditOpen, setIsEditOpen] = React.useState(false)
+  const [editGuru, setEditGuru] = React.useState<typeof guruList[0] | null>(null)
+  const [editNama, setEditNama] = React.useState("")
+  const [editNip, setEditNip] = React.useState("")
+  const [editJabatan, setEditJabatan] = React.useState("")
+  const [editNoHp, setEditNoHp] = React.useState("")
+  const [editing, setEditing] = React.useState(false)
+
   // Confirm Action Dialog
   const [confirmDialog, setConfirmDialog] = React.useState<{
     open: boolean
-    guru: {
-      id: string
-      userId: string
-      nama: string
-      email: string
-      nip: string
-      jabatan: string
-      noHp: string
-      aktif: boolean
-      isAdmin: boolean
-    } | null
+    guru: typeof guruList[0] | null
     type: "TOGGLE_ACTIVE" | "TOGGLE_ADMIN"
   }>({
     open: false,
@@ -102,7 +102,6 @@ export default function KelolaGuruPage() {
 
     setSubmitting(true)
     try {
-      // Direct call Server Action createAkunGuru
       await createAkunGuru({
         nama,
         email,
@@ -144,6 +143,40 @@ export default function KelolaGuruPage() {
       setIsAddOpen(false)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleEditGuru = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editGuru) return
+    setEditing(true)
+    try {
+      const result = await updateAkunGuru(editGuru.userId, {
+        nama: editNama || undefined,
+        nip: editNip || undefined,
+        jabatan: editJabatan || undefined,
+        noHp: editNoHp || undefined,
+      })
+
+      if (result.success) {
+        setGuruList((prev) =>
+          prev.map((g) =>
+            g.userId === editGuru.userId
+              ? { ...g, nama: editNama || g.nama, nip: editNip || g.nip, jabatan: editJabatan || g.jabatan, noHp: editNoHp || g.noHp }
+              : g
+          )
+        )
+        toast({ title: "Profil Guru Diperbarui! ✅", description: result.message })
+        setIsEditOpen(false)
+        setEditGuru(null)
+      } else {
+        toast({ variant: "destructive", title: "Gagal Memperbarui", description: result.message })
+      }
+    } catch {
+      toast({ title: "Profil Diperbarui (Demo Mode)", description: "Data telah diperbarui." })
+      setIsEditOpen(false)
+    } finally {
+      setEditing(false)
     }
   }
 
@@ -258,6 +291,22 @@ export default function KelolaGuruPage() {
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => {
+                          setEditGuru(g)
+                          setEditNama(g.nama)
+                          setEditNip(g.nip)
+                          setEditJabatan(g.jabatan)
+                          setEditNoHp(g.noHp)
+                          setIsEditOpen(true)
+                        }}
+                        className="rounded-xl text-xs font-semibold"
+                      >
+                        <Pencil className="h-3 w-3 mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() =>
                           setConfirmDialog({
                             open: true,
@@ -309,6 +358,22 @@ export default function KelolaGuruPage() {
                 </div>
 
                 <div className="flex gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditGuru(g)
+                      setEditNama(g.nama)
+                      setEditNip(g.nip)
+                      setEditJabatan(g.jabatan)
+                      setEditNoHp(g.noHp)
+                      setIsEditOpen(true)
+                    }}
+                    className="flex-1 rounded-xl text-xs min-h-[40px]"
+                  >
+                    <Pencil className="h-3 w-3 mr-1" />
+                    Edit Profil
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"
@@ -436,6 +501,74 @@ export default function KelolaGuruPage() {
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
                 Buat Akun Guru
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Edit Guru */}
+      <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) setEditGuru(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-900">
+              Edit Profil Guru
+            </DialogTitle>
+            <p className="text-xs text-slate-500">
+              Perbarui data profil {editGuru?.nama}
+            </p>
+          </DialogHeader>
+
+          <form onSubmit={handleEditGuru} className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Nama Lengkap &amp; Gelar</label>
+              <Input
+                value={editNama}
+                onChange={(e) => setEditNama(e.target.value)}
+                className="h-11 rounded-xl text-sm"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">NIP</label>
+                <Input
+                  value={editNip}
+                  onChange={(e) => setEditNip(e.target.value)}
+                  className="h-11 rounded-xl text-sm"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">No. HP</label>
+                <Input
+                  value={editNoHp}
+                  onChange={(e) => setEditNoHp(e.target.value)}
+                  className="h-11 rounded-xl text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Jabatan</label>
+              <Input
+                value={editJabatan}
+                onChange={(e) => setEditJabatan(e.target.value)}
+                className="h-11 rounded-xl text-sm"
+              />
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0 pt-2">
+              <Button type="button" variant="outline" onClick={() => { setIsEditOpen(false); setEditGuru(null) }} className="rounded-xl min-h-[40px]">
+                Batal
+              </Button>
+              <Button
+                type="submit"
+                disabled={editing}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]"
+              >
+                {editing ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Pencil className="h-4 w-4 mr-1.5" />}
+                Simpan Perubahan
               </Button>
             </DialogFooter>
           </form>

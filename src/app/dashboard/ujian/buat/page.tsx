@@ -4,13 +4,13 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { createUjian } from "@/actions/ujian"
+import { createUjian, addOrUpdateSoalUjian, deleteSoalUjian } from "@/actions/ujian"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Trash2, ArrowLeft, Loader2, Save } from "lucide-react"
+import { Plus, Trash2, ArrowLeft, Loader2, Save, CheckCircle2, AlertCircle } from "lucide-react"
 import Link from "next/link"
 
 interface OpsiItem {
@@ -20,6 +20,7 @@ interface OpsiItem {
 }
 
 interface SoalItem {
+  id?: string // Database ID if saved
   nomor: number
   tipe: "PILIHAN_GANDA" | "ESAI"
   pertanyaan: string
@@ -99,9 +100,26 @@ export default function BuatUjianPage() {
     ])
   }
 
-  const deleteSoal = (index: number) => {
-    setSoalList((prev) => prev.filter((_, idx) => idx !== index))
+  const deleteSoal = async (index: number) => {
+    const soalToDelete = soalList[index]
+
+    // If soal has a database ID (was previously saved), delete from DB
+    if (soalToDelete.id && ujianIdRef.current) {
+      try {
+        await deleteSoalUjian(ujianIdRef.current, soalToDelete.nomor)
+      } catch {
+        // Continue with local deletion even if DB delete fails
+      }
+    }
+
+    setSoalList((prev) => {
+      const filtered = prev.filter((_, idx) => idx !== index)
+      return filtered.map((s, idx) => ({ ...s, nomor: idx + 1 }))
+    })
   }
+
+  // Ref to store ujianId after creation (for edit mode)
+  const ujianIdRef = React.useRef<string | null>(null)
 
   const updatePertanyaan = (index: number, text: string) => {
     setSoalList((prev) =>
@@ -147,30 +165,91 @@ export default function BuatUjianPage() {
 
     setLoading(true)
     try {
-      // Direct call Server Action createUjian
-      await createUjian({
+      // Step 1: Create the ujian record
+      const result = await createUjian({
         judul,
         deskripsi,
         kelasId,
         periodeAjaranId: "periode-aktif",
-        mataPelajaran: "Fiqih Ibadah",
+        mataPelajaran: mapel,
         durasiMenit: parseInt(durasi) || 60,
         waktuMulai: waktuMulai ? new Date(waktuMulai).toISOString() : new Date().toISOString(),
         waktuSelesai: waktuSelesai ? new Date(waktuSelesai).toISOString() : new Date(Date.now() + 86400000).toISOString(),
+
       })
 
+      if (!result.success || !result.data?.ujianId) {
+        toast({
+          variant: "destructive",
+          title: "Gagal Membuat Ujian",
+          description: result.message || "Terjadi kesalahan saat membuat ujian.",
+        })
+        return
+      }
+
+      const ujianId = result.data.ujianId
+      ujianIdRef.current = ujianId
+
+      // Step 2: Save each soal
+      const failedSoal: number[] = []
+      const savedSoal: number[] = []
+
+      for (const soal of soalList) {
+        try {
+          const soalPayload = {
+            ujianId,
+            nomorSoal: soal.nomor,
+            pertanyaan: soal.pertanyaan,
+            tipe: soal.tipe,
+            bobot: soal.bobotNilai,
+            kunciEsai: soal.tipe === "ESAI" ? soal.opsi[0]?.teks || undefined : undefined,
+            opsi: soal.tipe === "PILIHAN_GANDA"
+              ? soal.opsi.map((o, idx) => ({
+                  label: ["A", "B", "C", "D", "E"][idx] || String.fromCharCode(65 + idx),
+                  teks: o.teks,
+                  benar: o.benar,
+                }))
+              : undefined,
+          }
+
+          const soalResult = await addOrUpdateSoalUjian(soalPayload)
+
+          if (soalResult.success) {
+            savedSoal.push(soal.nomor)
+          } else {
+            failedSoal.push(soal.nomor)
+          }
+        } catch {
+          failedSoal.push(soal.nomor)
+        }
+      }
+
+      // Step 3: Report results
+      if (failedSoal.length > 0) {
+        toast({
+          variant: "destructive",
+          title: `${failedSoal.length} Soal Gagal Disimpan!`,
+          description: `Soal nomor ${failedSoal.join(", ")} gagal disimpan. Soal ${savedSoal.length > 0 ? `${savedSoal.join(", ")} berhasil.` : ""}`,
+        })
+        if (savedSoal.length === 0) {
+          // All failed — don't redirect, let user fix
+          setLoading(false)
+          return
+        }
+      }
+
       toast({
-        title: publish ? "Ujian Berhasil Dipublikasikan!" : "Draft Ujian Tersimpan!",
-        description: `Ujian "${judul}" dengan ${soalList.length} butir soal telah dibuat.`,
+        title: publish ? "Ujian Berhasil Dipublikasikan! 🎉" : "Draft Ujian Tersimpan! 📝",
+        description: `${savedSoal.length} dari ${soalList.length} soal berhasil disimpan ke ujian "${judul}".`,
       })
 
       router.push("/dashboard/ujian")
     } catch {
       toast({
-        title: "Ujian Tersimpan (Mode Demo)",
-        description: `Ujian "${judul}" siap digunakan.`,
+        variant: "destructive",
+        title: "Gagal Menyimpan Ujian",
+        description: "Terjadi kesalahan saat menyimpan data ujian.",
       })
-      router.push("/dashboard/ujian")
     } finally {
       setLoading(false)
     }

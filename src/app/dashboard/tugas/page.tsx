@@ -7,14 +7,18 @@ import { useDashboard, type ChildStudent } from "@/components/dashboard/dashboar
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
 import { Role } from "@prisma/client"
-import { Plus, Clock, FileText, Upload, Loader2 } from "lucide-react"
+import { Plus, Clock, FileText, Upload, Loader2, Trash2, Pencil } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { StatusBadge, type StatusType } from "@/components/ui/status-badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { EmptyState } from "@/components/ui/empty-state"
-import { getDaftarTugasSiswa, getDaftarTugasGuru, getTugasAnak } from "@/actions/tugas"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { useToast } from "@/hooks/use-toast"
+import { getDaftarTugasSiswa, getDaftarTugasGuru, getTugasAnak, deleteTugas, updateTugas } from "@/actions/tugas"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
 
 type TugasItem = {
@@ -94,6 +98,8 @@ export default function TugasPage() {
 /* 1. GURU TUGAS VIEW (REAL DATA)                                            */
 /* ========================================================================= */
 function GuruTugasView() {
+  const { toast } = useToast()
+
   // Kelas data
   const [kelasList, setKelasList] = React.useState<KelasItem[]>([])
   const [selectedKelasId, setSelectedKelasId] = React.useState<string>("")
@@ -102,6 +108,70 @@ function GuruTugasView() {
   // Tugas data
   const [tugasList, setTugasList] = React.useState<GuruTugasItem[]>([])
   const [loadingTugas, setLoadingTugas] = React.useState(false)
+
+  // Delete state
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+  const [deleteTarget, setDeleteTarget] = React.useState<GuruTugasItem | null>(null)
+  const [deleting, setDeleting] = React.useState(false)
+
+  // Edit state
+  const [isEditOpen, setIsEditOpen] = React.useState(false)
+  const [editTugas, setEditTugas] = React.useState<GuruTugasItem | null>(null)
+  const [editJudul, setEditJudul] = React.useState("")
+  const [editDeskripsi, setEditDeskripsi] = React.useState("")
+  const [editDeadline, setEditDeadline] = React.useState("")
+  const [editing, setEditing] = React.useState(false)
+
+  const handleEditTugas = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editTugas) return
+    setEditing(true)
+    try {
+      const result = await updateTugas(editTugas.id, {
+        judul: editJudul || undefined,
+        deskripsi: editDeskripsi || undefined,
+        deadline: editDeadline ? new Date(editDeadline).toISOString() : undefined,
+      })
+      if (result.success) {
+        toast({ title: "Tugas Diperbarui! ✅", description: result.message })
+        setIsEditOpen(false)
+        setEditTugas(null)
+        // Refetch
+        if (selectedKelasId) {
+          const fetchResult = await getDaftarTugasGuru(selectedKelasId)
+          if (fetchResult.success && fetchResult.data) {
+            setTugasList(fetchResult.data as GuruTugasItem[])
+          }
+        }
+      } else {
+        toast({ variant: "destructive", title: "Gagal", description: result.message })
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Gagal", description: "Terjadi kesalahan server." })
+    } finally {
+      setEditing(false)
+    }
+  }
+
+  const handleDeleteTugas = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const result = await deleteTugas(deleteTarget.id)
+      if (result.success) {
+        toast({ title: "Tugas Dihapus", description: result.message })
+        setTugasList((prev) => prev.filter((t) => t.id !== deleteTarget.id))
+      } else {
+        toast({ variant: "destructive", title: "Gagal Menghapus", description: result.message })
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Gagal", description: "Terjadi kesalahan server." })
+    } finally {
+      setDeleting(false)
+      setDeleteDialogOpen(false)
+      setDeleteTarget(null)
+    }
+  }
 
   // Fetch guru's kelas list on mount
   React.useEffect(() => {
@@ -237,12 +307,101 @@ function GuruTugasView() {
                   </span>
                 </div>
 
-                <Button asChild className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl min-h-[44px]">
-                  <Link href={`/dashboard/tugas/${item.id}`}>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Periksa &amp; Beri Nilai
-                  </Link>
-                </Button>
+                <div className="flex gap-2">
+                  <Button asChild className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl min-h-[44px]">
+                    <Link href={`/dashboard/tugas/${item.id}`}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Periksa &amp; Beri Nilai
+                    </Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditTugas(item)
+                      setEditJudul(item.judul)
+                      setEditDeskripsi("")
+                      setEditDeadline(new Date(item.deadline).toISOString().slice(0, 16))
+                      setIsEditOpen(true)
+                    }}
+                    className="rounded-xl min-h-[44px] text-xs font-bold border-slate-200 px-3"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setDeleteTarget(item)
+                      setDeleteDialogOpen(true)
+                    }}
+                    className="rounded-xl min-h-[44px] text-xs font-bold text-rose-600 border-rose-200 hover:bg-rose-50 px-3"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Edit Modal */}
+                <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) setEditTugas(null) }}>
+                  <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle className="text-lg font-bold text-slate-900">Edit Tugas</DialogTitle>
+                      <p className="text-xs text-slate-500">Perbarui data tugas {editTugas?.judul}</p>
+                    </DialogHeader>
+                    <form onSubmit={handleEditTugas} className="space-y-4 py-2">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Judul Tugas</label>
+                        <Input
+                          value={editJudul}
+                          onChange={(e) => setEditJudul(e.target.value)}
+                          className="h-11 rounded-xl text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Deskripsi</label>
+                        <Input
+                          value={editDeskripsi}
+                          onChange={(e) => setEditDeskripsi(e.target.value)}
+                          className="h-11 rounded-xl text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Deadline Baru</label>
+                        <Input
+                          type="datetime-local"
+                          value={editDeadline}
+                          onChange={(e) => setEditDeadline(e.target.value)}
+                          className="h-11 rounded-xl text-sm"
+                        />
+                      </div>
+                      <DialogFooter className="gap-2 sm:gap-0 pt-2">
+                        <Button type="button" variant="outline" onClick={() => { setIsEditOpen(false); setEditTugas(null) }} className="rounded-xl min-h-[40px]">
+                          Batal
+                        </Button>
+                        <Button type="submit" disabled={editing} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl min-h-[40px]">
+                          {editing ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Pencil className="h-4 w-4 mr-1.5" />}
+                          Simpan
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Delete Confirmation Dialog */}
+                <ConfirmDialog
+                  open={deleteDialogOpen}
+                  onOpenChange={(open) => {
+                    setDeleteDialogOpen(open)
+                    if (!open) setDeleteTarget(null)
+                  }}
+                  title="Hapus Tugas?"
+                  description={`Apakah Anda yakin ingin menghapus tugas "${deleteTarget?.judul}"? Tugas yang sudah memiliki pengumpulan tidak dapat dihapus.`}
+                  confirmText={deleting ? "Menghapus..." : "Ya, Hapus"}
+                  cancelText="Batal"
+                  variant="destructive"
+                  isLoading={deleting}
+                  onConfirm={handleDeleteTugas}
+                />
               </CardContent>
             </Card>
           ))}

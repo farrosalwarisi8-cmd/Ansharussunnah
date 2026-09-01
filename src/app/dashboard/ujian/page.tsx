@@ -7,13 +7,16 @@ import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
 import { Role } from "@prisma/client"
-import { Plus, Clock, FileText, Play, BarChart2, Calendar, Award, Loader2 } from "lucide-react"
+import { Plus, Clock, FileText, Play, BarChart2, Calendar, Award, Loader2, Pencil, Trash2, BarChart } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
-import { getDaftarUjianSiswa, getDaftarUjianAnak, getDaftarUjianGuru } from "@/actions/ujian"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { getDaftarUjianSiswa, getDaftarUjianAnak, getDaftarUjianGuru, deleteUjian } from "@/actions/ujian"
+import { useToast } from "@/hooks/use-toast"
 
 type UjianItem = {
   id: string
@@ -74,35 +77,74 @@ export default function UjianPage() {
 /* ========================================================================= */
 function GuruUjianView() {
   const { user } = useDashboard()
+  const { toast } = useToast()
+  const router = useRouter()
   const [ujianList, setUjianList] = React.useState<UjianItem[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
-  React.useEffect(() => {
-    async function fetchUjian() {
-      setLoading(true)
-      setError(null)
-      try {
-        const kelasId = user.kelas?.id
-        if (!kelasId) {
-          setError("Anda belum ditugaskan ke kelas manapun")
-          setLoading(false)
-          return
-        }
-        const result = await getDaftarUjianGuru(kelasId)
-        if (result.success && result.data) {
-          setUjianList(result.data as UjianItem[])
-        } else {
-          setError(result.message || "Gagal memuat data ujian")
-        }
-      } catch {
-        setError("Gagal memuat data ujian")
-      } finally {
+  // Delete confirmation
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+  const [deleteTarget, setDeleteTarget] = React.useState<UjianItem | null>(null)
+  const [deleting, setDeleting] = React.useState(false)
+
+  const fetchUjian = React.useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const kelasId = user.kelas?.id
+      if (!kelasId) {
+        setError("Anda belum ditugaskan ke kelas manapun")
         setLoading(false)
+        return
       }
+      const result = await getDaftarUjianGuru(kelasId)
+      if (result.success && result.data) {
+        setUjianList(result.data as UjianItem[])
+      } else {
+        setError(result.message || "Gagal memuat data ujian")
+      }
+    } catch {
+      setError("Gagal memuat data ujian")
+    } finally {
+      setLoading(false)
     }
-    fetchUjian()
   }, [user.kelas?.id])
+
+  React.useEffect(() => {
+    fetchUjian()
+  }, [fetchUjian])
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const result = await deleteUjian(deleteTarget.id)
+      if (result.success) {
+        toast({
+          title: "Ujian Berhasil Dihapus",
+          description: `"${deleteTarget.judul}" telah dihapus.`,
+        })
+        setUjianList((prev) => prev.filter((u) => u.id !== deleteTarget.id))
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Gagal Menghapus Ujian",
+          description: result.message,
+        })
+      }
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Gagal Menghapus Ujian",
+        description: "Terjadi kesalahan saat menghapus ujian.",
+      })
+    } finally {
+      setDeleting(false)
+      setDeleteDialogOpen(false)
+      setDeleteTarget(null)
+    }
+  }
 
   if (loading) {
     return (
@@ -166,6 +208,7 @@ function GuruUjianView() {
                 </span>
               </div>
 
+              {/* Actions: Rekap Hasil + Edit + Hapus */}
               <div className="flex items-center gap-2 pt-1">
                 <Button asChild variant="outline" size="sm" className="flex-1 rounded-xl min-h-[38px] text-xs font-bold">
                   <Link href={`/dashboard/ujian/${item.id}/rekap`}>
@@ -179,10 +222,50 @@ function GuruUjianView() {
                   </Link>
                 </Button>
               </div>
+
+              {/* Edit & Delete buttons */}
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => router.push(`/dashboard/ujian/buat?edit=${item.id}`)}
+                  className="flex-1 rounded-xl min-h-[38px] text-xs font-bold text-slate-600 border-slate-200"
+                >
+                  <Pencil className="h-3.5 w-3.5 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setDeleteTarget(item)
+                    setDeleteDialogOpen(true)
+                  }}
+                  className="rounded-xl min-h-[38px] text-xs font-bold text-rose-600 border-rose-200 hover:bg-rose-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open)
+          if (!open) setDeleteTarget(null)
+        }}
+        title="Hapus Ujian?"
+        description={`Apakah Anda yakin ingin menghapus ujian "${deleteTarget?.judul}"? Tindakan ini tidak dapat dibatalkan.`}
+        confirmText={deleting ? "Menghapus..." : "Ya, Hapus"}
+        cancelText="Batal"
+        variant="destructive"
+        isLoading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }
