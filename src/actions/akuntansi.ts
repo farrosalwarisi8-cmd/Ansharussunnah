@@ -59,7 +59,24 @@ export async function generateBulkSpp(
 ): Promise<ActionResponse<{ totalSiswaTerproses: number; totalDilewati: number }>> {
   try {
     await requireAdminKeuangan()
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Unauthorized",
+    }
+  }
+  return generateTagihanSppInternal(payload)
+}
 
+/**
+ * Inti logika generate tagihan SPP bulanan — tanpa guard otentikasi sesi.
+ * Dipakai oleh server action (dengan requireAdminKeuangan) dan oleh
+ * cron job SPP bulanan (dengan guard CRON_SECRET di route API).
+ */
+export async function generateTagihanSppInternal(
+  payload: GenerateBulkSppValues
+): Promise<ActionResponse<{ totalSiswaTerproses: number; totalDilewati: number }>> {
+  try {
     const validated = generateBulkSppSchema.safeParse(payload)
     if (!validated.success) {
       return {
@@ -136,17 +153,33 @@ export async function generateBulkSpp(
           continue
         }
 
-        await tx.tagihanSiswa.create({
-          data: {
-            siswaId: siswa.id,
-            namaTagihan: `SPP ${BULAN_NAMES[bulan]} ${tahun}`,
-            bulan,
-            tahun,
-            nominal: nominalSpp,
-            jatuhTempo,
-            status: StatusTagihan.BELUM_BAYAR,
-          },
-        })
+        await tx.tagihanSiswa
+          .create({
+            data: {
+              siswaId: siswa.id,
+              namaTagihan: `SPP ${BULAN_NAMES[bulan]} ${tahun}`,
+              bulan,
+              tahun,
+              nominal: nominalSpp,
+              jatuhTempo,
+              status: StatusTagihan.BELUM_BAYAR,
+            },
+          })
+          .catch((err: unknown) => {
+            // Unique constraint (siswa_id, bulan, tahun): bila request lain sudah
+            // membuat tagihan yang sama lebih dulu dalam window yang sama,
+            // lewati saja daripada menggagalkan seluruh batch.
+            if (
+              typeof err === "object" &&
+              err !== null &&
+              "code" in err &&
+              (err as { code: string }).code === "P2002"
+            ) {
+              totalDilewati++
+              return undefined
+            }
+            throw err
+          })
 
         totalSiswaTerproses++
       }

@@ -127,17 +127,19 @@ enum Kewarganegaraan {
 
 model User {
   id                 String    @id @default(cuid())
-  email              String    @unique
+  email              String
   nama               String
   role               Role
   avatar             String?
-  authId             String    @unique @map("auth_id")
+  authId             String    @map("auth_id")
   aktif              Boolean   @default(true)
   isAdmin            Boolean   @default(false) @map("is_admin")
   mustChangePassword Boolean   @default(false) @map("must_change_password")
   lastPasswordChange DateTime? @map("last_password_change")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@unique([authId, role])
 
   guru     Guru?
   siswa    Siswa?
@@ -818,6 +820,7 @@ model TagihanSiswa {
 
   @@index([siswaId, status])
   @@index([status, jatuhTempo])
+  @@unique([siswaId, bulan, tahun], map: "tagihan_siswas_siswa_bulan_tahun_unique")
   @@map("tagihan_siswas")
 }
 

@@ -4,8 +4,13 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 import prisma from "@/lib/prisma"
 import { Role } from "@prisma/client"
 import { redirect } from "next/navigation"
+import { cookies } from "next/headers"
+import { cache } from "react"
 
-export async function getCurrentUser() {
+const ROLE_COOKIE = "selected_role"
+const USER_ID_COOKIE = "selected_user_id"
+
+export const getCurrentUser = cache(async () => {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user: authUser },
@@ -13,27 +18,81 @@ export async function getCurrentUser() {
 
   if (!authUser) return null
 
-  const user = await prisma.user.findUnique({
-    where: { authId: authUser.id },
-    include: {
-      guru: true,
-      siswa: {
-        include: {
-          kelas: { include: { jenjang: true } },
-        },
+  // Check if user has selected a role (multi-role support)
+  const cookieStore = await cookies()
+  const selectedUserId = cookieStore.get(USER_ID_COOKIE)?.value
+  const selectedRole = cookieStore.get(ROLE_COOKIE)?.value
+
+  let user = null
+
+  if (selectedUserId && selectedRole) {
+    // Try to find the specific user record by ID + role
+    user = await prisma.user.findFirst({
+      where: {
+        id: selectedUserId,
+        authId: authUser.id,
+        role: selectedRole as Role,
       },
-      orangTua: true,
-    },
-  })
+      include: {
+        guru: true,
+        siswa: {
+          include: {
+            kelas: { include: { jenjang: true } },
+          },
+        },
+        orangTua: true,
+      },
+    })
+  }
+
+  // Fallback: find by authId (single role or first match)
+  if (!user) {
+    user = await prisma.user.findFirst({
+      where: { authId: authUser.id },
+      include: {
+        guru: true,
+        siswa: {
+          include: {
+            kelas: { include: { jenjang: true } },
+          },
+        },
+        orangTua: true,
+      },
+    })
+  }
 
   // Defense-in-depth: cek apakah akun masih aktif
-  // Memastikan meskipun ban Supabase Auth gagal/belum ter-propagate,
-  // aplikasi tetap menolak akses berdasarkan data di database
   if (user && !user.aktif) {
     throw new Error("Akun Anda telah dinonaktifkan. Hubungi admin sekolah.")
   }
 
   return user
+})
+
+/**
+ * Get all roles available for the current auth user.
+ * Used by login flow to determine if role selector is needed.
+ */
+export async function getAllRolesForCurrentUser() {
+  const supabase = await createSupabaseServerClient()
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser()
+
+  if (!authUser) return []
+
+  const users = await prisma.user.findMany({
+    where: { authId: authUser.id, aktif: true },
+    select: {
+      id: true,
+      nama: true,
+      email: true,
+      role: true,
+      isAdmin: true,
+    },
+  })
+
+  return users
 }
 
 export async function requireAuth() {

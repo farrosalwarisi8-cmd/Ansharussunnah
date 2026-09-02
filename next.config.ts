@@ -2,6 +2,7 @@
 
 import type { NextConfig } from "next"
 import createBundleAnalyzer from "@next/bundle-analyzer"
+import { withSentryConfig } from "@sentry/nextjs"
 
 const withBundleAnalyzer = createBundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
@@ -117,4 +118,19 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default withBundleAnalyzer(nextConfig)
+const sentryConfigured =
+  !!process.env.SENTRY_DSN || !!process.env.NEXT_PUBLIC_SENTRY_DSN
+
+const baseConfig = withBundleAnalyzer(nextConfig)
+
+// Hanya aktifkan Sentry bila DSN sudah diset. Tanpa DSN, build/start tetap
+// berjalan normal tanpa tracing error.
+export default sentryConfigured
+  ? withSentryConfig(baseConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      silent: !process.env.CI,
+      widenClientFileUpload: true,
+      telemetry: false,
+    })
+  : baseConfig

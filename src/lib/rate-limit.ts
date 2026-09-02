@@ -23,28 +23,33 @@ interface RatelimitInstance {
 }
 
 class UpstashRateLimiter implements RateLimiterBackend {
-  private ratelimit: RatelimitInstance | null = null
+  // Keyed per konfigurasi (maxRequests:windowMs) agar setiap alur memakai
+  // batasnya sendiri, tidak saling menumpuk dengan alur yang pertama dimuat.
+  private ratelimits = new Map<string, RatelimitInstance>()
 
   private async getRatelimit(options: RateLimitOptions): Promise<RatelimitInstance> {
-    if (!this.ratelimit) {
-      const { Ratelimit } = await import("@upstash/ratelimit")
-      const { Redis } = await import("@upstash/redis")
+    const key = `${options.maxRequests}:${options.windowMs}`
+    const cached = this.ratelimits.get(key)
+    if (cached) return cached
 
-      const redis = new Redis({
-        url: process.env.UPSTASH_REDIS_REST_URL!,
-        token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-      })
+    const { Ratelimit } = await import("@upstash/ratelimit")
+    const { Redis } = await import("@upstash/redis")
 
-      this.ratelimit = new Ratelimit({
-        redis,
-        limiter: Ratelimit.slidingWindow(
-          options.maxRequests,
-          `${options.windowMs} ms`
-        ),
-        analytics: false,
-      })
-    }
-    return this.ratelimit
+    const redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    })
+
+    const ratelimit = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(
+        options.maxRequests,
+        `${options.windowMs} ms`
+      ),
+      analytics: false,
+    })
+    this.ratelimits.set(key, ratelimit)
+    return ratelimit
   }
 
   async limit(

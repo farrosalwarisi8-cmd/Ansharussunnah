@@ -7,26 +7,22 @@ import { ChildSelector } from "@/components/dashboard/child-selector"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { Role } from "@prisma/client"
 
-// Lazy-load each role-specific dashboard — only the user's role is loaded
+// Dynamic import memecah bundle per role — hanya chunk role user yang dimuat.
+// SSR diaktifkan agar konten langsung tampil saat berpindah halaman.
 const GuruDashboardHome = dynamic(
-  () => import("@/components/dashboard/role-homes/guru-home").then((m) => m.GuruDashboardHome),
-  { ssr: false }
+  () => import("@/components/dashboard/role-homes/guru-home").then((m) => m.GuruDashboardHome)
 )
 const SiswaDashboardHome = dynamic(
-  () => import("@/components/dashboard/role-homes/siswa-home").then((m) => m.SiswaDashboardHome),
-  { ssr: false }
+  () => import("@/components/dashboard/role-homes/siswa-home").then((m) => m.SiswaDashboardHome)
 )
 const OrangTuaDashboardHome = dynamic(
-  () => import("@/components/dashboard/role-homes/orang-tua-home").then((m) => m.OrangTuaDashboardHome),
-  { ssr: false }
+  () => import("@/components/dashboard/role-homes/orang-tua-home").then((m) => m.OrangTuaDashboardHome)
 )
 const KeuanganDashboardHome = dynamic(
-  () => import("@/components/dashboard/role-homes/keuangan-home").then((m) => m.KeuanganDashboardHome),
-  { ssr: false }
+  () => import("@/components/dashboard/role-homes/keuangan-home").then((m) => m.KeuanganDashboardHome)
 )
 const AdminDashboardHome = dynamic(
-  () => import("@/components/dashboard/role-homes/admin-home").then((m) => m.AdminDashboardHome),
-  { ssr: false }
+  () => import("@/components/dashboard/role-homes/admin-home").then((m) => m.AdminDashboardHome)
 )
 
 export function DashboardPageClient() {

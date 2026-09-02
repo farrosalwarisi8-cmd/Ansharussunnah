@@ -204,6 +204,16 @@ export async function verifikasiPendaftaran(
       return { success: false, message: "Data pendaftaran tidak ditemukan" }
     }
 
+    // Guard transisi status: hanya pendaftaran yang masih MENUNGGU_VERIFIKASI
+    // boleh diverifikasi (diterima/ditolak). Mencegah verifikasi ganda yang
+    // bisa membuat akun yatim/berkontradiksi dengan status record.
+    if (pendaftaran.status !== StatusPendaftaran.MENUNGGU_VERIFIKASI) {
+      return {
+        success: false,
+        message: `Pendaftaran ${pendaftaran.nomorPendaftaran} sudah berstatus ${pendaftaran.status} dan tidak dapat diverifikasi lagi.`,
+      }
+    }
+
     const latestBuktiId = pendaftaran.buktiTransfer[0]?.id
 
     // --- CASE A: PENDAFTARAN DITOLAK ---
@@ -313,8 +323,9 @@ export async function verifikasiPendaftaran(
       // ✅ Prisma Transaction with strict rollback cleanup
       try {
         await prisma.$transaction(async (tx) => {
-          let userOrtu = await tx.user.findUnique({
-            where: { email: emailOrtu },
+          // Find existing user by authId + role (supports multi-role with same auth)
+          let userOrtu = await tx.user.findFirst({
+            where: { authId: authOrtuId, role: Role.ORANG_TUA },
           })
 
           if (!userOrtu) {
@@ -421,7 +432,9 @@ export async function verifikasiPendaftaran(
         html: buildKredensialEmail({
           namaOrangTua: pendaftaran.namaOrangTua,
           emailOrangTua: emailOrtu,
-          passwordOrangTua,
+          // Jika ortu sudah punya akun (anak ke-2+), JANGAN sertakan password
+          // yang tidak pernah diterapkan — biar tidak membingungkan/mengunci.
+          passwordOrangTua: ortuAlreadyExisted ? undefined : passwordOrangTua,
           namaSiswa: pendaftaran.namaLengkap,
           emailSiswa,
           passwordSiswa,

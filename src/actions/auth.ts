@@ -50,7 +50,7 @@ async function logLoginAttempt(params: {
   }
 }
 
-export async function login(formData: FormData): Promise<ActionResponse> {
+export async function login(formData: FormData): Promise<ActionResponse<{ hasMultipleRoles?: boolean }>> {
   const email = formData.get("email") as string
   const password = formData.get("password") as string
 
@@ -71,7 +71,6 @@ export async function login(formData: FormData): Promise<ActionResponse> {
     windowMs: 15 * 60 * 1000, // 15 menit
   })
   if (!ipLimiter.success) {
-    // Audit: catat percobaan yang diblokir rate limit
     logLoginAttempt({
       email: normalizedEmail,
       ip,
@@ -85,26 +84,6 @@ export async function login(formData: FormData): Promise<ActionResponse> {
     }
   }
 
-  // Rate Limit #2: Per-email — maksimal 5 percobaan gagal per 15 menit per email
-  // Melindungi dari brute-force satu akun dari banyak IP berbeda
-  const emailLimiter = await rateLimitAsync(`login-email:${normalizedEmail}`, {
-    maxRequests: 5,
-    windowMs: 15 * 60 * 1000, // 15 menit
-  })
-  if (!emailLimiter.success) {
-    logLoginAttempt({
-      email: normalizedEmail,
-      ip,
-      userAgent,
-      status: "RATE_LIMITED",
-      reason: "Email rate limit exceeded",
-    })
-    return {
-      success: false,
-      message: "Terlalu banyak percobaan login untuk email ini. Silakan coba lagi dalam 15 menit.",
-    }
-  }
-
   const supabase = await createSupabaseServerClient()
 
   const { error } = await supabase.auth.signInWithPassword({
@@ -113,22 +92,32 @@ export async function login(formData: FormData): Promise<ActionResponse> {
   })
 
   if (error) {
-    // Audit: catat percobaan login gagal
+    // Rate Limit #2: Per-email — maksimal 5 percobaan GAGAL per 15 menit.
+    // Hanya dikenakan saat autentikasi GAGAL, sehingga serangan dengan
+    // password salah tidak bisa mengunci email korban (anti DoS login).
+    const emailLimiter = await rateLimitAsync(`login-email:${normalizedEmail}`, {
+      maxRequests: 5,
+      windowMs: 15 * 60 * 1000, // 15 menit
+    })
+
     logLoginAttempt({
       email: normalizedEmail,
       ip,
       userAgent,
-      status: "FAILED",
-      reason: error.message,
+      status: emailLimiter.success ? "FAILED" : "RATE_LIMITED",
+      reason: emailLimiter.success ? error.message : "Email rate limit exceeded",
     })
-    // Pesan error tetap generik — tidak membedakan email tidak terdaftar vs password salah
+
     return {
       success: false,
-      message: "Email atau password salah",
+      message:
+        "Email atau password salah" +
+        (emailLimiter.success
+          ? ""
+          : ". Terlalu banyak percobaan gagal untuk email ini. Silakan coba lagi dalam 15 menit."),
     }
   }
 
-  // Audit: catat percobaan login berhasil
   logLoginAttempt({
     email: normalizedEmail,
     ip,
@@ -136,14 +125,35 @@ export async function login(formData: FormData): Promise<ActionResponse> {
     status: "SUCCESS",
   })
 
+  // Check if this auth user has multiple roles in the database
+  const authUser = await supabase.auth.getUser()
+  const authUserId = authUser.data.user?.id
+
+  let hasMultipleRoles = false
+  if (authUserId) {
+    const userRecords = await prisma.user.findMany({
+      where: { authId: authUserId, aktif: true },
+      select: { id: true },
+    })
+    hasMultipleRoles = userRecords.length > 1
+  }
+
   return {
     success: true,
     message: "Login berhasil",
+    data: { hasMultipleRoles },
   }
 }
 
 export async function logout() {
   const supabase = await createSupabaseServerClient()
   await supabase.auth.signOut()
+
+  // Clear role selection cookies
+  const { cookies } = await import("next/headers")
+  const cookieStore = await cookies()
+  cookieStore.delete("selected_role")
+  cookieStore.delete("selected_user_id")
+
   redirect("/login")
 }

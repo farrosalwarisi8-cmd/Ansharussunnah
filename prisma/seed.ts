@@ -77,26 +77,36 @@ async function main() {
     Role.GURU
   )
 
-  const guruUser = await prisma.user.upsert({
-    where: { email: "guru@sekolah.sch.id" },
-    update: { authId: guruAuthId, isAdmin: true },
-    create: {
-      email: "guru@sekolah.sch.id",
-      nama: "Ustadz Ahmad Fauzi, S.Pd",
-      role: Role.GURU,
-      authId: guruAuthId,
-      mustChangePassword: true,
-      isAdmin: true,
-      guru: {
-        create: {
-          nip: "198501012010011001",
-          jabatan: "Kepala Panitia PPDB",
-          noHp: "081234567890",
-        },
-      },
-    },
+  let guruUser = await prisma.user.findFirst({
+    where: { authId: guruAuthId, role: Role.GURU },
     include: { guru: true },
   })
+
+  if (!guruUser) {
+    guruUser = await prisma.user.create({
+      data: {
+        email: "guru@sekolah.sch.id",
+        nama: "Ustadz Ahmad Fauzi, S.Pd",
+        role: Role.GURU,
+        authId: guruAuthId,
+        mustChangePassword: true,
+        isAdmin: true,
+        guru: {
+          create: {
+            nip: "198501012010011001",
+            jabatan: "Kepala Panitia PPDB",
+            noHp: "081234567890",
+          },
+        },
+      },
+      include: { guru: true },
+    })
+  } else {
+    await prisma.user.update({
+      where: { id: guruUser.id },
+      data: { isAdmin: true },
+    })
+  }
   console.log("  ✔ Record Guru berhasil dibuat")
 
   const financeAuthId = await createAuthUser(
@@ -106,17 +116,21 @@ async function main() {
     Role.ADMIN_KEUANGAN
   )
 
-  await prisma.user.upsert({
-    where: { email: "keuangan@sekolah.sch.id" },
-    update: { authId: financeAuthId },
-    create: {
-      email: "keuangan@sekolah.sch.id",
-      nama: "Hj. Siti Aminah, S.E",
-      role: Role.ADMIN_KEUANGAN,
-      authId: financeAuthId,
-      mustChangePassword: true,
-    },
+  const existingFinance = await prisma.user.findFirst({
+    where: { authId: financeAuthId, role: Role.ADMIN_KEUANGAN },
   })
+
+  if (!existingFinance) {
+    await prisma.user.create({
+      data: {
+        email: "keuangan@sekolah.sch.id",
+        nama: "Hj. Siti Aminah, S.E",
+        role: Role.ADMIN_KEUANGAN,
+        authId: financeAuthId,
+        mustChangePassword: true,
+      },
+    })
+  }
   console.log("  ✔ Record Admin Keuangan berhasil dibuat")
 
   // Tampilkan password yang di-generate agar admin bisa login

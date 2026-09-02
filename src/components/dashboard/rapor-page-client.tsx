@@ -6,17 +6,15 @@ import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
 import { Role } from "@prisma/client"
 import { Button } from "@/components/ui/button"
-import { Printer, Loader2 } from "lucide-react"
+import { Printer } from "lucide-react"
 import dynamic from "next/dynamic"
 
-// Lazy-load role-specific sub-views — only the active role's code is downloaded
+// Dynamic import memecah bundle per role. SSR aktif agar tampilan langsung muncul.
 const GuruRaporView = dynamic(
-  () => import("@/components/dashboard/rapor-guru-view").then((m) => m.GuruRaporView),
-  { ssr: false, loading: () => <div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-yellow-500" /></div> }
+  () => import("@/components/dashboard/rapor-guru-view").then((m) => m.GuruRaporView)
 )
 const SiswaOrangTuaRaporView = dynamic(
-  () => import("@/components/dashboard/rapor-siswa-view").then((m) => m.SiswaOrangTuaRaporView),
-  { ssr: false, loading: () => <div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-yellow-500" /></div> }
+  () => import("@/components/dashboard/rapor-siswa-view").then((m) => m.SiswaOrangTuaRaporView)
 )
 
 export default function RaporPage() {

@@ -50,6 +50,7 @@ vi.mock("@/lib/prisma", () => ({
     buktiTransferPendaftaran: { update: mockBuktiTransferUpdate },
     user: {
       findUnique: mockUserFindUnique,
+      findFirst: mockUserFindUnique,
       create: mockUserCreate,
     },
     orangTua: {
@@ -201,6 +202,7 @@ function setupTransactionMock() {
       const tx = {
         user: {
           findUnique: mockUserFindUnique,
+          findFirst: mockUserFindUnique,
           create: mockUserCreate,
         },
         orangTua: {
@@ -252,7 +254,6 @@ describe("verifikasiPendaftaran — EMIS Fields Copy (Field Lengkap)", () => {
 
     mockUserFindUnique
       .mockResolvedValueOnce(null) // ortu tidak ada → buat baru
-      .mockResolvedValueOnce(null) // siswa tidak ada → buat baru
     // user.create untuk ortu
     mockUserCreate
       .mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA" })
@@ -308,7 +309,6 @@ describe("verifikasiPendaftaran — EMIS Fields Copy (Field Lengkap)", () => {
 
     mockUserFindUnique
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null)
     mockUserCreate
       .mockResolvedValueOnce({ id: "user-ortu-2", role: "ORANG_TUA" })
       .mockResolvedValueOnce({ id: "user-siswa-2", role: "SISWA" })
@@ -350,7 +350,6 @@ describe("verifikasiPendaftaran — EMIS Fields Copy (Field Lengkap)", () => {
     setupTransactionMock()
 
     mockUserFindUnique
-      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
     mockUserCreate
       .mockResolvedValueOnce({ id: "user-ortu-3", role: "ORANG_TUA" })
@@ -547,7 +546,6 @@ describe("verifikasiPendaftaran — Edge Cases", () => {
 
     mockUserFindUnique
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null)
     mockUserCreate
       .mockResolvedValueOnce({ id: "user-ortu-4", role: "ORANG_TUA" })
       .mockResolvedValueOnce({ id: "user-siswa-4", role: "SISWA" })
@@ -568,5 +566,192 @@ describe("verifikasiPendaftaran — Edge Cases", () => {
     const siswaData = siswaCreateCall![0].data.siswa.create
 
     expect(siswaData.kewarganegaraan).toBe("WNI")
+  })
+})
+
+// ========================================================
+// 5. Multi-Child — Satu Email Orang Tua, Banyak Anak
+// ========================================================
+
+describe("verifikasiPendaftaran — Multi-Child (Same Parent Email)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("harus reuse akun orang tua yang sudah ada saat approve pendaftaran anak kedua dengan email yang sama", async () => {
+    // Pendaftaran anak kedua dengan email orang tua yang sama
+    const pendaftaranAnakKedua = {
+      ...pendaftaranMinimal,
+      id: "pend-child-2",
+      nomorPendaftaran: "REG-2026-00003",
+      namaLengkap: "Saudara Ahmad",
+      emailOrangTua: "ortu@example.com", // email sama dengan pendaftaranWithEmis
+      namaOrangTua: "Bapak Ahmad",
+    }
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranAnakKedua)
+
+    // Supabase Auth: email sudah terdaftar → error "already been registered"
+    mockCreateUser.mockResolvedValueOnce({
+      data: null,
+      error: { message: "User already been registered" },
+    })
+    mockListUsers.mockResolvedValueOnce({
+      data: {
+        users: [{ id: "existing-ortu-auth-uuid", email: "ortu@example.com" }],
+      },
+      error: null,
+    })
+    // Auth siswa baru
+    mockCreateUser.mockResolvedValueOnce({
+      data: { user: { id: "auth-siswa-child2-uuid" } },
+      error: null,
+    })
+
+    setupTransactionMock()
+
+    // findFirst(ortu) → sudah ada (anak baru)
+    mockUserFindUnique.mockResolvedValueOnce({ id: "user-ortu-existing", role: "ORANG_TUA" })
+    mockUserCreate.mockResolvedValueOnce({ id: "user-siswa-child2", role: "SISWA" })
+    mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-existing" })
+    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-child2" })
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-child-2",
+      status: "DITERIMA",
+    })
+
+    expect(result.success).toBe(true)
+
+    // Verify: tidak membuat auth orang tua baru
+    // mockCreateUser dipanggil 2x: 1x ortu (gagal already exists), 1x siswa
+    expect(mockCreateUser).toHaveBeenCalledTimes(2)
+
+    // Verify: listUsers dipanggil untuk resolve existing auth
+    expect(mockListUsers).toHaveBeenCalledTimes(1)
+
+    // Verify: User.findFirst dipanggil untuk ortu (found existing)
+    expect(mockUserFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          role: "ORANG_TUA",
+        }),
+      })
+    )
+
+    // Verify: ParentStudent link dibuat untuk anak kedua
+    expect(mockParentStudentCreate).toHaveBeenCalledWith({
+      data: {
+        orangTuaId: "ortu-existing",
+        siswaId: "siswa-child2",
+        hubungan: "Orang Tua",
+      },
+    })
+
+    // Verify: tidak membuat User baru untuk ortu (reuse existing)
+    const ortuCreateCalls = mockUserCreate.mock.calls.filter(
+      (call) => call[0]?.data?.role === "ORANG_TUA"
+    )
+    expect(ortuCreateCalls).toHaveLength(0)
+  })
+
+  it("harus membuat ParentStudent baru meskipun ortu sudah link ke anak lain", async () => {
+    // Skenario: ortu sudah punya 1 anak, sekarang daftarkan anak ke-2
+    const pendaftaranAnakKetiga = {
+      ...pendaftaranMinimal,
+      id: "pend-child-3",
+      nomorPendaftaran: "REG-2026-00004",
+      namaLengkap: "Anak Ketiga",
+      emailOrangTua: "ortu@example.com",
+      namaOrangTua: "Bapak Ahmad",
+    }
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranAnakKetiga)
+
+    // Auth ortu sudah ada
+    mockCreateUser.mockResolvedValueOnce({
+      data: null,
+      error: { message: "User already been registered" },
+    })
+    mockListUsers.mockResolvedValueOnce({
+      data: {
+        users: [{ id: "existing-ortu-auth-uuid", email: "ortu@example.com" }],
+      },
+      error: null,
+    })
+    // Auth siswa baru
+    mockCreateUser.mockResolvedValueOnce({
+      data: { user: { id: "auth-siswa-child3-uuid" } },
+      error: null,
+    })
+
+    setupTransactionMock()
+
+    mockUserFindUnique.mockResolvedValueOnce({ id: "user-ortu-existing", role: "ORANG_TUA" })
+    mockUserCreate.mockResolvedValueOnce({ id: "user-siswa-child3", role: "SISWA" })
+    mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-existing" })
+    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-child3" })
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-child-3",
+      status: "DITERIMA",
+    })
+
+    expect(result.success).toBe(true)
+
+    // ParentStudent harus dibuat dengan ortu yang sama, siswa yang baru
+    expect(mockParentStudentCreate).toHaveBeenCalledWith({
+      data: {
+        orangTuaId: "ortu-existing",
+        siswaId: "siswa-child3",
+        hubungan: "Orang Tua",
+      },
+    })
+  })
+
+  it("harus skip buktiTransfer update jika latestBuktiId null (anak kedua tanpa bukti baru)", async () => {
+    const pendaftaranTanpaBukti = {
+      ...pendaftaranMinimal,
+      id: "pend-child-4",
+      nomorPendaftaran: "REG-2026-00005",
+      namaLengkap: "Anak Keempat",
+      emailOrangTua: "ortu@example.com",
+      namaOrangTua: "Bapak Ahmad",
+      buktiTransfer: [], // tidak ada bukti transfer
+    }
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranTanpaBukti)
+
+    mockCreateUser.mockResolvedValueOnce({
+      data: null,
+      error: { message: "User already been registered" },
+    })
+    mockListUsers.mockResolvedValueOnce({
+      data: {
+        users: [{ id: "existing-ortu-auth-uuid", email: "ortu@example.com" }],
+      },
+      error: null,
+    })
+    mockCreateUser.mockResolvedValueOnce({
+      data: { user: { id: "auth-siswa-child4-uuid" } },
+      error: null,
+    })
+
+    setupTransactionMock()
+
+    mockUserFindUnique.mockResolvedValueOnce({ id: "user-ortu-existing", role: "ORANG_TUA" })
+    mockUserCreate.mockResolvedValueOnce({ id: "user-siswa-child4", role: "SISWA" })
+    mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-existing" })
+    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-child4" })
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-child-4",
+      status: "DITERIMA",
+    })
+
+    expect(result.success).toBe(true)
+
+    // buktiTransfer update tidak dipanggil karena tidak ada bukti
+    expect(mockBuktiTransferUpdate).not.toHaveBeenCalled()
+
+    // ParentStudent tetap dibuat
+    expect(mockParentStudentCreate).toHaveBeenCalled()
   })
 })

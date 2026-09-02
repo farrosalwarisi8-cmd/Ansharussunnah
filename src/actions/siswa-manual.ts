@@ -54,14 +54,14 @@ export async function createSiswaManual(
 
     const emailOrtu = data.emailOrangTua.toLowerCase().trim()
 
-    // Cek duplikasi email siswa
-    const existingSiswa = await prisma.user.findUnique({ where: { email: emailSiswa } })
+    // Cek duplikasi email siswa untuk role yang sama
+    const existingSiswa = await prisma.user.findFirst({ where: { email: emailSiswa, role: Role.SISWA } })
     if (existingSiswa) {
       return { success: false, message: "Email siswa sudah terdaftar dalam sistem" }
     }
 
-    // Cek duplikasi email orang tua
-    const existingOrtu = await prisma.user.findUnique({ where: { email: emailOrtu } })
+    // Cek duplikasi email orang tua untuk role yang sama
+    const existingOrtu = await prisma.user.findFirst({ where: { email: emailOrtu, role: Role.ORANG_TUA } })
 
     // Generate atau pakai password manual
     const passwordSiswa = data.passwordManual || generateSecurePassword(14)
@@ -135,12 +135,13 @@ export async function createSiswaManual(
     newlyCreatedAuthIds.push(authSiswaId)
 
     // --- Prisma Transaction ---
+    let prismaSiswaUserId: string | undefined
     try {
       await prisma.$transaction(async (tx) => {
-        // Cek atau buat User orang tua
-        let userOrtu = ortuAlreadyExisted
-          ? await tx.user.findUnique({ where: { email: emailOrtu } })
-          : null
+        // Cek atau buat User orang tua (support multi-role: same authId, different role)
+        let userOrtu = await tx.user.findFirst({
+          where: { authId: authOrtuId, role: Role.ORANG_TUA },
+        })
 
         if (!userOrtu) {
           userOrtu = await tx.user.create({
@@ -200,6 +201,8 @@ export async function createSiswaManual(
           },
         })
 
+        prismaSiswaUserId = userSiswa.id
+
         const siswaRecord = await tx.siswa.findUnique({
           where: { userId: userSiswa.id },
         })
@@ -237,11 +240,17 @@ export async function createSiswaManual(
     }
 
     revalidatePath("/dashboard/siswa")
+    if (!prismaSiswaUserId) {
+      return {
+        success: false,
+        message: "Gagal membuat akun siswa: ID siswa tidak ditemukan setelah transaksi selesai.",
+      }
+    }
     return {
       success: true,
       message: `Akun siswa "${data.namaLengkap}" berhasil dibuat.`,
       data: {
-        siswaUserId: authSiswaId,
+        siswaUserId: prismaSiswaUserId,
         passwordSiswa,
         passwordOrangTua: ortuAlreadyExisted ? undefined : passwordOrangTua,
         orangTuaBaruDibuat: !ortuAlreadyExisted,

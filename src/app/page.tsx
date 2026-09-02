@@ -20,7 +20,10 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 selection:bg-yellow-100 selection:text-yellow-800">
       {/* 1. Header / Navbar */}
-      <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur-md sticky top-0 z-50 transition-all">
+      {/* NOTE: sengaja pakai bg opaque (bukan backdrop-blur). backdrop-filter
+          membuat GPU bekerja terus-menerus saat scroll & mahal di HP kelas
+          bawah / koneksi desa. */}
+      <header className="border-b border-slate-200/80 bg-white sticky top-0 z-50 transition-all">
         <div className="container mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden relative shadow-md shadow-emerald-900/20">
@@ -67,7 +70,7 @@ export default function HomePage() {
       <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28 bg-gradient-to-b from-yellow-900 via-slate-800 to-slate-800 text-white">
         <div className="absolute inset-0 bg-[radial-gradient(#22c55e_1px,transparent_1px)] [background-size:24px_24px] opacity-10" />
         <div className="container mx-auto px-4 sm:px-6 relative z-10 text-center max-w-4xl">
-          <div className="inline-flex items-center gap-2 bg-amber-500/15 border border-amber-500/30 text-amber-300 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold mb-8 backdrop-blur-sm animate-in fade-in">
+          <div className="inline-flex items-center gap-2 bg-amber-500/20 border border-amber-500/30 text-amber-200 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold mb-8">
             <Sparkles className="h-4 w-4 text-amber-400" />
             <span>Penerimaan Santri Baru (PSB) Tahun Ajaran 2024/2025 Dibuka</span>
           </div>
@@ -95,7 +98,7 @@ export default function HomePage() {
 
             <Link
               href="/login"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-2xl transition-all backdrop-blur-sm min-h-[50px]"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-2xl transition-all min-h-[50px]"
             >
               <LogIn className="h-5 w-5 text-yellow-400" />
               <span>Masuk Portal LMS</span>
@@ -112,7 +115,7 @@ export default function HomePage() {
             ].map((stat, idx) => {
               const Icon = stat.icon
               return (
-                <div key={idx} className="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 backdrop-blur-sm">
+                <div key={idx} className="p-4 rounded-2xl bg-slate-800 border border-slate-700">
                   <Icon className="h-5 w-5 text-amber-400 mb-2" />
                   <div className="font-bold text-white text-sm sm:text-base">{stat.value}</div>
                   <div className="text-xs text-slate-400">{stat.label}</div>

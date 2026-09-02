@@ -24,7 +24,8 @@ export async function requestPasswordReset(
       return { success: false, message: "Format email tidak valid" }
     }
 
-    const user = await prisma.user.findUnique({
+    // Find any user record with this email (multiple roles may share the same auth)
+    const user = await prisma.user.findFirst({
       where: { email: normalizedEmail },
     })
 
@@ -109,7 +110,8 @@ export async function verifyResetOtp(
       return { success: false, message: "Kode OTP harus berupa 6 digit angka" }
     }
 
-    const user = await prisma.user.findUnique({
+    // Find any user record with this email (multiple roles may share the same auth)
+    const user = await prisma.user.findFirst({
       where: { email: normalizedEmail },
     })
 
@@ -198,7 +200,8 @@ export async function resetPassword(
       return { success: false, message: "Konfirmasi password baru tidak cocok" }
     }
 
-    const user = await prisma.user.findUnique({
+    // Find any user record with this email (multiple roles may share the same auth)
+    const user = await prisma.user.findFirst({
       where: { email: normalizedEmail },
     })
 

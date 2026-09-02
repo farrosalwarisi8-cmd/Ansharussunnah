@@ -579,14 +579,22 @@ export default function VerifikasiPendaftaranPage() {
               </div>
 
               <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t border-slate-100">
-                <Button type="button" variant="destructive" onClick={() => setIsRejectDialogOpen(true)} className="rounded-xl min-h-[44px] text-xs font-bold">
-                  <XCircle className="h-4 w-4 mr-1.5" />
-                  Tolak Pendaftaran
-                </Button>
-                <Button type="button" onClick={() => setIsApproveConfirmOpen(true)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px] text-xs px-6">
-                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                  Terima Santri &amp; Terbitkan Akun
-                </Button>
+                {detailData?.pendaftaran.status === "MENUNGGU_VERIFIKASI" ? (
+                  <>
+                    <Button type="button" variant="destructive" onClick={() => setIsRejectDialogOpen(true)} className="rounded-xl min-h-[44px] text-xs font-bold">
+                      <XCircle className="h-4 w-4 mr-1.5" />
+                      Tolak Pendaftaran
+                    </Button>
+                    <Button type="button" onClick={() => setIsApproveConfirmOpen(true)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px] text-xs px-6">
+                      <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                      Terima Santri &amp; Terbitkan Akun
+                    </Button>
+                  </>
+                ) : (
+                  <p className="text-xs font-medium text-slate-500 py-2">
+                    Pendaftaran ini sudah berstatus <StatusBadge status={detailData?.pendaftaran.status ?? ""} /> dan tidak dapat diverifikasi ulang.
+                  </p>
+                )}
               </DialogFooter>
             </>
           )}

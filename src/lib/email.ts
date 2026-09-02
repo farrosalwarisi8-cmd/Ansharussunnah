@@ -2,7 +2,17 @@
 
 import { Resend } from "resend"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+function createResend() {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) return null
+  try {
+    return new Resend(apiKey)
+  } catch {
+    return null
+  }
+}
+
+const resend = createResend()
 const fromEmail = process.env.EMAIL_FROM || "Sistem Pendaftaran <onboarding@resend.dev>"
 const replyTo = process.env.EMAIL_REPLY_TO || "admin@sekolahmu.sch.id"
 
@@ -13,6 +23,15 @@ interface SendEmailParams {
 }
 
 export async function sendEmail({ to, subject, html }: SendEmailParams) {
+  if (!resend) {
+    console.warn(
+      "[email] RESEND_API_KEY belum dikonfigurasi. Email tidak terkirim."
+    )
+    return {
+      success: false,
+      error: "RESEND_API_KEY belum dikonfigurasi",
+    }
+  }
   try {
     const { data, error } = await resend.emails.send({
       from: fromEmail,
@@ -40,12 +59,27 @@ export async function sendEmail({ to, subject, html }: SendEmailParams) {
 export function buildKredensialEmail(params: {
   namaOrangTua: string
   emailOrangTua: string
-  passwordOrangTua: string
+  passwordOrangTua?: string
   namaSiswa: string
   emailSiswa: string
   passwordSiswa: string
   nomorPendaftaran: string
 }): string {
+  const ortuAccount = params.passwordOrangTua
+    ? `
+        <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 12px 0;">
+          <p style="margin: 0 0 8px 0;"><strong>Akun Orang Tua:</strong></p>
+          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.emailOrangTua}</code></p>
+          <p style="margin: 2px 0;">Password: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.passwordOrangTua}</code></p>
+        </div>
+      `
+    : `
+        <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 12px 0;">
+          <p style="margin: 0 0 8px 0;"><strong>Akun Orang Tua:</strong></p>
+          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.emailOrangTua}</code></p>
+          <p style="margin: 2px 0; color: #475569;">Anda sudah memiliki akun orang tua — gunakan password yang sudah ada (tidak berubah).</p>
+        </div>
+      `
   return `
     <!DOCTYPE html>
     <html lang="id">
@@ -60,11 +94,7 @@ export function buildKredensialEmail(params: {
         
         <h3 style="color: #333;">🔐 Informasi Akun Login</h3>
         
-        <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 12px 0;">
-          <p style="margin: 0 0 8px 0;"><strong>Akun Orang Tua:</strong></p>
-          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.emailOrangTua}</code></p>
-          <p style="margin: 2px 0;">Password: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.passwordOrangTua}</code></p>
-        </div>
+        ${ortuAccount}
         
         <div style="background: #f0fdf4; border-radius: 8px; padding: 16px; margin: 12px 0;">
           <p style="margin: 0 0 8px 0;"><strong>Akun Siswa:</strong></p>

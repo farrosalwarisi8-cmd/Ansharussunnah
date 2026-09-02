@@ -28,7 +28,12 @@ export default function LoginForm() {
     const result = await login(formData)
 
     if (result.success) {
-      router.push(redirectedFrom || "/dashboard")
+      // Check if user has multiple roles
+      if (result.data?.hasMultipleRoles) {
+        router.push("/pilih-role")
+      } else {
+        router.push(redirectedFrom || "/dashboard")
+      }
       router.refresh()
     } else {
       setError(result.message || "Gagal masuk. Periksa email dan password Anda.")

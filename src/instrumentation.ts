@@ -15,3 +15,14 @@ export async function register() {
     }
   }
 }
+
+export const onRequestError = async (...args: unknown[]) => {
+  const dsn = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN
+  if (!dsn) return
+
+  const Sentry = await import("@sentry/nextjs")
+  const captureRequestError = Sentry.captureRequestError as unknown as (
+    ...a: unknown[]
+  ) => void
+  captureRequestError(...args)
+}

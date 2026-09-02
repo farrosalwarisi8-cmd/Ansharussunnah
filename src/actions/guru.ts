@@ -14,6 +14,7 @@ import {
   type UpdateAkunGuruValues,
 } from "@/lib/validations/guru"
 import type { ActionResponse } from "@/types"
+import { Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
 // ========================================================
@@ -46,10 +47,10 @@ export async function createAkunGuru(
 
     const { nama, email, nip, jabatan, noHp } = validated.data
 
-    // Cek duplikasi email
-    const existingEmail = await prisma.user.findUnique({ where: { email } })
+    // Cek duplikasi email untuk role yang sama
+    const existingEmail = await prisma.user.findFirst({ where: { email, role: Role.GURU } })
     if (existingEmail) {
-      return { success: false, message: "Email sudah terdaftar dalam sistem" }
+      return { success: false, message: "Email sudah terdaftar untuk role Guru" }
     }
 
     // Cek duplikasi NIP jika diisi

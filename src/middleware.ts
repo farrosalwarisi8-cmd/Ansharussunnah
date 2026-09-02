@@ -15,6 +15,8 @@ const PUBLIC_ROUTES = [
   "/api/jenjang-kelas",
   "/api/pendaftaran",
   "/api/auth/login",
+  "/api/pilih-role",
+  "/pilih-role",
 ]
 
 
@@ -34,11 +36,28 @@ export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+  const { pathname } = request.nextUrl
+
+  // Abaikan static files
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/favicon") ||
+    pathname.includes(".")
+  ) {
+    return supabaseResponse
+  }
+
   // If Supabase env vars are not configured, skip auth check entirely
   if (!supabaseUrl || !supabaseAnonKey) {
     console.warn(
       "[middleware] NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set. Auth middleware is disabled."
     )
+    return supabaseResponse
+  }
+
+  // Short-circuit: untuk route publik, kita TIDAK perlu menyentuh Supabase.
+  // Ini menghilangkan 1 round-trip jaringan tiap navigasi ke halaman publik.
+  if (isPublicRoute(pathname)) {
     return supabaseResponse
   }
 
@@ -66,17 +85,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  const { pathname } = request.nextUrl
-
-  // Abaikan static files
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon") ||
-    pathname.includes(".")
-  ) {
-    return supabaseResponse
-  }
 
   // Jika TIDAK login dan mencoba akses protected route
   if (!user && !isPublicRoute(pathname)) {

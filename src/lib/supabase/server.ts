@@ -2,8 +2,9 @@
 
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { cookies } from "next/headers"
+import { cache } from "react"
 
-export async function createSupabaseServerClient() {
+export const createSupabaseServerClient = cache(async () => {
   const cookieStore = await cookies()
 
   return createServerClient(
@@ -26,4 +27,4 @@ export async function createSupabaseServerClient() {
       },
     }
   )
-}
+})

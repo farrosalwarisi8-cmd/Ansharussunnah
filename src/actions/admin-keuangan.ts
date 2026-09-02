@@ -14,6 +14,7 @@ import {
   type UpdateAkunAdminKeuanganValues,
 } from "@/lib/validations/admin-keuangan"
 import type { ActionResponse } from "@/types"
+import { Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
 // ========================================================
@@ -86,10 +87,10 @@ export async function createAkunAdminKeuangan(
 
     const { nama, email, noHp } = validated.data
 
-    // Cek duplikasi email
-    const existingEmail = await prisma.user.findUnique({ where: { email } })
+    // Cek duplikasi email untuk role yang sama
+    const existingEmail = await prisma.user.findFirst({ where: { email, role: Role.ADMIN_KEUANGAN } })
     if (existingEmail) {
-      return { success: false, message: "Email sudah terdaftar dalam sistem" }
+      return { success: false, message: "Email sudah terdaftar untuk role Admin Keuangan" }
     }
 
     // Generate password random aman

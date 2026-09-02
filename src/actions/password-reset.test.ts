@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("@/lib/prisma", () => ({
   default: {
-    user: { findUnique: vi.fn() },
+    user: { findUnique: vi.fn(), findFirst: vi.fn() },
     passwordResetToken: {
       findFirst: vi.fn(),
       create: vi.fn(),
@@ -61,7 +61,7 @@ describe("requestPasswordReset", () => {
   })
 
   it("harus mengembalikan response sukses generik jika email tidak terdaftar", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(null)
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(null)
 
     const result = await requestPasswordReset("unknown@example.com")
     expect(result.success).toBe(true)
@@ -69,7 +69,7 @@ describe("requestPasswordReset", () => {
   })
 
   it("harus membatasi request OTP baru dalam masa cooldown", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never)
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(mockUser as never)
     vi.mocked(prisma.passwordResetToken.findFirst).mockResolvedValue({
       id: "token-1",
       createdAt: new Date(),
@@ -92,7 +92,7 @@ describe("verifyResetOtp", () => {
   })
 
   it("harus mengunci token jika limit percobaan salah (lockout) terpenuhi", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never)
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(mockUser as never)
     vi.mocked(prisma.passwordResetToken.findFirst).mockResolvedValue({
       id: "token-1",
       jumlahGagal: 3,
@@ -105,7 +105,7 @@ describe("verifyResetOtp", () => {
   })
 
   it("harus menambah counter gagal jika OTP salah", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never)
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(mockUser as never)
     vi.mocked(prisma.passwordResetToken.findFirst).mockResolvedValue({
       id: "token-1",
       kodeOtpHash: "$2a$10$hashed",

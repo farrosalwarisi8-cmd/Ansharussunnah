@@ -9,20 +9,16 @@ import { Plus } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import dynamic from "next/dynamic"
-import { Loader2 } from "lucide-react"
 
-// Lazy-load role-specific sub-views — only the active role's code is downloaded
+// Dynamic import memecah bundle per role. SSR aktif agar tampilan langsung muncul.
 const GuruTugasView = dynamic(
-  () => import("@/components/dashboard/tugas-guru-view").then((m) => m.GuruTugasView),
-  { ssr: false, loading: () => <div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-yellow-500" /></div> }
+  () => import("@/components/dashboard/tugas-guru-view").then((m) => m.GuruTugasView)
 )
 const SiswaTugasView = dynamic(
-  () => import("@/components/dashboard/tugas-siswa-view").then((m) => m.SiswaTugasView),
-  { ssr: false, loading: () => <div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-yellow-500" /></div> }
+  () => import("@/components/dashboard/tugas-siswa-view").then((m) => m.SiswaTugasView)
 )
 const OrangTuaTugasView = dynamic(
-  () => import("@/components/dashboard/tugas-orang-tua-view").then((m) => m.OrangTuaTugasView),
-  { ssr: false, loading: () => <div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-yellow-500" /></div> }
+  () => import("@/components/dashboard/tugas-orang-tua-view").then((m) => m.OrangTuaTugasView)
 )
 
 export default function TugasPage() {

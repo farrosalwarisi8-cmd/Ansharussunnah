@@ -3,6 +3,7 @@
 import type { Metadata } from "next"
 import { getCurrentUser, enforcePasswordChange } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { redirect } from "next/navigation"
 import { Role } from "@prisma/client"
 import { DashboardProvider, type DashboardUser, type ChildStudent } from "@/components/dashboard/dashboard-context"
 import { DashboardNavWrapper } from "@/components/dashboard/dashboard-nav-wrapper"
@@ -19,10 +20,17 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  // Guard: Paksa user ganti password jika mustChangePassword = true
+  // Guard: Paksa user ganti password jika mustChangePassword = true.
+  // getCurrentUser di-memoize per-request (React cache), jadi pemanggilan
+  // di bawah akan memakai hasil yang sama tanpa query Supabase/Prisma tambahan.
   await enforcePasswordChange("/dashboard")
 
   const user = await getCurrentUser()
+
+  // Defense-in-depth: jangan pernah menyediakan akun default bila sesi tidak aktif.
+  if (!user) {
+    redirect("/login")
+  }
 
   let childrenList: ChildStudent[] = []
 
@@ -58,35 +66,25 @@ export default async function DashboardLayout({
   }
 
   // Siapkan dashboard user data
-  const dashboardUser: DashboardUser = user
-    ? {
-        id: user.id,
-        nama: user.nama,
-        email: user.email,
-        role: user.role,
-        isAdmin: user.isAdmin,
-        avatar: user.avatar,
-        kelas: user.siswa?.kelas
-          ? {
-              id: user.siswa.kelas.id,
-              nama: user.siswa.kelas.nama,
-              jenjang: {
-                id: user.siswa.kelas.jenjang.id,
-                nama: user.siswa.kelas.jenjang.nama,
-              },
-            }
-          : null,
-        children: childrenList,
-      }
-    : {
-        // Fallback demo user if session is not active
-        id: "demo-user",
-        nama: "Ustadz Abdullah",
-        email: "guru@ansharussunnah.sch.id",
-        role: Role.GURU,
-        isAdmin: true,
-        avatar: null,
-      }
+  const dashboardUser: DashboardUser = {
+    id: user.id,
+    nama: user.nama,
+    email: user.email,
+    role: user.role,
+    isAdmin: user.isAdmin,
+    avatar: user.avatar,
+    kelas: user.siswa?.kelas
+      ? {
+          id: user.siswa.kelas.id,
+          nama: user.siswa.kelas.nama,
+          jenjang: {
+            id: user.siswa.kelas.jenjang.id,
+            nama: user.siswa.kelas.jenjang.nama,
+          },
+        }
+      : null,
+    children: childrenList,
+  }
 
   return (
     <DashboardProvider user={dashboardUser}>

@@ -5,23 +5,20 @@ import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
 import { Role } from "@prisma/client"
-import { Plus, Loader2 } from "lucide-react"
+import { Plus } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import dynamic from "next/dynamic"
 
-// Lazy-load role-specific sub-views — only the active role's code is downloaded
+// Dynamic import memecah bundle per role. SSR aktif agar tampilan langsung muncul.
 const GuruUjianView = dynamic(
-  () => import("@/components/dashboard/ujian-guru-view").then((m) => m.GuruUjianView),
-  { ssr: false, loading: () => <div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-yellow-500" /></div> }
+  () => import("@/components/dashboard/ujian-guru-view").then((m) => m.GuruUjianView)
 )
 const SiswaUjianView = dynamic(
-  () => import("@/components/dashboard/ujian-siswa-view").then((m) => m.SiswaUjianView),
-  { ssr: false, loading: () => <div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-yellow-500" /></div> }
+  () => import("@/components/dashboard/ujian-siswa-view").then((m) => m.SiswaUjianView)
 )
 const OrangTuaUjianView = dynamic(
-  () => import("@/components/dashboard/ujian-orang-tua-view").then((m) => m.OrangTuaUjianView),
-  { ssr: false, loading: () => <div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-yellow-500" /></div> }
+  () => import("@/components/dashboard/ujian-orang-tua-view").then((m) => m.OrangTuaUjianView)
 )
 
 export default function UjianPage() {

@@ -3,29 +3,23 @@
 import dynamic from "next/dynamic"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Loader2 } from "lucide-react"
 import { BarChart3 } from "lucide-react"
 
-// Lazy-load each tab — only the active tab's code is downloaded
+// Dynamic import memecah bundle per tab. SSR aktif agar konten langsung tampil.
 const VerifikasiPembayaranTab = dynamic(
-  () => import("@/components/dashboard/keuangan-verifikasi-tab").then((m) => m.VerifikasiPembayaranTab),
-  { ssr: false, loading: () => <div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-yellow-500" /></div> }
+  () => import("@/components/dashboard/keuangan-verifikasi-tab").then((m) => m.VerifikasiPembayaranTab)
 )
 const GenerateSppTab = dynamic(
-  () => import("@/components/dashboard/keuangan-generate-tab").then((m) => m.GenerateSppTab),
-  { ssr: false, loading: () => <div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-yellow-500" /></div> }
+  () => import("@/components/dashboard/keuangan-generate-tab").then((m) => m.GenerateSppTab)
 )
 const RekapTab = dynamic(
-  () => import("@/components/dashboard/keuangan-rekap-tab").then((m) => m.RekapTab),
-  { ssr: false, loading: () => <div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-yellow-500" /></div> }
+  () => import("@/components/dashboard/keuangan-rekap-tab").then((m) => m.RekapTab)
 )
 const KasirTab = dynamic(
-  () => import("@/components/dashboard/keuangan-kasir-tab").then((m) => m.KasirTab),
-  { ssr: false, loading: () => <div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-yellow-500" /></div> }
+  () => import("@/components/dashboard/keuangan-kasir-tab").then((m) => m.KasirTab)
 )
 const LaporanTab = dynamic(
-  () => import("@/components/dashboard/keuangan-laporan-tab").then((m) => m.LaporanTab),
-  { ssr: false, loading: () => <div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-yellow-500" /></div> }
+  () => import("@/components/dashboard/keuangan-laporan-tab").then((m) => m.LaporanTab)
 )
 
 export default function KeuanganPage() {
