@@ -251,7 +251,7 @@ export default function VerifikasiPendaftaranPage() {
                 <ArrowUpDown className="h-3.5 w-3.5" />
                 {sortBy === "newest" ? "Terbaru" : "Terlama"}
               </Button>
-              <Button variant="outline" size="sm" onClick={fetchList} className="rounded-xl">
+              <Button variant="outline" size="sm" onClick={fetchList} className="rounded-xl" aria-label="Muat Ulang">
                 <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                 Muat Ulang
               </Button>
@@ -436,7 +436,7 @@ export default function VerifikasiPendaftaranPage() {
               <div className="space-y-4 py-2 text-xs sm:text-sm">
                 {/* ---- DATA CALON SISWA ---- */}
                 <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 space-y-2">
-                  <h4 className="font-bold text-blue-900 uppercase text-xs">Data Calon Siswa</h4>
+                  <h3 className="font-bold text-blue-900 uppercase text-xs">Data Calon Siswa</h3>
                   <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
                     <DetailRow label="Nama Lengkap" value={pendaftar.namaLengkap} />
                     <DetailRow label="Jenis Kelamin" value={pendaftar.jenisKelamin === "LAKI_LAKI" ? "Laki-laki" : "Perempuan"} />
@@ -453,7 +453,7 @@ export default function VerifikasiPendaftaranPage() {
 
                 {/* ---- DATA KONTAK ORANG TUA ---- */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                  <h4 className="font-bold text-slate-800 uppercase text-xs">Data Kontak Orang Tua</h4>
+                  <h3 className="font-bold text-slate-800 uppercase text-xs">Data Kontak Orang Tua</h3>
                   <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
                     <DetailRow label="Nama" value={pendaftar.namaOrangTua} />
                     <DetailRow label="No. HP / WA" value={pendaftar.noHpOrangTua} />
@@ -471,7 +471,7 @@ export default function VerifikasiPendaftaranPage() {
                 {/* ---- DATA AYAH KANDUNG ---- */}
                 {(pendaftar.namaAyahKandung || pendaftar.statusAyahKandung) && (
                   <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-2">
-                    <h4 className="font-bold text-amber-900 uppercase text-xs">Data Ayah Kandung</h4>
+                    <h3 className="font-bold text-amber-900 uppercase text-xs">Data Ayah Kandung</h3>
                     <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
                       <DetailRow label="Nama" value={pendaftar.namaAyahKandung} />
                       <DetailRow label="Status" value={formatStatusOrangTua(pendaftar.statusAyahKandung)} />
@@ -485,7 +485,7 @@ export default function VerifikasiPendaftaranPage() {
                 {/* ---- DATA IBU KANDUNG ---- */}
                 {(pendaftar.namaIbuKandung || pendaftar.statusIbuKandung) && (
                   <div className="p-4 rounded-2xl bg-pink-50 border border-pink-200 space-y-2">
-                    <h4 className="font-bold text-pink-900 uppercase text-xs">Data Ibu Kandung</h4>
+                    <h3 className="font-bold text-pink-900 uppercase text-xs">Data Ibu Kandung</h3>
                     <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
                       <DetailRow label="Nama" value={pendaftar.namaIbuKandung} />
                       <DetailRow label="Status" value={formatStatusOrangTua(pendaftar.statusIbuKandung)} />
@@ -499,7 +499,7 @@ export default function VerifikasiPendaftaranPage() {
                 {/* ---- DATA WALI ---- */}
                 {pendaftar.statusWali && (
                   <div className="p-4 rounded-2xl bg-violet-50 border border-violet-200 space-y-2">
-                    <h4 className="font-bold text-violet-900 uppercase text-xs">Data Wali</h4>
+                    <h3 className="font-bold text-violet-900 uppercase text-xs">Data Wali</h3>
                     <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
                       <DetailRow label="Status" value={formatStatusWali(pendaftar.statusWali)} />
                       {pendaftar.statusWali === "LAINNYA" && pendaftar.namaWali && (
@@ -512,7 +512,7 @@ export default function VerifikasiPendaftaranPage() {
                 {/* ---- KEWARGANEGARAAN ---- */}
                 {pendaftar.kewarganegaraan && pendaftar.kewarganegaraan !== "WNI" && (
                   <div className="p-4 rounded-2xl bg-teal-50 border border-teal-200 space-y-2">
-                    <h4 className="font-bold text-teal-900 uppercase text-xs">Kewarganegaraan</h4>
+                    <h3 className="font-bold text-teal-900 uppercase text-xs">Kewarganegaraan</h3>
                     <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
                       <DetailRow label="Kewarganegaraan" value={pendaftar.kewarganegaraan} />
                       {pendaftar.kitas && (
@@ -527,7 +527,7 @@ export default function VerifikasiPendaftaranPage() {
 
                 {/* ---- DOKUMEN TERLAMPIR ---- */}
                 <div className="space-y-2">
-                  <h4 className="font-bold text-slate-800 uppercase text-xs">Dokumen Terlampir:</h4>
+                  <h3 className="font-bold text-slate-800 uppercase text-xs">Dokumen Terlampir:</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {signedUrls?.buktiTransfer?.map((bt) => (
                       <a

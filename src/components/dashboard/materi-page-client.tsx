@@ -403,6 +403,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
                             setDeleteDialogOpen(true)
                           }}
                           className="rounded-xl text-xs font-bold text-rose-600 border-rose-200 hover:bg-rose-50 min-h-[38px]"
+                          aria-label="Hapus materi"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>

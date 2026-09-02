@@ -17,6 +17,27 @@ const nextConfig: NextConfig = {
   // ✅ Aktifkan gzip compression
   compress: true,
 
+  // ✅ Disable source maps di production (mengurangi transfer size)
+  productionBrowserSourceMaps: false,
+
+  // ✅ Optimize tree-shaking untuk package besar (lucide-react, radix-ui, etc.)
+  //    Mengurangi bundle JS hingga 40-60% untuk icon library
+  optimizePackageImports: [
+    "lucide-react",
+    "@radix-ui/react-dialog",
+    "@radix-ui/react-dropdown-menu",
+    "@radix-ui/react-select",
+    "@radix-ui/react-tabs",
+    "@radix-ui/react-avatar",
+    "@radix-ui/react-toast",
+    "@radix-ui/react-label",
+    "@radix-ui/react-slot",
+    "class-variance-authority",
+    "tailwind-merge",
+    "zod",
+    "date-fns",
+  ],
+
   // ✅ Server Actions — body size limit (5MB untuk upload file)
   experimental: {
     serverActions: {
@@ -84,6 +105,8 @@ const nextConfig: NextConfig = {
   // ✅ Konfigurasi Image Optimization — gunakan AVIF + WebP untuk gambar lebih ringan
   images: {
     formats: ["image/avif", "image/webp"],
+    deviceSizes: [640, 750, 828, 1080, 1200],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256],
     remotePatterns: [
       {
         protocol: "https",

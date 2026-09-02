@@ -493,6 +493,7 @@ export default function PeriodeAjaranPage() {
                               setDeleteDialog({ open: true, periode: p })
                             }
                             className="rounded-xl text-xs font-semibold"
+                            aria-label="Hapus periode ajaran"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -565,6 +566,7 @@ export default function PeriodeAjaranPage() {
                           setDeleteDialog({ open: true, periode: p })
                         }
                         className="rounded-xl text-xs min-h-[40px] px-3"
+                        aria-label="Hapus periode ajaran"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>

@@ -377,6 +377,7 @@ export default function KelolaKelasPage() {
                       setDeleteDialogOpen(true)
                     }}
                     className="rounded-xl min-h-[36px] text-xs text-rose-600 border-rose-200 hover:bg-rose-50"
+                    aria-label="Hapus jenjang"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -434,6 +435,7 @@ export default function KelolaKelasPage() {
                               setDeleteDialogOpen(true)
                             }}
                             className="rounded-xl min-h-[32px] text-xs text-rose-600 border-rose-200 hover:bg-rose-50"
+                            aria-label="Hapus kelas"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
