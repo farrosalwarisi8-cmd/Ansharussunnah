@@ -1,10 +1,18 @@
 // src/app/dashboard/layout.tsx
 
+import type { Metadata } from "next"
 import { getCurrentUser, enforcePasswordChange } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { Role } from "@prisma/client"
 import { DashboardProvider, type DashboardUser, type ChildStudent } from "@/components/dashboard/dashboard-context"
 import { DashboardNavWrapper } from "@/components/dashboard/dashboard-nav-wrapper"
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+  },
+}
 
 export default async function DashboardLayout({
   children,

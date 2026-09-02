@@ -1,7 +1,5 @@
 "use client"
 
-
-
 import * as React from "react"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
@@ -16,12 +14,29 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import dynamic from "next/dynamic"
-const Dialog = dynamic(() => import("@/components/ui/dialog").then(m => m.Dialog), { ssr: false })
-const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogContent), { ssr: false })
-const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogHeader), { ssr: false })
-const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
-const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 import { Upload, Clock, CheckCircle2, Building2, Copy, Loader2, ShieldX } from "lucide-react"
+
+// Single dynamic import for all Dialog parts — one chunk instead of five
+const DialogRoot = dynamic(
+  () => import("@/components/ui/dialog").then((m) => m.Dialog),
+  { ssr: false }
+)
+const DialogContent = dynamic(
+  () => import("@/components/ui/dialog").then((m) => m.DialogContent),
+  { ssr: false }
+)
+const DialogHeader = dynamic(
+  () => import("@/components/ui/dialog").then((m) => m.DialogHeader),
+  { ssr: false }
+)
+const DialogTitle = dynamic(
+  () => import("@/components/ui/dialog").then((m) => m.DialogTitle),
+  { ssr: false }
+)
+const DialogFooter = dynamic(
+  () => import("@/components/ui/dialog").then((m) => m.DialogFooter),
+  { ssr: false }
+)
 
 type TagihanItem = {
   id: string
@@ -107,12 +122,10 @@ function TagihanContent() {
     setLoading(true)
     setError(null)
     try {
-      // Determine siswaId based on role
       let siswaId: string | undefined
       if (isParent && selectedChild) {
         siswaId = selectedChild.id
       } else if (user.kelas?.id) {
-        // For ADMIN_KEUANGAN or GURU (wali kelas), use the selectedChild if available
         siswaId = selectedChild?.id
       }
 
@@ -176,7 +189,6 @@ function TagihanContent() {
         description: "Admin keuangan akan memverifikasi pembayaran Anda dalam 1x24 jam.",
       })
       setSelectedTagihan(null)
-      // Refetch data after successful submission
       fetchTagihan()
     } catch {
       toast({
@@ -325,7 +337,7 @@ function TagihanContent() {
 
       {/* Modal Upload Bukti Transfer */}
       {selectedTagihan && (
-        <Dialog open={!!selectedTagihan} onOpenChange={() => setSelectedTagihan(null)}>
+        <DialogRoot open={!!selectedTagihan} onOpenChange={() => setSelectedTagihan(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle className="text-lg font-bold text-slate-800">
@@ -403,7 +415,7 @@ function TagihanContent() {
               </DialogFooter>
             </form>
           </DialogContent>
-        </Dialog>
+        </DialogRoot>
       )}
     </div>
   )
