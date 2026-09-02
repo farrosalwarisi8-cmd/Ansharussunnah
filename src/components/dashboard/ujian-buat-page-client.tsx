@@ -5,12 +5,14 @@
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createUjian, updateUjian, getUjianDetail, addOrUpdateSoalUjian, deleteSoalUjian } from "@/actions/ujian"
+import { getPeriodeAjaranAktif } from "@/actions/periode-ajaran"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Trash2, ArrowLeft, Loader2, Save, CheckCircle2, AlertCircle } from "lucide-react"
+import { KelasMapelSelector } from "@/components/dashboard/kelas-mapel-selector"
+import { Plus, Trash2, ArrowLeft, Loader2, Save } from "lucide-react"
 import Link from "next/link"
 
 interface OpsiItem {
@@ -44,8 +46,9 @@ export default function BuatUjianPage() {
   // Form Metadata Ujian
   const [judul, setJudul] = React.useState("")
   const [deskripsi, setDeskripsi] = React.useState("")
-  const [mapel, setMapel] = React.useState("Fiqih Ibadah")
-  const [kelasId, setKelasId] = React.useState("7A-IKHWAN")
+  const [mapel, setMapel] = React.useState("")
+  const [kelasId, setKelasId] = React.useState("")
+  const [periodeAjaranId, setPeriodeAjaranId] = React.useState("")
   const [durasi, setDurasi] = React.useState("60")
   const [waktuMulai, setWaktuMulai] = React.useState("")
   const [waktuSelesai, setWaktuSelesai] = React.useState("")
@@ -220,6 +223,21 @@ export default function BuatUjianPage() {
     loadUjian()
   }, [editId, router, toast])
 
+  // Muat periode ajaran aktif sebagai nilai default periode
+  React.useEffect(() => {
+    let mounted = true
+    async function loadPeriode() {
+      const res = await getPeriodeAjaranAktif()
+      if (mounted && res.success && res.data?.id) {
+        setPeriodeAjaranId(res.data.id)
+      }
+    }
+    loadPeriode()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   const handleSaveUjian = async (publish: boolean = false) => {
     if (!judul.trim()) {
       toast({ variant: "destructive", title: "Judul ujian wajib diisi!" })
@@ -236,7 +254,7 @@ export default function BuatUjianPage() {
           judul,
           deskripsi,
           kelasId,
-          periodeAjaranId: "periode-aktif",
+          periodeAjaranId,
           mataPelajaran: mapel,
           durasiMenit: parseInt(durasi) || 60,
           waktuMulai: waktuMulai ? new Date(waktuMulai).toISOString() : undefined,
@@ -258,7 +276,7 @@ export default function BuatUjianPage() {
           judul,
           deskripsi,
           kelasId,
-          periodeAjaranId: "periode-aktif",
+          periodeAjaranId,
           mataPelajaran: mapel,
           durasiMenit: parseInt(durasi) || 60,
           waktuMulai: waktuMulai ? new Date(waktuMulai).toISOString() : new Date().toISOString(),
@@ -411,37 +429,23 @@ export default function BuatUjianPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <KelasMapelSelector
+                kelasId={kelasId}
+                mapel={mapel}
+                onChangeKelas={setKelasId}
+                onChangeMapel={setMapel}
+              />
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-                  Mata Pelajaran
+                  Periode Ajaran
                 </label>
-                <select
-                  value={mapel}
-                  onChange={(e) => setMapel(e.target.value)}
-                  className="w-full h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-yellow-500"
-                >
-                  <option value="Fiqih Ibadah">Fiqih Ibadah</option>
-                  <option value="Aqidah Akhlak">Aqidah Akhlak</option>
-                  <option value="Bahasa Arab">Bahasa Arab</option>
-                  <option value="Tahfidz & Tajwid">Tahfidz &amp; Tajwid</option>
-                  <option value="Hadits Arba'in">Hadits Arba&apos;in</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-                  Kelas Sasaran
-                </label>
-                <select
-                  value={kelasId}
-                  onChange={(e) => setKelasId(e.target.value)}
-                  className="w-full h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-yellow-500"
-                >
-                  <option value="7A-IKHWAN">Kelas 7A - Ikhwan</option>
-                  <option value="7B-AKHWAT">Kelas 7B - Akhwat</option>
-                  <option value="8A-IKHWAN">Kelas 8A - Ikhwan</option>
-                  <option value="9A-IKHWAN">Kelas 9A - Ikhwan</option>
-                </select>
+                <input
+                  type="text"
+                  value={periodeAjaranId ? "Periode aktif terpilih" : "Memuat periode aktif..."}
+                  readOnly
+                  disabled
+                  className="w-full h-12 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-500"
+                />
               </div>
             </div>
 

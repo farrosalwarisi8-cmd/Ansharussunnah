@@ -6,6 +6,7 @@ import * as React from "react"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { promosiSiswaMassal, getSiswaUntukPromosi } from "@/actions/kenaikan-kelas"
 import { getAdminJenjangList } from "@/actions/jenjang-kelas"
+import { getPeriodeAjaranAktif } from "@/actions/periode-ajaran"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -45,7 +46,7 @@ export default function KenaikanKelasPage() {
   const [loadingKelas, setLoadingKelas] = React.useState(true)
 
   const [kelasAsalId, setKelasAsalId] = React.useState("")
-  const [periodeAjaranId, setPeriodeAjaranId] = React.useState("periode-aktif")
+  const [periodeAjaranId, setPeriodeAjaranId] = React.useState("")
   const [isConfirmOpen, setIsConfirmOpen] = React.useState(false)
   const [processing, setProcessing] = React.useState(false)
 
@@ -96,6 +97,21 @@ export default function KenaikanKelasPage() {
     }
     fetchKelas()
   }, [kelasAsalId])
+
+  // Muat periode ajaran aktif
+  React.useEffect(() => {
+    let mounted = true
+    async function loadPeriode() {
+      const res = await getPeriodeAjaranAktif()
+      if (mounted && res.success && res.data?.id) {
+        setPeriodeAjaranId(res.data.id)
+      }
+    }
+    loadPeriode()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   // Fetch siswa when kelas asal changes
   React.useEffect(() => {
@@ -245,10 +261,10 @@ export default function KenaikanKelasPage() {
             </label>
             <input
               type="text"
-              value={periodeAjaranId}
-              onChange={(e) => setPeriodeAjaranId(e.target.value)}
-              placeholder="periode-aktif"
-              className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-yellow-500"
+              value={periodeAjaranId ? "Periode aktif" : "Memuat periode aktif..."}
+              readOnly
+              disabled
+              className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-500"
             />
           </div>
 

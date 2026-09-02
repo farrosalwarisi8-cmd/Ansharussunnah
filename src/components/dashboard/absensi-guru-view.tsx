@@ -3,6 +3,7 @@
 import * as React from "react"
 import { inputAbsensiBulk, inputAbsensiSingle, getSiswaByKelas, getRekapKehadiranKelas } from "@/actions/absensi"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
+import { getPeriodeAjaranAktif } from "@/actions/periode-ajaran"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -56,7 +57,22 @@ export function GuruAbsensiView() {
     persentaseKehadiran: string
   }> | null>(null)
   const [loadingRekap, setLoadingRekap] = React.useState(false)
-  const [periodeAjaranId, setPeriodeAjaranId] = React.useState("periode-aktif")
+  const [periodeAjaranId, setPeriodeAjaranId] = React.useState("")
+
+  // Muat periode ajaran aktif
+  React.useEffect(() => {
+    let mounted = true
+    async function loadPeriode() {
+      const res = await getPeriodeAjaranAktif()
+      if (mounted && res.success && res.data?.id) {
+        setPeriodeAjaranId(res.data.id)
+      }
+    }
+    loadPeriode()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   const handleLoadRekap = async () => {
     if (!selectedKelasId) return
@@ -147,7 +163,7 @@ export function GuruAbsensiView() {
     try {
       const result = await inputAbsensiBulk({
         kelasId: selectedKelasId,
-        periodeAjaranId: "periode-aktif",
+        periodeAjaranId,
         tanggal: selectedTanggal,
         absensi: students.map((s) => ({
           siswaId: s.siswaId,
@@ -378,7 +394,7 @@ export function GuruAbsensiView() {
                           const result = await inputAbsensiSingle({
                             siswaId: student.siswaId,
                             kelasId: selectedKelasId,
-                            periodeAjaranId: "periode-aktif",
+                            periodeAjaranId,
                             tanggal: selectedTanggal,
                             status: attendance[student.siswaId] || "HADIR",
                           })

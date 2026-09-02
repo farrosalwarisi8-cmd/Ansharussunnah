@@ -39,6 +39,35 @@ export async function getDaftarPeriodeAjaran(): Promise<ActionResponse> {
 }
 
 /**
+ * Ambil periode ajaran aktif (yang sedang berjalan) untuk dipakai
+ * sebagai nilai default dropdown periode di form ujian/tugas/materi.
+ */
+export async function getPeriodeAjaranAktif(): Promise<
+  ActionResponse<{ id: string; nama: string } | null>
+> {
+  try {
+    await requireGuru()
+
+    const periode = await prisma.periodeAjaran.findFirst({
+      where: { aktif: true },
+      select: { id: true, nama: true },
+      orderBy: { tahunAjaran: "desc" },
+    })
+
+    return {
+      success: true,
+      message: "Periode ajaran aktif berhasil dimuat",
+      data: periode,
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal memuat periode ajaran aktif",
+    }
+  }
+}
+
+/**
  * Buat periode ajaran baru.
  * Jika diset aktif=true, periode lain otomatis di-nonaktifkan.
  */

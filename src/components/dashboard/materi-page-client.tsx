@@ -7,6 +7,7 @@ import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
 import { createMateri, getDaftarMateriSiswa, getDaftarMateriAnak, getDaftarMateriGuru, updateMateri, deleteMateri } from "@/actions/materi"
+import { getPeriodeAjaranAktif } from "@/actions/periode-ajaran"
 import { useToast } from "@/hooks/use-toast"
 import { Role } from "@prisma/client"
 import { Button } from "@/components/ui/button"
@@ -14,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
+import { KelasMapelSelector } from "@/components/dashboard/kelas-mapel-selector"
 import dynamic from "next/dynamic"
 const Dialog = dynamic(() => import("@/components/ui/dialog").then(m => m.Dialog), { ssr: false })
 const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogContent), { ssr: false })
@@ -65,8 +67,9 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
   // Form State
   const [judul, setJudul] = React.useState("")
   const [deskripsi, setDeskripsi] = React.useState("")
-  const [mapel, setMapel] = React.useState("Fiqih Ibadah")
+  const [mapel, setMapel] = React.useState("")
   const [kelasId, setKelasId] = React.useState("")
+  const [periodeAjaranId, setPeriodeAjaranId] = React.useState("")
   const [fileUrl, setFileUrl] = React.useState("")
 
   // Guru class list for dropdown
@@ -109,6 +112,21 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
     }
     fetchKelas()
   }, [isTeacher, kelasId])
+
+  // Muat periode ajaran aktif sebagai nilai default periode
+  React.useEffect(() => {
+    let mounted = true
+    async function loadPeriode() {
+      const res = await getPeriodeAjaranAktif()
+      if (mounted && res.success && res.data?.id) {
+        setPeriodeAjaranId(res.data.id)
+      }
+    }
+    loadPeriode()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   // Fetch materi data
   const fetchMateri = React.useCallback(async () => {
@@ -161,7 +179,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
         judul,
         deskripsi,
         kelasId,
-        periodeAjaranId: "periode-aktif",
+        periodeAjaranId,
         mataPelajaran: mapel,
         urlFile: fileUrl,
       })
@@ -241,7 +259,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
     }
   }
 
-  const mapelOptions = ["SEMUA", "Fiqih Ibadah", "Bahasa Arab", "Hadits Arba'in", "Tahfidz & Tajwid", "Aqidah Akhlak"]
+  const mapelOptions = ["SEMUA", ...Array.from(new Set(materiList.map((m) => m.mataPelajaran)))]
 
   const filteredMateri = selectedMapelFilter === "SEMUA"
     ? materiList
@@ -444,42 +462,23 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <KelasMapelSelector
+                kelasId={kelasId}
+                mapel={mapel}
+                onChangeKelas={setKelasId}
+                onChangeMapel={setMapel}
+              />
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-                  Mata Pelajaran
+                  Periode Ajaran
                 </label>
-                <select
-                  value={mapel}
-                  onChange={(e) => setMapel(e.target.value)}
-                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-yellow-500"
-                >
-                  <option value="Fiqih Ibadah">Fiqih Ibadah</option>
-                  <option value="Bahasa Arab">Bahasa Arab</option>
-                  <option value="Hadits Arba'in">Hadits Arba&apos;in</option>
-                  <option value="Tahfidz & Tajwid">Tahfidz &amp; Tajwid</option>
-                  <option value="Aqidah Akhlak">Aqidah Akhlak</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-                  Kelas Tujuan
-                </label>
-                <select
-                  value={kelasId}
-                  onChange={(e) => setKelasId(e.target.value)}
-                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-yellow-500"
-                >
-                  {kelasList.length > 0 ? (
-                    kelasList.map((k) => (
-                      <option key={k.kelasId} value={k.kelasId}>
-                        {k.namaKelas}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="7A-IKHWAN">Kelas 7A - Ikhwan</option>
-                  )}
-                </select>
+                <input
+                  type="text"
+                  value={periodeAjaranId ? "Periode aktif terpilih" : "Memuat periode aktif..."}
+                  readOnly
+                  disabled
+                  className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500"
+                />
               </div>
             </div>
 
@@ -556,11 +555,9 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
                 onChange={(e) => setEditMapel(e.target.value)}
                 className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-yellow-500"
               >
-                <option value="Fiqih Ibadah">Fiqih Ibadah</option>
-                <option value="Bahasa Arab">Bahasa Arab</option>
-                <option value="Hadits Arba'in">Hadits Arba&apos;in</option>
-                <option value="Tahfidz & Tajwid">Tahfidz &amp; Tajwid</option>
-                <option value="Aqidah Akhlak">Aqidah Akhlak</option>
+                {mapelOptions.filter((m) => m !== "SEMUA").map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
               </select>
             </div>
 

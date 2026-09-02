@@ -113,16 +113,35 @@ export async function requireRole(allowedRoles: Role[]) {
   return user
 }
 
+/**
+ * Role yang boleh mengakses fitur akademik (ujian, tugas, materi, absensi, rapor).
+ * SUPER_ADMIN dan ADMIN_AKADEMIK diperlakukan sebagai "guru admin" yang punya akses penuh
+ * ke seluruh kelas & jenjang, sedangkan Role.GURU hanya kelas yang diajarnya.
+ */
+const AKADEMIK_ROLES = [Role.GURU, Role.SUPER_ADMIN, Role.ADMIN_AKADEMIK] as const
+
 export async function requireGuru() {
-  return requireRole([Role.GURU])
+  return requireRole([...AKADEMIK_ROLES])
 }
 
 /**
- * Guard yang memastikan user adalah guru dengan hak admin.
- * Hanya guru dengan isAdmin === true yang boleh mengakses fitur ini.
+ * Apakah role yang sedang login adalah admin akademik / super admin
+ * (boleh mengelola seluruh kelas & jenjang, bukan hanya tugasan guru).
+ */
+export function isAcademicAdminRole(role: Role): boolean {
+  return role === Role.SUPER_ADMIN || role === Role.ADMIN_AKADEMIK
+}
+
+/**
+ * Guard yang memastikan user adalah guru dengan hak admin penuh.
+ * SUPER_ADMIN dan ADMIN_AKADEMIK selalu dianggap admin;
+ * Role.GURU hanya dianggap admin bila user.isAdmin === true.
  */
 export async function requireGuruAdmin() {
   const user = await requireGuru()
+  if (isAcademicAdminRole(user.role)) {
+    return user
+  }
   if (!user.isAdmin) {
     throw new Error("Akses ditolak: Fitur ini hanya untuk admin")
   }
