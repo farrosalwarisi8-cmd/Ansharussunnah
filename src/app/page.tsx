@@ -24,7 +24,7 @@ export default function HomePage() {
         <div className="container mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden relative shadow-md shadow-emerald-900/20">
-              <Image src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" fill sizes="(max-width: 640px) 48px, 56px" className="object-cover" priority />
+              <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="(max-width: 640px) 48px, 56px" className="object-cover" priority />
             </div>
             <div>
               <div className="font-extrabold text-base sm:text-lg text-slate-800 tracking-tight flex items-center gap-1.5">
@@ -222,7 +222,7 @@ export default function HomePage() {
 
             <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
               <div className="w-12 h-12 rounded-2xl overflow-hidden relative">
-                <Image src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" fill sizes="48px" className="object-cover" />
+                <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="48px" className="object-contain" />
               </div>
               <h3 className="font-bold text-lg text-slate-800">Untuk Santri / Siswa</h3>
               <ul className="text-xs sm:text-sm text-slate-600 space-y-2.5">
@@ -270,7 +270,7 @@ export default function HomePage() {
         <div className="container mx-auto px-4 sm:px-6 max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl overflow-hidden relative">
-              <Image src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" fill sizes="36px" className="object-cover" />
+              <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="36px" className="object-contain" />
             </div>
             <div>
               <div className="font-bold text-white text-sm">Pesantren Ansharussunnah</div>

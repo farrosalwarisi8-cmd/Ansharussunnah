@@ -22,7 +22,7 @@ export default async function PendaftaranPage() {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl overflow-hidden relative">
-              <Image src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" fill sizes="36px" className="object-cover" priority />
+              <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="36px" className="object-cover" priority />
             </div>
             <span className="font-bold text-gray-900">Pendaftaran Siswa Baru</span>
           </Link>

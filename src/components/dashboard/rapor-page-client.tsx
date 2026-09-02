@@ -420,7 +420,7 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
       {/* Formal Header */}
       <div className="bg-gradient-to-r from-yellow-900 via-slate-800 to-yellow-900 text-white p-6 sm:p-8 text-center border-b border-yellow-500/20">
         <div className="w-12 h-12 rounded-2xl overflow-hidden relative mx-auto mb-3 shadow-md">
-          <Image src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" fill sizes="48px" className="object-cover" />
+          <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="48px" className="object-contain" />
         </div>
         <h2 className="text-xl sm:text-2xl font-black tracking-tight uppercase">
           Laporan Hasil Penilaian Santri (Rapor)

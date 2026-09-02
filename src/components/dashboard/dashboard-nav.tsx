@@ -156,7 +156,7 @@ function DashboardNavInner() {
         <div className="h-20 flex items-center px-6 border-b border-slate-700/80 bg-slate-800/40">
           <Link href="/dashboard" className="flex items-center gap-3 group">
             <div className="w-10 h-10 rounded-xl overflow-hidden relative shadow-md shadow-yellow-800/30 group-hover:scale-105 transition-transform">
-              <Image src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" fill sizes="40px" className="object-cover" />
+              <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="40px" className="object-contain" />
             </div>
             <div>
               <div className="font-extrabold text-base tracking-tight text-white flex items-center gap-1.5">
@@ -257,7 +257,7 @@ function DashboardNavInner() {
       <header className="lg:hidden sticky top-0 z-40 bg-slate-800/95 backdrop-blur-md text-white border-b border-slate-700 px-4 py-3 flex items-center justify-between shadow-sm">
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg overflow-hidden relative shadow-sm">
-            <Image src="/ansharussunnah-logo.jpeg" alt="Logo Ansharussunnah" fill sizes="32px" className="object-cover" />
+            <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="32px" className="object-contain" />
           </div>
           <div>
             <div className="font-bold text-sm text-white leading-tight">Ansharussunnah</div>
