@@ -1,9 +1,4 @@
-import dynamic from "next/dynamic"
-
-const TagihanPageClient = dynamic(
-  () => import("@/components/dashboard/tagihan-page-client"),
-  { ssr: false }
-)
+import TagihanPageClient from "@/components/dashboard/tagihan-page-client"
 
 export default function Page() {
   return <TagihanPageClient />

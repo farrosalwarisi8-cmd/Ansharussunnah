@@ -1,9 +1,4 @@
-import dynamic from "next/dynamic"
-
-const MateriPageClient = dynamic(
-  () => import("@/components/dashboard/materi-page-client"),
-  { ssr: false }
-)
+import MateriPageClient from "@/components/dashboard/materi-page-client"
 
 export default function Page() {
   return <MateriPageClient />

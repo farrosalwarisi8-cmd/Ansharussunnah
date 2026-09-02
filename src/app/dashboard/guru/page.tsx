@@ -1,9 +1,4 @@
-import dynamic from "next/dynamic"
-
-const GuruPageClient = dynamic(
-  () => import("@/components/dashboard/guru-page-client"),
-  { ssr: false }
-)
+import GuruPageClient from "@/components/dashboard/guru-page-client"
 
 export default function Page() {
   return <GuruPageClient />

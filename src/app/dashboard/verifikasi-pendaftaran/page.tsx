@@ -1,9 +1,4 @@
-import dynamic from "next/dynamic"
-
-const VerifikasiPendaftaranPageClient = dynamic(
-  () => import("@/components/dashboard/verifikasi-pendaftaran-page-client"),
-  { ssr: false }
-)
+import VerifikasiPendaftaranPageClient from "@/components/dashboard/verifikasi-pendaftaran-page-client"
 
 export default function Page() {
   return <VerifikasiPendaftaranPageClient />

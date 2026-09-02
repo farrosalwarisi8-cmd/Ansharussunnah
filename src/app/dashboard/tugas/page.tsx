@@ -1,9 +1,4 @@
-import dynamic from "next/dynamic"
-
-const TugasPageClient = dynamic(
-  () => import("@/components/dashboard/tugas-page-client"),
-  { ssr: false }
-)
+import TugasPageClient from "@/components/dashboard/tugas-page-client"
 
 export default function Page() {
   return <TugasPageClient />

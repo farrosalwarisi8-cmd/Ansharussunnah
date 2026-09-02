@@ -1,9 +1,4 @@
-import dynamic from "next/dynamic"
-
-const KeuanganPageClient = dynamic(
-  () => import("@/components/dashboard/keuangan-page-client"),
-  { ssr: false }
-)
+import KeuanganPageClient from "@/components/dashboard/keuangan-page-client"
 
 export default function Page() {
   return <KeuanganPageClient />

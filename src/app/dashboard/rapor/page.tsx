@@ -1,9 +1,4 @@
-import dynamic from "next/dynamic"
-
-const RaporPageClient = dynamic(
-  () => import("@/components/dashboard/rapor-page-client"),
-  { ssr: false }
-)
+import RaporPageClient from "@/components/dashboard/rapor-page-client"
 
 export default function Page() {
   return <RaporPageClient />

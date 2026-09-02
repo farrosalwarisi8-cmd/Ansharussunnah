@@ -1,9 +1,4 @@
-import dynamic from "next/dynamic"
-
-const PeriodeAjaranPageClient = dynamic(
-  () => import("@/components/dashboard/periode-ajaran-page-client"),
-  { ssr: false }
-)
+import PeriodeAjaranPageClient from "@/components/dashboard/periode-ajaran-page-client"
 
 export default function Page() {
   return <PeriodeAjaranPageClient />

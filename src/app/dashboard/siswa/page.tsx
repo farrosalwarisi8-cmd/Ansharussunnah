@@ -1,9 +1,4 @@
-import dynamic from "next/dynamic"
-
-const SiswaPageClient = dynamic(
-  () => import("@/components/dashboard/siswa-page-client"),
-  { ssr: false }
-)
+import SiswaPageClient from "@/components/dashboard/siswa-page-client"
 
 export default function Page() {
   return <SiswaPageClient />

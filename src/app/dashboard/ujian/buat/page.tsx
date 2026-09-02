@@ -1,9 +1,4 @@
-import dynamic from "next/dynamic"
-
-const UjianBuatPageClient = dynamic(
-  () => import("@/components/dashboard/ujian-buat-page-client"),
-  { ssr: false }
-)
+import UjianBuatPageClient from "@/components/dashboard/ujian-buat-page-client"
 
 export default function Page() {
   return <UjianBuatPageClient />
