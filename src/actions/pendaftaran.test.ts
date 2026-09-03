@@ -80,6 +80,7 @@ const baseData = {
   noHpOrangTua: "081234567890",
   emailOrangTua: "budi@example.com",
   jenjangTujuanId: "jenjang-1",
+  kelasTujuanId: "kelas-1",
 }
 
 const baseEmisFields = {
@@ -118,8 +119,13 @@ beforeEach(() => {
   // Default: jenjang ditemukan
   mockJenjangFindUnique.mockResolvedValue(mockJenjang)
 
-  // Default: kelas tidak perlu divalidasi (_kelasTujuanId tidak dikirim)
-  mockKelasFindFirst.mockResolvedValue(null)
+  // Default: kelas valid dengan kapasitas tersedia & no capacity check
+  mockKelasFindFirst.mockResolvedValue({
+    id: "kelas-1",
+    nama: "Kelas 1",
+    kapasitas: 30,
+    _count: { siswa: 5 },
+  })
 
   // Default: generate nomor pendaftaran
   mockGenerateNomorPendaftaran.mockResolvedValue("REG-2026-00001")
@@ -373,6 +379,20 @@ describe("createPendaftaran — Validasi Gagal", () => {
     expect(mockPendaftaranCreate).not.toHaveBeenCalled()
   })
 
+  it("harus MENOLAK jika kelasTujuanId tidak dikirim (kini wajib)", async () => {
+    const withoutKelas: Record<string, string> = {}
+    for (const [k, v] of Object.entries(baseData)) {
+      if (k !== "kelasTujuanId") withoutKelas[k] = v
+    }
+    const formData = makeFormData(withoutKelas)
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toBe("Data pendaftaran tidak valid")
+    expect(result.errors?.kelasTujuanId).toBeDefined()
+    expect(mockPendaftaranCreate).not.toHaveBeenCalled()
+  })
+
   it("harus MENOLAK agama jika opsi tidak valid", async () => {
     const formData = makeFormData({
       ...baseData,
@@ -432,6 +452,37 @@ describe("createPendaftaran — Validasi Data Referensi", () => {
       "Kelas tujuan tidak valid untuk jenjang yang dipilih"
     )
     expect(mockPendaftaranCreate).not.toHaveBeenCalled()
+  })
+
+  it("harus gagal jika kelas tujuan sudah penuh", async () => {
+    mockKelasFindFirst.mockResolvedValue({
+      id: "kelas-1",
+      nama: "Kelas 1",
+      kapasitas: 30,
+      _count: { siswa: 30 },
+    })
+
+    const formData = makeFormData(baseData)
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("sudah penuh")
+    expect(mockPendaftaranCreate).not.toHaveBeenCalled()
+  })
+
+  it("harus lolos jika kelas tujuan tersedia kuota", async () => {
+    mockKelasFindFirst.mockResolvedValue({
+      id: "kelas-1",
+      nama: "Kelas 1",
+      kapasitas: 30,
+      _count: { siswa: 28 },
+    })
+
+    const formData = makeFormData(baseData)
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(true)
+    expect(mockPendaftaranCreate).toHaveBeenCalledOnce()
   })
 })
 

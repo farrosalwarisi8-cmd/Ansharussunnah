@@ -256,7 +256,7 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
     1: ["namaLengkap", "tempatLahir", "tanggalLahir", "jenisKelamin", "alamatSiswa"],
     2: ["namaOrangTua", "noHpOrangTua", "emailOrangTua"],
     3: [],
-    4: ["jenjangTujuanId"],
+    4: ["jenjangTujuanId", "kelasTujuanId"],
     5: [],
   }
 
@@ -954,7 +954,9 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
                 )}
               </div>
               <div>
-                <Label>Kelas (opsional)</Label>
+                <Label>
+                  Kelas <span className="text-destructive">*</span>
+                </Label>
                 <Select
                   onValueChange={(value) => setValue("kelasTujuanId", value)}
                   disabled={availableKelas.length === 0}
@@ -976,6 +978,11 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.kelasTujuanId && (
+                  <p className="text-xs text-destructive mt-1">
+                    {errors.kelasTujuanId.message}
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>

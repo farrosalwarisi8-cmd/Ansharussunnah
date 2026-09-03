@@ -123,7 +123,7 @@ export async function createJenjang(
       }
     }
 
-    const { nama, urutan } = validated.data
+    const { nama, urutan, tarifSppBulanan } = validated.data
 
     // Cek duplikasi nama atau urutan
     const existing = await prisma.jenjang.findFirst({
@@ -143,7 +143,7 @@ export async function createJenjang(
     }
 
     await prisma.jenjang.create({
-      data: { nama, urutan, aktif: true },
+      data: { nama, urutan, aktif: true, tarifSppBulanan: tarifSppBulanan ?? null },
     })
 
     revalidatePath("/dashboard/jenjang")
@@ -182,6 +182,8 @@ export async function updateJenjang(
         nama: payload.nama,
         urutan: payload.urutan,
         aktif: payload.aktif,
+        tarifSppBulanan:
+          payload.tarifSppBulanan !== undefined ? payload.tarifSppBulanan ?? null : undefined,
       },
     })
 

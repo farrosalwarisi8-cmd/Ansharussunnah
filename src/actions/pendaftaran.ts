@@ -84,11 +84,20 @@ export async function createPendaftaran(
     if (data.kelasTujuanId) {
       const kelas = await prisma.kelas.findFirst({
         where: { id: data.kelasTujuanId, jenjangId: data.jenjangTujuanId },
+        include: { _count: { select: { siswa: true } } },
       })
       if (!kelas) {
         return {
           success: false,
           message: "Kelas tujuan tidak valid untuk jenjang yang dipilih",
+        }
+      }
+
+      // ✅ Validasi kapasitas kelas
+      if (kelas.kapasitas > 0 && kelas._count.siswa >= kelas.kapasitas) {
+        return {
+          success: false,
+          message: `Kelas "${kelas.nama}" sudah penuh (${kelas._count.siswa}/${kelas.kapasitas})`,
         }
       }
     }

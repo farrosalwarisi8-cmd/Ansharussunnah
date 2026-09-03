@@ -15,6 +15,7 @@ const {
   mockSiswaFindUnique,
   mockParentStudentCreate,
   mockBuktiTransferUpdate,
+  mockKelasFindUnique,
 } = vi.hoisted(() => ({
   mockPrismaTransaction: vi.fn(),
   mockPendaftaranFindUnique: vi.fn(),
@@ -31,6 +32,12 @@ const {
   mockSiswaFindUnique: vi.fn(),
   mockParentStudentCreate: vi.fn(),
   mockBuktiTransferUpdate: vi.fn(),
+  mockKelasFindUnique: vi.fn().mockResolvedValue({
+    id: "kelas-1",
+    nama: "Kelas 1",
+    kapasitas: 30,
+    _count: { siswa: 5 },
+  }),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -46,6 +53,9 @@ vi.mock("@/lib/prisma", () => ({
     pendaftaran: {
       findUnique: mockPendaftaranFindUnique,
       update: mockPendaftaranUpdate,
+    },
+    kelas: {
+      findUnique: mockKelasFindUnique,
     },
     buktiTransferPendaftaran: { update: mockBuktiTransferUpdate },
     user: {

@@ -21,6 +21,7 @@ function validBase(overrides?: Record<string, unknown>) {
     noHpOrangTua: "081234567890",
     emailOrangTua: "budi@example.com",
     jenjangTujuanId: "jenjang-1",
+    kelasTujuanId: "kelas-1",
     ...overrides,
   }
 }
@@ -128,6 +129,19 @@ describe("pendaftaranSchema — Validasi Field Dasar", () => {
       validBase({ jenjangTujuanId: "" })
     )
     expect(result.success).toBe(false)
+  })
+
+  it("harus gagal jika kelasTujuanId kosong (kini wajib diisi)", () => {
+    const result = pendaftaranSchema.safeParse(
+      validBase({ kelasTujuanId: "" })
+    )
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      const kelasErrors = result.error.issues.filter(
+        (i) => i.path[0] === "kelasTujuanId"
+      )
+      expect(kelasErrors.length).toBeGreaterThan(0)
+    }
   })
 })
 
@@ -659,6 +673,7 @@ describe("pendaftaranSchema — Validasi Kombinasi", () => {
       kitas: "KITAS-2024-001",
       asalNegara: "Malaysia",
       jenjangTujuanId: "jenjang-1",
+      kelasTujuanId: "kelas-1",
     })
     expect(result.success).toBe(true)
   })
@@ -674,6 +689,7 @@ describe("pendaftaranSchema — Validasi Kombinasi", () => {
       noHpOrangTua: "085612345678",
       emailOrangTua: "ortu@contoh.com",
       jenjangTujuanId: "jenjang-2",
+      kelasTujuanId: "kelas-2",
       // Semua field EMIS dikosongkan/tidak dikirim
     })
     expect(result.success).toBe(true)

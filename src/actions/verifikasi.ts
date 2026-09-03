@@ -261,6 +261,20 @@ export async function verifikasiPendaftaran(
     if (status === "DITERIMA") {
       const supabaseAdmin = createSupabaseAdmin()
 
+      // ✅ Validasi kapasitas kelas sebelum menerima pendaftaran
+      if (pendaftaran.kelasTujuanId) {
+        const kelas = await prisma.kelas.findUnique({
+          where: { id: pendaftaran.kelasTujuanId },
+          include: { _count: { select: { siswa: true } } },
+        })
+        if (kelas && kelas.kapasitas > 0 && kelas._count.siswa >= kelas.kapasitas) {
+          return {
+            success: false,
+            message: `Kelas "${kelas.nama}" sudah penuh (${kelas._count.siswa}/${kelas.kapasitas}). Pilih kelas lain sebelum menerima pendaftaran.`,
+          }
+        }
+      }
+
       // Amankan credentials secara random
       const passwordOrangTua = generateSecurePassword(14)
       const passwordSiswa = generateSecurePassword(14)

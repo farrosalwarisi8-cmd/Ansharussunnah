@@ -92,7 +92,7 @@ export const pendaftaranSchema = z
       .min(1, "Pilih jenjang tujuan"),
     kelasTujuanId: z
       .string()
-      .optional(),
+      .min(1, "Pilih kelas tujuan"),
   })
   .superRefine((data, ctx) => {
     const kewarganegaraan = data.kewarganegaraan || "WNI"

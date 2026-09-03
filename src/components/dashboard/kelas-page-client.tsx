@@ -74,6 +74,7 @@ export default function KelolaKelasPage() {
   const [editJenjang, setEditJenjang] = React.useState<JenjangItem | null>(null)
   const [namaJenjang, setNamaJenjang] = React.useState("")
   const [urutanJenjang, setUrutanJenjang] = React.useState("1")
+  const [tarifSppJenjang, setTarifSppJenjang] = React.useState("")
   const [loadingJenjang, setLoadingJenjang] = React.useState(false)
 
   // Delete confirmation
@@ -189,11 +190,17 @@ export default function KelolaKelasPage() {
         result = await updateJenjang(editJenjang.id, {
           nama: namaJenjang,
           urutan: parseInt(urutanJenjang) || 1,
+          tarifSppBulanan: tarifSppJenjang
+            ? parseFloat(tarifSppJenjang.replace(/[^\d]/g, "")) || null
+            : null,
         })
       } else {
         result = await createJenjang({
           nama: namaJenjang,
           urutan: parseInt(urutanJenjang) || 1,
+          tarifSppBulanan: tarifSppJenjang
+            ? parseFloat(tarifSppJenjang.replace(/[^\d]/g, "")) || null
+            : null,
         })
       }
 
@@ -207,6 +214,7 @@ export default function KelolaKelasPage() {
         setEditJenjang(null)
         setNamaJenjang("")
         setUrutanJenjang("1")
+        setTarifSppJenjang("")
       } else {
         toast({ title: "Gagal", description: result.message, variant: "destructive" })
       }
@@ -295,6 +303,7 @@ export default function KelolaKelasPage() {
                 setEditJenjang(null)
                 setNamaJenjang("")
                 setUrutanJenjang(String(jenjangList.length + 1))
+                setTarifSppJenjang("")
                 setIsJenjangOpen(true)
               }}
               variant="outline"
@@ -361,6 +370,11 @@ export default function KelolaKelasPage() {
                       setEditJenjang(jenjang)
                       setNamaJenjang(jenjang.nama)
                       setUrutanJenjang(String(jenjang.urutan))
+                      setTarifSppJenjang(
+                        jenjang.tarifSppBulanan
+                          ? String(jenjang.tarifSppBulanan)
+                          : ""
+                      )
                       setIsJenjangOpen(true)
                     }}
                     className="rounded-xl min-h-[36px] text-xs"
@@ -594,6 +608,23 @@ export default function KelolaKelasPage() {
                 className="h-11 rounded-xl text-sm"
                 required
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                Tarif SPP Bulanan (Rp)
+              </label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="Contoh: 500000"
+                value={tarifSppJenjang}
+                onChange={(e) => setTarifSppJenjang(e.target.value)}
+                className="h-11 rounded-xl text-sm"
+              />
+              <p className="text-[11px] text-slate-400">
+                Dipakai untuk menghitung tagihan SPP otomatis siswa di jenjang ini.
+              </p>
             </div>
 
             <DialogFooter className="gap-2 sm:gap-0 pt-2">

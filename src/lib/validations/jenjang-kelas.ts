@@ -11,6 +11,11 @@ export const jenjangSchema = z.object({
     .number()
     .int("Urutan harus bilangan bulat")
     .min(1, "Urutan minimal 1"),
+  tarifSppBulanan: z
+    .number()
+    .min(0, "Tarif SPP tidak boleh negatif")
+    .optional()
+    .nullable(),
 })
 
 export type JenjangFormValues = z.infer<typeof jenjangSchema>
