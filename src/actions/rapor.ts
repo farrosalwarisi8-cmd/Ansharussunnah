@@ -344,44 +344,181 @@ export async function getRekapRaporKelas(
       orderBy: { user: { nama: "asc" } },
     })
 
-    // Hitung rapor per siswa
-    const rekap = await Promise.all(
-      siswaList.map(async (siswa) => {
-        const nilaiMapel = await hitungNilaiPerMapel(
-          siswa.id,
-          periodeAjaranId
-        )
-        const kehadiran = await hitungKehadiran(siswa.id, periodeAjaranId)
+    // Batch: ambil semua data mentah untuk SELURUH siswa di kelas ini (4 query)
+    // menggantikan N×4 query per siswa (N+1 pattern)
+    const siswaIdList = siswaList.map((s) => s.id)
 
-        const rataKeseluruhan =
-          nilaiMapel.length > 0
-            ? nilaiMapel.reduce((acc, m) => acc + m.nilaiGabungan, 0) /
-              nilaiMapel.length
+    const [semuaPengerjaanUjian, semuaPengumpulanTugas, semuaAbsensi, semuaCatatan] =
+      await Promise.all([
+        // 1. Semua pengerjaan ujian yang sudah dinilai untuk siswa di kelas ini
+        prisma.pengerjaanUjian.findMany({
+          where: {
+            siswaId: { in: siswaIdList },
+            ujian: { periodeAjaranId },
+            status: StatusPengerjaan.DINILAI,
+          },
+          select: {
+            siswaId: true,
+            nilaiTotal: true,
+            ujian: { select: { mataPelajaran: { select: { nama: true } } } },
+          },
+        }),
+        // 2. Semua pengumpulan tugas yang sudah dinilai
+        prisma.pengumpulanTugas.findMany({
+          where: {
+            siswaId: { in: siswaIdList },
+            tugas: { periodeAjaranId },
+            status: StatusPengumpulan.DINILAI,
+          },
+          select: {
+            siswaId: true,
+            nilai: true,
+            tugas: { select: { mataPelajaran: { select: { nama: true } } } },
+          },
+        }),
+        // 3. Semua absensi untuk siswa di kelas ini
+        prisma.absensi.findMany({
+          where: {
+            siswaId: { in: siswaIdList },
+            periodeAjaranId,
+          },
+          select: {
+            siswaId: true,
+            status: true,
+          },
+        }),
+        // 4. Semua catatan rapor untuk siswa di kelas ini
+        prisma.catatanRapor.findMany({
+          where: {
+            siswaId: { in: siswaIdList },
+            periodeAjaranId,
+          },
+          select: {
+            siswaId: true,
+            ranking: true,
+            catatan: true,
+          },
+        }),
+      ])
+
+    // --- Agregasi nilai per siswa di JavaScript ---
+    // Struktur: Map<siswaId, Map<mapel, { nilaiUjian[], nilaiTugas[] }>>
+    const nilaiPerSiswa = new Map<string, Map<string, { nilaiUjian: number[]; nilaiTugas: number[] }>>()
+
+    for (const p of semuaPengerjaanUjian) {
+      if (!nilaiPerSiswa.has(p.siswaId)) {
+        nilaiPerSiswa.set(p.siswaId, new Map())
+      }
+      const mapelMap = nilaiPerSiswa.get(p.siswaId)!
+      const mapel = p.ujian.mataPelajaran.nama
+      if (!mapelMap.has(mapel)) {
+        mapelMap.set(mapel, { nilaiUjian: [], nilaiTugas: [] })
+      }
+      if (p.nilaiTotal) {
+        mapelMap.get(mapel)!.nilaiUjian.push(Number(p.nilaiTotal))
+      }
+    }
+
+    for (const p of semuaPengumpulanTugas) {
+      if (!nilaiPerSiswa.has(p.siswaId)) {
+        nilaiPerSiswa.set(p.siswaId, new Map())
+      }
+      const mapelMap = nilaiPerSiswa.get(p.siswaId)!
+      const mapel = p.tugas.mataPelajaran.nama
+      if (!mapelMap.has(mapel)) {
+        mapelMap.set(mapel, { nilaiUjian: [], nilaiTugas: [] })
+      }
+      if (p.nilai) {
+        mapelMap.get(mapel)!.nilaiTugas.push(Number(p.nilai))
+      }
+    }
+
+    // Hitung rata-rata per mapel per siswa (reproduksi EXACT logic hitungNilaiPerMapel)
+    const BOBOT_UJIAN = 0.6
+    const BOBOT_TUGAS = 0.4
+
+    const rekapNilaiPerSiswa = new Map<string, NilaiMapel[]>()
+
+    for (const [siswaId, mapelMap] of nilaiPerSiswa.entries()) {
+      const hasil: NilaiMapel[] = []
+      for (const [mapel, data] of mapelMap.entries()) {
+        const rataUjian =
+          data.nilaiUjian.length > 0
+            ? data.nilaiUjian.reduce((a, b) => a + b, 0) / data.nilaiUjian.length
+            : 0
+        const rataTugas =
+          data.nilaiTugas.length > 0
+            ? data.nilaiTugas.reduce((a, b) => a + b, 0) / data.nilaiTugas.length
             : 0
 
-        const catatan = await prisma.catatanRapor.findUnique({
-          where: {
-            siswaId_periodeAjaranId: {
-              siswaId: siswa.id,
-              periodeAjaranId,
-            },
-          },
-          select: { ranking: true, catatan: true },
-        })
-
-        return {
-          siswaId: siswa.id,
-          nama: siswa.user.nama,
-          nisn: siswa.nisn,
-          rataRataKeseluruhan: Math.round(rataKeseluruhan * 100) / 100,
-          jumlahMapel: nilaiMapel.length,
-          kehadiran: kehadiran.persentase,
-          totalAlpha: kehadiran.alpha,
-          ranking: catatan?.ranking || null,
-          hasCatatan: !!catatan,
+        let nilaiGabungan = 0
+        if (data.nilaiUjian.length > 0 && data.nilaiTugas.length > 0) {
+          nilaiGabungan = rataUjian * BOBOT_UJIAN + rataTugas * BOBOT_TUGAS
+        } else if (data.nilaiUjian.length > 0) {
+          nilaiGabungan = rataUjian
+        } else if (data.nilaiTugas.length > 0) {
+          nilaiGabungan = rataTugas
         }
-      })
-    )
+
+        hasil.push({
+          mataPelajaran: mapel,
+          rataRataUjian: Math.round(rataUjian * 100) / 100,
+          rataRataTugas: Math.round(rataTugas * 100) / 100,
+          nilaiGabungan: Math.round(nilaiGabungan * 100) / 100,
+          jumlahUjian: data.nilaiUjian.length,
+          jumlahTugas: data.nilaiTugas.length,
+        })
+      }
+      hasil.sort((a, b) => a.mataPelajaran.localeCompare(b.mataPelajaran))
+      rekapNilaiPerSiswa.set(siswaId, hasil)
+    }
+
+    // --- Agregasi kehadiran per siswa di JavaScript ---
+    const hitungPerSiswa = new Map<string, { HADIR: number; SAKIT: number; IZIN: number; ALPHA: number; total: number }>()
+
+    for (const a of semuaAbsensi) {
+      if (!hitungPerSiswa.has(a.siswaId)) {
+        hitungPerSiswa.set(a.siswaId, { HADIR: 0, SAKIT: 0, IZIN: 0, ALPHA: 0, total: 0 })
+      }
+      const h = hitungPerSiswa.get(a.siswaId)!
+      h[a.status]++
+      h.total++
+    }
+
+    // --- Map catatan rapor per siswa ---
+    const catatanPerSiswa = new Map<string, { ranking: number | null; catatan: string }>()
+    for (const c of semuaCatatan) {
+      catatanPerSiswa.set(c.siswaId, { ranking: c.ranking, catatan: c.catatan })
+    }
+
+    // --- Bangun rekap per siswa (identik dengan struktur sebelumnya) ---
+    const rekap = siswaList.map((siswa) => {
+      const nilaiMapel = rekapNilaiPerSiswa.get(siswa.id) || []
+
+      const rataKeseluruhan =
+        nilaiMapel.length > 0
+          ? nilaiMapel.reduce((acc, m) => acc + m.nilaiGabungan, 0) /
+            nilaiMapel.length
+          : 0
+
+      const h = hitungPerSiswa.get(siswa.id)
+      const total = h ? h.total : 0
+      const persentase = total > 0 ? ((h!.HADIR / total) * 100).toFixed(1) : "0.0"
+
+      const catatan = catatanPerSiswa.get(siswa.id) || null
+
+      return {
+        siswaId: siswa.id,
+        nama: siswa.user.nama,
+        nisn: siswa.nisn,
+        rataRataKeseluruhan: Math.round(rataKeseluruhan * 100) / 100,
+        jumlahMapel: nilaiMapel.length,
+        kehadiran: `${persentase}%`,
+        totalAlpha: h ? h.ALPHA : 0,
+        ranking: catatan?.ranking || null,
+        hasCatatan: !!catatan,
+      }
+    })
 
     // Urutkan berdasarkan ranking (jika ada), lalu rata-rata descending
     rekap.sort((a, b) => {

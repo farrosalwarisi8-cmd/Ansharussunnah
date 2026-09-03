@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma"
 import { requireRole } from "@/lib/auth"
 import { verifyGuruAksesKelas } from "@/lib/guru-auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { getSignedUrl } from "@/lib/storage"
+import { getSignedUrls } from "@/lib/storage"
 import {
   createMateriSchema,
   updateMateriSchema,
@@ -265,27 +265,29 @@ export async function getDaftarMateriGuru(
       orderBy: { createdAt: "desc" },
     })
 
-    const formatted = await Promise.all(
-      materiList.map(async (m) => {
-        let signedUrl: string | null = null
-        if (m.urlFile) {
-          signedUrl = await getSignedUrl("materi", m.urlFile)
-        }
+    // Batch: ambil semua signed URL materi yang punya file dalam SATU panggilan API
+    const urlFileList = materiList
+      .map((m) => m.urlFile)
+      .filter((u): u is string => !!u)
 
-        return {
-          id: m.id,
-          judul: m.judul,
-          deskripsi: m.deskripsi,
-          mataPelajaran: m.mataPelajaran.nama,
-          urlFile: m.urlFile,
-          urlLink: m.urlLink,
-          signedUrl,
-          periode: m.periodeAjaran.nama,
-          diunggahOleh: m.diunggahOleh.nama,
-          createdAt: m.createdAt,
-        }
-      })
-    )
+    const signedUrlMap = await getSignedUrls("materi", urlFileList)
+
+    const formatted = materiList.map((m) => {
+      const signedUrl = m.urlFile ? signedUrlMap.get(m.urlFile) ?? null : null
+
+      return {
+        id: m.id,
+        judul: m.judul,
+        deskripsi: m.deskripsi,
+        mataPelajaran: m.mataPelajaran.nama,
+        urlFile: m.urlFile,
+        urlLink: m.urlLink,
+        signedUrl,
+        periode: m.periodeAjaran.nama,
+        diunggahOleh: m.diunggahOleh.nama,
+        createdAt: m.createdAt,
+      }
+    })
 
     return {
       success: true,
@@ -326,27 +328,29 @@ export async function getDaftarMateriSiswa(): Promise<ActionResponse> {
       orderBy: { createdAt: "desc" },
     })
 
-    const formatted = await Promise.all(
-      materiList.map(async (m) => {
-        let signedUrl: string | null = null
-        if (m.urlFile) {
-          signedUrl = await getSignedUrl("materi", m.urlFile)
-        }
+    // Batch: ambil semua signed URL materi yang punya file dalam SATU panggilan API
+    const urlFileList = materiList
+      .map((m) => m.urlFile)
+      .filter((u): u is string => !!u)
 
-        return {
-          id: m.id,
-          judul: m.judul,
-          deskripsi: m.deskripsi,
-          mataPelajaran: m.mataPelajaran.nama,
-          urlFile: m.urlFile,
-          urlLink: m.urlLink,
-          signedUrl,
-          periode: m.periodeAjaran.nama,
-          diunggahOleh: m.diunggahOleh.nama,
-          createdAt: m.createdAt,
-        }
-      })
-    )
+    const signedUrlMap = await getSignedUrls("materi", urlFileList)
+
+    const formatted = materiList.map((m) => {
+      const signedUrl = m.urlFile ? signedUrlMap.get(m.urlFile) ?? null : null
+
+      return {
+        id: m.id,
+        judul: m.judul,
+        deskripsi: m.deskripsi,
+        mataPelajaran: m.mataPelajaran.nama,
+        urlFile: m.urlFile,
+        urlLink: m.urlLink,
+        signedUrl,
+        periode: m.periodeAjaran.nama,
+        diunggahOleh: m.diunggahOleh.nama,
+        createdAt: m.createdAt,
+      }
+    })
 
     return {
       success: true,
@@ -403,27 +407,29 @@ export async function getDaftarMateriAnak(
       orderBy: { createdAt: "desc" },
     })
 
-    const formatted = await Promise.all(
-      materiList.map(async (m) => {
-        let signedUrl: string | null = null
-        if (m.urlFile) {
-          signedUrl = await getSignedUrl("materi", m.urlFile)
-        }
+    // Batch: ambil semua signed URL materi yang punya file dalam SATU panggilan API
+    const urlFileList = materiList
+      .map((m) => m.urlFile)
+      .filter((u): u is string => !!u)
 
-        return {
-          id: m.id,
-          judul: m.judul,
-          deskripsi: m.deskripsi,
-          mataPelajaran: m.mataPelajaran.nama,
-          urlFile: m.urlFile,
-          urlLink: m.urlLink,
-          signedUrl,
-          periode: m.periodeAjaran.nama,
-          diunggahOleh: m.diunggahOleh.nama,
-          createdAt: m.createdAt,
-        }
-      })
-    )
+    const signedUrlMap = await getSignedUrls("materi", urlFileList)
+
+    const formatted = materiList.map((m) => {
+      const signedUrl = m.urlFile ? signedUrlMap.get(m.urlFile) ?? null : null
+
+      return {
+        id: m.id,
+        judul: m.judul,
+        deskripsi: m.deskripsi,
+        mataPelajaran: m.mataPelajaran.nama,
+        urlFile: m.urlFile,
+        urlLink: m.urlLink,
+        signedUrl,
+        periode: m.periodeAjaran.nama,
+        diunggahOleh: m.diunggahOleh.nama,
+        createdAt: m.createdAt,
+      }
+    })
 
     return {
       success: true,

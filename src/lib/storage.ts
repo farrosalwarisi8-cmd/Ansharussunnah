@@ -147,3 +147,34 @@ export async function getSignedUrl(
   if (error) return null
   return data.signedUrl
 }
+
+/**
+ * Batch: generate signed URL untuk banyak file dalam SATU panggilan API.
+ * Mengembalikan Map<path, signedUrl | null>.
+ * Path yang tidak ditemukan atau gagal akan bernilai null.
+ */
+export async function getSignedUrls(
+  bucket: string,
+  paths: string[],
+  expiresIn: number = 3600
+): Promise<Map<string, string | null>> {
+  const result = new Map<string, string | null>()
+
+  if (paths.length === 0) return result
+
+  const supabase = createSupabaseAdmin()
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrls(paths, expiresIn)
+
+  if (error || !data) {
+    for (const p of paths) result.set(p, null)
+    return result
+  }
+
+  for (let i = 0; i < paths.length; i++) {
+    result.set(paths[i], data[i]?.signedUrl ?? null)
+  }
+
+  return result
+}

@@ -7,7 +7,7 @@ import { requireAuth, requireRole } from "@/lib/auth"
 import { verifyGuruAksesKelas } from "@/lib/guru-auth"
 import { getClientIpFromHeaders, rateLimitAsync } from "@/lib/rate-limit"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { getSignedUrl } from "@/lib/storage"
+import { getSignedUrls } from "@/lib/storage"
 import {
   generateBulkSppSchema,
   submitBuktiSppSchema,
@@ -1394,68 +1394,79 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
       orderBy: [{ tahun: "desc" }, { bulan: "desc" }],
     })
 
-    const formatted = await Promise.all(
-      tagihanList.map(async (t) => {
-        // Ambil pembayaran terakhir (paling baru) untuk ditampilkan
-        const pembayaranTerakhir = t.pembayaran[0] || null
-        // Pembayaran yang sudah dikonfirmasi untuk riwayat lengkap
-        const pembayaranDikonfirmasi = t.pembayaran.filter(
-          (p) => p.statusPembayaran === StatusPembayaran.DIKONFIRMASI
-        )
+    // Batch: kumpulkan semua urlBukti dari pembayaran terakhir di seluruh tagihan,
+    // lalu generate signed URL sekaligus dalam SATU panggilan API
+    const urlBuktiList: string[] = []
+    const pembayaranTerakhirByTagihan = new Map<string, (typeof tagihanList)[number]["pembayaran"][number] | null>()
+    for (const t of tagihanList) {
+      const pembayaranTerakhir = t.pembayaran[0] || null
+      pembayaranTerakhirByTagihan.set(t.id, pembayaranTerakhir)
+      if (pembayaranTerakhir?.urlBukti) {
+        urlBuktiList.push(pembayaranTerakhir.urlBukti)
+      }
+    }
 
-        let signedBuktiUrl: string | null = null
-        if (pembayaranTerakhir?.urlBukti) {
-          signedBuktiUrl = await getSignedUrl("bukti-spp", pembayaranTerakhir.urlBukti)
-        }
+    const signedBuktiUrlMap = await getSignedUrls("bukti-spp", urlBuktiList)
 
-        const nominalTagihan = Number(t.nominal)
-        const totalTerbayar = Number(t.totalTerbayar || 0)
-        const sisaTunggakan = Math.max(0, nominalTagihan - totalTerbayar)
+    const formatted = tagihanList.map((t) => {
+      const pembayaranTerakhir = pembayaranTerakhirByTagihan.get(t.id) || null
+      // Pembayaran yang sudah dikonfirmasi untuk riwayat lengkap
+      const pembayaranDikonfirmasi = t.pembayaran.filter(
+        (p) => p.statusPembayaran === StatusPembayaran.DIKONFIRMASI
+      )
 
-        // PENTEST FIX #1: Label yang jelas untuk setiap status
-        const labelStatus: Record<string, string> = {
-          BELUM_BAYAR: "Belum Dibayar",
-          TERLAMBAT: "Terlambat — Harap segera bayar",
-          MENUNGGU_VERIFIKASI: "Bukti dikirim — Menunggu konfirmasi admin keuangan",
-          DIBAYAR_SEBAGIAN: `Dibayar Sebagian — Sisa Rp ${sisaTunggakan.toLocaleString("id-ID")}`,
-          SUDAH_BAYAR: "Lunas",
-          DIBATALKAN: "Dibatalkan",
-        }
+      let signedBuktiUrl: string | null = null
+      if (pembayaranTerakhir?.urlBukti) {
+        signedBuktiUrl = signedBuktiUrlMap.get(pembayaranTerakhir.urlBukti) ?? null
+      }
 
-        return {
-          id: t.id,
-          bulan: t.bulan,
-          tahun: t.tahun,
-          nominal: nominalTagihan,
-          status: t.status,
-          labelStatus: labelStatus[t.status] || t.status,
-          jatuhTempo: t.jatuhTempo,
-          totalTerbayar,
-          sisaTunggakan,
-          // Info pembayaran terkini (PENDING atau DIKONFIRMASI)
-          pembayaranTerkini: pembayaranTerakhir
-            ? {
-                id: pembayaranTerakhir.id,
-                nominalDibayar: Number(pembayaranTerakhir.nominalDibayar),
-                tanggalBayar: pembayaranTerakhir.tanggalBayar,
-                metodeBayar: pembayaranTerakhir.metodeBayar,
-                statusPembayaran: pembayaranTerakhir.statusPembayaran,
-                alasanPenolakan: pembayaranTerakhir.alasanPenolakan,
-                catatan: pembayaranTerakhir.catatan,
-                konfirmator: pembayaranTerakhir.dikonfirmasiOleh?.nama || null,
-                buktiUrl: signedBuktiUrl,
-              }
-            : null,
-          // Riwayat pembayaran yang sudah dikonfirmasi
-          riwayatPembayaran: pembayaranDikonfirmasi.map((p) => ({
-            nominalDibayar: Number(p.nominalDibayar),
-            tanggalBayar: p.tanggalBayar,
-            metodeBayar: p.metodeBayar,
-            konfirmator: p.dikonfirmasiOleh?.nama || null,
-          })),
-        }
-      })
-    )
+      const nominalTagihan = Number(t.nominal)
+      const totalTerbayar = Number(t.totalTerbayar || 0)
+      const sisaTunggakan = Math.max(0, nominalTagihan - totalTerbayar)
+
+      // PENTEST FIX #1: Label yang jelas untuk setiap status
+      const labelStatus: Record<string, string> = {
+        BELUM_BAYAR: "Belum Dibayar",
+        TERLAMBAT: "Terlambat — Harap segera bayar",
+        MENUNGGU_VERIFIKASI: "Bukti dikirim — Menunggu konfirmasi admin keuangan",
+        DIBAYAR_SEBAGIAN: `Dibayar Sebagian — Sisa Rp ${sisaTunggakan.toLocaleString("id-ID")}`,
+        SUDAH_BAYAR: "Lunas",
+        DIBATALKAN: "Dibatalkan",
+      }
+
+      return {
+        id: t.id,
+        bulan: t.bulan,
+        tahun: t.tahun,
+        nominal: nominalTagihan,
+        status: t.status,
+        labelStatus: labelStatus[t.status] || t.status,
+        jatuhTempo: t.jatuhTempo,
+        totalTerbayar,
+        sisaTunggakan,
+        // Info pembayaran terkini (PENDING atau DIKONFIRMASI)
+        pembayaranTerkini: pembayaranTerakhir
+          ? {
+              id: pembayaranTerakhir.id,
+              nominalDibayar: Number(pembayaranTerakhir.nominalDibayar),
+              tanggalBayar: pembayaranTerakhir.tanggalBayar,
+              metodeBayar: pembayaranTerakhir.metodeBayar,
+              statusPembayaran: pembayaranTerakhir.statusPembayaran,
+              alasanPenolakan: pembayaranTerakhir.alasanPenolakan,
+              catatan: pembayaranTerakhir.catatan,
+              konfirmator: pembayaranTerakhir.dikonfirmasiOleh?.nama || null,
+              buktiUrl: signedBuktiUrl,
+            }
+          : null,
+        // Riwayat pembayaran yang sudah dikonfirmasi
+        riwayatPembayaran: pembayaranDikonfirmasi.map((p) => ({
+          nominalDibayar: Number(p.nominalDibayar),
+          tanggalBayar: p.tanggalBayar,
+          metodeBayar: p.metodeBayar,
+          konfirmator: p.dikonfirmasiOleh?.nama || null,
+        })),
+      }
+    })
 
     return {
       success: true,

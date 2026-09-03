@@ -29,6 +29,7 @@ import {
   Menu,
   ChevronRight,
   Sparkles,
+  RefreshCw,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { logout } from "@/actions/auth"
@@ -38,6 +39,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { GantiAkunDialog } from "./ganti-akun-dialog"
 
 interface NavItem {
   title: string
@@ -130,6 +132,7 @@ function DashboardNavInner() {
   const pathname = usePathname()
   const { user, isMobileMenuOpen, setIsMobileMenuOpen } = useDashboard()
   const navItems = getNavItems(user.role, user.isAdmin)
+  const [gantiAkunOpen, setGantiAkunOpen] = React.useState(false)
 
   const primaryMobileItems = navItems.slice(0, 4)
   const hasMoreItems = navItems.length > 4
@@ -243,6 +246,14 @@ function DashboardNavInner() {
             <User className="h-4 w-4" />
             <span>Profil & Pengaturan</span>
           </Link>
+          <button
+            type="button"
+            onClick={() => setGantiAkunOpen(true)}
+            className="flex items-center gap-3 w-full px-3.5 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors min-h-[38px]"
+          >
+            <RefreshCw className="h-4 w-4" />
+            <span>Ganti Akun</span>
+          </button>
           <form action={logout}>
             <button
               type="submit"
@@ -401,6 +412,17 @@ function DashboardNavInner() {
               <User className="h-4 w-4" />
               <span>Profil Pengguna</span>
             </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileMenuOpen(false)
+                setGantiAkunOpen(true)
+              }}
+              className="flex items-center gap-3 w-full p-3 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white min-h-[44px]"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Ganti Akun</span>
+            </button>
             <form action={logout}>
               <button
                 type="submit"
@@ -413,6 +435,9 @@ function DashboardNavInner() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog Ganti Akun */}
+      <GantiAkunDialog open={gantiAkunOpen} onOpenChange={setGantiAkunOpen} />
     </>
   )
 }
