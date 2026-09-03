@@ -14,6 +14,9 @@ const supabaseOrigin = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://jjybghd
 export const metadata: Metadata = {
   title: "Ansharussunnah - Sistem Manajemen Sekolah & LMS",
   description: "Platform Manajemen Pendidikan & Pembelajaran Digital Pesantren/Sekolah Ansharussunnah",
+  other: {
+    "theme-color": "#f59e0b",
+  },
 }
 
 export default function RootLayout({

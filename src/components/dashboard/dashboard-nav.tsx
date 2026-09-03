@@ -162,7 +162,7 @@ function DashboardNavInner() {
         {/* Brand Header */}
         <div className="h-20 flex items-center px-6 border-b border-slate-700/80 bg-slate-800/40">
           <Link href="/dashboard" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl overflow-hidden relative shadow-md shadow-yellow-800/30 group-hover:scale-105 transition-transform">
+            <div className="w-10 h-10 rounded-xl relative shadow-md shadow-yellow-800/30 group-hover:scale-105 transition-transform">
               <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="40px" className="object-contain" />
             </div>
             <div>
