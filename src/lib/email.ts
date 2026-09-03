@@ -116,6 +116,57 @@ export function buildKredensialEmail(params: {
 }
 
 /**
+ * Template email: Kredensial anak baru untuk orang tua yang SUDAH punya akun
+ * Hanya tampilkan kredensial anak, tanpa info akun orang tua.
+ */
+export function buildKredensialEmailAnakKedua(params: {
+  namaOrangTua: string
+  emailOrangTua: string
+  namaSiswa: string
+  emailSiswa: string
+  passwordSiswa: string
+  nomorPendaftaran: string
+}): string {
+  return `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head><meta charset="UTF-8"></head>
+    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
+      <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h2 style="color: #1e40af; margin-top: 0;">🎉 Santri Baru Diterima!</h2>
+        <p>Halo <strong>${params.namaOrangTua}</strong>,</p>
+        <p>Selamat! Anak Anda dengan nomor pendaftaran <strong>${params.nomorPendaftaran}</strong> atas nama <strong>${params.namaSiswa}</strong> telah <strong style="color: green;">DITERIMA</strong>.</p>
+        
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+        
+        <h3 style="color: #333;">🔐 Akun Login Anak</h3>
+        
+        <div style="background: #f0fdf4; border-radius: 8px; padding: 16px; margin: 12px 0;">
+          <p style="margin: 0 0 8px 0;"><strong>Akun Siswa:</strong></p>
+          <p style="margin: 2px 0;">Email: <code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${params.emailSiswa}</code></p>
+          <p style="margin: 2px 0;">Password: <code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${params.passwordSiswa}</code></p>
+        </div>
+        
+        <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 12px 0;">
+          <p style="margin: 0 0 4px 0;"><strong>👤 Akun Orang Tua Anda:</strong></p>
+          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.emailOrangTua}</code></p>
+          <p style="margin: 6px 0 0 0; color: #475569; font-size: 13px;">Gunakan akun yang sama seperti sebelumnya untuk login. Password tidak berubah.</p>
+        </div>
+        
+        <div style="background: #fef3c7; border-radius: 8px; padding: 16px; margin: 16px 0;">
+          <p style="margin: 0; color: #92400e;">⚠️ <strong>PENTING:</strong> Saat pertama kali login siswa, password akan diminta untuk diganti. Simpan informasi ini dengan aman.</p>
+        </div>
+        
+        <p style="color: #666; font-size: 13px; margin-top: 24px;">
+          Jika Anda tidak merasa mendaftar, abaikan email ini atau hubungi admin sekolah.
+        </p>
+      </div>
+    </body>
+    </html>
+  `
+}
+
+/**
  * Template email: Kredensial Akun Guru Baru
  */
 export function buildKredensialGuruEmail(params: {

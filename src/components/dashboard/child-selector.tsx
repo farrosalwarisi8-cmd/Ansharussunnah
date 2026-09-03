@@ -17,7 +17,7 @@ import { Role } from "@prisma/client"
 function ChildSelectorInner() {
   const { user, selectedChild, setSelectedChild } = useDashboard()
 
-  if (user.role !== Role.ORANG_TUA || !user.children || user.children.length === 0) {
+  if (user.role !== Role.ORANG_TUA || !user.children || user.children.length === 0 || !selectedChild) {
     return null
   }
 

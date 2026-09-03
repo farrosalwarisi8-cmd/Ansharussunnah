@@ -49,8 +49,9 @@ export function DashboardProvider({
   children: React.ReactNode
 }) {
   const [selectedChild, setSelectedChild] = React.useState<ChildStudent | null>(() => {
-    if (user.role === Role.ORANG_TUA && user.children && user.children.length > 0) {
-      return user.children[0]
+    if (user.role === Role.ORANG_TUA && user.children) {
+      // Kalau cuma 1 anak, langsung pilih. Kalau 2+, tampilkan card grid dulu.
+      if (user.children.length === 1) return user.children[0]
     }
     return null
   })

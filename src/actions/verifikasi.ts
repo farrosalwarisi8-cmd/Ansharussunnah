@@ -7,7 +7,7 @@ import { requireGuru } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getSignedUrl } from "@/lib/storage"
 import { generateSecurePassword } from "@/lib/password"
-import { sendEmail, buildKredensialEmail } from "@/lib/email"
+import { sendEmail, buildKredensialEmail, buildKredensialEmailAnakKedua } from "@/lib/email"
 import {
   verifikasiPendaftaranSchema,
   type VerifikasiPendaftaranValues,
@@ -353,7 +353,19 @@ export async function verifikasiPendaftaran(
               where: { email: emailOrtu, role: Role.ORANG_TUA },
             })
             if (userOrtu) {
-              // Link the new authId to the existing user
+              await tx.user.update({
+                where: { id: userOrtu.id },
+                data: { authId: authOrtuId },
+              })
+            }
+          }
+
+          if (!userOrtu) {
+            const existingByEmail = await tx.user.findFirst({
+              where: { email: emailOrtu },
+            })
+            if (existingByEmail) {
+              userOrtu = existingByEmail
               await tx.user.update({
                 where: { id: userOrtu.id },
                 data: { authId: authOrtuId },
@@ -400,6 +412,19 @@ export async function verifikasiPendaftaran(
               where: { email: emailSiswa, role: Role.SISWA },
             })
             if (userSiswa) {
+              await tx.user.update({
+                where: { id: userSiswa.id },
+                data: { authId: authSiswaId },
+              })
+            }
+          }
+
+          if (!userSiswa) {
+            const existingByEmail = await tx.user.findFirst({
+              where: { email: emailSiswa },
+            })
+            if (existingByEmail) {
+              userSiswa = existingByEmail
               await tx.user.update({
                 where: { id: userSiswa.id },
                 data: { authId: authSiswaId },
@@ -487,18 +512,27 @@ export async function verifikasiPendaftaran(
       // Kirim Credentials email secure
       await sendEmail({
         to: emailOrtu,
-        subject: `Pendaftaran Disetujui — ${pendaftaran.nomorPendaftaran}`,
-        html: buildKredensialEmail({
-          namaOrangTua: pendaftaran.namaOrangTua,
-          emailOrangTua: emailOrtu,
-          // Jika ortu sudah punya akun (anak ke-2+), JANGAN sertakan password
-          // yang tidak pernah diterapkan — biar tidak membingungkan/mengunci.
-          passwordOrangTua: ortuAlreadyExisted ? undefined : passwordOrangTua,
-          namaSiswa: pendaftaran.namaLengkap,
-          emailSiswa,
-          passwordSiswa,
-          nomorPendaftaran: pendaftaran.nomorPendaftaran,
-        }),
+        subject: ortuAlreadyExisted
+          ? `Santri Baru Diterima — ${pendaftaran.nomorPendaftaran}`
+          : `Pendaftaran Disetujui — ${pendaftaran.nomorPendaftaran}`,
+        html: ortuAlreadyExisted
+          ? buildKredensialEmailAnakKedua({
+              namaOrangTua: pendaftaran.namaOrangTua,
+              emailOrangTua: emailOrtu,
+              namaSiswa: pendaftaran.namaLengkap,
+              emailSiswa,
+              passwordSiswa,
+              nomorPendaftaran: pendaftaran.nomorPendaftaran,
+            })
+          : buildKredensialEmail({
+              namaOrangTua: pendaftaran.namaOrangTua,
+              emailOrangTua: emailOrtu,
+              passwordOrangTua,
+              namaSiswa: pendaftaran.namaLengkap,
+              emailSiswa,
+              passwordSiswa,
+              nomorPendaftaran: pendaftaran.nomorPendaftaran,
+            }),
       })
 
       revalidatePath("/dashboard/pendaftaran")

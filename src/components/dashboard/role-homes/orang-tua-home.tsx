@@ -6,15 +6,78 @@ import {
   Award,
   FileCheck2,
   CreditCard,
+  GraduationCap,
+  Users,
 } from "lucide-react"
-import { type ChildStudent } from "@/components/dashboard/dashboard-context"
+import { useDashboard, type ChildStudent } from "@/components/dashboard/dashboard-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-export function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildStudent | null }) {
-  const childName = selectedChild?.nama || "Santri"
-  const childClass = selectedChild ? `${selectedChild.jenjangNama} - ${selectedChild.kelasNama}` : "Kelas Santri"
+function ChildCardGrid({ children, onSelect }: { children: ChildStudent[]; onSelect: (c: ChildStudent) => void }) {
+  return (
+    <div className="space-y-6">
+      <div className="text-center space-y-2">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-yellow-500 text-white shadow-lg mb-2">
+          <Users className="h-7 w-7" />
+        </div>
+        <h2 className="text-xl font-extrabold text-slate-800">Pilih Santri yang Ingin Dipantau</h2>
+        <p className="text-sm text-slate-500 max-w-md mx-auto">
+          Anda memiliki {children.length} santri terdaftar. Pilih salah satu untuk melihat data akademiknya.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {children.map((child) => (
+          <button
+            key={child.id}
+            onClick={() => onSelect(child)}
+            className="group text-left"
+          >
+            <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm hover:shadow-md hover:border-yellow-300 transition-all cursor-pointer group-hover:scale-[1.02]">
+              <CardContent className="p-5 flex flex-col items-center text-center space-y-3">
+                <Avatar className="h-16 w-16 border-2 border-yellow-200 ring-4 ring-yellow-50 group-hover:ring-yellow-100 transition-all">
+                  <AvatarImage src={child.avatar || ""} />
+                  <AvatarFallback className="bg-yellow-500 text-white font-bold text-lg">
+                    {child.nama
+                      .split(" ")
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join("")}
+                  </AvatarFallback>
+                </Avatar>
+
+                <div className="space-y-1">
+                  <div className="text-base font-bold text-slate-800 group-hover:text-yellow-700 transition-colors">
+                    {child.nama}
+                  </div>
+                  <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
+                    <GraduationCap className="h-3.5 w-3.5 text-yellow-500" />
+                    <span>{child.jenjangNama} — {child.kelasNama}</span>
+                  </div>
+                  {child.nisn && (
+                    <div className="text-[11px] text-slate-400 font-mono">NISN: {child.nisn}</div>
+                  )}
+                </div>
+
+                <div className="w-full pt-2 border-t border-slate-100 group-hover:border-yellow-100 transition-colors">
+                  <span className="text-xs font-semibold text-yellow-600 group-hover:text-yellow-700">
+                    Lihat Data &rarr;
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ChildStatsDashboard({ selectedChild }: { selectedChild: ChildStudent }) {
+  const childName = selectedChild.nama
+  const childClass = `${selectedChild.jenjangNama} - ${selectedChild.kelasNama}`
 
   return (
     <div className="space-y-6">
@@ -75,7 +138,6 @@ export function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildS
 
       {/* Two Column Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Rapor & Nilai Terakhir */}
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
           <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
             <div>
@@ -107,7 +169,6 @@ export function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildS
           </CardContent>
         </Card>
 
-        {/* Tagihan & Pembayaran */}
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
           <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
             <div>
@@ -140,4 +201,17 @@ export function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildS
       </div>
     </div>
   )
+}
+
+export function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildStudent | null }) {
+  const { user, setSelectedChild } = useDashboard()
+  const children = user.children || []
+
+  // Belum pilih anak → tampilkan card grid
+  if (!selectedChild) {
+    return <ChildCardGrid children={children} onSelect={setSelectedChild} />
+  }
+
+  // Sudah pilih → tampilkan statistik
+  return <ChildStatsDashboard selectedChild={selectedChild} />
 }
