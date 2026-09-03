@@ -14,9 +14,9 @@ import {
   getDaftarKelasYangDiajarGuru,
 } from "@/actions/guru-kelas"
 import { getDaftarGuru } from "@/actions/guru"
+import { getMapelAktif } from "@/actions/mapel"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import dynamic from "next/dynamic"
@@ -70,6 +70,9 @@ export default function PengajarKelasPage() {
   const [mataPelajaran, setMataPelajaran] = React.useState("")
   const [submitting, setSubmitting] = React.useState(false)
 
+  // Data master mata pelajaran
+  const [mapelOptions, setMapelOptions] = React.useState<Array<{ id: string; kode: string; nama: string }>>([])
+
   // Confirm Delete Dialog
   const [deleteDialog, setDeleteDialog] = React.useState<{
     open: boolean
@@ -81,10 +84,11 @@ export default function PengajarKelasPage() {
   React.useEffect(() => {
     async function loadData() {
       try {
-        const [pengajarRes, guruRes, kelasRes] = await Promise.all([
+        const [pengajarRes, guruRes, kelasRes, mapelRes] = await Promise.all([
           getDaftarPengajarKelas(kelasId),
           getDaftarGuru(),
           getDaftarKelasYangDiajarGuru(),
+          getMapelAktif(),
         ])
 
         if (pengajarRes.success && Array.isArray(pengajarRes.data)) {
@@ -115,6 +119,10 @@ export default function PengajarKelasPage() {
           if (kelas) {
             setKelasName(kelas.namaKelas)
           }
+        }
+
+        if (mapelRes.success && Array.isArray(mapelRes.data)) {
+          setMapelOptions(mapelRes.data)
         }
       } catch {
         // Silently handle - demo mode
@@ -408,17 +416,24 @@ export default function PengajarKelasPage() {
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
                 Mata Pelajaran *
               </label>
-              <Input
-                placeholder="Contoh: Matematika, B. Arab, Fiqih, Tahfidz..."
+              <select
                 value={mataPelajaran}
                 onChange={(e) => setMataPelajaran(e.target.value)}
-                className="h-11 rounded-xl text-sm"
+                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-yellow-500"
                 required
-              />
-              <p className="text-[11px] text-slate-400">
-                Ketik nama mata pelajaran yang sesuai dengan yang terdaftar di
-                sistem.
-              </p>
+              >
+                <option value="">— Pilih Mata Pelajaran —</option>
+                {mapelOptions.map((m) => (
+                  <option key={m.id} value={m.nama}>
+                    {m.kode ? `${m.kode} — ${m.nama}` : m.nama}
+                  </option>
+                ))}
+              </select>
+              {mapelOptions.length === 0 && (
+                <p className="text-[11px] text-amber-600">
+                  Belum ada mata pelajaran yang terdaftar. Tambahkan melalui menu Master Data Mata Pelajaran.
+                </p>
+              )}
             </div>
 
             <DialogFooter className="gap-2 sm:gap-0 pt-2">

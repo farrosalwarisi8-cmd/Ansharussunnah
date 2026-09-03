@@ -8,7 +8,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
 import { siswaManualSchema, type SiswaManualFormValues } from "@/lib/validations/siswa-manual"
 import type { ActionResponse } from "@/types"
-import { Role } from "@prisma/client"
+import { Prisma, Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
 // ========================================================
@@ -157,21 +157,31 @@ export async function createSiswaManual(
         }
 
         if (!userOrtu) {
-          userOrtu = await tx.user.create({
-            data: {
-              email: emailOrtu,
-              nama: data.namaOrangTua,
-              role: Role.ORANG_TUA,
-              authId: authOrtuId,
-              mustChangePassword: true,
-              orangTua: {
-                create: {
-                  noHp: data.noHpOrangTua,
-                  alamat: data.alamatOrangTua || data.alamatSiswa,
+          try {
+            userOrtu = await tx.user.create({
+              data: {
+                email: emailOrtu,
+                nama: data.namaOrangTua,
+                role: Role.ORANG_TUA,
+                authId: authOrtuId,
+                mustChangePassword: true,
+                orangTua: {
+                  create: {
+                    noHp: data.noHpOrangTua,
+                    alamat: data.alamatOrangTua || data.alamatSiswa,
+                  },
                 },
               },
-            },
-          })
+            })
+          } catch (err) {
+            if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+              // Race condition: admin lain (misal menambah kakak-adik dengan orang tua
+              // yang sama) berhasil membuat user ini duluan. Ambil yang sudah ada.
+              userOrtu = await tx.user.findFirstOrThrow({ where: { email: emailOrtu } })
+            } else {
+              throw err
+            }
+          }
         }
 
         const orangTuaRecord = await tx.orangTua.findUnique({
@@ -196,40 +206,50 @@ export async function createSiswaManual(
         }
 
         if (!userSiswa) {
-          userSiswa = await tx.user.create({
-            data: {
-              email: emailSiswa,
-              nama: data.namaLengkap,
-              role: Role.SISWA,
-              authId: authSiswaId,
-              mustChangePassword: true,
-              siswa: {
-                create: {
-                  nisn: data.nisn || null,
-                  nis: data.nis || null,
-                  agama: data.agama || null,
-                  tempatLahir: data.tempatLahir,
-                  tanggalLahir: new Date(data.tanggalLahir),
-                  jenisKelamin: data.jenisKelamin,
-                  alamat: data.alamatSiswa,
-                  noHpSiswa: data.noHpSiswa || null,
-                  namaAyahKandung: data.namaAyahKandung || null,
-                  statusAyahKandung: data.statusAyahKandung || null,
-                  nikAyah: data.nikAyah || null,
-                  namaIbuKandung: data.namaIbuKandung || null,
-                  statusIbuKandung: data.statusIbuKandung || null,
-                  nikIbu: data.nikIbu || null,
-                  statusWali: data.statusWali || null,
-                  namaWali: data.namaWali || null,
-                  kewarganegaraan: data.kewarganegaraan || "WNI",
-                  kitas: data.kitas || null,
-                  asalNegara: data.asalNegara || null,
-                  kelasId: data.kelasId,
-                  // pendaftaranId sengaja tidak diisi (siswa manual)
+          try {
+            userSiswa = await tx.user.create({
+              data: {
+                email: emailSiswa,
+                nama: data.namaLengkap,
+                role: Role.SISWA,
+                authId: authSiswaId,
+                mustChangePassword: true,
+                siswa: {
+                  create: {
+                    nisn: data.nisn || null,
+                    nis: data.nis || null,
+                    agama: data.agama || null,
+                    tempatLahir: data.tempatLahir,
+                    tanggalLahir: new Date(data.tanggalLahir),
+                    jenisKelamin: data.jenisKelamin,
+                    alamat: data.alamatSiswa,
+                    noHpSiswa: data.noHpSiswa || null,
+                    namaAyahKandung: data.namaAyahKandung || null,
+                    statusAyahKandung: data.statusAyahKandung || null,
+                    nikAyah: data.nikAyah || null,
+                    namaIbuKandung: data.namaIbuKandung || null,
+                    statusIbuKandung: data.statusIbuKandung || null,
+                    nikIbu: data.nikIbu || null,
+                    statusWali: data.statusWali || null,
+                    namaWali: data.namaWali || null,
+                    kewarganegaraan: data.kewarganegaraan || "WNI",
+                    kitas: data.kitas || null,
+                    asalNegara: data.asalNegara || null,
+                    kelasId: data.kelasId,
+                    // pendaftaranId sengaja tidak diisi (siswa manual)
+                  },
                 },
               },
-            },
-          })
+            })
+          } catch (err) {
+            if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+              // Race condition: admin lain berhasil membuat user siswa ini duluan.
+              // Ambil yang sudah ada, jangan gagal.
+              userSiswa = await tx.user.findFirstOrThrow({ where: { email: emailSiswa } })
+            } else {
+              throw err
+            }
+          }
         }
 
         prismaSiswaUserId = userSiswa.id

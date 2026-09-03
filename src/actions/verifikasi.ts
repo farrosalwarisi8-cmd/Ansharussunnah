@@ -13,7 +13,7 @@ import {
   type VerifikasiPendaftaranValues,
 } from "@/lib/validations/pendaftaran"
 import type { ActionResponse, PendaftaranWithRelations } from "@/types"
-import { StatusPendaftaran, StatusVerifikasiBukti, Role } from "@prisma/client"
+import { Prisma, StatusPendaftaran, StatusVerifikasiBukti, Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
 export async function getPendaftaranList(options?: {
@@ -374,22 +374,32 @@ export async function verifikasiPendaftaran(
           }
 
           if (!userOrtu) {
-            userOrtu = await tx.user.create({
-              data: {
-                email: emailOrtu,
-                nama: pendaftaran.namaOrangTua,
-                role: Role.ORANG_TUA,
-                authId: authOrtuId,
-                mustChangePassword: true,
-                aktif: true,
-                orangTua: {
-                  create: {
-                    noHp: pendaftaran.noHpOrangTua,
-                    alamat: pendaftaran.alamatOrangTua || pendaftaran.alamatSiswa,
+            try {
+              userOrtu = await tx.user.create({
+                data: {
+                  email: emailOrtu,
+                  nama: pendaftaran.namaOrangTua,
+                  role: Role.ORANG_TUA,
+                  authId: authOrtuId,
+                  mustChangePassword: true,
+                  aktif: true,
+                  orangTua: {
+                    create: {
+                      noHp: pendaftaran.noHpOrangTua,
+                      alamat: pendaftaran.alamatOrangTua || pendaftaran.alamatSiswa,
+                    },
                   },
                 },
-              },
-            })
+              })
+            } catch (err) {
+              if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+                // Race condition: proses approve lain (misal untuk anak kedua dari orang tua
+                // yang sama) berhasil membuat user ini duluan. Ambil yang sudah ada, jangan gagal.
+                userOrtu = await tx.user.findFirstOrThrow({ where: { email: emailOrtu } })
+              } else {
+                throw err
+              }
+            }
           } else if (userOrtu.aktif === false) {
             // Reaktivasi akun orang tua yang pernah dinonaktifkan (orang tua dengan
             // anak kedua+ yang sebelumnya dia nonaktifkan / record lama).
@@ -433,39 +443,49 @@ export async function verifikasiPendaftaran(
           }
 
           if (!userSiswa) {
-            userSiswa = await tx.user.create({
-              data: {
-                email: emailSiswa,
-                nama: pendaftaran.namaLengkap,
-                role: Role.SISWA,
-                authId: authSiswaId,
-                mustChangePassword: true,
-                siswa: {
-                  create: {
-                  nisn: pendaftaran.nisn || null,
-                  agama: pendaftaran.agama || null,
-                  tempatLahir: pendaftaran.tempatLahir,
-                  tanggalLahir: pendaftaran.tanggalLahir,
-                  jenisKelamin: pendaftaran.jenisKelamin,
-                  alamat: pendaftaran.alamatSiswa,
-                  noHpSiswa: pendaftaran.noHpSiswa || null,
-                  namaAyahKandung: pendaftaran.namaAyahKandung || null,
-                  statusAyahKandung: pendaftaran.statusAyahKandung || null,
-                  nikAyah: pendaftaran.nikAyah || null,
-                  namaIbuKandung: pendaftaran.namaIbuKandung || null,
-                  statusIbuKandung: pendaftaran.statusIbuKandung || null,
-                  nikIbu: pendaftaran.nikIbu || null,
-                  statusWali: pendaftaran.statusWali || null,
-                  namaWali: pendaftaran.namaWali || null,
-                  kewarganegaraan: pendaftaran.kewarganegaraan || "WNI",
-                  kitas: pendaftaran.kitas || null,
-                  asalNegara: pendaftaran.asalNegara || null,
-                  kelasId: pendaftaran.kelasTujuanId || null,
-                  pendaftaranId: pendaftaran.id,
+            try {
+              userSiswa = await tx.user.create({
+                data: {
+                  email: emailSiswa,
+                  nama: pendaftaran.namaLengkap,
+                  role: Role.SISWA,
+                  authId: authSiswaId,
+                  mustChangePassword: true,
+                  siswa: {
+                    create: {
+                    nisn: pendaftaran.nisn || null,
+                    agama: pendaftaran.agama || null,
+                    tempatLahir: pendaftaran.tempatLahir,
+                    tanggalLahir: pendaftaran.tanggalLahir,
+                    jenisKelamin: pendaftaran.jenisKelamin,
+                    alamat: pendaftaran.alamatSiswa,
+                    noHpSiswa: pendaftaran.noHpSiswa || null,
+                    namaAyahKandung: pendaftaran.namaAyahKandung || null,
+                    statusAyahKandung: pendaftaran.statusAyahKandung || null,
+                    nikAyah: pendaftaran.nikAyah || null,
+                    namaIbuKandung: pendaftaran.namaIbuKandung || null,
+                    statusIbuKandung: pendaftaran.statusIbuKandung || null,
+                    nikIbu: pendaftaran.nikIbu || null,
+                    statusWali: pendaftaran.statusWali || null,
+                    namaWali: pendaftaran.namaWali || null,
+                    kewarganegaraan: pendaftaran.kewarganegaraan || "WNI",
+                    kitas: pendaftaran.kitas || null,
+                    asalNegara: pendaftaran.asalNegara || null,
+                    kelasId: pendaftaran.kelasTujuanId || null,
+                    pendaftaranId: pendaftaran.id,
+                  },
                 },
               },
-            },
-          })
+            })
+            } catch (err) {
+              if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+                // Race condition: proses approve lain (misal dari pendaftaran berbeda)
+                // berhasil membuat user siswa ini duluan. Ambil yang sudah ada.
+                userSiswa = await tx.user.findFirstOrThrow({ where: { email: emailSiswa } })
+              } else {
+                throw err
+              }
+            }
           }
 
           const siswaRecord = await tx.siswa.findUnique({
