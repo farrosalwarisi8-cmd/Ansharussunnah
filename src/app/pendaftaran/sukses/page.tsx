@@ -2,12 +2,9 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import {
-  CheckCircle2,
-  Copy,
-  ArrowRight,
-} from "lucide-react"
+import { CheckCircle2, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { CopyNomorButton } from "@/components/pendaftaran/copy-nomor-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { formatCurrency } from "@/lib/utils"
@@ -71,16 +68,7 @@ export default async function SuksesPage({ searchParams }: SuksesPageProps) {
               <span className="text-3xl font-bold font-mono text-primary tracking-wider">
                 {pendaftaran.nomorPendaftaran}
               </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() =>
-                  navigator.clipboard.writeText(pendaftaran.nomorPendaftaran)
-                }
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
+              <CopyNomorButton nomor={pendaftaran.nomorPendaftaran} />
             </div>
             <p className="text-xs text-gray-400 mt-2">
               Simpan nomor ini untuk mengecek status pendaftaran Anda
