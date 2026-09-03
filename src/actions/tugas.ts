@@ -641,7 +641,8 @@ export async function submitTugas(
       }
 
       // Simpan versi lama ke riwayat sebelum menimpa
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(
+        async (tx) => {
         await tx.riwayatPengumpulanTugas.create({
           data: {
             pengumpulanId: existing.id,
@@ -670,7 +671,9 @@ export async function submitTugas(
             waktuPenilaian: null,
           },
         })
-      })
+        },
+        { timeout: 10000, maxWait: 3000 }
+      )
 
       revalidatePath("/dashboard/siswa/tugas")
       return {

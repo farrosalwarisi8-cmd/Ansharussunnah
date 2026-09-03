@@ -183,7 +183,8 @@ export async function inputAbsensiBulk(
     // Eksekusi bulk upsert dalam transaction
     let berhasil = 0
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(
+      async (tx) => {
       for (const item of absensi) {
         await tx.absensi.upsert({
           where: {
@@ -211,7 +212,9 @@ export async function inputAbsensiBulk(
         })
         berhasil++
       }
-    })
+      },
+      { timeout: 10000, maxWait: 3000 }
+    )
 
     revalidatePath(`/dashboard/guru/absensi`)
     return {

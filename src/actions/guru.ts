@@ -83,7 +83,8 @@ export async function createAkunGuru(
     }
 
     // Buat record User + Guru dalam transaction
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(
+      async (tx) => {
       const user = await tx.user.create({
         data: {
           email,
@@ -106,7 +107,9 @@ export async function createAkunGuru(
       })
 
       return { userId: user.id, guruId: guru.id }
-    })
+      },
+      { timeout: 10000, maxWait: 3000 }
+    )
 
     // Kirim kredensial via email (fire-and-forget, jangan block response)
     sendEmail({
@@ -183,7 +186,8 @@ export async function updateAkunGuru(
       }
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(
+      async (tx) => {
       // Update nama di User jika diubah
       if (validated.data.nama) {
         await tx.user.update({
@@ -201,7 +205,9 @@ export async function updateAkunGuru(
           noHp: validated.data.noHp !== undefined ? validated.data.noHp : undefined,
         },
       })
-    })
+      },
+      { timeout: 10000, maxWait: 3000 }
+    )
 
     revalidatePath("/dashboard/guru")
     return { success: true, message: "Data guru berhasil diperbarui" }

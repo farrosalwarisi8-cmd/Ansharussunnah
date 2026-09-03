@@ -121,7 +121,8 @@ export async function generateTagihanSppInternal(
     let totalSiswaTerproses = 0
     let totalDilewati = 0
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(
+      async (tx) => {
       for (const siswa of siswaList) {
         // Cek apakah tagihan bulan+tahun ini sudah ada untuk siswa terkait (Idempotency)
         const existing = await tx.tagihanSiswa.findFirst({
@@ -184,7 +185,9 @@ export async function generateTagihanSppInternal(
 
         totalSiswaTerproses++
       }
-    })
+      },
+      { timeout: 20000, maxWait: 5000 }
+    )
 
     revalidatePath("/dashboard/keuangan")
     return {
@@ -303,7 +306,8 @@ export async function submitBuktiPembayaranSpp(
     //   - Status tagihan → MENUNGGU_VERIFIKASI (BUKAN SUDAH_BAYAR)
     //   - Admin keuangan harus memanggil konfirmasiPembayaranSppOlehAdmin untuk finalisasi
     //   - nominalDibayar dicatat apa adanya; admin yang memvalidasi kesesuaiannya
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(
+      async (tx) => {
       await tx.pembayaranSiswa.create({
         data: {
           tagihanId,
@@ -324,7 +328,9 @@ export async function submitBuktiPembayaranSpp(
           status: StatusTagihan.MENUNGGU_VERIFIKASI,
         },
       })
-    })
+      },
+      { timeout: 10000, maxWait: 3000 }
+    )
 
     revalidatePath("/dashboard/keuangan")
     return {
@@ -412,7 +418,8 @@ export async function konfirmasiPembayaranSppOlehAdmin(
     const nominalTidakSesuai = nominalPembayaranIni !== nominalTagihan
     const selisihNominal = Math.abs(nominalTagihan - nominalPembayaranIni)
 
-    const hasil = await prisma.$transaction(async (tx) => {
+    const hasil = await prisma.$transaction(
+      async (tx) => {
       if (disetujui) {
         // PENTEST FIX #3 (Partial Payment): Hitung total setelah pembayaran ini dikonfirmasi
         const totalDibayarSetelahIni = totalSudahDikonfirmasi + nominalPembayaranIni
@@ -481,7 +488,9 @@ export async function konfirmasiPembayaranSppOlehAdmin(
           sisaTunggakan: Math.max(0, nominalTagihan - totalSudahDikonfirmasi),
         }
       }
-    })
+      },
+      { timeout: 10000, maxWait: 3000 }
+    )
 
     revalidatePath("/dashboard/keuangan")
     return {
@@ -559,7 +568,8 @@ export async function konfirmasiPembayaranSppManual(
         ? StatusTagihan.SUDAH_BAYAR
         : StatusTagihan.DIBAYAR_SEBAGIAN
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(
+      async (tx) => {
       await tx.pembayaranSiswa.create({
         data: {
           tagihanId,
@@ -583,7 +593,9 @@ export async function konfirmasiPembayaranSppManual(
           totalTerbayar: new Prisma.Decimal(totalDibayarSetelahIni),
         },
       })
-    })
+      },
+      { timeout: 10000, maxWait: 3000 }
+    )
 
     const sisaTunggakan = Math.max(0, nominalTagihan - totalDibayarSetelahIni)
     revalidatePath("/dashboard/keuangan")

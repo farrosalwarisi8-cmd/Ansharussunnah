@@ -137,7 +137,8 @@ export async function createSiswaManual(
     // --- Prisma Transaction ---
     let prismaSiswaUserId: string | undefined
     try {
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(
+        async (tx) => {
         // Cek atau buat User orang tua (support multi-role: same authId, different role)
         let userOrtu = await tx.user.findFirst({
           where: { authId: authOrtuId, role: Role.ORANG_TUA },
@@ -280,7 +281,9 @@ export async function createSiswaManual(
             })
           }
         }
-      })
+        },
+        { timeout: 15000, maxWait: 5000 }
+      )
     } catch (txError) {
       console.error("Prisma transaction error, rolling back Supabase Users...", txError)
       // Cleanup auth yang baru dibuat

@@ -242,7 +242,8 @@ export async function resetPassword(
     // Invalidate semua session aktif (global sign-out)
     await supabaseAdmin.auth.admin.signOut(user.authId)
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(
+      async (tx) => {
       await tx.passwordResetToken.update({
         where: { id: token.id },
         data: { digunakan: true },
@@ -260,7 +261,9 @@ export async function resetPassword(
           lastPasswordChange: new Date(),
         },
       })
-    })
+      },
+      { timeout: 8000, maxWait: 3000 }
+    )
 
     return {
       success: true,

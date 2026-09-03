@@ -100,7 +100,8 @@ export async function createPeriodeAjaran(
       }
     }
 
-    const periode = await prisma.$transaction(async (tx) => {
+    const periode = await prisma.$transaction(
+      async (tx) => {
       // Jika periode baru diset aktif, nonaktifkan semua periode lain
       if (aktif) {
         await tx.periodeAjaran.updateMany({
@@ -119,7 +120,9 @@ export async function createPeriodeAjaran(
           aktif,
         },
       })
-    })
+      },
+      { timeout: 10000, maxWait: 3000 }
+    )
 
     revalidatePath("/dashboard/guru/periode")
     return {
@@ -161,7 +164,8 @@ export async function updatePeriodeAjaran(
       return { success: false, message: "Periode ajaran tidak ditemukan" }
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(
+      async (tx) => {
       // Jika mengaktifkan periode ini, nonaktifkan yang lain
       if (payload.aktif === true && !existing.aktif) {
         await tx.periodeAjaran.updateMany({
@@ -185,7 +189,9 @@ export async function updatePeriodeAjaran(
           aktif: payload.aktif,
         },
       })
-    })
+      },
+      { timeout: 10000, maxWait: 3000 }
+    )
 
     revalidatePath("/dashboard/guru/periode")
     return { success: true, message: "Periode ajaran berhasil diperbarui" }

@@ -225,30 +225,33 @@ export async function verifikasiPendaftaran(
         }
       }
 
-      await prisma.$transaction(async (tx) => {
-        await tx.pendaftaran.update({
-          where: { id: pendaftaranId },
-          data: {
-            status: StatusPendaftaran.DITOLAK,
-            catatanAdmin: catatanAdmin || null,
-            alasanPenolakan,
-            diverifikasiOlehId: guruUser.id,
-            waktuVerifikasi: new Date(),
-          },
-        })
-
-        if (latestBuktiId) {
-          await tx.buktiTransferPendaftaran.update({
-            where: { id: latestBuktiId },
+      await prisma.$transaction(
+        async (tx) => {
+          await tx.pendaftaran.update({
+            where: { id: pendaftaranId },
             data: {
-              status: StatusVerifikasiBukti.DITOLAK,
-              catatanVerifikasi: alasanPenolakan,
+              status: StatusPendaftaran.DITOLAK,
+              catatanAdmin: catatanAdmin || null,
+              alasanPenolakan,
               diverifikasiOlehId: guruUser.id,
               waktuVerifikasi: new Date(),
             },
           })
-        }
-      })
+
+          if (latestBuktiId) {
+            await tx.buktiTransferPendaftaran.update({
+              where: { id: latestBuktiId },
+              data: {
+                status: StatusVerifikasiBukti.DITOLAK,
+                catatanVerifikasi: alasanPenolakan,
+                diverifikasiOlehId: guruUser.id,
+                waktuVerifikasi: new Date(),
+              },
+            })
+          }
+        },
+        { timeout: 10000, maxWait: 5000 }
+      )
 
       revalidatePath("/dashboard/pendaftaran")
       return {
@@ -340,8 +343,9 @@ export async function verifikasiPendaftaran(
 
       // ✅ Prisma Transaction with strict rollback cleanup
       try {
-        await prisma.$transaction(async (tx) => {
-          // Find existing user by authId + role first, then by email as fallback
+        await prisma.$transaction(
+          async (tx) => {
+            // Find existing user by authId + role first, then by email as fallback
           // (handles cases where authId differs but email matches — e.g. parent
           // re-registers with a new Supabase auth but the DB still has the old record)
           let userOrtu = await tx.user.findFirst({
@@ -522,7 +526,9 @@ export async function verifikasiPendaftaran(
               waktuVerifikasi: new Date(),
             },
           })
-        })
+          },
+          { timeout: 15000, maxWait: 5000 }
+        )
       } catch (txError) {
         console.error("Prisma transaction error, rolling back Supabase Users...", txError)
         await cleanupAuthUsers(supabaseAdmin, newlyCreatedAuthIds)

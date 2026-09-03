@@ -218,7 +218,8 @@ export async function addOrUpdateSoalUjian(
       return { success: false, message: "Ujian sudah selesai, soal tidak dapat diubah" }
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(
+      async (tx) => {
       // Upsert Soal
       const soal = await tx.soalUjian.upsert({
         where: {
@@ -254,7 +255,9 @@ export async function addOrUpdateSoalUjian(
       } else if (tipe === "ESAI") {
         await tx.opsiJawaban.deleteMany({ where: { soalId: soal.id } })
       }
-    })
+      },
+      { timeout: 10000, maxWait: 3000 }
+    )
 
     revalidatePath(`/dashboard/guru/ujian/${ujianId}`)
     return { success: true, message: `Soal nomor ${nomorSoal} berhasil disimpan` }
@@ -381,7 +384,8 @@ export async function beriNilaiEsai(
       pengerjaan.ujian.mataPelajaranId
     )
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(
+      async (tx) => {
       // Update tiap jawaban esai yang dinilai
       for (const item of penilaian) {
         const soal = pengerjaan.ujian.soal.find((s) => s.id === item.soalId)
@@ -436,7 +440,9 @@ export async function beriNilaiEsai(
             : StatusPengerjaan.DINILAI,
         },
       })
-    })
+      },
+      { timeout: 15000, maxWait: 5000 }
+    )
 
     revalidatePath(`/dashboard/guru/ujian/${pengerjaan.ujianId}`)
     return {
@@ -761,7 +767,8 @@ export async function submitPengerjaanUjian(
     const submitTerlambat = now > deadlineFinal
 
     // Eksekusi Grading Pilihan Ganda & Submit secara Atomik
-    const hasil = await prisma.$transaction(async (tx) => {
+    const hasil = await prisma.$transaction(
+      async (tx) => {
       let poinPgDiperoleh = 0
       let totalBobotSemuaSoal = 0
       let adaSoalEsai = false
@@ -847,7 +854,9 @@ export async function submitPengerjaanUjian(
       })
 
       return updatedPengerjaan
-    })
+      },
+      { timeout: 15000, maxWait: 5000 }
+    )
 
     // Susun pesan response dengan info keterlambatan jika relevan
     let pesanSubmit: string
@@ -942,7 +951,8 @@ export async function tutupPengerjaanUjianKedaluwarsa(
 
       const adaSoalEsai = sesi.ujian.soal.some((s) => s.tipe === "ESAI")
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(
+        async (tx) => {
         // Buat record jawaban kosong untuk soal yang belum dijawab sama sekali
         // (agar rekap guru lengkap dan tidak ada data kosong)
         for (const soal of sesi.ujian.soal) {
@@ -992,7 +1002,9 @@ export async function tutupPengerjaanUjianKedaluwarsa(
             nilaiTotal: adaSoalEsai ? null : nilaiPgDecimal,
           },
         })
-      })
+        },
+        { timeout: 15000, maxWait: 5000 }
+      )
 
       totalDitutup++
       detail.push(
