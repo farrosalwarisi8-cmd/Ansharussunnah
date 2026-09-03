@@ -13,3 +13,4 @@ if (dsn) {
     replaysOnErrorSampleRate: 1,
   })
 }
+

@@ -144,6 +144,19 @@ export async function createSiswaManual(
         })
 
         if (!userOrtu) {
+          // Fallback: cek by email (handle case where authId berbeda tapi email sama)
+          userOrtu = await tx.user.findFirst({
+            where: { email: emailOrtu, role: Role.ORANG_TUA },
+          })
+          if (userOrtu) {
+            await tx.user.update({
+              where: { id: userOrtu.id },
+              data: { authId: authOrtuId },
+            })
+          }
+        }
+
+        if (!userOrtu) {
           userOrtu = await tx.user.create({
             data: {
               email: emailOrtu,
@@ -165,41 +178,59 @@ export async function createSiswaManual(
           where: { userId: userOrtu.id },
         })
 
-        // Buat User + Siswa
-        const userSiswa = await tx.user.create({
-          data: {
-            email: emailSiswa,
-            nama: data.namaLengkap,
-            role: Role.SISWA,
-            authId: authSiswaId,
-            mustChangePassword: true,
-            siswa: {
-              create: {
-                nisn: data.nisn || null,
-                nis: data.nis || null,
-                agama: data.agama || null,
-                tempatLahir: data.tempatLahir,
-                tanggalLahir: new Date(data.tanggalLahir),
-                jenisKelamin: data.jenisKelamin,
-                alamat: data.alamatSiswa,
-                noHpSiswa: data.noHpSiswa || null,
-                namaAyahKandung: data.namaAyahKandung || null,
-                statusAyahKandung: data.statusAyahKandung || null,
-                nikAyah: data.nikAyah || null,
-                namaIbuKandung: data.namaIbuKandung || null,
-                statusIbuKandung: data.statusIbuKandung || null,
-                nikIbu: data.nikIbu || null,
-                statusWali: data.statusWali || null,
-                namaWali: data.namaWali || null,
-                kewarganegaraan: data.kewarganegaraan || "WNI",
-                kitas: data.kitas || null,
-                asalNegara: data.asalNegara || null,
-                kelasId: data.kelasId,
-                // pendaftaranId sengaja tidak diisi (siswa manual)
+        // Buat User + Siswa (cek duplikasi by authId+role lalu by email)
+        let userSiswa = await tx.user.findFirst({
+          where: { authId: authSiswaId, role: Role.SISWA },
+        })
+
+        if (!userSiswa) {
+          userSiswa = await tx.user.findFirst({
+            where: { email: emailSiswa, role: Role.SISWA },
+          })
+          if (userSiswa) {
+            await tx.user.update({
+              where: { id: userSiswa.id },
+              data: { authId: authSiswaId },
+            })
+          }
+        }
+
+        if (!userSiswa) {
+          userSiswa = await tx.user.create({
+            data: {
+              email: emailSiswa,
+              nama: data.namaLengkap,
+              role: Role.SISWA,
+              authId: authSiswaId,
+              mustChangePassword: true,
+              siswa: {
+                create: {
+                  nisn: data.nisn || null,
+                  nis: data.nis || null,
+                  agama: data.agama || null,
+                  tempatLahir: data.tempatLahir,
+                  tanggalLahir: new Date(data.tanggalLahir),
+                  jenisKelamin: data.jenisKelamin,
+                  alamat: data.alamatSiswa,
+                  noHpSiswa: data.noHpSiswa || null,
+                  namaAyahKandung: data.namaAyahKandung || null,
+                  statusAyahKandung: data.statusAyahKandung || null,
+                  nikAyah: data.nikAyah || null,
+                  namaIbuKandung: data.namaIbuKandung || null,
+                  statusIbuKandung: data.statusIbuKandung || null,
+                  nikIbu: data.nikIbu || null,
+                  statusWali: data.statusWali || null,
+                  namaWali: data.namaWali || null,
+                  kewarganegaraan: data.kewarganegaraan || "WNI",
+                  kitas: data.kitas || null,
+                  asalNegara: data.asalNegara || null,
+                  kelasId: data.kelasId,
+                  // pendaftaranId sengaja tidak diisi (siswa manual)
+                },
               },
             },
-          },
-        })
+          })
+        }
 
         prismaSiswaUserId = userSiswa.id
 

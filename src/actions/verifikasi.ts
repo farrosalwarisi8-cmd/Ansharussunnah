@@ -341,10 +341,25 @@ export async function verifikasiPendaftaran(
       // ✅ Prisma Transaction with strict rollback cleanup
       try {
         await prisma.$transaction(async (tx) => {
-          // Find existing user by authId + role (supports multi-role with same auth)
+          // Find existing user by authId + role first, then by email as fallback
+          // (handles cases where authId differs but email matches — e.g. parent
+          // re-registers with a new Supabase auth but the DB still has the old record)
           let userOrtu = await tx.user.findFirst({
             where: { authId: authOrtuId, role: Role.ORANG_TUA },
           })
+
+          if (!userOrtu) {
+            userOrtu = await tx.user.findFirst({
+              where: { email: emailOrtu, role: Role.ORANG_TUA },
+            })
+            if (userOrtu) {
+              // Link the new authId to the existing user
+              await tx.user.update({
+                where: { id: userOrtu.id },
+                data: { authId: authOrtuId },
+              })
+            }
+          }
 
           if (!userOrtu) {
             userOrtu = await tx.user.create({
@@ -376,15 +391,32 @@ export async function verifikasiPendaftaran(
             where: { userId: userOrtu.id },
           })
 
-          const userSiswa = await tx.user.create({
-            data: {
-              email: emailSiswa,
-              nama: pendaftaran.namaLengkap,
-              role: Role.SISWA,
-              authId: authSiswaId,
-              mustChangePassword: true,
-              siswa: {
-                create: {
+          let userSiswa = await tx.user.findFirst({
+            where: { authId: authSiswaId, role: Role.SISWA },
+          })
+
+          if (!userSiswa) {
+            userSiswa = await tx.user.findFirst({
+              where: { email: emailSiswa, role: Role.SISWA },
+            })
+            if (userSiswa) {
+              await tx.user.update({
+                where: { id: userSiswa.id },
+                data: { authId: authSiswaId },
+              })
+            }
+          }
+
+          if (!userSiswa) {
+            userSiswa = await tx.user.create({
+              data: {
+                email: emailSiswa,
+                nama: pendaftaran.namaLengkap,
+                role: Role.SISWA,
+                authId: authSiswaId,
+                mustChangePassword: true,
+                siswa: {
+                  create: {
                   nisn: pendaftaran.nisn || null,
                   agama: pendaftaran.agama || null,
                   tempatLahir: pendaftaran.tempatLahir,
@@ -409,6 +441,7 @@ export async function verifikasiPendaftaran(
               },
             },
           })
+          }
 
           const siswaRecord = await tx.siswa.findUnique({
             where: { userId: userSiswa.id },
