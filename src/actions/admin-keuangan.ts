@@ -137,7 +137,7 @@ export async function createAkunAdminKeuangan(
       }),
     }).catch((err) => console.error("Gagal mengirim email kredensial admin keuangan:", err))
 
-    revalidatePath("/dashboard/admin-keuangan")
+    revalidatePath("/dashboard/kelola-akun-keuangan")
     return {
       success: true,
       message: `Akun admin keuangan "${nama}" berhasil dibuat. Kredensial telah dikirim ke ${email}.`,
@@ -204,7 +204,7 @@ export async function updateAkunAdminKeuangan(
       },
     })
 
-    revalidatePath("/dashboard/admin-keuangan")
+    revalidatePath("/dashboard/kelola-akun-keuangan")
     return { success: true, message: "Data admin keuangan berhasil diperbarui" }
   } catch (error: unknown) {
     return {
@@ -255,7 +255,7 @@ export async function nonaktifkanAkunAdminKeuangan(
       data: { aktif: false },
     })
 
-    revalidatePath("/dashboard/admin-keuangan")
+    revalidatePath("/dashboard/kelola-akun-keuangan")
     return { success: true, message: `Akun admin keuangan "${user.nama}" berhasil dinonaktifkan` }
   } catch (error: unknown) {
     return {
@@ -304,7 +304,7 @@ export async function aktifkanKembaliAkunAdminKeuangan(
       data: { aktif: true },
     })
 
-    revalidatePath("/dashboard/admin-keuangan")
+    revalidatePath("/dashboard/kelola-akun-keuangan")
     return { success: true, message: `Akun admin keuangan "${user.nama}" berhasil diaktifkan kembali` }
   } catch (error: unknown) {
     return {

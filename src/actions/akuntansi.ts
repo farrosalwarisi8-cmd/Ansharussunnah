@@ -40,7 +40,8 @@ const BULAN_NAMES = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni",
 // ========================================================
 
 async function requireAdminKeuangan() {
-  return requireRole([Role.ADMIN_KEUANGAN])
+  // SUPER_ADMIN punya akses penuh ke seluruh modul, termasuk keuangan.
+  return requireRole([Role.ADMIN_KEUANGAN, Role.SUPER_ADMIN])
 }
 
 async function verifyOrangTuaAksesSiswa(orangTuaId: string, siswaId: string): Promise<boolean> {
@@ -185,7 +186,7 @@ export async function generateTagihanSppInternal(
       }
     })
 
-    revalidatePath("/dashboard/finance/spp")
+    revalidatePath("/dashboard/keuangan")
     return {
       success: true,
       message: `Pembuatan tagihan selesai. Terproses: ${totalSiswaTerproses} siswa, Dilewati (sudah ada/tanpa tarif): ${totalDilewati}`,
@@ -269,21 +270,33 @@ export async function submitBuktiPembayaranSpp(
     }
 
     // ✅ Validasi path file & pencegahan path traversal
+    // Dua bentuk diterima:
+    //  1) Path storage internal -> `spp/{tagihanId}/...` (diverifikasi di bucket)
+    //  2) URL eksternal (Google Drive / cloud) -> `https://...` (diterima apa adanya)
     const expectedPrefix = `spp/${tagihanId}/`
-    if (!urlFileCheck(urlBukti, expectedPrefix)) {
+    const isInternalPath = urlBukti.startsWith("spp/")
+    const isExternalUrl = /^https?:\/\//i.test(urlBukti)
+
+    if (!isInternalPath && !isExternalUrl) {
       return { success: false, message: "Struktur lokasi berkas tidak valid" }
     }
 
-    // Verifikasi file ada di Supabase Storage
-    const supabaseAdmin = createSupabaseAdmin()
-    const fileName = urlBukti.split("/").pop()
-    const { data: fileList } = await supabaseAdmin.storage
-      .from("bukti-spp")
-      .list(`spp/${tagihanId}`)
+    if (isInternalPath) {
+      if (!urlFileCheck(urlBukti, expectedPrefix)) {
+        return { success: false, message: "Struktur lokasi berkas tidak valid" }
+      }
 
-    const fileExists = fileList?.some((f) => f.name === fileName)
-    if (!fileExists) {
-      return { success: false, message: "Berkas bukti transfer tidak ditemukan di server" }
+      // Verifikasi file ada di Supabase Storage
+      const supabaseAdmin = createSupabaseAdmin()
+      const fileName = urlBukti.split("/").pop()
+      const { data: fileList } = await supabaseAdmin.storage
+        .from("bukti-spp")
+        .list(`spp/${tagihanId}`)
+
+      const fileExists = fileList?.some((f) => f.name === fileName)
+      if (!fileExists) {
+        return { success: false, message: "Berkas bukti transfer tidak ditemukan di server" }
+      }
     }
 
     // PENTEST FIX #1: Buat record PembayaranSpp berstatus PENDING
@@ -313,7 +326,7 @@ export async function submitBuktiPembayaranSpp(
       })
     })
 
-    revalidatePath("/dashboard/finance/spp")
+    revalidatePath("/dashboard/keuangan")
     return {
       success: true,
       message:
@@ -470,7 +483,7 @@ export async function konfirmasiPembayaranSppOlehAdmin(
       }
     })
 
-    revalidatePath("/dashboard/finance/spp")
+    revalidatePath("/dashboard/keuangan")
     return {
       success: true,
       message: disetujui
@@ -573,7 +586,7 @@ export async function konfirmasiPembayaranSppManual(
     })
 
     const sisaTunggakan = Math.max(0, nominalTagihan - totalDibayarSetelahIni)
-    revalidatePath("/dashboard/finance/spp")
+    revalidatePath("/dashboard/keuangan")
     return {
       success: true,
       message:
@@ -633,7 +646,7 @@ export async function createTransaksiKeuangan(
       },
     })
 
-    revalidatePath("/dashboard/finance/transaksi")
+    revalidatePath("/dashboard/keuangan/transaksi")
     return {
       success: true,
       message: `Transaksi keuangan ${kategori.tipe.toLowerCase()} berhasil disimpan`,
@@ -683,7 +696,7 @@ export async function batalkanTransaksiKeuangan(
       },
     })
 
-    revalidatePath("/dashboard/finance/transaksi")
+    revalidatePath("/dashboard/keuangan/transaksi")
     return { success: true, message: "Transaksi berhasil dibatalkan (soft-delete)" }
   } catch (error: unknown) {
     return { success: false, message: error instanceof Error ? error.message : "Gagal membatalkan transaksi" }
@@ -725,7 +738,7 @@ export async function batalkanTagihanSpp(
       },
     })
 
-    revalidatePath("/dashboard/finance/spp")
+    revalidatePath("/dashboard/keuangan")
     return { success: true, message: "Tagihan SPP berhasil dibatalkan" }
   } catch (error: unknown) {
     return { success: false, message: error instanceof Error ? error.message : "Gagal membatalkan tagihan SPP" }

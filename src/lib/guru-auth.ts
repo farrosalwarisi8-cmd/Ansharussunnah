@@ -13,11 +13,32 @@ import { Role } from "@prisma/client"
  *   memilih kelas mana pun dari dropdown; validasi mapel dilakukan via pengecekan
  *   GuruKelas saat mapel tertentu dipilih.
  */
+/**
+ * Sebuah referensi mapel bisa berupa nama ATAU ID (CUID Prisma).
+ * Call site `createUjian`/`createTugas`/`createMateri` mengirim nama,
+ * sedangkan semua aksi edit/delete/publish/grade mengirim `mataPelajaranId`.
+ * Helper ini menormalkan kedua bentuk jadi filter `mataPelajaran` yang benar
+ * untuk query Prisma (nama ATAU id).
+ */
+function normalizeMapelFilter(mataPelajaran: string):
+  | { nama: string }
+  | { id: string }
+  | undefined {
+  if (!mataPelajaran) return undefined
+  // CUID Prisma: diawali "c" lalu 24 karakter alfanumerik lowercase
+  if (/^c[a-z0-9]{24}$/.test(mataPelajaran)) {
+    return { id: mataPelajaran }
+  }
+  return { nama: mataPelajaran }
+}
+
 export async function verifyGuruAksesKelas(
   kelasId: string,
   mataPelajaran?: string
 ) {
   const user = await requireGuru()
+
+  const mapelFilter = normalizeMapelFilter(mataPelajaran ?? "")
 
   // Admin akademik / super admin bebas mengelola semua kelas
   if (isAcademicAdminRole(user.role)) {
@@ -26,9 +47,9 @@ export async function verifyGuruAksesKelas(
     }
 
     // Bila mapel diberikan, pastikan mapelnya valid & ada di kelas tsb
-    if (mataPelajaran) {
+    if (mapelFilter) {
       const mapelDiKelas = await prisma.guruKelas.findFirst({
-        where: { kelasId, mataPelajaran: { nama: mataPelajaran } },
+        where: { kelasId, mataPelajaran: mapelFilter },
       })
       if (!mapelDiKelas) {
         throw new Error(
@@ -62,7 +83,7 @@ export async function verifyGuruAksesKelas(
     where: {
       guruId,
       kelasId,
-      ...(mataPelajaran ? { mataPelajaran: { nama: mataPelajaran } } : {}),
+      ...(mapelFilter ? { mataPelajaran: mapelFilter } : {}),
     },
   })
 

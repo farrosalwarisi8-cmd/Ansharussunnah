@@ -314,7 +314,7 @@ export async function getRekapHasilUjian(ujianId: string): Promise<ActionRespons
         },
         jawaban: {
           include: {
-            soal: { select: { nomorSoal: true, tipe: true, bobot: true } },
+            soal: { select: { id: true, nomorSoal: true, tipe: true, bobot: true } },
           },
         },
       },
@@ -538,6 +538,7 @@ export async function getDaftarUjianSiswa(): Promise<ActionResponse> {
       include: {
         periodeAjaran: { select: { nama: true } },
         dibuatOleh: { select: { nama: true } },
+        mataPelajaran: { select: { nama: true } },
         pengerjaan: {
           where: { siswaId: user.siswa.id },
           select: {
@@ -562,7 +563,7 @@ export async function getDaftarUjianSiswa(): Promise<ActionResponse> {
         id: u.id,
         judul: u.judul,
         deskripsi: u.deskripsi,
-        mataPelajaran: u.mataPelajaranId,
+        mataPelajaran: u.mataPelajaran.nama,
         durasiMenit: u.durasiMenit,
         waktuMulai: u.waktuMulai,
         waktuSelesai: u.waktuSelesai,
@@ -1029,6 +1030,7 @@ export async function getDaftarUjianGuru(
       include: {
         periodeAjaran: { select: { nama: true } },
         dibuatOleh: { select: { nama: true } },
+        mataPelajaran: { select: { nama: true } },
         _count: { select: { soal: true, pengerjaan: true } },
       },
       orderBy: { waktuMulai: "desc" },
@@ -1037,7 +1039,7 @@ export async function getDaftarUjianGuru(
     const formatted = ujianList.map((u) => ({
       id: u.id,
       judul: u.judul,
-      mataPelajaran: u.mataPelajaranId,
+      mataPelajaran: u.mataPelajaran.nama,
       kelasId: u.kelasId,
       durasiMenit: u.durasiMenit,
       waktuMulai: u.waktuMulai,

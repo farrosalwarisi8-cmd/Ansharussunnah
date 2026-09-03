@@ -7,6 +7,7 @@ import * as React from "react"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import {
   createAkunGuru,
+  getDaftarGuru,
   nonaktifkanAkunGuru,
   aktifkanKembaliAkunGuru,
   setGuruAdmin,
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { EmptyState } from "@/components/ui/empty-state"
 import dynamic from "next/dynamic"
 const Dialog = dynamic(() => import("@/components/ui/dialog").then(m => m.Dialog), { ssr: false })
 const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogContent), { ssr: false })
@@ -24,46 +26,51 @@ const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.
 const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
-import { Plus, ShieldCheck, Loader2, Pencil } from "lucide-react"
+import { Plus, ShieldCheck, Loader2, Pencil, AlertTriangle, Users } from "lucide-react"
 
 export default function KelolaGuruPage() {
   const { toast } = useToast()
 
-  const [guruList, setGuruList] = React.useState([
-    {
-      id: "g1",
-      userId: "u1",
-      nama: "Ustadz Abdullah, S.Pd.I",
-      email: "abdullah@ansharussunnah.sch.id",
-      nip: "19880101202001",
-      jabatan: "Kepala Kepengasuhan & Guru Fiqih",
-      noHp: "081234567890",
-      aktif: true,
-      isAdmin: true,
-    },
-    {
-      id: "g2",
-      userId: "u2",
-      nama: "Ustadz Salman Al-Farisi, Lc.",
-      email: "salman@ansharussunnah.sch.id",
-      nip: "19900512202102",
-      jabatan: "Guru Bahasa Arab & Nahwu",
-      noHp: "081234567891",
-      aktif: true,
-      isAdmin: false,
-    },
-    {
-      id: "g3",
-      userId: "u3",
-      nama: "Ustadz Farhan Ramadhan, S.Pd.",
-      email: "farhan@ansharussunnah.sch.id",
-      nip: "19920820202203",
-      jabatan: "Guru Hadits & Tahfidz",
-      noHp: "081234567892",
-      aktif: true,
-      isAdmin: false,
-    },
-  ])
+  interface DataGuru {
+    id: string
+    userId: string
+    nama: string
+    email: string
+    nip: string | null
+    jabatan: string | null
+    noHp: string | null
+    aktif: boolean
+    isAdmin: boolean
+    mustChangePassword: boolean
+    createdAt: string | Date
+    waliKelas: string[]
+    jumlahMengajar: number
+  }
+
+  const [guruList, setGuruList] = React.useState<DataGuru[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [loadError, setLoadError] = React.useState<string | null>(null)
+
+  const fetchGuru = React.useCallback(async () => {
+    setLoading(true)
+    setLoadError(null)
+    try {
+      const result = await getDaftarGuru()
+      if (result.success && result.data) {
+        setGuruList(result.data as DataGuru[])
+      } else {
+        setLoadError(result.message || "Gagal memuat daftar guru")
+      }
+    } catch {
+      setLoadError("Gagal memuat daftar guru")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    fetchGuru()
+  }, [fetchGuru])
 
   // Modal Tambah Guru
   const [isAddOpen, setIsAddOpen] = React.useState(false)
@@ -101,32 +108,25 @@ export default function KelolaGuruPage() {
 
     setSubmitting(true)
     try {
-      await createAkunGuru({
+      const result = await createAkunGuru({
         nama,
         email,
         nip: nip || undefined,
         jabatan: jabatan || undefined,
         noHp: noHp || undefined,
+        isAdmin: isAdminInput,
       })
 
-      setGuruList((prev) => [
-        ...prev,
-        {
-          id: `g-${Date.now()}`,
-          userId: `u-${Date.now()}`,
-          nama,
-          email,
-          nip: nip || "-",
-          jabatan: jabatan || "Tenaga Pendidik",
-          noHp: noHp || "-",
-          aktif: true,
-          isAdmin: isAdminInput,
-        },
-      ])
+      if (!result.success) {
+        toast({ variant: "destructive", title: "Gagal Membuat Akun", description: result.message })
+        return
+      }
+
+      await fetchGuru()
 
       toast({
         title: "Akun Guru Berhasil Dibuat! 🎉",
-        description: `Akun untuk ${nama} telah terdaftar. Password default telah dikirim ke email.`,
+        description: `Akun untuk ${nama} telah terdaftar. Kredensial dikirim ke email.`,
       })
       setIsAddOpen(false)
       setNama("")
@@ -135,11 +135,7 @@ export default function KelolaGuruPage() {
       setJabatan("")
       setNoHp("")
     } catch {
-      toast({
-        title: "Akun Guru Dibuat (Demo Mode)",
-        description: `Akun untuk ${nama} telah dibuat.`,
-      })
-      setIsAddOpen(false)
+      toast({ variant: "destructive", title: "Gagal Membuat Akun", description: "Terjadi kesalahan saat membuat akun guru." })
     } finally {
       setSubmitting(false)
     }
@@ -172,8 +168,7 @@ export default function KelolaGuruPage() {
         toast({ variant: "destructive", title: "Gagal Memperbarui", description: result.message })
       }
     } catch {
-      toast({ title: "Profil Diperbarui (Demo Mode)", description: "Data telah diperbarui." })
-      setIsEditOpen(false)
+      toast({ variant: "destructive", title: "Gagal Memperbarui", description: "Terjadi kesalahan saat memperbarui profil." })
     } finally {
       setEditing(false)
     }
@@ -212,10 +207,7 @@ export default function KelolaGuruPage() {
         })
       }
     } catch {
-      toast({
-        title: "Aksi Berhasil (Demo Mode)",
-        description: "Status telah diperbarui.",
-      })
+      toast({ variant: "destructive", title: "Aksi Gagal", description: "Terjadi kesalahan saat memperbarui status akun." })
     } finally {
       setConfirmDialog({ open: false, guru: null, type: "TOGGLE_ACTIVE" })
     }
@@ -248,6 +240,27 @@ export default function KelolaGuruPage() {
         </CardHeader>
 
         <CardContent className="p-0">
+          {loading ? (
+            <div className="flex items-center justify-center p-12">
+              <Loader2 className="h-7 w-7 animate-spin text-yellow-500" />
+              <span className="ml-3 text-sm text-slate-500">Memuat daftar guru...</span>
+            </div>
+          ) : loadError ? (
+            <EmptyState
+              icon={AlertTriangle}
+              title="Gagal Memuat Data"
+              description={loadError}
+              actionLabel="Coba Lagi"
+              onAction={fetchGuru}
+            />
+          ) : guruList.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title="Belum Ada Guru"
+              description="Belum ada tenaga pendidik yang terdaftar. Klik 'Tambah Guru Baru' untuk memulai."
+            />
+          ) : (
+            <>
           {/* Desktop Table */}
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm text-left">
@@ -293,9 +306,9 @@ export default function KelolaGuruPage() {
                         onClick={() => {
                           setEditGuru(g)
                           setEditNama(g.nama)
-                          setEditNip(g.nip)
-                          setEditJabatan(g.jabatan)
-                          setEditNoHp(g.noHp)
+                          setEditNip(g.nip || "")
+                          setEditJabatan(g.jabatan || "")
+                          setEditNoHp(g.noHp || "")
                           setIsEditOpen(true)
                         }}
                         className="rounded-xl text-xs font-semibold"
@@ -363,9 +376,9 @@ export default function KelolaGuruPage() {
                     onClick={() => {
                       setEditGuru(g)
                       setEditNama(g.nama)
-                      setEditNip(g.nip)
-                      setEditJabatan(g.jabatan)
-                      setEditNoHp(g.noHp)
+                      setEditNip(g.nip || "")
+                      setEditJabatan(g.jabatan || "")
+                      setEditNoHp(g.noHp || "")
                       setIsEditOpen(true)
                     }}
                     className="flex-1 rounded-xl text-xs min-h-[40px]"
@@ -405,6 +418,8 @@ export default function KelolaGuruPage() {
               </div>
             ))}
           </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

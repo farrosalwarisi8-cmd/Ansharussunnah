@@ -25,6 +25,7 @@ import { ArrowLeft, Clock, Upload, CheckCircle2, Link as LinkIcon, Loader2, Aler
 
 interface SubmisiItem {
   siswaId: string
+  pengumpulanId: string | null
   nama: string
   nisn: string
   status: string
@@ -151,7 +152,7 @@ export default function DetailTugasPage() {
 
     try {
       const result = await beriNilaiTugas({
-        pengumpulanId: selectedSubmisi.siswaId,
+        pengumpulanId: selectedSubmisi.pengumpulanId || selectedSubmisi.siswaId,
         nilai: parseFloat(skorNilai) || 0,
         feedback: feedbackGuru || undefined,
       })

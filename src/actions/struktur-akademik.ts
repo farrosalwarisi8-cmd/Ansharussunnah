@@ -7,12 +7,13 @@ import { requireGuru, isAcademicAdminRole } from "@/lib/auth"
 import type { ActionResponse } from "@/types"
 
 /**
- * Mengambil struktur jenjang → kelas (hanya kelas aktif) sebagai sumber tunggal
- * konsisten untuk semua dropdown "Pilih Kelas" di fitur akademik
- * (ujian, tugas, materi, absensi, rapor, dll).
+ * Mengambil struktur jenjang → kelas sebagai sumber tunggal konsisten untuk
+ * semua dropdown "Pilih Kelas" di fitur akademik (ujian, tugas, materi, rapor, dll).
  *
- * Semua role akademik (GURU, SUPER_ADMIN, ADMIN_AKADEMIK) dapat melihat seluruh
- * kelas aktif secara bebas.
+ * Cakupan kelas disesuaikan dengan role pengunjung:
+ * - SUPER_ADMIN / ADMIN_AKADEMIK: seluruh kelas aktif (akses penuh).
+ * - Role.GURU: hanya kelas yang diajarnya (via GuruKelas) atau kelas yang
+ *   menjadi wali kelasnya — konsisten dengan getDaftarKelasYangDiajarGuru.
  */
 export async function getStrukturKelasSiswaAkademik(): Promise<
   ActionResponse<{
@@ -34,8 +35,26 @@ export async function getStrukturKelasSiswaAkademik(): Promise<
     const user = await requireGuru()
     const isAdmin = isAcademicAdminRole(user.role)
 
+    const jenjangWhere: Record<string, unknown> = { aktif: true }
+
+    if (!isAdmin) {
+      const guruId = user.guru?.id
+      if (!guruId) {
+        return { success: false, message: "Forbidden: Profil guru tidak ditemukan" }
+      }
+      // GURU: hanya kelas yang diajar / menjadi wali kelas
+      jenjangWhere.kelas = {
+        some: {
+          OR: [
+            { waliKelasId: guruId },
+            { guruMengajar: { some: { guruId } } },
+          ],
+        },
+      }
+    }
+
     const jenjangs = await prisma.jenjang.findMany({
-      where: { aktif: true },
+      where: jenjangWhere as never,
       orderBy: { urutan: "asc" },
       include: {
         kelas: {
@@ -78,15 +97,15 @@ export async function getMapelTersedia(
 ): Promise<ActionResponse<Array<{ id: string; nama: string }>>> {
   try {
     const user = await requireGuru()
-    if (!user.guru) {
+    const isAdmin = isAcademicAdminRole(user.role)
+    if (!isAdmin && !user.guru) {
       return { success: false, message: "Forbidden: Profil guru tidak ditemukan" }
     }
 
-    const isAdmin = isAcademicAdminRole(user.role)
     const where =
       isAdmin
         ? { kelasId }
-        : { kelasId, guruId: user.guru.id }
+        : { kelasId, guruId: user.guru!.id }
 
     const mapels = await prisma.mataPelajaran.findMany({
       where: { guruKelas: { some: where } },

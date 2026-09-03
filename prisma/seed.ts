@@ -326,9 +326,82 @@ async function main() {
   }
 
   // ========================================================
-  // 5. KATEGORI TRANSAKSI KEUANGAN
+  // 5. SISWA CONTOH (Data Uji untuk Fitur Akademik)
   // ========================================================
-  console.log("\n5. Membuat Kategori Transaksi Keuangan...")
+  console.log("\n5. Membuat Siswa Contoh...")
+
+  // Siswa contoh ditempatkan ke kelas yang diajar guru seed agar fitur akademik
+  // (absensi, rapor, ujian, tugas, materi) langsung terisi data uji.
+  const siswaData = [
+    { nama: "Muhammad Rizky Ramadhan", email: "rizky@sekolah.sch.id", kelas: "Kelas 1", jenjang: "Madrasah Ibtidaiyyah", nisn: "0123456789", nis: "1001" },
+    { nama: "Ahmad Fikri Haikal", email: "fikri@sekolah.sch.id", kelas: "Kelas 1", jenjang: "Madrasah Ibtidaiyyah", nisn: "0123456790", nis: "1002" },
+    { nama: "Abdullah Arif Rahman", email: "arif@sekolah.sch.id", kelas: "Kelas 1", jenjang: "Madrasah Ibtidaiyyah", nisn: "0123456791", nis: "1003" },
+    { nama: "Umar Faruq Akbar", email: "umar@sekolah.sch.id", kelas: "Kelas 2", jenjang: "Madrasah Ibtidaiyyah", nisn: "0123456792", nis: "2001" },
+    { nama: "Zaid bin Tsabit", email: "zaid@sekolah.sch.id", kelas: "Kelas 2", jenjang: "Madrasah Ibtidaiyyah", nisn: "0123456793", nis: "2002" },
+    { nama: "Khalid bin Walid", email: "khalid@sekolah.sch.id", kelas: "Kelas 1", jenjang: "Madrasah Mutawasithah", nisn: "0123456794", nis: "3101" },
+    { nama: "Sa'ad bin Abi Waqqash", email: "saad@sekolah.sch.id", kelas: "Kelas 1", jenjang: "Madrasah Mutawasithah", nisn: "0123456795", nis: "3102" },
+  ]
+
+  const siswaPassword = process.env.SEED_SISWA_PASSWORD || generateSecurePassword(16)
+
+  let createdSiswa = 0
+  for (const s of siswaData) {
+    // Cari kelas tujuan berdasarkan nama + jenjang
+    const kelasRecord = await prisma.kelas.findFirst({
+      where: { nama: s.kelas, jenjang: { nama: s.jenjang } },
+    })
+    if (!kelasRecord) continue
+
+    const authId = await createAuthUser(s.email, siswaPassword, s.nama, Role.SISWA)
+
+    // Idempotent: jangan buat duplikat bila sudah ada
+    const existing = await prisma.user.findFirst({
+      where: { authId, role: Role.SISWA },
+      include: { siswa: true },
+    })
+
+    if (existing) {
+      // Pastikan tetap terhubung ke kelas yang benar
+      if (existing.siswa && existing.siswa.kelasId !== kelasRecord.id) {
+        await prisma.siswa.update({
+          where: { id: existing.siswa.id },
+          data: { kelasId: kelasRecord.id },
+        })
+      }
+      continue
+    }
+
+    await prisma.user.create({
+      data: {
+        email: s.email,
+        nama: s.nama,
+        role: Role.SISWA,
+        authId,
+        mustChangePassword: true,
+        siswa: {
+          create: {
+            nisn: s.nisn,
+            nis: s.nis,
+            jenisKelamin: JenisKelamin.LAKI_LAKI,
+            agama: "Islam",
+            kelasId: kelasRecord.id,
+          },
+        },
+      },
+    })
+    createdSiswa++
+  }
+
+  if (createdSiswa > 0) {
+    console.log(`  ✔ ${createdSiswa} Siswa contoh berhasil dibuat (password sama untuk semua: ${siswaPassword})`)
+  } else {
+    console.log("  ℹ️  Siswa contoh sudah ada sebelumnya — dilewati")
+  }
+
+  // ========================================================
+  // 6. KATEGORI TRANSAKSI KEUANGAN
+  // ========================================================
+  console.log("\n6. Membuat Kategori Transaksi Keuangan...")
 
   const kategoriData = [
     { nama: "SPP Bulanan", tipe: TipeTransaksi.PEMASUKAN, deskripsi: "Pembayaran SPP rutin bulanan siswa" },

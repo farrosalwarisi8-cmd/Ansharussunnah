@@ -3,7 +3,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireGuru, requireGuruAdmin } from "@/lib/auth"
+import { requireGuru, requireGuruAdmin, isAcademicAdminRole } from "@/lib/auth"
 import {
   assignGuruKeKelasSchema,
   type AssignGuruKeKelasValues,
@@ -187,7 +187,12 @@ export async function getDaftarPengajarKelas(
 // ========================================================
 
 /**
- * Mengambil daftar semua kelas + mata pelajaran yang diajar oleh guru tertentu.
+ * Mengambil daftar semua kelas yang berhak dikelola oleh user akademik saat ini:
+ * - SUPER_ADMIN / ADMIN_AKADEMIK: seluruh kelas aktif (akses penuh).
+ * - Role.GURU: hanya kelas yang diajarnya (via GuruKelas) ATAU kelas yang
+ *   menjadi wali kelasnya.
+ * Dipakai sebagai sumber tunggal & konsisten untuk dropdown "Pilih Kelas"
+ * di semua fitur akademik (absensi, rapor, ujian, tugas, materi, dll).
  */
 export async function getDaftarKelasYangDiajarGuru(
   guruId?: string
@@ -195,13 +200,42 @@ export async function getDaftarKelasYangDiajarGuru(
   try {
     const user = await requireGuru()
 
+    const isAdmin = isAcademicAdminRole(user.role)
+
+    // Admin akademik / super admin melihat seluruh kelas aktif
+    if (isAdmin) {
+      const kelasList = await prisma.kelas.findMany({
+        where: { aktif: true },
+        include: {
+          jenjang: { select: { nama: true } },
+          _count: { select: { siswa: true } },
+        },
+        orderBy: [{ jenjang: { urutan: "asc" } }, { nama: "asc" }],
+      })
+
+      const formatted = kelasList.map((k) => ({
+        guruKelasId: null,
+        kelasId: k.id,
+        namaKelas: k.nama,
+        jenjang: k.jenjang.nama,
+        mataPelajaranId: null,
+        jumlahSiswa: k._count.siswa,
+      }))
+
+      return {
+        success: true,
+        message: "Daftar kelas berhasil dimuat",
+        data: formatted,
+      }
+    }
+
     // Jika tidak ada guruId, ambil milik sendiri
     const targetGuruId = guruId || user.guru?.id
     if (!targetGuruId) {
       return { success: false, message: "Data guru tidak ditemukan" }
     }
 
-    const kelasList = await prisma.guruKelas.findMany({
+    const guruKelasList = await prisma.guruKelas.findMany({
       where: { guruId: targetGuruId },
       include: {
         kelas: {
@@ -214,14 +248,35 @@ export async function getDaftarKelasYangDiajarGuru(
       orderBy: [{ kelas: { jenjang: { urutan: "asc" } } }, { mataPelajaranId: "asc" }],
     })
 
-    const formatted = kelasList.map((gk) => ({
-      guruKelasId: gk.id,
-      kelasId: gk.kelasId,
-      namaKelas: gk.kelas.nama,
-      jenjang: gk.kelas.jenjang.nama,
-      mataPelajaranId: gk.mataPelajaranId,
-      jumlahSiswa: gk.kelas._count.siswa,
-    }))
+    // Tambahkan kelas yang menjadi wali kelas (walau tidak mengajar mapel apa pun)
+    const taughtKelasIds = guruKelasList.map((gk) => gk.kelasId)
+    const waliKelasList = await prisma.kelas.findMany({
+      where: { aktif: true, waliKelasId: targetGuruId, id: { notIn: taughtKelasIds } },
+      include: {
+        jenjang: { select: { nama: true } },
+        _count: { select: { siswa: true } },
+      },
+      orderBy: [{ jenjang: { urutan: "asc" } }, { nama: "asc" }],
+    })
+
+    const formatted = [
+      ...guruKelasList.map((gk) => ({
+        guruKelasId: gk.id,
+        kelasId: gk.kelasId,
+        namaKelas: gk.kelas.nama,
+        jenjang: gk.kelas.jenjang.nama,
+        mataPelajaranId: gk.mataPelajaranId,
+        jumlahSiswa: gk.kelas._count.siswa,
+      })),
+      ...waliKelasList.map((k) => ({
+        guruKelasId: null,
+        kelasId: k.id,
+        namaKelas: k.nama,
+        jenjang: k.jenjang.nama,
+        mataPelajaranId: null,
+        jumlahSiswa: k._count.siswa,
+      })),
+    ]
 
     return {
       success: true,

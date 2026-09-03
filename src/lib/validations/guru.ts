@@ -12,6 +12,7 @@ export const createAkunGuruSchema = z.object({
   nip: z.string().max(30, "NIP maksimal 30 karakter").optional(),
   jabatan: z.string().max(100, "Jabatan maksimal 100 karakter").optional(),
   noHp: z.string().max(20, "Nomor HP maksimal 20 karakter").optional(),
+  isAdmin: z.boolean().optional().default(false),
 })
 
 export type CreateAkunGuruValues = z.infer<typeof createAkunGuruSchema>

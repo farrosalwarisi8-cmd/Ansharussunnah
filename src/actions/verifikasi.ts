@@ -301,7 +301,11 @@ export async function verifikasiPendaftaran(
 
       if (authOrtuError) {
         if (authOrtuError.message.includes("already been registered")) {
-          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
+          // Paginate dengan perPage besar agar lookup tidak terbatas pada 50 user
+          // pertama (listUsers default 50). Email orang tua bisa berada di halaman berikutnya.
+          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
+            perPage: 1000,
+          })
           const matched = existingUsers.users.find((u) => u.email === emailOrtu)
           if (!matched) throw new Error("Gagal memetakan akun auth orang tua")
           authOrtuId = matched.id
@@ -350,6 +354,7 @@ export async function verifikasiPendaftaran(
                 role: Role.ORANG_TUA,
                 authId: authOrtuId,
                 mustChangePassword: true,
+                aktif: true,
                 orangTua: {
                   create: {
                     noHp: pendaftaran.noHpOrangTua,
@@ -357,6 +362,13 @@ export async function verifikasiPendaftaran(
                   },
                 },
               },
+            })
+          } else if (userOrtu.aktif === false) {
+            // Reaktivasi akun orang tua yang pernah dinonaktifkan (orang tua dengan
+            // anak kedua+ yang sebelumnya dia nonaktifkan / record lama).
+            await tx.user.update({
+              where: { id: userOrtu.id },
+              data: { aktif: true },
             })
           }
 

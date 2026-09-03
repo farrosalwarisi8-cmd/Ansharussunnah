@@ -503,7 +503,7 @@ describe("Cross-Cutting — Auth & Error Handling", () => {
     expect(r3.message).toContain("Connection pool exhausted")
   })
 
-  it("requireRole harus dipanggil dengan argumen ['ADMIN_KEUANGAN'] untuk ketiga fungsi", async () => {
+  it("requireRole harus dipanggil dengan argumen ['ADMIN_KEUANGAN', 'SUPER_ADMIN'] untuk ketiga fungsi", async () => {
     setupAdmin()
     mockPembayaranSiswaFindMany.mockResolvedValue([])
     mockSiswaFindMany.mockResolvedValue([])
@@ -515,7 +515,7 @@ describe("Cross-Cutting — Auth & Error Handling", () => {
 
     expect(mockRequireRole).toHaveBeenCalledTimes(3)
     mockRequireRole.mock.calls.forEach((call: unknown[]) => {
-      expect(call[0]).toEqual(["ADMIN_KEUANGAN"])
+      expect(call[0]).toEqual(["ADMIN_KEUANGAN", "SUPER_ADMIN"])
     })
   })
 })

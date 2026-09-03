@@ -45,7 +45,7 @@ export async function createAkunGuru(
       }
     }
 
-    const { nama, email, nip, jabatan, noHp } = validated.data
+    const { nama, email, nip, jabatan, noHp, isAdmin } = validated.data
 
     // Cek duplikasi email untuk role yang sama
     const existingEmail = await prisma.user.findFirst({ where: { email, role: Role.GURU } })
@@ -92,6 +92,7 @@ export async function createAkunGuru(
           authId: authData.user!.id,
           mustChangePassword: true,
           aktif: true,
+          isAdmin: isAdmin ?? false,
         },
       })
 

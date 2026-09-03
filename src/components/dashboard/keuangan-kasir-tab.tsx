@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { CheckCircle2, XCircle, Plus, Loader2 } from "lucide-react"
-import { createTransaksiKeuangan, konfirmasiPembayaranSppManual } from "@/actions/akuntansi"
+import { createTransaksiKeuangan, batalkanTransaksiKeuangan, konfirmasiPembayaranSppManual } from "@/actions/akuntansi"
 import dynamic from "next/dynamic"
 const Dialog = dynamic(() => import("@/components/ui/dialog").then(m => m.Dialog), { ssr: false })
 const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogContent), { ssr: false })
@@ -197,7 +197,7 @@ export function KasirTab() {
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => { setCancelDialogOpen(false); setCancelTargetId(""); setCancelAlasan("") }} className="rounded-xl min-h-[40px]">Batal</Button>
-            <Button onClick={async () => { if (!cancelTargetId || !cancelAlasan.trim()) return; setCancelling(true); /* ... cancel logic ... */ setCancelling(false); setCancelDialogOpen(false) }} disabled={cancelling || cancelAlasan.length < 5} variant="destructive" className="rounded-xl min-h-[40px]">
+            <Button onClick={async () => { if (!cancelTargetId || !cancelAlasan.trim()) return; setCancelling(true); try { const result = await batalkanTransaksiKeuangan({ transaksiId: cancelTargetId, alasanPembatalan: cancelAlasan }); if (result.success) { toast({ title: "Transaksi Dibatalkan", description: result.message }); setTransaksiList((prev) => prev.filter((t) => t.id !== cancelTargetId)); setCancelDialogOpen(false); setCancelTargetId(""); setCancelAlasan(""); } else { toast({ variant: "destructive", title: "Gagal Membatalkan", description: result.message }); } } catch { toast({ variant: "destructive", title: "Gagal Membatalkan", description: "Terjadi kesalahan saat membatalkan transaksi." }); } finally { setCancelling(false); } }} disabled={cancelling || cancelAlasan.length < 5} variant="destructive" className="rounded-xl min-h-[40px]">
               {cancelling ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null} Ya, Batalkan
             </Button>
           </DialogFooter>

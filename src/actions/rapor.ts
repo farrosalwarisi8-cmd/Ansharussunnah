@@ -447,8 +447,8 @@ export async function createOrUpdateCatatanRapor(
 
     const { user, guru, roleInKelas } = await verifyGuruAksesKelas(siswa.kelas.id)
 
-    // Hanya wali kelas yang boleh menulis catatan rapor
-    if (roleInKelas !== "WALI_KELAS") {
+    // Wali kelas atau admin akademik/super admin boleh menulis catatan rapor
+    if (roleInKelas !== "WALI_KELAS" && roleInKelas !== "ADMIN") {
       return { success: false, message: "Akses ditolak: Hanya wali kelas yang dapat menulis catatan rapor" }
     }
 
@@ -516,7 +516,7 @@ export async function updateCatatanRapor(
 
     if (catatanRapor.siswa.kelas) {
       const { roleInKelas } = await verifyGuruAksesKelas(catatanRapor.siswa.kelas.id)
-      if (roleInKelas !== "WALI_KELAS") {
+      if (roleInKelas !== "WALI_KELAS" && roleInKelas !== "ADMIN") {
         return { success: false, message: "Akses ditolak: Hanya wali kelas yang dapat mengubah catatan rapor" }
       }
     }

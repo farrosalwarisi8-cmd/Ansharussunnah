@@ -259,6 +259,7 @@ export default function BuatUjianPage() {
           durasiMenit: parseInt(durasi) || 60,
           waktuMulai: waktuMulai ? new Date(waktuMulai).toISOString() : undefined,
           waktuSelesai: waktuSelesai ? new Date(waktuSelesai).toISOString() : undefined,
+          status: publish ? "PUBLISHED" : "DRAFT",
         })
 
         if (!result.success) {
@@ -341,6 +342,11 @@ export default function BuatUjianPage() {
           setLoading(false)
           return
         }
+      }
+
+      // Step 3: If creating & user chose "Publish", set status ke PUBLISHED
+      if (publish && !isEditMode && savedSoal.length > 0) {
+        await updateUjian(ujianId, { status: "PUBLISHED" })
       }
 
       toast({

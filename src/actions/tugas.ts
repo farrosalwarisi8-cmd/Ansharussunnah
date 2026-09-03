@@ -238,6 +238,7 @@ export async function getDaftarTugasGuru(kelasId: string): Promise<ActionRespons
       include: {
         periodeAjaran: { select: { nama: true } },
         dibuatOleh: { select: { nama: true } },
+        mataPelajaran: { select: { nama: true } },
         _count: { select: { pengumpulan: true } },
       },
       orderBy: { deadline: "desc" },
@@ -246,7 +247,7 @@ export async function getDaftarTugasGuru(kelasId: string): Promise<ActionRespons
     const formatted = tugasList.map((t) => ({
       id: t.id,
       judul: t.judul,
-      mataPelajaran: t.mataPelajaranId,
+      mataPelajaran: t.mataPelajaran.nama,
       deadline: t.deadline,
       periode: t.periodeAjaran.nama,
       guru: t.dibuatOleh.nama,
@@ -344,6 +345,7 @@ export async function getRekapPengumpulanTugas(
       where: { id: tugasId },
       include: {
         kelas: true,
+        mataPelajaran: { select: { nama: true } },
       },
     })
     if (!tugas) {
@@ -378,6 +380,7 @@ export async function getRekapPengumpulanTugas(
 
       return {
         siswaId: siswa.id,
+        pengumpulanId: pengumpulan?.id || null,
         nama: siswa.user.nama,
         nisn: siswa.nisn,
         status: pengumpulan
@@ -409,7 +412,7 @@ export async function getRekapPengumpulanTugas(
           id: tugas.id,
           judul: tugas.judul,
           deadline: tugas.deadline,
-          mataPelajaran: tugas.mataPelajaranId,
+          mataPelajaran: tugas.mataPelajaran.nama,
         },
         statistik: {
           totalSiswa: siswaList.length,
@@ -452,6 +455,7 @@ export async function getDaftarTugasSiswa(): Promise<ActionResponse> {
       include: {
         periodeAjaran: { select: { nama: true } },
         dibuatOleh: { select: { nama: true } },
+        mataPelajaran: { select: { nama: true } },
         pengumpulan: {
           where: { siswaId: user.siswa.id },
           select: {
@@ -477,7 +481,7 @@ export async function getDaftarTugasSiswa(): Promise<ActionResponse> {
         id: t.id,
         judul: t.judul,
         deskripsi: t.deskripsi,
-        mataPelajaran: t.mataPelajaranId,
+        mataPelajaran: t.mataPelajaran.nama,
         deadline: t.deadline,
         guru: t.dibuatOleh.nama,
         periode: t.periodeAjaran.nama,
@@ -573,34 +577,46 @@ export async function submitTugas(
     // PENTEST FIX #4: Validasi path file harus per-siswa: submission/{tugasId}/{siswaId}/
     // Ini mencegah siswa mereferensikan file milik siswa lain di folder yang sama
     // Kontrak upload dari frontend: folder = `submission/${tugasId}/${siswaId}`
+    //
+    // Duo bentuk diterima:
+    //  1) Path storage internal -> `submission/{tugasId}/{siswaId}/...` (harus diverifikasi di bucket)
+    //  2) URL eksternal (Google Drive / cloud) -> `https://...` (diterima apa adanya)
     const expectedPrefix = `submission/${tugasId}/${siswaId}/`
-    if (!urlFile.startsWith(expectedPrefix)) {
-      return {
-        success: false,
-        message: "Path file tidak valid",
+    const isInternalPath = urlFile.startsWith("submission/")
+    const isExternalUrl = /^https?:\/\//i.test(urlFile)
+
+    if (!isExternalUrl) {
+      if (!urlFile.startsWith(expectedPrefix)) {
+        return {
+          success: false,
+          message: "Path file tidak valid",
+        }
       }
-    }
-    if (urlFile.includes("..") || urlFile.includes("//")) {
-      return {
-        success: false,
-        message: "Path file mengandung karakter tidak valid",
+      if (urlFile.includes("..") || urlFile.includes("//")) {
+        return {
+          success: false,
+          message: "Path file mengandung karakter tidak valid",
+        }
       }
     }
 
     // PENTEST FIX #4: Verifikasi file di subfolder per-siswa, bukan folder umum per-tugas
-    // Ini memastikan siswa tidak bisa mereferensikan file di folder siswa lain
-    const supabaseAdmin = createSupabaseAdmin()
-    const fileName = urlFile.split("/").pop()
-    const { data: fileList } = await supabaseAdmin.storage
-      .from("tugas-siswa")
-      .list(`submission/${tugasId}/${siswaId}`)
+    // ini hanya berlaku untuk file yang di-upload ke storage internal; URL eksternal
+    // (misal Google Drive) tidak bisa diverifikasi keberadaannya di bucket.
+    if (isInternalPath) {
+      const supabaseAdmin = createSupabaseAdmin()
+      const fileName = urlFile.split("/").pop()
+      const { data: fileList } = await supabaseAdmin.storage
+        .from("tugas-siswa")
+        .list(`submission/${tugasId}/${siswaId}`)
 
-    const fileExists = fileList?.some((f) => f.name === fileName)
-    if (!fileExists) {
-      return {
-        success: false,
-        message:
-          "File jawaban tidak ditemukan di storage. Silakan upload ulang.",
+      const fileExists = fileList?.some((f) => f.name === fileName)
+      if (!fileExists) {
+        return {
+          success: false,
+          message:
+            "File jawaban tidak ditemukan di storage. Silakan upload ulang.",
+        }
       }
     }
 

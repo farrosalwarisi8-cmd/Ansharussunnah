@@ -35,7 +35,7 @@ interface PesertaRekap {
   nilaiPg: number | null
   nilaiEsai: number | null
   jawaban: Array<{
-    soal: { nomorSoal: number; tipe: string; bobot: number }
+    soal: { id: string; nomorSoal: number; tipe: string; bobot: number }
     nilaiSoal: number | null
     benar: boolean | null
     jawabanEsai?: string | null
@@ -100,12 +100,13 @@ export default function RekapHasilUjianPage() {
     try {
       const result = await beriNilaiEsai({
         pengerjaanId: selectedStudent.id,
-        penilaian: [{
-          soalId: selectedStudent.jawaban.find(j => j.soal.tipe === "ESAI")?.soal ? 
-            `soal-esai-${selectedStudent.id}` : "",
-          nilaiSoal: parseFloat(nilaiEsai) || 0,
-          catatanGuru: catatanEsai || undefined,
-        }],
+        penilaian: selectedStudent.jawaban
+          .filter((j) => j.soal.tipe === "ESAI" && j.soal.id && j.nilaiSoal === null)
+          .map((j) => ({
+            soalId: j.soal.id,
+            nilaiSoal: parseFloat(nilaiEsai) || 0,
+            catatanGuru: catatanEsai || undefined,
+          })),
       })
 
       if (result.success) {

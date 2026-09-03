@@ -10,17 +10,30 @@ import { generateBulkSpp } from "@/actions/akuntansi"
 
 export function GenerateSppTab() {
   const { toast } = useToast()
-  const [bulanGenerate, setBulanGenerate] = React.useState("April 2024")
+  const BULAN = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+  const now = new Date()
+  const tahunSekarang = now.getFullYear()
+  const [bulanGenerate, setBulanGenerate] = React.useState(`${BULAN[now.getMonth()]} ${tahunSekarang}`)
   const [nominalDefault, setNominalDefault] = React.useState("500000")
   const [generating, setGenerating] = React.useState(false)
 
   const handleGenerateSpp = async () => {
     setGenerating(true)
     try {
-      await generateBulkSpp({ bulan: 4, tahun: 2024 })
+      const [bulanNama, tahunStr] = bulanGenerate.split(" ")
+      const bulan = BULAN.indexOf(bulanNama) + 1
+      const tahun = parseInt(tahunStr, 10)
+
+      const result = await generateBulkSpp({ bulan, tahun })
+
+      if (!result.success) {
+        toast({ variant: "destructive", title: "Gagal Menerbitkan Tagihan", description: result.message })
+        return
+      }
+
       toast({ title: "Tagihan SPP Massal Terbit! 📊", description: `Tagihan bulan ${bulanGenerate} berhasil diterbitkan untuk seluruh santri aktif.` })
     } catch {
-      toast({ title: "Tagihan Terbit (Demo Mode)", description: `Tagihan SPP ${bulanGenerate} siap ditagihkan.` })
+      toast({ variant: "destructive", title: "Gagal Menerbitkan Tagihan", description: "Terjadi kesalahan saat menerbitkan tagihan SPP." })
     } finally {
       setGenerating(false)
     }
@@ -39,10 +52,9 @@ export function GenerateSppTab() {
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Bulan Tagihan</label>
             <select value={bulanGenerate} onChange={(e) => setBulanGenerate(e.target.value)} className="w-full h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-yellow-500">
-              <option value="Maret 2024">Maret 2024</option>
-              <option value="April 2024">April 2024</option>
-              <option value="Mei 2024">Mei 2024</option>
-              <option value="Juni 2024">Juni 2024</option>
+              {BULAN.map((b) => (
+                <option key={b} value={`${b} ${tahunSekarang}`}>{b} {tahunSekarang}</option>
+              ))}
             </select>
           </div>
           <div className="space-y-1.5">

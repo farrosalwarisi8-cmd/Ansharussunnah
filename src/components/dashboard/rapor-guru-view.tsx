@@ -3,19 +3,20 @@
 import * as React from "react"
 import { createOrUpdateCatatanRapor, getRekapRaporKelas } from "@/actions/rapor"
 import { getPeriodeAjaranAktif } from "@/actions/periode-ajaran"
-import { getStrukturKelasSiswaAkademik } from "@/actions/struktur-akademik"
+import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
 import { getSiswaByKelas } from "@/actions/absensi"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { EmptyState } from "@/components/ui/empty-state"
 import { Loader2, BarChart2, Save } from "lucide-react"
 
-type JenjangOption = {
-  id: string
-  nama: string
-  urutan: number
-  kelas: Array<{ id: string; nama: string }>
+type KelasItem = {
+  kelasId: string
+  namaKelas: string
+  jenjang: string
+  jumlahSiswa: number
 }
 
 type SiswaOption = {
@@ -26,9 +27,9 @@ type SiswaOption = {
 
 export function GuruRaporView() {
   const { toast } = useToast()
-  const [jenjang, setJenjang] = React.useState("")
-  const [struktur, setStruktur] = React.useState<JenjangOption[]>([])
+  const [kelasList, setKelasList] = React.useState<KelasItem[]>([])
   const [kelasId, setKelasId] = React.useState("")
+  const [loadingKelas, setLoadingKelas] = React.useState(true)
   const [periodeAjaranId, setPeriodeAjaranId] = React.useState("")
 
   const [students, setStudents] = React.useState<SiswaOption[]>([])
@@ -54,21 +55,28 @@ export function GuruRaporView() {
   } | null>(null)
   const [loadingRekap, setLoadingRekap] = React.useState(false)
 
-  // Muat struktur jenjang → kelas & periode aktif
+  // Muat daftar kelas yang diajar guru (konsisten dengan absensi/ujian/tugas) & periode aktif
   React.useEffect(() => {
     let mounted = true
     async function load() {
-      const [strukturRes, periodeRes] = await Promise.all([
-        getStrukturKelasSiswaAkademik(),
+      setLoadingKelas(true)
+      const [kelasRes, periodeRes] = await Promise.all([
+        getDaftarKelasYangDiajarGuru(),
         getPeriodeAjaranAktif(),
       ])
       if (!mounted) return
-      if (strukturRes.success && strukturRes.data) {
-        setStruktur(strukturRes.data.jenjangList)
+      if (kelasRes.success && kelasRes.data) {
+        const data = kelasRes.data as KelasItem[]
+        const unik = Array.from(new Map(data.map((k) => [k.kelasId, k])).values())
+        setKelasList(unik)
+        if (unik.length > 0) {
+          setKelasId(unik[0].kelasId)
+        }
       }
       if (periodeRes.success && periodeRes.data?.id) {
         setPeriodeAjaranId(periodeRes.data.id)
       }
+      setLoadingKelas(false)
     }
     load()
     return () => {
@@ -76,35 +84,38 @@ export function GuruRaporView() {
     }
   }, [])
 
-  const handleJenjangChange = (jenjangId: string) => {
-    setJenjang(jenjangId)
-    setKelasId("")
-    setStudents([])
-    setSelectedStudentId("")
-    setShowRekap(false)
-    const jn = struktur.find((j) => j.id === jenjangId)
-    if (jn && jn.kelas.length > 0) {
-      handleKelasChange(jn.kelas[0].id)
-    }
+  const handleKelasChange = (newKelasId: string) => {
+    setKelasId(newKelasId)
   }
 
-  const handleKelasChange = async (newKelasId: string) => {
-    setKelasId(newKelasId)
+  // Muat daftar siswa otomatis saat kelas berubah (termasuk pemilihan awal)
+  React.useEffect(() => {
+    if (!kelasId) {
+      setStudents([])
+      setSelectedStudentId("")
+      setShowRekap(false)
+      return
+    }
+    let mounted = true
     setStudents([])
     setSelectedStudentId("")
     setShowRekap(false)
-    if (!newKelasId) return
-    const res = await getSiswaByKelas(newKelasId)
-    if (res.success && res.data) {
-      const list = res.data as SiswaOption[]
-      setStudents(list)
-      if (list.length > 0) {
-        setSelectedStudentId(list[0].siswaId)
+    async function loadSiswa() {
+      const res = await getSiswaByKelas(kelasId)
+      if (!mounted) return
+      if (res.success && res.data) {
+        const list = res.data as SiswaOption[]
+        setStudents(list)
+        if (list.length > 0) {
+          setSelectedStudentId(list[0].siswaId)
+        }
       }
     }
-  }
-
-  const selectedJenjang = struktur.find((j) => j.id === jenjang)
+    loadSiswa()
+    return () => {
+      mounted = false
+    }
+  }, [kelasId])
 
   const handleSaveCatatan = async () => {
     if (!selectedStudentId || !periodeAjaranId) {
@@ -154,36 +165,41 @@ export function GuruRaporView() {
     }
   }
 
+  if (loadingKelas) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
+        <span className="ml-3 text-sm text-slate-500">Memuat daftar kelas...</span>
+      </div>
+    )
+  }
+
+  if (kelasList.length === 0) {
+    return (
+      <EmptyState
+        title="Belum Ada Kelas"
+        description="Anda belum ditugaskan mengajar di kelas manapun."
+      />
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Kelas & Periode Selector */}
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
-        <CardContent className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Jenjang</label>
-            <select
-              value={jenjang}
-              onChange={(e) => handleJenjangChange(e.target.value)}
-              className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-yellow-500"
-            >
-              <option value="">— Pilih Jenjang —</option>
-              {struktur.map((j) => (
-                <option key={j.id} value={j.id}>{j.nama}</option>
-              ))}
-            </select>
-          </div>
-
+        <CardContent className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Kelas</label>
             <select
-              value={kelasId}
+              value={kelasId || ""}
               onChange={(e) => handleKelasChange(e.target.value)}
-              disabled={!jenjang}
-              className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-yellow-500 disabled:bg-slate-50"
+              className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-yellow-500"
             >
               <option value="">— Pilih Kelas —</option>
-              {selectedJenjang?.kelas.map((k) => (
-                <option key={k.id} value={k.id}>Kelas {k.nama}</option>
+              {kelasList.map((k) => (
+                <option key={k.kelasId} value={k.kelasId}>
+                  {k.namaKelas} ({k.jumlahSiswa} siswa)
+                </option>
               ))}
             </select>
           </div>

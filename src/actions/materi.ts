@@ -86,22 +86,34 @@ export async function createMateri(
     }
 
     // Validasi path file jika ada urlFile
+    // Dua bentuk diterima:
+    //  1) Path storage internal -> `materi/{kelasId}/...` (diverifikasi di bucket)
+    //  2) URL eksternal (Google Drive / cloud) -> `https://...` (diterima apa adanya)
     if (urlFile) {
       const expectedPrefix = `materi/${kelasId}/`
-      if (!urlFileCheck(urlFile, expectedPrefix)) {
+      const isInternalPath = urlFile.startsWith("materi/")
+      const isExternalUrl = /^https?:\/\//i.test(urlFile)
+
+      if (!isInternalPath && !isExternalUrl) {
         return { success: false, message: "Struktur lokasi berkas tidak valid" }
       }
 
-      // Verifikasi file ada di Supabase Storage
-      const supabaseAdmin = createSupabaseAdmin()
-      const fileName = urlFile.split("/").pop()
-      const { data: fileList } = await supabaseAdmin.storage
-        .from("materi")
-        .list(`materi/${kelasId}`)
+      if (isInternalPath) {
+        if (!urlFileCheck(urlFile, expectedPrefix)) {
+          return { success: false, message: "Struktur lokasi berkas tidak valid" }
+        }
 
-      const fileExists = fileList?.some((f) => f.name === fileName)
-      if (!fileExists) {
-        return { success: false, message: "Berkas materi tidak ditemukan di server" }
+        // Verifikasi file ada di Supabase Storage
+        const supabaseAdmin = createSupabaseAdmin()
+        const fileName = urlFile.split("/").pop()
+        const { data: fileList } = await supabaseAdmin.storage
+          .from("materi")
+          .list(`materi/${kelasId}`)
+
+        const fileExists = fileList?.some((f) => f.name === fileName)
+        if (!fileExists) {
+          return { success: false, message: "Berkas materi tidak ditemukan di server" }
+        }
       }
     }
 
@@ -161,7 +173,12 @@ export async function updateMateri(
     // Validasi path file baru jika diubah
     if (payload.urlFile) {
       const expectedPrefix = `materi/${materi.kelasId}/`
-      if (!urlFileCheck(payload.urlFile, expectedPrefix)) {
+      const isInternalPath = payload.urlFile.startsWith("materi/")
+      const isExternalUrl = /^https?:\/\//i.test(payload.urlFile)
+      if (isInternalPath && !urlFileCheck(payload.urlFile, expectedPrefix)) {
+        return { success: false, message: "Struktur lokasi berkas tidak valid" }
+      }
+      if (!isInternalPath && !isExternalUrl) {
         return { success: false, message: "Struktur lokasi berkas tidak valid" }
       }
     }
