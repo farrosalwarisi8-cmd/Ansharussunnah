@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-function ChildCardGrid({ children, onSelect }: { children: ChildStudent[]; onSelect: (c: ChildStudent) => void }) {
+function ChildCardGrid({ childList, onSelect }: { childList: ChildStudent[]; onSelect: (c: ChildStudent) => void }) {
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
@@ -24,12 +24,12 @@ function ChildCardGrid({ children, onSelect }: { children: ChildStudent[]; onSel
         </div>
         <h2 className="text-xl font-extrabold text-slate-800">Pilih Santri yang Ingin Dipantau</h2>
         <p className="text-sm text-slate-500 max-w-md mx-auto">
-          Anda memiliki {children.length} santri terdaftar. Pilih salah satu untuk melihat data akademiknya.
+          Anda memiliki {childList.length} santri terdaftar. Pilih salah satu untuk melihat data akademiknya.
         </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {children.map((child) => (
+        {childList.map((child) => (
           <button
             key={child.id}
             onClick={() => onSelect(child)}
@@ -209,7 +209,7 @@ export function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildS
 
   // Belum pilih anak → tampilkan card grid
   if (!selectedChild) {
-    return <ChildCardGrid children={children} onSelect={setSelectedChild} />
+    return <ChildCardGrid childList={children} onSelect={setSelectedChild} />
   }
 
   // Sudah pilih → tampilkan statistik
