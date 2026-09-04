@@ -33,7 +33,7 @@ export async function getStrukturKelasSiswaAkademik(): Promise<
 > {
   try {
     const user = await requireGuru()
-    const isAdmin = isAcademicAdminRole(user.role)
+    const isAdmin = isAcademicAdminRole(user.role) || user.isAdmin
 
     const jenjangWhere: Record<string, unknown> = { aktif: true }
 

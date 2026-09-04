@@ -41,19 +41,20 @@ export async function verifyGuruAksesKelas(
   const mapelFilter = normalizeMapelFilter(mataPelajaran ?? "")
 
   // Admin akademik / super admin bebas mengelola semua kelas
-  if (isAcademicAdminRole(user.role)) {
+  if (isAcademicAdminRole(user.role) || user.isAdmin) {
     if (!user.guru) {
       throw new Error("Forbidden: Profil guru tidak ditemukan")
     }
 
-    // Bila mapel diberikan, pastikan mapelnya valid & ada di kelas tsb
+    // Admin dapat memakai mapel yang terdaftar di master mapel meskipun belum
+    // memiliki baris penugasan GuruKelas.
     if (mapelFilter) {
-      const mapelDiKelas = await prisma.guruKelas.findFirst({
-        where: { kelasId, mataPelajaran: mapelFilter },
+      const mapel = await prisma.mataPelajaran.findFirst({
+        where: { ...mapelFilter, aktif: true },
       })
-      if (!mapelDiKelas) {
+      if (!mapel) {
         throw new Error(
-          `Mata pelajaran "${mataPelajaran}" tidak terdaftar di kelas ini`
+          `Mata pelajaran "${mataPelajaran}" tidak ditemukan`
         )
       }
     }
@@ -107,7 +108,7 @@ export async function getMapelTersediaUntukKelas(
 ): Promise<{ id: string; nama: string }[]> {
   const user = await requireGuru()
 
-  if (isAcademicAdminRole(user.role)) {
+  if (isAcademicAdminRole(user.role) || user.isAdmin) {
     const mapels = await prisma.mataPelajaran.findMany({
       where: { aktif: true },
       select: { id: true, nama: true },

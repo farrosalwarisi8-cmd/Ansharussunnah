@@ -200,7 +200,7 @@ export async function getDaftarKelasYangDiajarGuru(
   try {
     const user = await requireGuru()
 
-    const isAdmin = isAcademicAdminRole(user.role)
+    const isAdmin = isAcademicAdminRole(user.role) || user.isAdmin
 
     // Admin akademik / super admin melihat seluruh kelas aktif
     if (isAdmin) {

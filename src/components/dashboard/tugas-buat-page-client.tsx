@@ -52,8 +52,7 @@ export default function BuatTugasPage() {
 
     setLoading(true)
     try {
-      // Direct call Server Action createTugas
-      await createTugas({
+      const result = await createTugas({
         judul,
         deskripsi,
         kelasId,
@@ -63,6 +62,15 @@ export default function BuatTugasPage() {
         lampiranUrl: fileUrl || undefined,
       })
 
+      if (!result.success) {
+        toast({
+          variant: "destructive",
+          title: "Gagal Membuat Tugas",
+          description: result.message || "Data tugas tidak valid.",
+        })
+        return
+      }
+
       toast({
         title: "Tugas Berhasil Dibuat! 🎉",
         description: `Tugas "${judul}" telah diterbitkan untuk santri.`,
@@ -70,10 +78,10 @@ export default function BuatTugasPage() {
       router.push("/dashboard/tugas")
     } catch {
       toast({
-        title: "Tugas Berhasil Dibuat (Demo Mode)",
-        description: `Tugas "${judul}" telah aktif.`,
+        variant: "destructive",
+        title: "Gagal Membuat Tugas",
+        description: "Terjadi kesalahan saat menyimpan tugas.",
       })
-      router.push("/dashboard/tugas")
     } finally {
       setLoading(false)
     }
