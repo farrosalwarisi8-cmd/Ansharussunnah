@@ -288,7 +288,7 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
 
     try {
       const timestamp = Date.now()
-      const tempFolder = `pendaftaran/temp-${timestamp}`
+      const tempFolder = `dokumen-pendaftaran/pendaftaran/temp-${timestamp}`
 
       let dokKKPath = ""
       let dokAktePath = ""

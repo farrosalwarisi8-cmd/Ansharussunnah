@@ -18,7 +18,7 @@
 | `tugas-siswa` | Submission tugas & lampiran instruksi guru | Siswa (submission), Guru (lampiran) |
 | `nota` | Bukti transaksi keuangan non-SPP | Admin Keuangan saja |
 | `materi` | Materi pembelajaran (file, PDF, dokumen) | Guru (upload materi) |
-| `dokumen-pendaftaran` | Dokumen pendaftaran (KK, akte lahir, foto) | Calon siswa (authenticated) |
+| `dokumen-pendaftaran` | Dokumen pendaftaran (KK, akte lahir, foto) | Calon siswa (public form) |
 
 ---
 
@@ -323,7 +323,7 @@ USING (
 ## Bucket: `dokumen-pendaftaran`
 
 **Konteks:** Calon siswa upload dokumen pendaftaran (Kartu Keluarga, Akte Lahir, Foto).
-File disimpan di path `dokumen-pendaftaran/{pendaftaranId}/{randomFile}`.
+File disimpan di path `dokumen-pendaftaran/pendaftaran/{tempId}/{randomFile}`.
 
 ```sql
 -- =============================================
@@ -333,7 +333,7 @@ File disimpan di path `dokumen-pendaftaran/{pendaftaranId}/{randomFile}`.
 -- PendaftaranId adalah UUID yang tidak bisa ditebak.
 CREATE POLICY "Calon siswa dapat upload dokumen pendaftaran"
 ON storage.objects FOR INSERT
-TO authenticated
+TO anon, authenticated
 WITH CHECK (
   bucket_id = 'dokumen-pendaftaran'
   AND (storage.foldername(name))[1] = 'dokumen-pendaftaran'

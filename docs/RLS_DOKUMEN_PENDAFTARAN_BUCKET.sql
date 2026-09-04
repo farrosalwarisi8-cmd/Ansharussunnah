@@ -6,7 +6,7 @@
 -- Pastikan bucket 'dokumen-pendaftaran' sudah dibuat di
 -- Supabase Dashboard → Storage dan toggle "Enable RLS" sudah aktif.
 --
--- Struktur path: dokumen-pendaftaran/{pendaftaranId}/{randomFile}
+-- Struktur path: dokumen-pendaftaran/pendaftaran/{tempId}/{randomFile}
 -- =====================================================
 
 -- =============================================
@@ -17,7 +17,7 @@
 -- PendaftaranId adalah UUID yang tidak bisa ditebak.
 CREATE POLICY "Calon siswa dapat upload dokumen pendaftaran"
 ON storage.objects FOR INSERT
-TO authenticated
+TO anon, authenticated
 WITH CHECK (
   bucket_id = 'dokumen-pendaftaran'
   AND (storage.foldername(name))[1] = 'dokumen-pendaftaran'
