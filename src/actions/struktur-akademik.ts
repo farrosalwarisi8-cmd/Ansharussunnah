@@ -99,9 +99,29 @@ export async function getMapelTersedia(
     const user = await requireGuru()
     const isAdmin = isAcademicAdminRole(user.role)
 
-    // Admin akademik / super admin: semua mapel aktif tersedia untuk kelas mana pun,
-    // tanpa harus melalui penugasan GuruKelas terlebih dahulu.
+    // Admin akademik / super admin: semua mapel aktif yang ditetapkan untuk kelas ini
+    // (melalui MapelKelas) tersedia. Jika belum ada MapelKelas, tampilkan semua mapel aktif
+    // sebagai fallback untuk backward compatibility.
     if (isAdmin) {
+      // Cek apakah ada mapel yang ditetapkan via MapelKelas untuk kelas ini
+      const mapelViaKelas = await prisma.mataPelajaran.findMany({
+        where: {
+          aktif: true,
+          mapelKelas: { some: { kelasId } },
+        },
+        select: { id: true, nama: true },
+        orderBy: { nama: "asc" },
+      })
+
+      if (mapelViaKelas.length > 0) {
+        return {
+          success: true,
+          message: "Daftar mata pelajaran tersedia untuk kelas ini",
+          data: mapelViaKelas,
+        }
+      }
+
+      // Fallback: jika belum ada MapelKelas, tampilkan semua mapel aktif
       const mapels = await prisma.mataPelajaran.findMany({
         where: { aktif: true },
         select: { id: true, nama: true },
@@ -115,13 +135,18 @@ export async function getMapelTersedia(
       }
     }
 
-    // Role.GURU: hanya mapel yang diajarnya di kelas tersebut (dari GuruKelas).
+    // Role.GURU: hanya mapel yang diajarnya di kelas tersebut (dari GuruKelas)
+    // DAN yang ditetapkan untuk kelas tersebut (dari MapelKelas, jika ada).
     if (!user.guru) {
       return { success: false, message: "Forbidden: Profil guru tidak ditemukan" }
     }
 
     const mapels = await prisma.mataPelajaran.findMany({
-      where: { guruKelas: { some: { kelasId, guruId: user.guru.id } } },
+      where: {
+        aktif: true,
+        guruKelas: { some: { kelasId, guruId: user.guru.id } },
+        mapelKelas: { some: { kelasId } },
+      },
       select: { id: true, nama: true },
       orderBy: { nama: "asc" },
     })

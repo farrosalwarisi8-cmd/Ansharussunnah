@@ -28,7 +28,6 @@ export function KasirTab() {
   const [savingTrx, setSavingTrx] = React.useState(false)
 
   // Manual Payment state
-  const [isManualPayOpen, setIsManualPayOpen] = React.useState(false)
   const [manualTagihanId, setManualTagihanId] = React.useState("")
   const [manualNominal, setManualNominal] = React.useState("")
   const [manualMetode, setManualMetode] = React.useState("TUNAI")
@@ -66,7 +65,6 @@ export function KasirTab() {
       const result = await konfirmasiPembayaranSppManual({ tagihanId: manualTagihanId, nominalDibayar: parseFloat(manualNominal), metodeBayar: manualMetode, catatan: manualCatatan || "Pembayaran tunai/manual" })
       if (result.success) {
         toast({ title: "Pembayaran Manual Tercatat! 💰", description: result.message })
-        setIsManualPayOpen(false)
         setManualTagihanId("")
         setManualNominal("")
         setManualCatatan("")

@@ -14,7 +14,7 @@ import {
   getDaftarKelasYangDiajarGuru,
 } from "@/actions/guru-kelas"
 import { getDaftarGuru } from "@/actions/guru"
-import { getMapelAktif } from "@/actions/mapel"
+import { getMapelTersedia } from "@/actions/struktur-akademik"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -70,8 +70,9 @@ export default function PengajarKelasPage() {
   const [mataPelajaran, setMataPelajaran] = React.useState("")
   const [submitting, setSubmitting] = React.useState(false)
 
-  // Data master mata pelajaran
-  const [mapelOptions, setMapelOptions] = React.useState<Array<{ id: string; kode: string; nama: string }>>([])
+  // Data mata pelajaran untuk kelas ini
+  const [mapelOptions, setMapelOptions] = React.useState<Array<{ id: string; nama: string }>>([])
+  const [mapelLoading, setMapelLoading] = React.useState(false)
 
   // Confirm Delete Dialog
   const [deleteDialog, setDeleteDialog] = React.useState<{
@@ -84,11 +85,10 @@ export default function PengajarKelasPage() {
   React.useEffect(() => {
     async function loadData() {
       try {
-        const [pengajarRes, guruRes, kelasRes, mapelRes] = await Promise.all([
+        const [pengajarRes, guruRes, kelasRes] = await Promise.all([
           getDaftarPengajarKelas(kelasId),
           getDaftarGuru(),
           getDaftarKelasYangDiajarGuru(),
-          getMapelAktif(),
         ])
 
         if (pengajarRes.success && Array.isArray(pengajarRes.data)) {
@@ -121,9 +121,13 @@ export default function PengajarKelasPage() {
           }
         }
 
+        // Load mapel tersedia untuk kelas ini (berdasarkan MapelKelas)
+        setMapelLoading(true)
+        const mapelRes = await getMapelTersedia(kelasId)
         if (mapelRes.success && Array.isArray(mapelRes.data)) {
           setMapelOptions(mapelRes.data)
         }
+        setMapelLoading(false)
       } catch {
         // Silently handle - demo mode
       } finally {
@@ -416,22 +420,28 @@ export default function PengajarKelasPage() {
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
                 Mata Pelajaran *
               </label>
-              <select
-                value={mataPelajaran}
-                onChange={(e) => setMataPelajaran(e.target.value)}
-                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-yellow-500"
-                required
-              >
-                <option value="">— Pilih Mata Pelajaran —</option>
-                {mapelOptions.map((m) => (
-                  <option key={m.id} value={m.nama}>
-                    {m.kode ? `${m.kode} — ${m.nama}` : m.nama}
-                  </option>
-                ))}
-              </select>
-              {mapelOptions.length === 0 && (
+              {mapelLoading ? (
+                <div className="flex items-center gap-2 h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-400">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Memuat mata pelajaran...
+                </div>
+              ) : (
+                <select
+                  value={mataPelajaran}
+                  onChange={(e) => setMataPelajaran(e.target.value)}
+                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-yellow-500"
+                  required
+                >
+                  <option value="">— Pilih Mata Pelajaran —</option>
+                  {mapelOptions.map((m) => (
+                    <option key={m.id} value={m.nama}>
+                      {m.nama}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {mapelOptions.length === 0 && !mapelLoading && (
                 <p className="text-[11px] text-amber-600">
-                  Belum ada mata pelajaran yang terdaftar. Tambahkan melalui menu Master Data Mata Pelajaran.
+                  Belum ada mata pelajaran yang ditetapkan untuk kelas ini. Atur melalui menu Master Data Mata Pelajaran (pilih kelas yang tersedia).
                 </p>
               )}
             </div>

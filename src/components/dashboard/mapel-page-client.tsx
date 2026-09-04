@@ -9,6 +9,8 @@ import {
   updateMapel,
   deleteMapel,
   toggleMapelAktif,
+  getJenjangList,
+  getKelasByJenjang,
 } from "@/actions/mapel"
 
 import { useToast } from "@/hooks/use-toast"
@@ -31,7 +33,10 @@ interface MapelItem {
   kode: string
   nama: string
   kelompok: string | null
+  jenjangId: string | null
+  jenjangNama: string | null
   aktif: boolean
+  kelasList: Array<{ id: string; nama: string }>
   count: {
     guruKelas: number
     ujian: number
@@ -53,7 +58,13 @@ export default function MapelPage() {
   const [nama, setNama] = React.useState("")
   const [kode, setKode] = React.useState("")
   const [kelompok, setKelompok] = React.useState("")
+  const [jenjangId, setJenjangId] = React.useState<string | null>(null)
+  const [selectedKelasIds, setSelectedKelasIds] = React.useState<string[]>([])
   const [loading, setLoading] = React.useState(false)
+
+  const [jenjangList, setJenjangList] = React.useState<Array<{ id: string; nama: string; urutan: number }>>([])
+  const [kelasOptions, setKelasOptions] = React.useState<Array<{ id: string; nama: string }>>([])
+  const [kelasLoading, setKelasLoading] = React.useState(false)
 
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   const [deleteTarget, setDeleteTarget] = React.useState<MapelItem | null>(null)
@@ -70,7 +81,10 @@ export default function MapelPage() {
           kode: string
           nama: string
           kelompok: string | null
+          jenjangId: string | null
+          jenjangNama: string | null
           aktif: boolean
+          kelasList: Array<{ id: string; nama: string }>
           _count: {
             guruKelas: number
             ujian: number
@@ -83,7 +97,10 @@ export default function MapelPage() {
           kode: m.kode,
           nama: m.nama,
           kelompok: m.kelompok,
+          jenjangId: m.jenjangId,
+          jenjangNama: m.jenjangNama,
           aktif: m.aktif,
+          kelasList: m.kelasList,
           count: m._count,
         }))
         setMapelList(mapped)
@@ -95,17 +112,77 @@ export default function MapelPage() {
 
   React.useEffect(() => {
     async function init() {
-      await fetchData()
+      const [mapelRes, jenjangRes] = await Promise.all([
+        getAdminMapelList(),
+        getJenjangList(),
+      ])
+      if (mapelRes.success && Array.isArray(mapelRes.data)) {
+        const mapped: MapelItem[] = (mapelRes.data as Array<{
+          id: string
+          kode: string
+          nama: string
+          kelompok: string | null
+          jenjangId: string | null
+          jenjangNama: string | null
+          aktif: boolean
+          kelasList: Array<{ id: string; nama: string }>
+          _count: {
+            guruKelas: number
+            ujian: number
+            tugas: number
+            materi: number
+            nilaiRapor: number
+          }
+        }>).map((m) => ({
+          id: m.id,
+          kode: m.kode,
+          nama: m.nama,
+          kelompok: m.kelompok,
+          jenjangId: m.jenjangId,
+          jenjangNama: m.jenjangNama,
+          aktif: m.aktif,
+          kelasList: m.kelasList,
+          count: m._count,
+        }))
+        setMapelList(mapped)
+      }
+      if (jenjangRes.success && Array.isArray(jenjangRes.data)) {
+        setJenjangList(jenjangRes.data)
+      }
       setPageLoading(false)
     }
     init()
-  }, [fetchData])
+  }, [])
+
+  // Fetch kelas when jenjang changes in form
+  React.useEffect(() => {
+    if (!jenjangId) {
+      setKelasOptions([])
+      setSelectedKelasIds([])
+      return
+    }
+    let cancelled = false
+    setKelasLoading(true)
+    getKelasByJenjang(jenjangId).then((res) => {
+      if (!cancelled) {
+        if (res.success && Array.isArray(res.data)) {
+          setKelasOptions(res.data)
+        } else {
+          setKelasOptions([])
+        }
+        setKelasLoading(false)
+      }
+    })
+    return () => { cancelled = true }
+  }, [jenjangId])
 
   const openAdd = () => {
     setEditMapel(null)
     setNama("")
     setKode("")
     setKelompok("")
+    setJenjangId(null)
+    setSelectedKelasIds([])
     setIsDialogOpen(true)
   }
 
@@ -114,6 +191,8 @@ export default function MapelPage() {
     setNama(m.nama)
     setKode(m.kode)
     setKelompok(m.kelompok || "")
+    setJenjangId(m.jenjangId || null)
+    setSelectedKelasIds(m.kelasList.map((k) => k.id))
     setIsDialogOpen(true)
   }
 
@@ -129,12 +208,16 @@ export default function MapelPage() {
           nama: nama.trim(),
           kode: kode.trim().toUpperCase(),
           kelompok: kelompok.trim() || null,
+          jenjangId,
+          kelasIds: selectedKelasIds,
         })
       } else {
         result = await createMapel({
           nama: nama.trim(),
           kode: kode.trim().toUpperCase(),
           kelompok: kelompok.trim() || null,
+          jenjangId: jenjangId || undefined,
+          kelasIds: selectedKelasIds,
         })
       }
 
@@ -149,6 +232,8 @@ export default function MapelPage() {
         setNama("")
         setKode("")
         setKelompok("")
+        setJenjangId(null)
+        setSelectedKelasIds([])
       } else {
         toast({ title: "Gagal", description: result.message, variant: "destructive" })
       }
@@ -204,7 +289,8 @@ export default function MapelPage() {
       (m) =>
         m.nama.toLowerCase().includes(q) ||
         m.kode.toLowerCase().includes(q) ||
-        (m.kelompok || "").toLowerCase().includes(q)
+        (m.kelompok || "").toLowerCase().includes(q) ||
+        (m.jenjangNama || "").toLowerCase().includes(q)
     )
   }, [mapelList, search])
 
@@ -335,11 +421,26 @@ export default function MapelPage() {
               </CardHeader>
 
               <CardContent className="p-5 pt-2">
+                {m.jenjangNama && (
+                  <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5 mb-1">
+                    <Tag className="h-3 w-3 text-blue-600" />
+                    Jenjang: <strong className="text-slate-700">{m.jenjangNama}</strong>
+                  </p>
+                )}
                 {m.kelompok && (
-                  <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5 mb-3">
+                  <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5 mb-1">
                     <Tag className="h-3 w-3 text-yellow-600" />
                     Kelompok: <strong className="text-slate-700">{m.kelompok}</strong>
                   </p>
+                )}
+                {m.kelasList.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2 mb-3">
+                    {m.kelasList.map((k) => (
+                      <span key={k.id} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                        {k.nama}
+                      </span>
+                    ))}
+                  </div>
                 )}
 
                 <div className="flex flex-wrap gap-1.5 text-[11px] font-semibold text-slate-600">
@@ -433,6 +534,66 @@ export default function MapelPage() {
                 Opsional. Kosongkan jika tidak termasuk kelompok tertentu.
               </p>
             </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                Jenjang
+              </label>
+              <select
+                value={jenjangId || ""}
+                onChange={(e) => setJenjangId(e.target.value || null)}
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white text-sm px-3 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500"
+              >
+                <option value="">-- Pilih Jenjang --</option>
+                {jenjangList.map((j) => (
+                  <option key={j.id} value={j.id}>{j.nama}</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-slate-400">
+                Pilih jenjang untuk mata pelajaran ini.
+              </p>
+            </div>
+
+            {jenjangId && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                  Kelas Tersedia
+                </label>
+                {kelasLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Memuat kelas...
+                  </div>
+                ) : kelasOptions.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-2">Tidak ada kelas aktif untuk jenjang ini.</p>
+                ) : (
+                  <div className="max-h-36 overflow-y-auto rounded-xl border border-slate-200 p-2 space-y-1">
+                    {kelasOptions.map((k) => (
+                      <label
+                        key={k.id}
+                        className="flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg px-2 py-1.5 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedKelasIds.includes(k.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedKelasIds((prev) => [...prev, k.id])
+                            } else {
+                              setSelectedKelasIds((prev) => prev.filter((id) => id !== k.id))
+                            }
+                          }}
+                          className="rounded border-slate-300 text-yellow-500 focus:ring-yellow-500/20"
+                        />
+                        <span className="text-xs font-medium">{k.nama}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[11px] text-slate-400">
+                  Pilih kelas yang bisa menggunakan mata pelajaran ini.
+                </p>
+              </div>
+            )}
 
             <DialogFooter className="gap-2 sm:gap-0 pt-2">
               <Button

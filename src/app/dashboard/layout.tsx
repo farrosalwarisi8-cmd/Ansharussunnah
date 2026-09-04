@@ -38,12 +38,19 @@ export default async function DashboardLayout({
     try {
       const parentRelations = await prisma.parentStudent.findMany({
         where: { orangTuaId: user.orangTua.id },
-        include: {
+        select: {
           siswa: {
-            include: {
-              user: true,
+            select: {
+              id: true,
+              userId: true,
+              nisn: true,
+              nis: true,
+              user: { select: { nama: true, avatar: true } },
               kelas: {
-                include: { jenjang: true },
+                select: {
+                  nama: true,
+                  jenjang: { select: { nama: true } },
+                },
               },
             },
           },

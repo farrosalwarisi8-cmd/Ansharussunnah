@@ -269,13 +269,16 @@ model ParentStudent {
 // ============================================
 
 model MataPelajaran {
-  id       String  @id @default(cuid())
-  kode     String  @unique // Cth: MTK, BIN
-  nama     String  // Cth: Matematika, B. Indonesia
-  kelompok String? // Cth: A (Wajib), B (Peminatan)
-  aktif    Boolean @default(true)
+  id         String   @id @default(cuid())
+  kode       String   @unique // Cth: MTK, BIN
+  nama       String   // Cth: Matematika, B. Indonesia
+  kelompok   String?  // Cth: A (Wajib), B (Peminatan)
+  jenjangId  String?  @map("jenjang_id")
+  aktif      Boolean  @default(true)
 
+  jenjang    Jenjang?  @relation(fields: [jenjangId], references: [id], onDelete: SetNull)
   guruKelas  GuruKelas[]
+  mapelKelas MapelKelas[]
   ujian      Ujian[]
   tugas      Tugas[]
   materi     MateriPembelajaran[]
@@ -284,6 +287,7 @@ model MataPelajaran {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([jenjangId])
   @@map("mata_pelajarans")
 }
 
@@ -294,8 +298,9 @@ model Jenjang {
   aktif           Boolean @default(true)
   tarifSppBulanan Decimal? @map("tarif_spp_bulanan") @db.Decimal(12, 2)
 
-  kelas       Kelas[]
-  pendaftaran Pendaftaran[]
+  kelas             Kelas[]
+  pendaftaran       Pendaftaran[]
+  mataPelajaran     MataPelajaran[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -311,12 +316,13 @@ model Kelas {
   kapasitas   Int     @default(30)
   aktif       Boolean @default(true)
 
-  jenjang   Jenjang @relation(fields: [jenjangId], references: [id], onDelete: Cascade)
-  waliKelas Guru?   @relation("WaliKelas", fields: [waliKelasId], references: [id])
+  jenjang       Jenjang     @relation(fields: [jenjangId], references: [id], onDelete: Cascade)
+  waliKelas     Guru?       @relation("WaliKelas", fields: [waliKelasId], references: [id])
 
   siswa                   Siswa[]
   pendaftaran             Pendaftaran[]
   guruMengajar            GuruKelas[]
+  mapelTersedia           MapelKelas[]
   ujian                   Ujian[]
   absensi                 Absensi[]
   tugas                   Tugas[]
@@ -374,6 +380,22 @@ model GuruKelas {
   @@index([kelasId])
   @@index([guruId])
   @@map("guru_kelas")
+}
+
+model MapelKelas {
+  id          String @id @default(cuid())
+  mapelId     String @map("mapel_id")
+  kelasId     String @map("kelas_id")
+
+  mataPelajaran MataPelajaran @relation(fields: [mapelId], references: [id], onDelete: Cascade)
+  kelas         Kelas         @relation(fields: [kelasId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([mapelId, kelasId])
+  @@index([kelasId])
+  @@index([mapelId])
+  @@map("mapel_kelas")
 }
 
 // ============================================

@@ -20,29 +20,27 @@ const nextConfig: NextConfig = {
   // ✅ Disable source maps di production (mengurangi transfer size)
   productionBrowserSourceMaps: false,
 
-  // ✅ Optimize tree-shaking untuk package besar (lucide-react, radix-ui, etc.)
-  //    Mengurangi bundle JS hingga 40-60% untuk icon library
-  optimizePackageImports: [
-    "lucide-react",
-    "@radix-ui/react-dialog",
-    "@radix-ui/react-dropdown-menu",
-    "@radix-ui/react-select",
-    "@radix-ui/react-tabs",
-    "@radix-ui/react-avatar",
-    "@radix-ui/react-toast",
-    "@radix-ui/react-label",
-    "@radix-ui/react-slot",
-    "class-variance-authority",
-    "tailwind-merge",
-    "zod",
-    "date-fns",
-  ],
-
   // ✅ Server Actions — body size limit (5MB untuk upload file)
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",
     },
+    // Optimize tree-shaking untuk package besar yang dipakai lintas halaman.
+    optimizePackageImports: [
+      "lucide-react",
+      "@radix-ui/react-dialog",
+      "@radix-ui/react-dropdown-menu",
+      "@radix-ui/react-select",
+      "@radix-ui/react-tabs",
+      "@radix-ui/react-avatar",
+      "@radix-ui/react-toast",
+      "@radix-ui/react-label",
+      "@radix-ui/react-slot",
+      "class-variance-authority",
+      "tailwind-merge",
+      "zod",
+      "date-fns",
+    ],
   },
 
   // ✅ Turbopack for faster dev builds

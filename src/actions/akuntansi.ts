@@ -463,10 +463,19 @@ export async function konfirmasiPembayaranSppOlehAdmin(
           sisaTunggakan: Math.max(0, nominalTagihan - totalDibayarSetelahIni),
         }
       } else {
-        // Pembayaran DITOLAK: kembalikan status tagihan sesuai jatuh tempo
-        const now = new Date()
-        const statusTagihanDikembalikan =
-          tagihan.jatuhTempo < now ? StatusTagihan.TERLAMBAT : StatusTagihan.BELUM_BAYAR
+        // Pembayaran DITOLAK: kembalikan status tagihan sesuai kondisi aktual.
+        // BUG FIX: Jika sebelumnya sudah ada pembayaran yang dikonfirmasi (partial),
+        // status harus DIBAYAR_SEBAGIAN, bukan selalu BELUM_BAYAR/TERLAMBAT.
+        let statusTagihanDikembalikan: StatusTagihan
+        if (totalSudahDikonfirmasi >= nominalTagihan) {
+          statusTagihanDikembalikan = StatusTagihan.SUDAH_BAYAR
+        } else if (totalSudahDikonfirmasi > 0) {
+          statusTagihanDikembalikan = StatusTagihan.DIBAYAR_SEBAGIAN
+        } else {
+          const now = new Date()
+          statusTagihanDikembalikan =
+            tagihan.jatuhTempo < now ? StatusTagihan.TERLAMBAT : StatusTagihan.BELUM_BAYAR
+        }
 
         await tx.pembayaranSiswa.update({
           where: { id: pembayaranId },
@@ -479,7 +488,7 @@ export async function konfirmasiPembayaranSppOlehAdmin(
           },
         })
 
-        // Kembalikan status tagihan ke kondisi sebelum ada pending
+        // Kembalikan status tagihan ke kondisi aktual
         await tx.tagihanSiswa.update({
           where: { id: tagihan.id },
           data: {
@@ -1082,7 +1091,7 @@ export async function getRekapSppPerKelas(
       }
     }
 
-    const { periodeAjaranId, bulan, tahun } = validated.data
+    const { bulan, tahun } = validated.data
 
     // Ambil semua siswa aktif beserta kelas dan jenjang (1 query)
     const siswaList = await prisma.siswa.findMany({

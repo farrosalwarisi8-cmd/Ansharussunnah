@@ -8,18 +8,36 @@ import { mapelSchema, type MapelFormValues } from "@/lib/validations/mapel"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
 
+async function validateKelasIds(jenjangId: string | null | undefined, kelasIds: string[]) {
+  const uniqueKelasIds = [...new Set(kelasIds)]
+  if (uniqueKelasIds.length === 0) return null
+  if (uniqueKelasIds.length !== kelasIds.length) return "Kelas tidak boleh dipilih lebih dari sekali"
+  if (!jenjangId) return "Jenjang wajib dipilih jika kelas ditetapkan"
+
+  const kelas = await prisma.kelas.findMany({
+    where: { id: { in: uniqueKelasIds }, jenjangId, aktif: true },
+    select: { id: true },
+  })
+
+  if (kelas.length !== uniqueKelasIds.length) {
+    return "Kelas tidak valid atau tidak sesuai dengan jenjang yang dipilih"
+  }
+
+  return null
+}
+
 // ========================================================
 // 1. PUBLIC: DAFTAR MAPEL AKTIF
 // ========================================================
 
 export async function getMapelAktif(): Promise<
-  ActionResponse<Array<{ id: string; kode: string; nama: string; kelompok: string | null }>>
+  ActionResponse<Array<{ id: string; kode: string; nama: string; kelompok: string | null; jenjangId: string | null }>>
 > {
   try {
     const mapels = await prisma.mataPelajaran.findMany({
       where: { aktif: true },
       orderBy: { nama: "asc" },
-      select: { id: true, kode: true, nama: true, kelompok: true },
+      select: { id: true, kode: true, nama: true, kelompok: true, jenjangId: true },
     })
 
     return {
@@ -36,6 +54,60 @@ export async function getMapelAktif(): Promise<
 }
 
 // ========================================================
+// 1b. PUBLIC: DAFTAR JENJANG AKTIF (untuk dropdown)
+// ========================================================
+
+export async function getJenjangList(): Promise<
+  ActionResponse<Array<{ id: string; nama: string; urutan: number }>>
+> {
+  try {
+    const jenjangs = await prisma.jenjang.findMany({
+      where: { aktif: true },
+      orderBy: { urutan: "asc" },
+      select: { id: true, nama: true, urutan: true },
+    })
+
+    return {
+      success: true,
+      message: "Daftar jenjang berhasil diambil",
+      data: jenjangs,
+    }
+  } catch {
+    return {
+      success: false,
+      message: "Gagal memuat daftar jenjang",
+    }
+  }
+}
+
+// ========================================================
+// 1c. PUBLIC: DAFTAR KELAS BERDASARKAN JENJANG (untuk multi-select)
+// ========================================================
+
+export async function getKelasByJenjang(jenjangId: string): Promise<
+  ActionResponse<Array<{ id: string; nama: string }>>
+> {
+  try {
+    const kelas = await prisma.kelas.findMany({
+      where: { jenjangId, aktif: true },
+      orderBy: { nama: "asc" },
+      select: { id: true, nama: true },
+    })
+
+    return {
+      success: true,
+      message: "Daftar kelas berhasil diambil",
+      data: kelas,
+    }
+  } catch {
+    return {
+      success: false,
+      message: "Gagal memuat daftar kelas",
+    }
+  }
+}
+
+// ========================================================
 // 2. ADMIN: CRUD MAPEL
 // ========================================================
 
@@ -46,7 +118,10 @@ export async function getAdminMapelList(): Promise<
       kode: string
       nama: string
       kelompok: string | null
+      jenjangId: string | null
+      jenjangNama: string | null
       aktif: boolean
+      kelasList: Array<{ id: string; nama: string }>
       _count: {
         guruKelas: number
         ujian: number
@@ -67,7 +142,14 @@ export async function getAdminMapelList(): Promise<
         kode: true,
         nama: true,
         kelompok: true,
+        jenjangId: true,
+        jenjang: { select: { nama: true } },
         aktif: true,
+        mapelKelas: {
+          select: {
+            kelas: { select: { id: true, nama: true } },
+          },
+        },
         _count: {
           select: {
             guruKelas: true,
@@ -80,10 +162,22 @@ export async function getAdminMapelList(): Promise<
       },
     })
 
+    const data = mapels.map((m) => ({
+      id: m.id,
+      kode: m.kode,
+      nama: m.nama,
+      kelompok: m.kelompok,
+      jenjangId: m.jenjangId,
+      jenjangNama: m.jenjang?.nama ?? null,
+      aktif: m.aktif,
+      kelasList: m.mapelKelas.map((mk) => mk.kelas),
+      _count: m._count,
+    }))
+
     return {
       success: true,
       message: "Daftar mata pelajaran berhasil diambil",
-      data: mapels,
+      data,
     }
   } catch (error: unknown) {
     return {
@@ -106,7 +200,10 @@ export async function createMapel(payload: MapelFormValues): Promise<ActionRespo
       }
     }
 
-    const { kode, nama, kelompok } = validated.data
+    const { kode, nama, kelompok, jenjangId, kelasIds } = validated.data
+
+    const kelasError = await validateKelasIds(jenjangId, kelasIds)
+    if (kelasError) return { success: false, message: kelasError }
 
     const existing = await prisma.mataPelajaran.findFirst({
       where: { OR: [{ kode }, { nama }] },
@@ -127,7 +224,13 @@ export async function createMapel(payload: MapelFormValues): Promise<ActionRespo
         kode,
         nama,
         kelompok: kelompok || null,
+        jenjangId: jenjangId || null,
         aktif: true,
+        mapelKelas: kelasIds && kelasIds.length > 0
+          ? {
+              create: kelasIds.map((kelasId) => ({ kelasId })),
+            }
+          : undefined,
       },
     })
 
@@ -179,15 +282,53 @@ export async function updateMapel(
       }
     }
 
-    await prisma.mataPelajaran.update({
-      where: { id },
-      data: {
-        kode: payload.kode,
-        nama: payload.nama,
-        kelompok: payload.kelompok !== undefined ? payload.kelompok ?? null : undefined,
-        aktif: payload.aktif,
-      },
-    })
+    // Update mapelKelas (hapus semua lama, tambah yang baru)
+    const kelasIds = payload.kelasIds
+    const targetJenjangId = payload.jenjangId !== undefined ? payload.jenjangId : mapel.jenjangId
+    if (
+      payload.jenjangId !== undefined &&
+      payload.jenjangId !== mapel.jenjangId &&
+      kelasIds === undefined
+    ) {
+      return { success: false, message: "Kelas harus dipilih ulang saat jenjang diubah" }
+    }
+
+    if (kelasIds !== undefined) {
+      const kelasError = await validateKelasIds(targetJenjangId, kelasIds)
+      if (kelasError) return { success: false, message: kelasError }
+    }
+
+    if (kelasIds !== undefined) {
+      await prisma.$transaction(async (tx) => {
+        await tx.mapelKelas.deleteMany({ where: { mapelId: id } })
+        if (kelasIds.length > 0) {
+          await tx.mapelKelas.createMany({
+            data: [...new Set(kelasIds)].map((kelasId) => ({ mapelId: id, kelasId })),
+          })
+        }
+        await tx.mataPelajaran.update({
+          where: { id },
+          data: {
+            kode: payload.kode,
+            nama: payload.nama,
+            kelompok: payload.kelompok !== undefined ? payload.kelompok ?? null : undefined,
+            jenjangId: payload.jenjangId !== undefined ? payload.jenjangId ?? null : undefined,
+            aktif: payload.aktif,
+          },
+        })
+      })
+    } else {
+      await prisma.mataPelajaran.update({
+        where: { id },
+        data: {
+          kode: payload.kode,
+          nama: payload.nama,
+          kelompok: payload.kelompok !== undefined ? payload.kelompok ?? null : undefined,
+          jenjangId: payload.jenjangId !== undefined ? payload.jenjangId ?? null : undefined,
+          aktif: payload.aktif,
+        },
+      })
+    }
 
     revalidatePath("/dashboard/mapel")
 
@@ -213,6 +354,7 @@ export async function deleteMapel(id: string): Promise<ActionResponse> {
         _count: {
           select: {
             guruKelas: true,
+            mapelKelas: true,
             ujian: true,
             tugas: true,
             materi: true,
@@ -228,6 +370,7 @@ export async function deleteMapel(id: string): Promise<ActionResponse> {
 
     const totalUsed =
       checkRelations._count.guruKelas +
+      checkRelations._count.mapelKelas +
       checkRelations._count.ujian +
       checkRelations._count.tugas +
       checkRelations._count.materi +
@@ -237,7 +380,7 @@ export async function deleteMapel(id: string): Promise<ActionResponse> {
       return {
         success: false,
         message:
-          "Tidak dapat menghapus mata pelajaran karena masih terhubung dengan data pengajar, ujian, tugas, materi, atau rapor",
+          "Tidak dapat menghapus mata pelajaran karena masih terhubung dengan data pengajar, kelas, ujian, tugas, materi, atau rapor",
       }
     }
 

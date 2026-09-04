@@ -17,6 +17,15 @@ export const mapelSchema = z.object({
     .max(50, "Kelompok maksimal 50 karakter")
     .optional()
     .nullable(),
+  jenjangId: z
+    .string()
+    .min(1, "Jenjang wajib dipilih")
+    .optional()
+    .nullable(),
+  kelasIds: z
+    .array(z.string())
+    .optional()
+    .default([]),
 })
 
-export type MapelFormValues = z.infer<typeof mapelSchema>
+export type MapelFormValues = z.input<typeof mapelSchema>
