@@ -364,47 +364,27 @@ export async function verifikasiPendaftaran(
             }
           }
 
+          // Jangan pernah mengambil/menimpa record user dengan role lain (misal
+          // ADMIN_KEUANGAN/GURU) yang ber-email sama. Satu orang bisa punya
+          // beberapa role, dan role ORANG_TUA harus punya record tersendiri agar
+          // muncul di fitur "Ganti Akun" dan bisa login sebagai wali santri.
           if (!userOrtu) {
-            const existingByEmail = await tx.user.findFirst({
-              where: { email: emailOrtu },
-            })
-            if (existingByEmail) {
-              userOrtu = existingByEmail
-              await tx.user.update({
-                where: { id: userOrtu.id },
-                data: { authId: authOrtuId },
-              })
-            }
-          }
-
-          if (!userOrtu) {
-            const existingByEmail = await tx.user.findFirst({
-              where: { email: emailOrtu },
-            })
-            if (existingByEmail) {
-              userOrtu = existingByEmail
-              await tx.user.update({
-                where: { id: userOrtu.id },
-                data: { authId: authOrtuId },
-              })
-            } else {
-              userOrtu = await tx.user.create({
-                data: {
-                  email: emailOrtu,
-                  nama: pendaftaran.namaOrangTua,
-                  role: Role.ORANG_TUA,
-                  authId: authOrtuId,
-                  mustChangePassword: true,
-                  aktif: true,
-                  orangTua: {
-                    create: {
-                      noHp: pendaftaran.noHpOrangTua,
-                      alamat: pendaftaran.alamatOrangTua || pendaftaran.alamatSiswa,
-                    },
+            userOrtu = await tx.user.create({
+              data: {
+                email: emailOrtu,
+                nama: pendaftaran.namaOrangTua,
+                role: Role.ORANG_TUA,
+                authId: authOrtuId,
+                mustChangePassword: true,
+                aktif: true,
+                orangTua: {
+                  create: {
+                    noHp: pendaftaran.noHpOrangTua,
+                    alamat: pendaftaran.alamatOrangTua || pendaftaran.alamatSiswa,
                   },
                 },
-              })
-            }
+              },
+            })
           } else if (userOrtu.aktif === false) {
             // Reaktivasi akun orang tua yang pernah dinonaktifkan (orang tua dengan
             // anak kedua+ yang sebelumnya dia nonaktifkan / record lama).
