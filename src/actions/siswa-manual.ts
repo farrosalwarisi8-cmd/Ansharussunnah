@@ -178,16 +178,19 @@ export async function createSiswaManual(
         }
 
         if (!userOrtu) {
-          const existingByEmail = await tx.user.findFirst({
-            where: { email: emailOrtu },
+          // Cek by email khusus role ORANG_TUA
+          const existingOrtuByEmail = await tx.user.findFirst({
+            where: { email: emailOrtu, role: Role.ORANG_TUA },
           })
-          if (existingByEmail) {
-            userOrtu = existingByEmail
+          if (existingOrtuByEmail) {
+            userOrtu = existingOrtuByEmail
             await tx.user.update({
               where: { id: userOrtu.id },
               data: { authId: authOrtuId },
             })
           } else {
+            // Email ada di role lain (misal ADMIN_KEUANGAN) — buat User baru ORANG_TUA
+            // Jangan reuse user role lain, buat terpisah
             userOrtu = await tx.user.create({
               data: {
                 email: emailOrtu,
@@ -612,6 +615,130 @@ export async function getKelasList(): Promise<ActionResponse<KelasListItem[]>> {
     return {
       success: false,
       message: error instanceof Error ? error.message : "Gagal memuat daftar kelas",
+    }
+  }
+}
+
+// ========================================================
+// 6. HAPUS SISWA PERMANEN (+ HAPUS ORANGTUA OTOMATIS)
+// ========================================================
+
+type HapusSiswaResult = {
+  siswaDihapus: boolean
+  orangTuaDihapus: boolean
+  namaSiswa: string
+}
+
+/**
+ * Menghapus siswa dan akun terkaitnya secara permanen.
+ * - Menghapus relasi ParentStudent
+ * - Menghapus OrangTua + User jika tidak terkait siswa lain
+ * - Menghapus Siswa + User + Supabase Auth
+ */
+export async function hapusSiswaPermanent(
+  siswaUserId: string
+): Promise<ActionResponse<HapusSiswaResult>> {
+  try {
+    await requireGuruAdmin()
+
+    const siswaUser = await prisma.user.findUnique({
+      where: { id: siswaUserId },
+      include: {
+        siswa: {
+          include: {
+            orangTua: {
+              include: {
+                orangTua: {
+                  include: {
+                    siswa: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (!siswaUser || siswaUser.role !== Role.SISWA) {
+      return { success: false, message: "Akun siswa tidak ditemukan" }
+    }
+
+    if (!siswaUser.siswa) {
+      return { success: false, message: "Data siswa tidak ditemukan" }
+    }
+
+    const namaSiswa = siswaUser.nama
+    let orangTuaDihapus = false
+
+    // Cek setiap orang tua yang terkait siswa ini
+    for (const ps of siswaUser.siswa.orangTua) {
+      const orangTua = ps.orangTua
+      const otherSiswaCount = orangTua.siswa.length - 1 // -1 untuk relasi dengan siswa ini
+
+      // Hapus relasi ParentStudent
+      await prisma.parentStudent.delete({
+        where: {
+          orangTuaId_siswaId: {
+            orangTuaId: orangTua.id,
+            siswaId: siswaUser.siswa.id,
+          },
+        },
+      })
+
+      // Jika orang tua tidak terkait siswa lain, hapus juga
+      if (otherSiswaCount <= 0) {
+        const orangTuaUser = await prisma.user.findUnique({
+          where: { id: orangTua.userId },
+        })
+
+        if (orangTuaUser) {
+          // Cek apakah authId dipakai role lain (multi-role / email dipakai admin)
+          const otherUsersWithAuth = await prisma.user.count({
+            where: { authId: orangTuaUser.authId, id: { not: orangTuaUser.id } },
+          })
+
+          // Hapus Supabase Auth orang tua hanya jika tidak dipakai role lain
+          if (otherUsersWithAuth === 0) {
+            const supabaseAdmin = createSupabaseAdmin()
+            await supabaseAdmin.auth.admin.deleteUser(orangTuaUser.authId)
+          }
+
+          // Hapus User orang tua (cascade ke OrangTua record)
+          await prisma.user.delete({ where: { id: orangTuaUser.id } })
+          orangTuaDihapus = true
+        }
+      }
+    }
+
+    // Hapus Supabase Auth siswa (hanya jika tidak dipakai role lain)
+    const siswaAuthUsers = await prisma.user.count({
+      where: { authId: siswaUser.authId, id: { not: siswaUser.id } },
+    })
+
+    if (siswaAuthUsers === 0) {
+      const supabaseAdmin = createSupabaseAdmin()
+      await supabaseAdmin.auth.admin.deleteUser(siswaUser.authId)
+    }
+
+    // Hapus User siswa (cascade ke Siswa record)
+    await prisma.user.delete({ where: { id: siswaUser.id } })
+
+    revalidatePath("/dashboard/siswa")
+    return {
+      success: true,
+      message: `Siswa "${namaSiswa}" berhasil dihapus secara permanen.`,
+      data: {
+        siswaDihapus: true,
+        orangTuaDihapus,
+        namaSiswa,
+      },
+    }
+  } catch (error: unknown) {
+    console.error("Error hapus siswa:", error)
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal menghapus siswa",
     }
   }
 }

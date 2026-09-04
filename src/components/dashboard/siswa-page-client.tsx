@@ -15,6 +15,7 @@ import {
   resetPasswordOrangTuaManual,
   getDaftarSiswaManual,
   getKelasList,
+  hapusSiswaPermanent,
 } from "@/actions/siswa-manual"
 import { useToast } from "@/hooks/use-toast"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
@@ -54,6 +55,7 @@ import {
   ChevronRight,
   Search,
   UserCheck,
+  Trash2,
 } from "lucide-react"
 
 // ============================================
@@ -309,6 +311,14 @@ export default function KelolaSiswaPage() {
   }>({ open: false, userId: "", nama: "", type: "SISWA" })
   const [resetLoading, setResetLoading] = React.useState(false)
 
+  // Hapus siswa state
+  const [hapusConfirm, setHapusConfirm] = React.useState<{
+    open: boolean
+    userId: string
+    nama: string
+  }>({ open: false, userId: "", nama: "" })
+  const [hapusLoading, setHapusLoading] = React.useState(false)
+
   // Available kelas based on selected jenjang (not used directly here, kelasId is direct)
   const [availableKelas, setAvailableKelas] = React.useState<KelasItem[]>([])
 
@@ -475,13 +485,53 @@ export default function KelolaSiswaPage() {
         })
       }
     } catch {
+        toast({
+          title: "Gagal Reset Password",
+          description: "Terjadi kesalahan saat mereset password.",
+          variant: "destructive",
+        })
+      } finally {
+        setResetLoading(false)
+      }
+  }
+
+  const handleHapusSiswa = async () => {
+    if (!hapusConfirm.userId) return
+    setHapusLoading(true)
+
+    try {
+      const result = await hapusSiswaPermanent(hapusConfirm.userId)
+
+      if (result.success) {
+        setHapusConfirm({ open: false, userId: "", nama: "" })
+
+        // Refresh data
+        const siswaRes = await getDaftarSiswaManual()
+        if (siswaRes.success && siswaRes.data) {
+          setSiswaList(siswaRes.data as unknown as SiswaListItem[])
+        }
+
+        toast({
+          title: "Siswa Dihapus 🗑️",
+          description: result.data?.orangTuaDihapus
+            ? `${result.data.namaSiswa} beserta akun orang tua sudah dihapus permanen.`
+            : `${result.data?.namaSiswa} sudah dihapus permanen.`,
+        })
+      } else {
+        toast({
+          title: "Gagal Hapus Siswa",
+          description: result.message,
+          variant: "destructive",
+        })
+      }
+    } catch {
       toast({
-        title: "Gagal Reset Password",
-        description: "Terjadi kesalahan saat mereset password.",
+        title: "Gagal Hapus Siswa",
+        description: "Terjadi kesalahan saat menghapus siswa.",
         variant: "destructive",
       })
     } finally {
-      setResetLoading(false)
+      setHapusLoading(false)
     }
   }
 
@@ -671,6 +721,21 @@ export default function KelolaSiswaPage() {
                               PW Ortu
                             </Button>
                           )}
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() =>
+                              setHapusConfirm({
+                                open: true,
+                                userId: s.userId,
+                                nama: s.nama,
+                              })
+                            }
+                            className="rounded-xl text-xs font-semibold"
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Hapus
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -738,6 +803,21 @@ export default function KelolaSiswaPage() {
                           PW Orang Tua
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() =>
+                          setHapusConfirm({
+                            open: true,
+                            userId: s.userId,
+                            nama: s.nama,
+                          })
+                        }
+                        className="rounded-xl text-xs min-h-[40px]"
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Hapus
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -1463,6 +1543,19 @@ export default function KelolaSiswaPage() {
         confirmText={resetLoading ? "Memproses..." : "Reset Password"}
         variant="destructive"
         onConfirm={handleResetPassword}
+      />
+
+      {/* ============================================ */}
+      {/* MODAL: KONFIRMASI HAPUS SISWA PERMANEN        */}
+      {/* ============================================ */}
+      <ConfirmDialog
+        open={hapusConfirm.open}
+        onOpenChange={(open) => setHapusConfirm((prev) => ({ ...prev, open }))}
+        title="Hapus Siswa Secara Permanen?"
+        description={`Siswa "${hapusConfirm.nama}" beserta akun loginnya akan dihapus permanen. Jika orang tua tidak terhubung ke siswa lain, akun orang tua juga akan ikut terhapus. Tindakan ini TIDAK BISA dibatalkan.`}
+        confirmText={hapusLoading ? "Memproses..." : "Hapus Permanen"}
+        variant="destructive"
+        onConfirm={handleHapusSiswa}
       />
     </div>
   )
