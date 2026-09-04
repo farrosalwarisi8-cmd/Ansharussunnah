@@ -26,8 +26,8 @@ export default function HomePage() {
       <header className="border-b border-slate-200/80 bg-white sticky top-0 z-50 transition-all">
         <div className="container mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden relative shadow-md shadow-emerald-900/20">
-              <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="(max-width: 640px) 48px, 56px" className="object-cover" priority />
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl relative">
+              <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="(max-width: 640px) 48px, 56px" className="object-contain" priority />
             </div>
             <div>
               <div className="font-extrabold text-base sm:text-lg text-slate-800 tracking-tight flex items-center gap-1.5">
