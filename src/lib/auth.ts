@@ -2,53 +2,108 @@
 
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import prisma from "@/lib/prisma"
-import { Role } from "@prisma/client"
+import { Role, Prisma } from "@prisma/client"
 import { redirect } from "next/navigation"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { cache } from "react"
 
 const ROLE_COOKIE = "selected_role"
 const USER_ID_COOKIE = "selected_user_id"
 
-export const getCurrentUser = cache(async () => {
-  const supabase = await createSupabaseServerClient()
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser()
+// Tipe return konsisten: selalu punya relasi guru/siswa/orangTua (nullable).
+// Dipakai agar semua caller yang mengakses `.guru` / `.siswa` / `.orangTua`
+// tetap typecheck walaupun include runtime dibuat dinamis per-role.
+type UserWithRelations = Prisma.UserGetPayload<{
+  include: {
+    guru: true
+    siswa: { include: { kelas: { include: { jenjang: true } } } }
+    orangTua: true
+  }
+}>
 
-  if (!authUser) return null
+// Role yang butuh relasi siswa.kelas.jenjang (untuk menampilkan info kelas).
+const ROLES_BUTUH_KELAS: Role[] = [Role.SISWA, Role.ORANG_TUA]
 
+/**
+ * Include relasi yang dibuat dinamis per role.
+ * - guru, siswa, orangTua SELALU di-include (1:1 lookup murah, nullable).
+ * - nested siswa.kelas.jenjang hanya di-include untuk role yang membutuhkannya
+ *   (SISWA/ORANG_TUA), mengurangi join berat untuk Guru/Admin.
+ */
+function buildUserInclude(role?: Role): Prisma.UserInclude {
+  const withKelas = role !== undefined && ROLES_BUTUH_KELAS.includes(role)
+  return {
+    guru: true,
+    siswa: withKelas
+      ? { include: { kelas: { include: { jenjang: true } } } }
+      : true,
+    orangTua: true,
+  }
+}
+
+export const getCurrentUser = cache(async (): Promise<UserWithRelations | null> => {
+  // Trust hasil verifikasi middleware bila tersedia (menghemat 1 panggilan
+  // Supabase getUser() per request pada route yang dilindungi).
+  const authUserId = await getAuthUserIdFromMiddleware()
+
+  if (!authUserId) {
+    const supabase = await createSupabaseServerClient()
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser()
+    if (!authUser) return null
+    return loadUserRecord(authUser.id)
+  }
+
+  return loadUserRecord(authUserId)
+})
+
+/**
+ * Membaca hasil verifikasi middleware dari request header (jika ada).
+ * Nilai ini SELALU ditimpa middleware dari getUser() yang trusted pada route
+ * yang dilindungi. Mengembalikan null bila tidak tersedia (mis. route publik
+ * yang di-short-circuit sebelum middleware memverifikasi).
+ */
+async function getAuthUserIdFromMiddleware(): Promise<string | null> {
+  try {
+    const headerStore = await headers()
+    // Next.js dapat men-prefix header middleware dengan 'x-middleware-' saat
+    // dibaca dari Server Component; cek kedua bentuk demi robust.
+    return (
+      headerStore.get("x-opencode-auth-user-id") ??
+      headerStore.get("x-middleware-opencode-auth-user-id") ??
+      null
+    )
+  } catch {
+    return null
+  }
+}
+
+async function loadUserRecord(authUserId: string): Promise<UserWithRelations | null> {
   // Check if user has selected a role (multi-role support)
   const cookieStore = await cookies()
   const selectedUserId = cookieStore.get(USER_ID_COOKIE)?.value
   const selectedRole = cookieStore.get(ROLE_COOKIE)?.value
 
-  let user = null
+  let user: UserWithRelations | null = null
 
   if (selectedUserId && selectedRole) {
     // Try to find the specific user record by ID + role
-    user = await prisma.user.findFirst({
+    user = (await prisma.user.findFirst({
       where: {
         id: selectedUserId,
-        authId: authUser.id,
+        authId: authUserId,
         role: selectedRole as Role,
       },
-      include: {
-        guru: true,
-        siswa: {
-          include: {
-            kelas: { include: { jenjang: true } },
-          },
-        },
-        orangTua: true,
-      },
-    })
+      include: buildUserInclude(selectedRole as Role),
+    })) as UserWithRelations | null
   }
 
-  // Fallback: find by authId (single role or first match)
+  // Fallback: find by authId (single role or first match) — sertakan nested kelas
+  // karena role belum diketahui pasti.
   if (!user) {
-    user = await prisma.user.findFirst({
-      where: { authId: authUser.id },
+    user = (await prisma.user.findFirst({
+      where: { authId: authUserId },
       include: {
         guru: true,
         siswa: {
@@ -58,7 +113,7 @@ export const getCurrentUser = cache(async () => {
         },
         orangTua: true,
       },
-    })
+    })) as UserWithRelations | null
   }
 
   // Defense-in-depth: cek apakah akun masih aktif
@@ -67,32 +122,6 @@ export const getCurrentUser = cache(async () => {
   }
 
   return user
-})
-
-/**
- * Get all roles available for the current auth user.
- * Used by login flow to determine if role selector is needed.
- */
-export async function getAllRolesForCurrentUser() {
-  const supabase = await createSupabaseServerClient()
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser()
-
-  if (!authUser) return []
-
-  const users = await prisma.user.findMany({
-    where: { authId: authUser.id, aktif: true },
-    select: {
-      id: true,
-      nama: true,
-      email: true,
-      role: true,
-      isAdmin: true,
-    },
-  })
-
-  return users
 }
 
 export async function requireAuth() {

@@ -128,8 +128,7 @@ export function GantiAkunDialog({
       const data = await res.json()
       if (data.success) {
         onOpenChange(false)
-        router.push("/dashboard")
-        router.refresh()
+        router.replace("/dashboard")
       } else {
         setError(data.message || "Gagal mengganti akun")
         setSelecting(null)

@@ -98,7 +98,7 @@ export async function verifyGuruAksesKelas(
 
 /**
  * Mengembalikan daftar mata pelajaran yang tersedia untuk dipilih guru di sebuah kelas.
- * - Admin akademik / super admin: semua mapel yang pernah/sedang diajarkan di kelas tersebut.
+ * - Admin akademik / super admin: semua mapel aktif (tanpa perlu penugasan GuruKelas).
  * - Role.GURU: hanya mapel yang diajarkannya di kelas tersebut (dari GuruKelas).
  */
 export async function getMapelTersediaUntukKelas(
@@ -109,7 +109,7 @@ export async function getMapelTersediaUntukKelas(
 
   if (isAcademicAdminRole(user.role)) {
     const mapels = await prisma.mataPelajaran.findMany({
-      where: { guruKelas: { some: { kelasId } } },
+      where: { aktif: true },
       select: { id: true, nama: true },
       orderBy: { nama: "asc" },
     })

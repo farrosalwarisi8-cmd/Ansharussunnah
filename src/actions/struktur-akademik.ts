@@ -98,17 +98,30 @@ export async function getMapelTersedia(
   try {
     const user = await requireGuru()
     const isAdmin = isAcademicAdminRole(user.role)
-    if (!isAdmin && !user.guru) {
+
+    // Admin akademik / super admin: semua mapel aktif tersedia untuk kelas mana pun,
+    // tanpa harus melalui penugasan GuruKelas terlebih dahulu.
+    if (isAdmin) {
+      const mapels = await prisma.mataPelajaran.findMany({
+        where: { aktif: true },
+        select: { id: true, nama: true },
+        orderBy: { nama: "asc" },
+      })
+
+      return {
+        success: true,
+        message: "Daftar mata pelajaran tersedia untuk kelas ini",
+        data: mapels,
+      }
+    }
+
+    // Role.GURU: hanya mapel yang diajarnya di kelas tersebut (dari GuruKelas).
+    if (!user.guru) {
       return { success: false, message: "Forbidden: Profil guru tidak ditemukan" }
     }
 
-    const where =
-      isAdmin
-        ? { kelasId }
-        : { kelasId, guruId: user.guru!.id }
-
     const mapels = await prisma.mataPelajaran.findMany({
-      where: { guruKelas: { some: where } },
+      where: { guruKelas: { some: { kelasId, guruId: user.guru.id } } },
       select: { id: true, nama: true },
       orderBy: { nama: "asc" },
     })

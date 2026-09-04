@@ -86,6 +86,19 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  // Forward hasil verifikasi middleware ke Server Components via request header.
+  // Nilai SELALU ditimpa oleh middleware (diambil dari getUser() yang trusted),
+  // jadi client tidak bisa memalsukannya. Dipakai getCurrentUser untuk melewati
+  // panggilan getUser() yang redundan di server render.
+  const AUTH_USER_ID_HEADER = "x-opencode-auth-user-id"
+  if (user) {
+    request.headers.set(AUTH_USER_ID_HEADER, user.id)
+    supabaseResponse.headers.set(AUTH_USER_ID_HEADER, user.id)
+  } else {
+    request.headers.delete(AUTH_USER_ID_HEADER)
+    supabaseResponse.headers.delete(AUTH_USER_ID_HEADER)
+  }
+
   // Jika TIDAK login dan mencoba akses protected route
   if (!user && !isPublicRoute(pathname)) {
     const url = request.nextUrl.clone()

@@ -86,19 +86,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 })
   }
 
-  // Verify the user record belongs to this auth user
-  const userRecord = await prisma.user.findFirst({
-    where: {
-      id: userId,
-      authId: authUser.id,
-      role: role,
-    },
-  })
-
-  if (!userRecord) {
-    return NextResponse.json({ success: false, message: "Role tidak valid" }, { status: 403 })
-  }
-
   // Set cookies using response headers
   const response = NextResponse.json({ success: true, message: "Role berhasil dipilih" })
 
