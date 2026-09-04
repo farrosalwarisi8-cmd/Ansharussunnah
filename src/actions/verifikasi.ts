@@ -13,7 +13,7 @@ import {
   type VerifikasiPendaftaranValues,
 } from "@/lib/validations/pendaftaran"
 import type { ActionResponse, PendaftaranWithRelations } from "@/types"
-import { Prisma, StatusPendaftaran, StatusVerifikasiBukti, Role } from "@prisma/client"
+import { StatusPendaftaran, StatusVerifikasiBukti, Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
 export async function getPendaftaranList(options?: {
@@ -378,7 +378,16 @@ export async function verifikasiPendaftaran(
           }
 
           if (!userOrtu) {
-            try {
+            const existingByEmail = await tx.user.findFirst({
+              where: { email: emailOrtu },
+            })
+            if (existingByEmail) {
+              userOrtu = existingByEmail
+              await tx.user.update({
+                where: { id: userOrtu.id },
+                data: { authId: authOrtuId },
+              })
+            } else {
               userOrtu = await tx.user.create({
                 data: {
                   email: emailOrtu,
@@ -395,14 +404,6 @@ export async function verifikasiPendaftaran(
                   },
                 },
               })
-            } catch (err) {
-              if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-                // Race condition: proses approve lain (misal untuk anak kedua dari orang tua
-                // yang sama) berhasil membuat user ini duluan. Ambil yang sudah ada, jangan gagal.
-                userOrtu = await tx.user.findFirstOrThrow({ where: { email: emailOrtu } })
-              } else {
-                throw err
-              }
             }
           } else if (userOrtu.aktif === false) {
             // Reaktivasi akun orang tua yang pernah dinonaktifkan (orang tua dengan
@@ -465,10 +466,17 @@ export async function verifikasiPendaftaran(
                 )
               }
             }
-          }
 
-          if (!userSiswa) {
-            try {
+            const existingByEmail = await tx.user.findFirst({
+              where: { email: emailSiswa },
+            })
+            if (existingByEmail) {
+              userSiswa = existingByEmail
+              await tx.user.update({
+                where: { id: userSiswa.id },
+                data: { authId: authSiswaId },
+              })
+            } else {
               userSiswa = await tx.user.create({
                 data: {
                   email: emailSiswa,
@@ -502,14 +510,6 @@ export async function verifikasiPendaftaran(
                 },
               },
             })
-            } catch (err) {
-              if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-                // Race condition: proses approve lain (misal dari pendaftaran berbeda)
-                // berhasil membuat user siswa ini duluan. Ambil yang sudah ada.
-                userSiswa = await tx.user.findFirstOrThrow({ where: { email: emailSiswa } })
-              } else {
-                throw err
-              }
             }
           }
 
@@ -518,13 +518,24 @@ export async function verifikasiPendaftaran(
           })
 
           if (orangTuaRecord && siswaRecord) {
-            await tx.parentStudent.create({
-              data: {
-                orangTuaId: orangTuaRecord.id,
-                siswaId: siswaRecord.id,
-                hubungan: "Orang Tua",
+            const existingRelation = await tx.parentStudent.findUnique({
+              where: {
+                orangTuaId_siswaId: {
+                  orangTuaId: orangTuaRecord.id,
+                  siswaId: siswaRecord.id,
+                },
               },
             })
+
+            if (!existingRelation) {
+              await tx.parentStudent.create({
+                data: {
+                  orangTuaId: orangTuaRecord.id,
+                  siswaId: siswaRecord.id,
+                  hubungan: "Orang Tua",
+                },
+              })
+            }
           }
 
           if (latestBuktiId) {

@@ -8,7 +8,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
 import { siswaManualSchema, type SiswaManualFormValues } from "@/lib/validations/siswa-manual"
 import type { ActionResponse } from "@/types"
-import { Prisma, Role } from "@prisma/client"
+import { Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
 // ========================================================
@@ -178,7 +178,16 @@ export async function createSiswaManual(
         }
 
         if (!userOrtu) {
-          try {
+          const existingByEmail = await tx.user.findFirst({
+            where: { email: emailOrtu },
+          })
+          if (existingByEmail) {
+            userOrtu = existingByEmail
+            await tx.user.update({
+              where: { id: userOrtu.id },
+              data: { authId: authOrtuId },
+            })
+          } else {
             userOrtu = await tx.user.create({
               data: {
                 email: emailOrtu,
@@ -194,14 +203,6 @@ export async function createSiswaManual(
                 },
               },
             })
-          } catch (err) {
-            if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-              // Race condition: admin lain (misal menambah kakak-adik dengan orang tua
-              // yang sama) berhasil membuat user ini duluan. Ambil yang sudah ada.
-              userOrtu = await tx.user.findFirstOrThrow({ where: { email: emailOrtu } })
-            } else {
-              throw err
-            }
           }
         }
 
@@ -227,7 +228,16 @@ export async function createSiswaManual(
         }
 
         if (!userSiswa) {
-          try {
+          const existingByEmail = await tx.user.findFirst({
+            where: { email: emailSiswa },
+          })
+          if (existingByEmail) {
+            userSiswa = existingByEmail
+            await tx.user.update({
+              where: { id: userSiswa.id },
+              data: { authId: authSiswaId },
+            })
+          } else {
             userSiswa = await tx.user.create({
               data: {
                 email: emailSiswa,
@@ -262,14 +272,6 @@ export async function createSiswaManual(
                 },
               },
             })
-          } catch (err) {
-            if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-              // Race condition: admin lain berhasil membuat user siswa ini duluan.
-              // Ambil yang sudah ada, jangan gagal.
-              userSiswa = await tx.user.findFirstOrThrow({ where: { email: emailSiswa } })
-            } else {
-              throw err
-            }
           }
         }
 
