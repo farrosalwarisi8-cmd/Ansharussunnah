@@ -58,6 +58,21 @@ export function DashboardProvider({
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
 
+  // Reset state anak saat user berubah (mis. ganti akun/role), supaya sisa
+  // selection role sebelumnya tidak terbawa.
+  const prevUserId = React.useRef(user.id)
+  React.useEffect(() => {
+    if (prevUserId.current !== user.id) {
+      prevUserId.current = user.id
+      if (user.role === Role.ORANG_TUA && user.children) {
+        setSelectedChild(user.children.length === 1 ? user.children[0] : null)
+      } else {
+        setSelectedChild(null)
+      }
+      setIsMobileMenuOpen(false)
+    }
+  }, [user.id, user.role, user.children])
+
   return (
     <DashboardContext.Provider
       value={{

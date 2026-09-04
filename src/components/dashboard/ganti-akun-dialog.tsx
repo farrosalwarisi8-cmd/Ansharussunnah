@@ -3,7 +3,6 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import { Role } from "@prisma/client"
 import { useDashboard } from "./dashboard-context"
 import {
@@ -76,7 +75,6 @@ export function GantiAkunDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const router = useRouter()
   const { user: currentUser } = useDashboard()
   const [roles, setRoles] = React.useState<UserRole[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -128,7 +126,11 @@ export function GantiAkunDialog({
       const data = await res.json()
       if (data.success) {
         onOpenChange(false)
-        router.replace("/dashboard")
+        // Router client-side replace("/dashboard") ke path yang SAMA tidak
+        // memicu re-fetch layout, jadi provider & tampilan memakai role lama.
+        // Hard reload memastikan server membaca cookie role baru & merender
+        // ulang seluruh dashboard dengan role yang benar.
+        window.location.href = "/dashboard"
       } else {
         setError(data.message || "Gagal mengganti akun")
         setSelecting(null)
