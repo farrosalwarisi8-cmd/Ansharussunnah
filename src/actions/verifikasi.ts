@@ -447,6 +447,27 @@ export async function verifikasiPendaftaran(
           }
 
           if (!userSiswa) {
+            // Re-check kapasitas kelas DI DALAM transaction untuk meminimalkan
+            // race window (TOCTOU) — pengecekan pertama di atas bisa melewati
+            // jika dua approval berjalan bersamaan.
+            if (pendaftaran.kelasTujuanId) {
+              const kelasTx = await tx.kelas.findUnique({
+                where: { id: pendaftaran.kelasTujuanId },
+                include: { _count: { select: { siswa: true } } },
+              })
+              if (
+                kelasTx &&
+                kelasTx.kapasitas > 0 &&
+                kelasTx._count.siswa >= kelasTx.kapasitas
+              ) {
+                throw new Error(
+                  `Kelas "${kelasTx.nama}" sudah penuh (${kelasTx._count.siswa}/${kelasTx.kapasitas}).`
+                )
+              }
+            }
+          }
+
+          if (!userSiswa) {
             try {
               userSiswa = await tx.user.create({
                 data: {

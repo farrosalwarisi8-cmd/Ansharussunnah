@@ -95,6 +95,7 @@ vi.mock("@/lib/password", () => ({
 vi.mock("@/lib/email", () => ({
   sendEmail: vi.fn().mockResolvedValue({ success: true }),
   buildKredensialEmail: vi.fn().mockReturnValue("<html>Email</html>"),
+  buildKredensialEmailAnakKedua: vi.fn().mockReturnValue("<html>Email Anak Kedua</html>"),
 }))
 
 vi.mock("next/cache", () => ({
@@ -229,6 +230,9 @@ function setupTransactionMock() {
         },
         buktiTransferPendaftaran: {
           update: mockBuktiTransferUpdate,
+        },
+        kelas: {
+          findUnique: mockKelasFindUnique,
         },
       }
       return fn(tx)

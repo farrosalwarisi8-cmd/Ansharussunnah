@@ -98,6 +98,9 @@ export async function createAkunAdminKeuangan(
 
     // Buat user di Supabase Auth
     const supabaseAdmin = createSupabaseAdmin()
+    let authId: string
+    let authUserBaruDibuat = false
+
     const { data: authData, error: authError } =
       await supabaseAdmin.auth.admin.createUser({
         email,
@@ -110,21 +113,46 @@ export async function createAkunAdminKeuangan(
       })
 
     if (authError) {
-      console.error("Supabase auth error:", authError)
-      return { success: false, message: `Gagal membuat akun auth: ${authError.message}` }
+      if (authError.message.includes("already been registered")) {
+        // Email ini sudah punya akun Supabase Auth (dari role lain).
+        // REUSE authId supaya identitas login tetap sama.
+        const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
+          perPage: 1000,
+        })
+        const matched = existingUsers.users.find((u) => u.email === email)
+        if (!matched) throw new Error("Gagal memetakan akun auth admin keuangan yang sudah ada")
+        authId = matched.id
+      } else {
+        console.error("Supabase auth error:", authError)
+        return { success: false, message: `Gagal membuat akun auth: ${authError.message}` }
+      }
+    } else {
+      authId = authData.user!.id
+      authUserBaruDibuat = true
     }
 
     // Buat record User
-    const user = await prisma.user.create({
-      data: {
-        email,
-        nama,
-        role: "ADMIN_KEUANGAN",
-        authId: authData.user!.id,
-        mustChangePassword: true,
-        aktif: true,
-      },
-    })
+    let user: { id: string }
+    try {
+      user = await prisma.user.create({
+        data: {
+          email,
+          nama,
+          role: "ADMIN_KEUANGAN",
+          authId,
+          mustChangePassword: true,
+          aktif: true,
+        },
+      })
+    } catch (createError) {
+      // Rollback: hapus auth user baru jika create DB gagal
+      if (authUserBaruDibuat) {
+        await supabaseAdmin.auth.admin.deleteUser(authId).catch((cleanupErr) => {
+          console.error("Gagal cleanup auth user setelah create DB gagal:", cleanupErr)
+        })
+      }
+      throw createError
+    }
 
     // Kirim kredensial via email (fire-and-forget, jangan block response)
     sendEmail({
@@ -160,22 +188,18 @@ export async function updateAkunAdminKeuangan(
   payload: UpdateAkunAdminKeuanganValues
 ): Promise<ActionResponse> {
   try {
-    // Otorisasi: hanya boleh edit profil sendiri atau guru admin boleh edit siapa saja
-    const { requireAuth } = await import("@/lib/auth")
+    // Otorisasi: boleh edit profil sendiri, ATAU admin akademik (GURU admin,
+    // SUPER_ADMIN, ADMIN_AKADEMIK) boleh edit siapa saja.
+    const { requireAuth, isAcademicAdminRole } = await import("@/lib/auth")
     const currentUser = await requireAuth()
 
-    if (currentUser.id !== userId && currentUser.role !== "GURU") {
+    const isAdminAkademik = isAcademicAdminRole(currentUser.role)
+    const isGuruAdmin = currentUser.role === "GURU" && currentUser.isAdmin === true
+
+    if (currentUser.id !== userId && !isAdminAkademik && !isGuruAdmin) {
       return {
         success: false,
         message: "Akses ditolak: Anda hanya bisa mengedit profil sendiri",
-      }
-    }
-
-    // Jika bukan guru admin, pastikan target adalah admin keuangan
-    if (currentUser.role !== "GURU" && currentUser.id !== userId) {
-      return {
-        success: false,
-        message: "Akses ditolak",
       }
     }
 

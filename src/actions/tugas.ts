@@ -606,9 +606,17 @@ export async function submitTugas(
     if (isInternalPath) {
       const supabaseAdmin = createSupabaseAdmin()
       const fileName = urlFile.split("/").pop()
-      const { data: fileList } = await supabaseAdmin.storage
+      const { data: fileList, error: listError } = await supabaseAdmin.storage
         .from("tugas-siswa")
         .list(`submission/${tugasId}/${siswaId}`)
+
+      if (listError) {
+        console.error("Storage list error (tugas siswa):", listError)
+        return {
+          success: false,
+          message: "Gagal memverifikasi file di storage.",
+        }
+      }
 
       const fileExists = fileList?.some((f) => f.name === fileName)
       if (!fileExists) {

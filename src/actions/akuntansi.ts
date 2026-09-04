@@ -292,9 +292,14 @@ export async function submitBuktiPembayaranSpp(
       // Verifikasi file ada di Supabase Storage
       const supabaseAdmin = createSupabaseAdmin()
       const fileName = urlBukti.split("/").pop()
-      const { data: fileList } = await supabaseAdmin.storage
+      const { data: fileList, error: listError } = await supabaseAdmin.storage
         .from("bukti-spp")
         .list(`spp/${tagihanId}`)
+
+      if (listError) {
+        console.error("Storage list error (bukti spp):", listError)
+        return { success: false, message: "Gagal memverifikasi berkas di storage." }
+      }
 
       const fileExists = fileList?.some((f) => f.name === fileName)
       if (!fileExists) {

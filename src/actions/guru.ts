@@ -66,6 +66,9 @@ export async function createAkunGuru(
 
     // Buat user di Supabase Auth
     const supabaseAdmin = createSupabaseAdmin()
+    let authId: string
+    let authUserBaruDibuat = false
+
     const { data: authData, error: authError } =
       await supabaseAdmin.auth.admin.createUser({
         email,
@@ -78,38 +81,63 @@ export async function createAkunGuru(
       })
 
     if (authError) {
-      console.error("Supabase auth error:", authError)
-      return { success: false, message: `Gagal membuat akun auth: ${authError.message}` }
+      if (authError.message.includes("already been registered")) {
+        // Email ini sudah punya akun Supabase Auth (dari role lain).
+        // REUSE authId supaya identitas login tetap sama.
+        const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
+          perPage: 1000,
+        })
+        const matched = existingUsers.users.find((u) => u.email === email)
+        if (!matched) throw new Error("Gagal memetakan akun auth guru yang sudah ada")
+        authId = matched.id
+      } else {
+        console.error("Supabase auth error:", authError)
+        return { success: false, message: `Gagal membuat akun auth: ${authError.message}` }
+      }
+    } else {
+      authId = authData.user!.id
+      authUserBaruDibuat = true
     }
 
     // Buat record User + Guru dalam transaction
-    const result = await prisma.$transaction(
-      async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email,
-          nama,
-          role: "GURU",
-          authId: authData.user!.id,
-          mustChangePassword: true,
-          aktif: true,
-          isAdmin: isAdmin ?? false,
-        },
-      })
+    let result: { userId: string; guruId: string }
+    try {
+      result = await prisma.$transaction(
+        async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            email,
+            nama,
+            role: "GURU",
+            authId,
+            mustChangePassword: true,
+            aktif: true,
+            isAdmin: isAdmin ?? false,
+          },
+        })
 
-      const guru = await tx.guru.create({
-        data: {
-          userId: user.id,
-          nip: nip || null,
-          jabatan: jabatan || null,
-          noHp: noHp || null,
-        },
-      })
+        const guru = await tx.guru.create({
+          data: {
+            userId: user.id,
+            nip: nip || null,
+            jabatan: jabatan || null,
+            noHp: noHp || null,
+          },
+        })
 
-      return { userId: user.id, guruId: guru.id }
-      },
-      { timeout: 10000, maxWait: 3000 }
-    )
+        return { userId: user.id, guruId: guru.id }
+        },
+        { timeout: 10000, maxWait: 3000 }
+      )
+    } catch (txError) {
+      // Rollback: hapus auth user baru jika transaction gagal
+      if (authUserBaruDibuat) {
+        await supabaseAdmin.auth.admin.deleteUser(authId).catch((cleanupErr) => {
+          console.error("Gagal cleanup auth user setelah transaction gagal:", cleanupErr)
+        })
+      }
+      throw txError
+    }
 
     // Kirim kredensial via email (fire-and-forget, jangan block response)
     sendEmail({

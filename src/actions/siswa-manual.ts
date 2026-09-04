@@ -93,7 +93,9 @@ export async function createSiswaManual(
       if (authOrtuError) {
         // Handle case: email sudah terdaftar di Supabase Auth
         if (authOrtuError.message.includes("already been registered")) {
-          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
+          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
+            perPage: 1000,
+          })
           const matched = existingUsers.users.find((u) => u.email === emailOrtu)
           if (!matched) {
             return { success: false, message: "Gagal memetakan akun auth orang tua yang sudah ada" }
@@ -111,6 +113,7 @@ export async function createSiswaManual(
     }
 
     // --- Buat Supabase Auth Siswa ---
+    let authSiswaId: string
     const { data: authSiswaData, error: authSiswaError } =
       await supabaseAdmin.auth.admin.createUser({
         email: emailSiswa,
@@ -123,16 +126,33 @@ export async function createSiswaManual(
       })
 
     if (authSiswaError) {
-      // Cleanup auth yang baru dibuat
-      for (const authId of newlyCreatedAuthIds) {
-        await supabaseAdmin.auth.admin.deleteUser(authId)
+      if (authSiswaError.message.includes("already been registered")) {
+        // Email ini sudah punya akun Supabase Auth (dari role lain).
+        // REUSE authId supaya identitas login tetap sama.
+        const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
+          perPage: 1000,
+        })
+        const matched = existingUsers.users.find((u) => u.email === emailSiswa)
+        if (!matched) {
+          // Cleanup auth orang tua baru yang sudah dibuat sebelumnya
+          for (const authId of newlyCreatedAuthIds) {
+            await supabaseAdmin.auth.admin.deleteUser(authId)
+          }
+          return { success: false, message: "Gagal memetakan akun auth siswa yang sudah ada" }
+        }
+        authSiswaId = matched.id
+      } else {
+        // Cleanup auth yang baru dibuat
+        for (const authId of newlyCreatedAuthIds) {
+          await supabaseAdmin.auth.admin.deleteUser(authId)
+        }
+        console.error("Supabase auth error (siswa):", authSiswaError)
+        return { success: false, message: `Gagal membuat akun auth siswa: ${authSiswaError.message}` }
       }
-      console.error("Supabase auth error (siswa):", authSiswaError)
-      return { success: false, message: `Gagal membuat akun auth siswa: ${authSiswaError.message}` }
+    } else {
+      authSiswaId = authSiswaData.user!.id
+      newlyCreatedAuthIds.push(authSiswaId)
     }
-
-    const authSiswaId = authSiswaData.user!.id
-    newlyCreatedAuthIds.push(authSiswaId)
 
     // --- Prisma Transaction ---
     let prismaSiswaUserId: string | undefined

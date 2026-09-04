@@ -7,6 +7,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { createOtpWithHash, verifyOtp } from "@/lib/otp"
 import { sendEmail, buildOtpEmail } from "@/lib/email"
 import type { ActionResponse } from "@/types"
+import { revalidatePath } from "next/cache"
 
 const OTP_EXPIRY_MINUTES = parseInt(process.env.OTP_EXPIRY_MINUTES || "10")
 const OTP_MAX_ATTEMPTS = parseInt(process.env.OTP_MAX_ATTEMPTS || "3")
@@ -264,6 +265,9 @@ export async function resetPassword(
       },
       { timeout: 8000, maxWait: 3000 }
     )
+
+    // Revalidate layout agar mustChangePassword guard di sisi klien ikut ter-update
+    revalidatePath("/", "layout")
 
     return {
       success: true,

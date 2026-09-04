@@ -106,9 +106,14 @@ export async function createMateri(
         // Verifikasi file ada di Supabase Storage
         const supabaseAdmin = createSupabaseAdmin()
         const fileName = urlFile.split("/").pop()
-        const { data: fileList } = await supabaseAdmin.storage
+        const { data: fileList, error: listError } = await supabaseAdmin.storage
           .from("materi")
           .list(`materi/${kelasId}`)
+
+        if (listError) {
+          console.error("Storage list error (materi):", listError)
+          return { success: false, message: "Gagal memverifikasi berkas di storage." }
+        }
 
         const fileExists = fileList?.some((f) => f.name === fileName)
         if (!fileExists) {

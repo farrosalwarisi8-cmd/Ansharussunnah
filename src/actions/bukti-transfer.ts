@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
+import { revalidatePath } from "next/cache"
 
 /**
  * ✅ FIX: Verifikasi file benar-benar ada di Supabase Storage
@@ -106,25 +107,32 @@ export async function uploadBuktiTransferPendaftaran(
       }
     }
 
-    // Buat record bukti transfer
-    await prisma.buktiTransferPendaftaran.create({
-      data: {
-        pendaftaranId: pendaftaran.id,
-        urlFile,
-        namaFile,
-        ukuranFile,
-        status: "PENDING",
-      },
-    })
+    // Buat record bukti transfer + update status pendaftaran secara ATOMIC
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.buktiTransferPendaftaran.create({
+          data: {
+            pendaftaranId: pendaftaran.id,
+            urlFile,
+            namaFile,
+            ukuranFile,
+            status: "PENDING",
+          },
+        })
 
-    // Update status pendaftaran
-    await prisma.pendaftaran.update({
-      where: { id: pendaftaran.id },
-      data: {
-        status: "MENUNGGU_VERIFIKASI",
-        alasanPenolakan: null,
+        // Update status pendaftaran
+        await tx.pendaftaran.update({
+          where: { id: pendaftaran.id },
+          data: {
+            status: "MENUNGGU_VERIFIKASI",
+            alasanPenolakan: null,
+          },
+        })
       },
-    })
+      { timeout: 10000, maxWait: 3000 }
+    )
+
+    revalidatePath("/dashboard/pendaftaran")
 
     return {
       success: true,

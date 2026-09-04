@@ -660,16 +660,36 @@ export async function mulaiPengerjaanUjian(
         }
       }
     } else {
-      // Inisialisasi Pengerjaan Baru
-      pengerjaan = await prisma.pengerjaanUjian.create({
-        data: {
-          ujianId,
-          siswaId,
-          waktuMulai: now,
-          status: StatusPengerjaan.SEDANG_MENGERJAKAN,
-        },
-        include: { jawaban: true },
-      })
+      // Inisialisasi Pengerjaan Baru — pakai upsert agar aman dari race condition
+      // (dua request bersamaan oleh siswa yang sama tidak menghasilkan duplikat).
+      try {
+        pengerjaan = await prisma.pengerjaanUjian.upsert({
+          where: {
+            ujianId_siswaId: { ujianId, siswaId },
+          },
+          create: {
+            ujianId,
+            siswaId,
+            waktuMulai: now,
+            status: StatusPengerjaan.SEDANG_MENGERJAKAN,
+          },
+          update: {},
+          include: { jawaban: true },
+        })
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+          // Race condition: request lain berhasil membuat pengerjaan ini duluan.
+          // Ambil yang sudah ada, jangan gagal.
+          pengerjaan = await prisma.pengerjaanUjian.findUniqueOrThrow({
+            where: {
+              ujianId_siswaId: { ujianId, siswaId },
+            },
+            include: { jawaban: true },
+          })
+        } else {
+          throw err
+        }
+      }
     }
 
     // Hitung sisa batas waktu deadline siswa
