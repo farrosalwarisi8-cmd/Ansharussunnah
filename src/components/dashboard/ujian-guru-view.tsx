@@ -236,7 +236,7 @@ export function GuruUjianView() {
                   </Link>
                 </Button>
                 <Button asChild size="sm" className="bg-slate-800 hover:bg-slate-800 text-white rounded-xl min-h-[38px] text-xs font-bold">
-                  <Link href={`/dashboard/ujian/${item.id}/kerjakan`}>
+                  <Link href={`/dashboard/ujian/${item.id}/preview`}>
                     Preview
                   </Link>
                 </Button>

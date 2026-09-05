@@ -87,7 +87,7 @@ export async function generateTagihanSppInternal(
       }
     }
 
-    const { bulan, tahun, kelasId } = validated.data
+    const { bulan, tahun, kelasId, nominalDefault } = validated.data
 
     // 1. Ambil semua siswa aktif yang masuk filter kelasId (jika ada)
     const filterSiswa: Record<string, unknown> = {
@@ -141,12 +141,15 @@ export async function generateTagihanSppInternal(
         // Tentukan nominal tagihan SPP:
         // Prioritas 1: sppKhusus di level Siswa (beasiswa/keringanan)
         // Prioritas 2: tarifSppBulanan di level Jenjang Kelas
+        // Prioritas 3: nominalDefault dari input admin (fallback universal)
         let nominalSpp: Prisma.Decimal | null = null
 
         if (siswa.sppKhusus) {
           nominalSpp = siswa.sppKhusus
         } else if (siswa.kelas?.jenjang?.tarifSppBulanan) {
           nominalSpp = siswa.kelas.jenjang.tarifSppBulanan
+        } else if (nominalDefault) {
+          nominalSpp = new Prisma.Decimal(nominalDefault)
         }
 
         // Jika tidak ada tarif SPP terkonfigurasi, skip siswa ini

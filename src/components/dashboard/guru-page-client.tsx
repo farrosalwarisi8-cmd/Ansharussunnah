@@ -504,6 +504,14 @@ export default function KelolaGuruPage() {
               </label>
             </div>
 
+            {!isAdminInput && (
+              <p className="text-xs text-slate-500 bg-slate-50 rounded-xl px-3 py-2 border border-slate-100">
+                Guru tanpa hak admin otomatis ditugaskan ke semua mapel aktif di semua kelas aktif, sehingga
+                langsung bisa mengisi tugas, materi, dan ujian. Pengaturan kelas/mapel tetap bisa dipangkas lewat
+                halaman Kelola Pengajar.
+              </p>
+            )}
+
             <DialogFooter className="gap-2 sm:gap-0 pt-2">
               <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)} className="rounded-xl min-h-[40px]">
                 Batal

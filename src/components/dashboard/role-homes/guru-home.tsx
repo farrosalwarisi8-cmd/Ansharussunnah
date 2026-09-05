@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import Link from "next/link"
 import {
   CalendarCheck2,
@@ -8,12 +9,64 @@ import {
   Users2,
   Sparkles,
   Plus,
+  Loader2,
+  AlertCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { EmptyState } from "@/components/ui/empty-state"
+import { getRangkumanGuruHome, type RangkumanGuru } from "@/actions/dashboard"
 
 export function GuruDashboardHome() {
+  const [data, setData] = React.useState<RangkumanGuru | null>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    let mounted = true
+    async function fetchData() {
+      try {
+        const result = await getRangkumanGuruHome()
+        if (!mounted) return
+        if (result.success && result.data) {
+          setData(result.data)
+        } else {
+          setError(result.message || "Gagal memuat rangkuman")
+        }
+      } catch {
+        if (mounted) setError("Gagal memuat rangkuman dashboard")
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    fetchData()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
+        <span className="ml-3 text-sm text-slate-500">Memuat rangkuman data...</span>
+      </div>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <EmptyState
+        icon={AlertCircle}
+        title="Gagal Memuat Rangkuman"
+        description={error || "Data tidak tersedia."}
+      />
+    )
+  }
+
+  const tugasPerluDinilai = data.daftarTugas.filter((t) => t.pending > 0)
+
   return (
     <div className="space-y-6">
       {/* KPI Cards Grid */}
@@ -29,9 +82,11 @@ export function GuruDashboardHome() {
               </div>
             </div>
             <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-2">
-              4 Kelas
+              {data.jumlahKelas} Kelas
             </div>
-            <span className="text-xs text-slate-500 mt-1 block">Total 120 Santri</span>
+            <span className="text-xs text-slate-500 mt-1 block">
+              Total {data.jumlahSantri} Santri
+            </span>
           </CardContent>
         </Card>
 
@@ -46,9 +101,9 @@ export function GuruDashboardHome() {
               </div>
             </div>
             <div className="text-2xl sm:text-3xl font-extrabold text-amber-600 mt-2">
-              18 Tugas
+              {data.tugasPerluDinilai} Tugas
             </div>
-            <span className="text-xs text-slate-500 mt-1 block">Dari 2 tugas aktif</span>
+            <span className="text-xs text-slate-500 mt-1 block">Pengumpulan menunggu nilai</span>
           </CardContent>
         </Card>
 
@@ -58,14 +113,14 @@ export function GuruDashboardHome() {
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Ujian Aktif
               </span>
-              <div className="p-2 rounded-xl bg-teal-50 text-yellow-500">
+              <div className="p-2 rounded-xl bg-teal-50 text-teal-600">
                 <Award className="h-4 w-4" />
               </div>
             </div>
             <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-2">
-              2 Ujian
+              {data.ujianAktif} Ujian
             </div>
-            <span className="text-xs text-slate-500 mt-1 block">Pekan UTS Ganjil</span>
+            <span className="text-xs text-slate-500 mt-1 block">Sedang berlangsung</span>
           </CardContent>
         </Card>
 
@@ -73,16 +128,18 @@ export function GuruDashboardHome() {
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Kehadiran Hari Ini
+                Sesi Esai Dinilai
               </span>
               <div className="p-2 rounded-xl bg-yellow-50 text-yellow-500">
                 <CalendarCheck2 className="h-4 w-4" />
               </div>
             </div>
             <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-2">
-              96.5%
+              {data.ujianPerluDinilai} Sesi
             </div>
-            <span className="text-xs text-yellow-500 mt-1 block font-medium">3 kelas terinput</span>
+            <span className="text-xs text-yellow-500 mt-1 block font-medium">
+              Menunggu koreksi esai
+            </span>
           </CardContent>
         </Card>
       </div>
@@ -125,7 +182,7 @@ export function GuruDashboardHome() {
                 Tugas Memerlukan Penilaian
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                Pengumpulan tugas terbaru santri
+                Pengumpulan tugas santri yang belum dinilai
               </CardDescription>
             </div>
             <Button asChild variant="ghost" size="sm" className="text-xs text-yellow-600 hover:text-yellow-700">
@@ -133,39 +190,42 @@ export function GuruDashboardHome() {
             </Button>
           </CardHeader>
           <CardContent className="p-5 divide-y divide-slate-100">
-            {[
-              { mapel: "Bahasa Arab", judul: "Tashrif Fi'il Tsulatsi Mujarrad", kelas: "7A - Ikhwan", pending: 12, deadline: "Hari Ini" },
-              { mapel: "Tahfidz & Tajwid", judul: "Setoran Hafalan Surat Al-Mulk", kelas: "8B - Akhwat", pending: 6, deadline: "Kemarin" },
-            ].map((item, idx) => (
-              <div key={idx} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded">
-                      {item.mapel}
-                    </span>
-                    <span className="text-xs text-slate-500">{item.kelas}</span>
+            {tugasPerluDinilai.length > 0 ? (
+              tugasPerluDinilai.map((item) => (
+                <div key={item.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded">
+                        {item.mapel}
+                      </span>
+                      <span className="text-xs text-slate-500">{item.kelas}</span>
+                    </div>
+                    <div className="text-sm font-bold text-slate-800">{item.judul}</div>
                   </div>
-                  <div className="text-sm font-bold text-slate-800">{item.judul}</div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
-                    {item.pending} Belum Dinilai
+                  <div className="text-right shrink-0">
+                    <div className="text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                      {item.pending} Belum Dinilai
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="py-6 text-center text-sm text-slate-400">
+                Tidak ada pengumpulan tugas yang menunggu penilaian.
+              </p>
+            )}
           </CardContent>
         </Card>
 
-        {/* Ujian Mendatang / Aktif */}
+        {/* Ujian Terbaru */}
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base font-bold text-slate-800">
-                Jadwal Ujian Aktif
+                Daftar Ujian
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                Monitoring pelaksanaan evaluasi
+                Ujian di kelas yang Anda ampu
               </CardDescription>
             </div>
             <Button asChild variant="ghost" size="sm" className="text-xs text-yellow-600 hover:text-yellow-700">
@@ -173,23 +233,26 @@ export function GuruDashboardHome() {
             </Button>
           </CardHeader>
           <CardContent className="p-5 divide-y divide-slate-100">
-            {[
-              { mapel: "Fiqih Ibadah", judul: "Penilaian Harian Thaharah & Shalat", kelas: "Kelas 7 & 8", status: "PUBLISHED", durasi: "60 Menit" },
-              { mapel: "Aqidah Akhlak", judul: "Kuis Rukun Iman & Tauhid", kelas: "Kelas 9A", status: "DRAFT", durasi: "45 Menit" },
-            ].map((item, idx) => (
-              <div key={idx} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
-                      {item.mapel}
-                    </span>
-                    <span className="text-xs text-slate-500">{item.durasi}</span>
+            {data.daftarUjian.length > 0 ? (
+              data.daftarUjian.map((item) => (
+                <div key={item.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+                        {item.mapel}
+                      </span>
+                      <span className="text-xs text-slate-500">{item.kelas}</span>
+                    </div>
+                    <div className="text-sm font-bold text-slate-800">{item.judul}</div>
                   </div>
-                  <div className="text-sm font-bold text-slate-800">{item.judul}</div>
+                  <StatusBadge status={item.status as "DRAFT" | "AKTIF" | "SELESAI" | "PUBLISHED"} />
                 </div>
-                <StatusBadge status={item.status as "DRAFT" | "AKTIF" | "SELESAI" | "PUBLISHED"} />
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="py-6 text-center text-sm text-slate-400">
+                Belum ada ujian di kelas yang Anda ampu.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

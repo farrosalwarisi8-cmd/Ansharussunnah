@@ -8,41 +8,89 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const {
   mockRequireGuru,
+  mockRequireGuruAdmin,
   mockUserFindUnique,
+  mockUserFindFirst,
+  mockUserCreate,
   mockGuruFindUnique,
+  mockGuruCreate,
+  mockGuruKelasCreateMany,
+  mockMapelFindMany,
+  mockKelasFindMany,
   mockPrismaTransaction,
   mockUserUpdate,
   mockGuruUpdate,
+  mockCreateUser,
+  mockListUsers,
+  mockSendEmail,
 } = vi.hoisted(() => ({
   mockRequireGuru: vi.fn(),
+  mockRequireGuruAdmin: vi.fn(),
   mockUserFindUnique: vi.fn(),
+  mockUserFindFirst: vi.fn(),
+  mockUserCreate: vi.fn(),
   mockGuruFindUnique: vi.fn(),
+  mockGuruCreate: vi.fn(),
+  mockGuruKelasCreateMany: vi.fn(),
+  mockMapelFindMany: vi.fn(),
+  mockKelasFindMany: vi.fn(),
   mockPrismaTransaction: vi.fn(),
   mockUserUpdate: vi.fn(),
   mockGuruUpdate: vi.fn(),
+  mockCreateUser: vi.fn(),
+  mockListUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
+  mockSendEmail: vi.fn().mockResolvedValue({}),
 }))
 
 vi.mock("@/lib/auth", () => ({
   requireGuru: mockRequireGuru,
-  requireGuruAdmin: vi.fn(),
+  requireGuruAdmin: mockRequireGuruAdmin,
 }))
 
 vi.mock("@/lib/prisma", () => ({
   default: {
     user: {
       findUnique: mockUserFindUnique,
+      findFirst: mockUserFindFirst,
+      create: mockUserCreate,
       update: mockUserUpdate,
     },
     guru: {
       findUnique: mockGuruFindUnique,
+      create: mockGuruCreate,
       update: mockGuruUpdate,
+    },
+    mataPelajaran: {
+      findMany: mockMapelFindMany,
+    },
+    kelas: {
+      findMany: mockKelasFindMany,
+    },
+    guruKelas: {
+      createMany: mockGuruKelasCreateMany,
     },
     $transaction: mockPrismaTransaction,
   },
 }))
 
 vi.mock("@/lib/supabase/admin", () => ({
-  createSupabaseAdmin: vi.fn(),
+  createSupabaseAdmin: () => ({
+    auth: {
+      admin: {
+        createUser: mockCreateUser,
+        listUsers: mockListUsers,
+      },
+    },
+  }),
+}))
+
+vi.mock("@/lib/password", () => ({
+  generateSecurePassword: vi.fn().mockReturnValue("Guru132!xYzQweR"),
+}))
+
+vi.mock("@/lib/email", () => ({
+  sendEmail: mockSendEmail,
+  buildKredensialGuruEmail: vi.fn(() => "<p>kredensial</p>"),
 }))
 
 vi.mock("next/cache", () => ({
@@ -53,7 +101,7 @@ vi.mock("next/cache", () => ({
 // Import setelah semua vi.mock() terdaftar
 // ========================================================
 
-import { updateAkunGuru } from "@/actions/guru"
+import { createAkunGuru, updateAkunGuru } from "@/actions/guru"
 
 // ========================================================
 // Data dummy
@@ -359,5 +407,159 @@ describe("updateAkunGuru - Otorisasi", () => {
     expect(result.success).toBe(true)
     // NIP sama → findUnique tidak dipanggil
     expect(mockGuruFindUnique).not.toHaveBeenCalled()
+  })
+})
+
+// ========================================================
+// createAkunGuru — Penugasan Otomatis Guru Baru
+// ========================================================
+
+describe("createAkunGuru - Otorisasi & Penugasan Otomatis", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function setupCreateTransaction() {
+    mockPrismaTransaction.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        return fn({
+          user: { create: mockUserCreate },
+          guru: { create: mockGuruCreate },
+          guruKelas: { createMany: mockGuruKelasCreateMany },
+        })
+      }
+    )
+  }
+
+  // --------------------------------------------------------
+  // KASUS 1: Guru baru non-admin → otomatis ditugaskan ke semua mapel & kelas aktif
+  // --------------------------------------------------------
+  it("harus otomatis menugaskan guru non-admin ke semua mapel aktif di semua kelas aktif", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
+    mockUserFindFirst.mockResolvedValue(null) // email tidak duplikat
+    mockGuruFindUnique.mockResolvedValue(null) // NIP tidak duplikat
+
+    // 2 mapel aktif x 2 kelas aktif = 4 penugasan
+    mockMapelFindMany.mockResolvedValue([{ id: "mapel-1" }, { id: "mapel-2" }])
+    mockKelasFindMany.mockResolvedValue([{ id: "kelas-1" }, { id: "kelas-2" }])
+
+    mockCreateUser.mockResolvedValue({ data: { user: { id: "auth-1" } }, error: null })
+
+    setupCreateTransaction()
+    mockUserCreate.mockResolvedValue({ id: "user-1" })
+    mockGuruCreate.mockResolvedValue({ id: "guru-1" })
+    mockGuruKelasCreateMany.mockResolvedValue({ count: 4 })
+
+    const result = await createAkunGuru({
+      nama: "Guru Baru",
+      email: "gurubaru@sekolah.sch.id",
+      isAdmin: false,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.message).toContain("otomatis ditugaskan ke semua mapel aktif")
+
+    // Penugasan default = mapel x kelas
+    const createManyCall = mockGuruKelasCreateMany.mock.calls[0][0]
+    expect(createManyCall.data).toHaveLength(4)
+    expect(createManyCall.skipDuplicates).toBe(true)
+    expect(createManyCall.data).toEqual(
+      expect.arrayContaining([
+        { guruId: "guru-1", kelasId: "kelas-1", mataPelajaranId: "mapel-1" },
+        { guruId: "guru-1", kelasId: "kelas-2", mataPelajaranId: "mapel-2" },
+      ])
+    )
+    // Kredensial dikirim via email
+    expect(mockSendEmail).toHaveBeenCalled()
+  })
+
+  // --------------------------------------------------------
+  // KASUS 2: Guru admin → TIDAK perlu penugasan otomatis
+  // --------------------------------------------------------
+  it("harus melewati penugasan otomatis untuk guru admin", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
+    mockUserFindFirst.mockResolvedValue(null)
+    mockGuruFindUnique.mockResolvedValue(null)
+    mockCreateUser.mockResolvedValue({ data: { user: { id: "auth-2" } }, error: null })
+
+    setupCreateTransaction()
+    mockUserCreate.mockResolvedValue({ id: "user-admin" })
+    mockGuruCreate.mockResolvedValue({ id: "guru-admin" })
+
+    const result = await createAkunGuru({
+      nama: "Guru Admin",
+      email: "guruadmin@sekolah.sch.id",
+      isAdmin: true,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.message).not.toContain("otomatis")
+    expect(mockMapelFindMany).not.toHaveBeenCalled()
+    expect(mockKelasFindMany).not.toHaveBeenCalled()
+    expect(mockGuruKelasCreateMany).not.toHaveBeenCalled()
+  })
+
+  // --------------------------------------------------------
+  // KASUS 3: Tidak ada mapel/kelas aktif → sukses tanpa penugasan
+  // --------------------------------------------------------
+  it("harus tetap sukses meski tidak ada mapel atau kelas aktif", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
+    mockUserFindFirst.mockResolvedValue(null)
+    mockGuruFindUnique.mockResolvedValue(null)
+    mockCreateUser.mockResolvedValue({ data: { user: { id: "auth-3" } }, error: null })
+
+    mockMapelFindMany.mockResolvedValue([])
+    mockKelasFindMany.mockResolvedValue([{ id: "kelas-1" }])
+
+    setupCreateTransaction()
+    mockUserCreate.mockResolvedValue({ id: "user-3" })
+    mockGuruCreate.mockResolvedValue({ id: "guru-3" })
+
+    const result = await createAkunGuru({
+      nama: "Guru Tiga",
+      email: "gurutiga@sekolah.sch.id",
+      isAdmin: false,
+    })
+
+    expect(result.success).toBe(true)
+    expect(mockGuruKelasCreateMany).not.toHaveBeenCalled()
+  })
+
+  // --------------------------------------------------------
+  // KASUS 4: Payload tidak valid → gagal sebelum menyentuh database
+  // --------------------------------------------------------
+  it("harus menolak payload yang tidak valid", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
+
+    const result = await createAkunGuru({
+      nama: "X",
+      email: "bukan-email",
+      isAdmin: false,
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.errors).toBeDefined()
+    expect(mockUserFindFirst).not.toHaveBeenCalled()
+  })
+
+  // --------------------------------------------------------
+  // KASUS 5: Email sudah dipakai role GURU → ditolak
+  // --------------------------------------------------------
+  it("harus menolak email yang sudah terdaftar role GURU", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
+    mockUserFindFirst.mockResolvedValue({
+      id: "user-ada",
+      email: "gurubaru@sekolah.sch.id",
+      role: "GURU",
+    })
+
+    const result = await createAkunGuru({
+      nama: "Guru Baru",
+      email: "gurubaru@sekolah.sch.id",
+      isAdmin: false,
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("Email sudah terdaftar")
   })
 })

@@ -6,6 +6,9 @@ export const generateBulkSppSchema = z.object({
   bulan: z.number().int().min(1, "Bulan minimal 1 (Januari)").max(12, "Bulan maksimal 12 (Desember)"),
   tahun: z.number().int().min(2024, "Tahun minimal 2024").max(2100),
   kelasId: z.string().optional(), // Opsional: jika diisi, hanya untuk 1 kelas. Jika kosong, untuk semua siswa aktif.
+  // Opsional: tarif default yang dipakai bila siswa tidak punya sppKhusus
+  // dan jenjang kelasnya belum punya tarifSppBulanan.
+  nominalDefault: z.number().positive("Tarif default harus lebih dari 0").optional(),
 })
 
 export type GenerateBulkSppValues = z.infer<typeof generateBulkSppSchema>

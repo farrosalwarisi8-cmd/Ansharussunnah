@@ -61,6 +61,26 @@ export async function createAkunGuru(
       }
     }
 
+    // Auto-tugaskan guru baru (non-admin) ke semua mapel aktif di semua kelas aktif,
+    // agar langsung bisa memakai semua fitur (tugas, materi, ujian).
+    // Untuk guru admin tidak perlu — hak isAdmin sudah membuka akses semua kelas & mapel.
+    let penugasanDefault: Array<{ kelasId: string; mataPelajaranId: string }> = []
+    if (!isAdmin) {
+      const [mapelAktif, kelasAktif] = await Promise.all([
+        prisma.mataPelajaran.findMany({
+          where: { aktif: true },
+          select: { id: true },
+        }),
+        prisma.kelas.findMany({
+          where: { aktif: true },
+          select: { id: true },
+        }),
+      ])
+      penugasanDefault = mapelAktif.flatMap((m) =>
+        kelasAktif.map((k) => ({ kelasId: k.id, mataPelajaranId: m.id }))
+      )
+    }
+
     // Generate password random aman
     const password = generateSecurePassword(14)
 
@@ -125,6 +145,18 @@ export async function createAkunGuru(
           },
         })
 
+        // Tugaskan otomatis ke semua mapel aktif di semua kelas aktif
+        if (penugasanDefault.length > 0) {
+          await tx.guruKelas.createMany({
+            data: penugasanDefault.map((p) => ({
+              guruId: guru.id,
+              kelasId: p.kelasId,
+              mataPelajaranId: p.mataPelajaranId,
+            })),
+            skipDuplicates: true,
+          })
+        }
+
         return { userId: user.id, guruId: guru.id }
         },
         { timeout: 10000, maxWait: 3000 }
@@ -151,9 +183,13 @@ export async function createAkunGuru(
     }).catch((err) => console.error("Gagal mengirim email kredensial guru:", err))
 
     revalidatePath("/dashboard/guru")
+    const infoPenugasan =
+      !isAdmin && penugasanDefault.length > 0
+        ? " Guru otomatis ditugaskan ke semua mapel aktif di semua kelas aktif."
+        : ""
     return {
       success: true,
-      message: `Akun guru "${nama}" berhasil dibuat. Kredensial telah dikirim ke ${email}.`,
+      message: `Akun guru "${nama}" berhasil dibuat. Kredensial telah dikirim ke ${email}.${infoPenugasan}`,
       data: { userId: result.userId },
     }
   } catch (error: unknown) {

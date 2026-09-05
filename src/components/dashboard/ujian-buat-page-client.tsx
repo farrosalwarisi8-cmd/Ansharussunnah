@@ -259,7 +259,7 @@ export default function BuatUjianPage() {
           durasiMenit: parseInt(durasi) || 60,
           waktuMulai: waktuMulai ? new Date(waktuMulai).toISOString() : undefined,
           waktuSelesai: waktuSelesai ? new Date(waktuSelesai).toISOString() : undefined,
-          status: publish ? "PUBLISHED" : "DRAFT",
+          status: publish ? "PUBLISHED" : undefined,
         })
 
         if (!result.success) {

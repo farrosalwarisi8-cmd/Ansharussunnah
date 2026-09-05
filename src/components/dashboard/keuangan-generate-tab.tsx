@@ -24,7 +24,17 @@ export function GenerateSppTab() {
       const bulan = BULAN.indexOf(bulanNama) + 1
       const tahun = parseInt(tahunStr, 10)
 
-      const result = await generateBulkSpp({ bulan, tahun })
+      const defaultNominal = Number(nominalDefault)
+      if (!Number.isFinite(defaultNominal) || defaultNominal <= 0) {
+        toast({ variant: "destructive", title: "Tarif default tidak valid", description: "Isi tarif dasar default dengan angka lebih dari 0." })
+        return
+      }
+
+      const result = await generateBulkSpp({
+        bulan,
+        tahun,
+        nominalDefault: defaultNominal,
+      })
 
       if (!result.success) {
         toast({ variant: "destructive", title: "Gagal Menerbitkan Tagihan", description: result.message })
