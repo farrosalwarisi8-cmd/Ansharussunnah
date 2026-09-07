@@ -423,7 +423,7 @@ describe("createAkunGuru - Otorisasi & Penugasan Otomatis", () => {
     mockPrismaTransaction.mockImplementation(
       async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
         return fn({
-          user: { create: mockUserCreate },
+          user: { create: mockUserCreate, findFirst: mockUserFindFirst },
           guru: { create: mockGuruCreate },
           guruKelas: { createMany: mockGuruKelasCreateMany },
         })

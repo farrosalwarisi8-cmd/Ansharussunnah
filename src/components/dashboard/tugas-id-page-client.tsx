@@ -6,7 +6,7 @@ import * as React from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
-import { submitTugas, beriNilaiTugas, getRekapPengumpulanTugas } from "@/actions/tugas"
+import { submitTugas, beriNilaiTugas, getRekapPengumpulanTugas, getDetailTugasSiswa } from "@/actions/tugas"
 import { useToast } from "@/hooks/use-toast"
 import { Role } from "@prisma/client"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,7 @@ const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m
 const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogHeader), { ssr: false })
 const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
-import { ArrowLeft, Clock, Upload, CheckCircle2, Link as LinkIcon, Loader2, AlertCircle } from "lucide-react"
+import { ArrowLeft, Upload, CheckCircle2, Link as LinkIcon, Loader2, AlertCircle } from "lucide-react"
 
 interface SubmisiItem {
   siswaId: string
@@ -53,6 +53,32 @@ interface RekapData {
   rekap: SubmisiItem[]
 }
 
+interface DetailTugasSiswaData {
+  tugas: {
+    id: string
+    judul: string
+    deskripsi: string
+    mataPelajaran: string
+    deadline: string | Date
+    guru: string
+    periode: string
+    lampiranUrl: string | null
+  }
+  pengumpulan: {
+    id: string
+    status: string
+    waktuKumpul: string | Date | null
+    nilai: number | null
+    feedback: string | null
+    jumlahRevisi: number
+    jawabanUrl: string | null
+    namaFile: string | null
+    penilai: string | null
+    waktuPenilaian: string | Date | null
+    riwayat: { waktuKumpul: string | Date; status: string }[]
+  } | null
+}
+
 export default function DetailTugasPage() {
   const params = useParams()
   const { user } = useDashboard()
@@ -71,6 +97,7 @@ export default function DetailTugasPage() {
   const [fileUrl, setFileUrl] = React.useState("")
   const [catatanSiswa, setCatatanSiswa] = React.useState("")
   const [alreadySubmitted, setAlreadySubmitted] = React.useState(false)
+  const [studentDetail, setStudentDetail] = React.useState<DetailTugasSiswaData | null>(null)
 
   // Grading State (for Teacher)
   const [selectedSubmisi, setSelectedSubmisi] = React.useState<SubmisiItem | null>(null)
@@ -103,8 +130,16 @@ export default function DetailTugasPage() {
 
   // For student, mark as loading done immediately
   React.useEffect(() => {
-    if (!isTeacher) setLoading(false)
-  }, [isTeacher])
+    if (!isTeacher && tugasId) {
+      setLoading(false)
+      getDetailTugasSiswa(tugasId).then((result) => {
+        if (result.success && result.data) {
+          setStudentDetail(result.data as DetailTugasSiswaData)
+          setAlreadySubmitted(!!(result.data as DetailTugasSiswaData).pengumpulan)
+        }
+      })
+    }
+  }, [isTeacher, tugasId])
 
   const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -148,11 +183,19 @@ export default function DetailTugasPage() {
 
   const handleBeriNilai = async () => {
     if (!selectedSubmisi) return
+    if (!selectedSubmisi.pengumpulanId) {
+      toast({
+        variant: "destructive",
+        title: "Santri belum mengumpulkan tugas",
+        description: "Tidak dapat memberi nilai sebelum tugas dikumpulkan.",
+      })
+      return
+    }
     setSavingGrade(true)
 
     try {
       const result = await beriNilaiTugas({
-        pengumpulanId: selectedSubmisi.pengumpulanId || selectedSubmisi.siswaId,
+        pengumpulanId: selectedSubmisi.pengumpulanId,
         nilai: parseFloat(skorNilai) || 0,
         feedback: feedbackGuru || undefined,
       })
@@ -402,9 +445,41 @@ export default function DetailTugasPage() {
             <div className="p-6 rounded-2xl bg-yellow-50 border border-yellow-200 text-center space-y-2">
               <CheckCircle2 className="h-10 w-10 text-yellow-500 mx-auto" />
               <h4 className="font-bold text-yellow-900 text-base">Tugas Anda Sudah Dikumpulkan!</h4>
-              <p className="text-xs text-yellow-600 max-w-sm mx-auto">
-                Asatidz akan memeriksa pengerjaan Anda dan memberikan nilai serta catatan koreksi.
-              </p>
+
+              {studentDetail?.pengumpulan && (
+                <div className="space-y-3 mt-2 max-w-md mx-auto text-left">
+                  <div className="flex items-center justify-center gap-2">
+                    <StatusBadge status={(studentDetail.pengumpulan.status || "TEPAT_WAKTU") as StatusType} />
+                  </div>
+
+                  {studentDetail.pengumpulan.nilai != null ? (
+                    <div className={`p-4 rounded-2xl border text-center ${studentDetail.pengumpulan.status === "DINILAI" ? "bg-teal-50 border-teal-200" : "bg-white border-slate-200"}`}>
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">Nilai Anda</span>
+                      <span className="text-4xl font-black text-yellow-600">{Number(studentDetail.pengumpulan.nilai)}</span>
+                      <span className="text-sm text-slate-400 font-semibold"> / 100</span>
+                      {studentDetail.pengumpulan.penilai && (
+                        <div className="text-xs text-slate-500 mt-1">
+                          Dinilai oleh {studentDetail.pengumpulan.penilai}
+                          {studentDetail.pengumpulan.waktuPenilaian
+                            ? ` • ${new Date(studentDetail.pengumpulan.waktuPenilaian).toLocaleDateString("id-ID")}`
+                            : ""}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-yellow-700 max-w-sm mx-auto text-center">
+                      Asatidz sedang memeriksa pengerjaan Anda dan akan memberikan nilai serta catatan koreksi.
+                    </p>
+                  )}
+
+                  {studentDetail.pengumpulan.feedback && (
+                    <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs text-slate-700">
+                      <strong className="text-slate-800">Catatan Ustadz:</strong>{" "}
+                      {studentDetail.pengumpulan.feedback}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <form onSubmit={handleStudentSubmit} className="space-y-4">

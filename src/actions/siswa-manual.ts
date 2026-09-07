@@ -6,7 +6,8 @@ import prisma from "@/lib/prisma"
 import { requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
-import { siswaManualSchema, type SiswaManualFormValues } from "@/lib/validations/siswa-manual"
+import { siswaManualSchema, type SiswaManualFormValues, updateAkunSiswaSchema, type UpdateAkunSiswaValues } from "@/lib/validations/siswa-manual"
+import { deriveUniqueUsername } from "@/lib/username"
 import type { ActionResponse } from "@/types"
 import { Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
@@ -194,6 +195,8 @@ export async function createSiswaManual(
             userOrtu = await tx.user.create({
               data: {
                 email: emailOrtu,
+                username: await deriveUniqueUsername(tx, emailOrtu),
+                passwordPlain: passwordOrangTua,
                 nama: data.namaOrangTua,
                 role: Role.ORANG_TUA,
                 authId: authOrtuId,
@@ -244,6 +247,8 @@ export async function createSiswaManual(
             userSiswa = await tx.user.create({
               data: {
                 email: emailSiswa,
+                username: await deriveUniqueUsername(tx, emailSiswa),
+                passwordPlain: passwordSiswa,
                 nama: data.namaLengkap,
                 role: Role.SISWA,
                 authId: authSiswaId,
@@ -391,7 +396,7 @@ export async function resetPasswordSiswaManual(
     // Set mustChangePassword: true
     await prisma.user.update({
       where: { id: siswaUserId },
-      data: { mustChangePassword: true },
+      data: { mustChangePassword: true, passwordPlain: newPassword },
     })
 
     revalidatePath("/dashboard/siswa")
@@ -451,7 +456,7 @@ export async function resetPasswordOrangTuaManual(
     // Set mustChangePassword: true
     await prisma.user.update({
       where: { id: orangTuaUserId },
-      data: { mustChangePassword: true },
+      data: { mustChangePassword: true, passwordPlain: newPassword },
     })
 
     revalidatePath("/dashboard/siswa")
@@ -477,6 +482,8 @@ type SiswaManualListItem = {
   userId: string
   nama: string
   email: string
+  username: string | null
+  passwordPlain: string | null
   nisn: string | null
   nis: string | null
   kelasNama: string | null
@@ -506,6 +513,8 @@ export async function getDaftarSiswaManual(): Promise<ActionResponse<SiswaManual
             id: true,
             nama: true,
             email: true,
+            username: true,
+            passwordPlain: true,
             aktif: true,
             createdAt: true,
           },
@@ -542,6 +551,8 @@ export async function getDaftarSiswaManual(): Promise<ActionResponse<SiswaManual
       userId: s.user.id,
       nama: s.user.nama,
       email: s.user.email,
+      username: s.user.username,
+      passwordPlain: s.user.passwordPlain,
       nisn: s.nisn,
       nis: s.nis,
       kelasNama: s.kelas?.nama || null,
@@ -571,7 +582,173 @@ export async function getDaftarSiswaManual(): Promise<ActionResponse<SiswaManual
 }
 
 // ========================================================
-// 5. GET KELAS LIST (untuk dropdown)
+// 5. UPDATE AKUN SISWA (username, email, password)
+// ========================================================
+
+/**
+ * Admin/guru mengubah data akun siswa:
+ * - username: disimpan ke DB, dipakai sebagai alias login
+ * - email: disinkronkan ke Supabase Auth (email_confirm otomatis)
+ * - password: disinkronkan ke Supabase Auth + disimpan plaintext di DB
+ */
+export async function updateAkunSiswa(
+  siswaUserId: string,
+  payload: UpdateAkunSiswaValues
+): Promise<ActionResponse> {
+  try {
+    await requireGuruAdmin()
+
+    if (!siswaUserId) {
+      return { success: false, message: "ID siswa tidak valid" }
+    }
+
+    // Normalisasi: username di-lowercase agar tidak ambigu dengan huruf kapital
+    const normalizedPayload =
+      payload.username !== undefined
+        ? { ...payload, username: payload.username.trim().toLowerCase() }
+        : payload
+
+    const validated = updateAkunSiswaSchema.safeParse(normalizedPayload)
+    if (!validated.success) {
+      return {
+        success: false,
+        message: "Data akun tidak valid",
+        errors: validated.error.flatten().fieldErrors,
+      }
+    }
+
+    const { username, email, password } = validated.data
+
+    const user = await prisma.user.findUnique({
+      where: { id: siswaUserId },
+      include: { siswa: true },
+    })
+    if (!user || user.role !== Role.SISWA) {
+      return { success: false, message: "Akun siswa tidak ditemukan" }
+    }
+
+    const changes: string[] = []
+
+    // Cek duplikasi username (case-insensitive) di SEMUA user (login via username bersifat global)
+    const newUsername = username?.trim()
+    if (newUsername && (user.username || "") !== newUsername) {
+      const duplicateUsername = await prisma.user.findFirst({
+        where: {
+          username: newUsername,
+          id: { not: user.id },
+          NOT: { username: null },
+        },
+      })
+      if (duplicateUsername) {
+        return { success: false, message: `Username "${newUsername}" sudah dipakai pengguna lain` }
+      }
+    }
+
+    // Cek duplikasi email di SEMUA user dengan authId BERBEDA.
+    // (Email di Supabase Auth wajib unik global; record lain yang ber-authId
+    // sama adalah identitas orang yang sama dan boleh memakai email sama.)
+    const newEmail = email?.toLowerCase().trim()
+    if (newEmail && newEmail !== user.email.toLowerCase()) {
+      const duplicateEmail = await prisma.user.findFirst({
+        where: {
+          email: newEmail,
+          id: { not: user.id },
+          NOT: { authId: user.authId },
+        },
+        select: { id: true },
+      })
+      if (duplicateEmail) {
+        return {
+          success: false,
+          message: `Email "${newEmail}" sudah terdaftar untuk pengguna lain`,
+        }
+      }
+    }
+
+    const supabaseAdmin = createSupabaseAdmin()
+
+    // Catat perubahan (untuk pesan ringkasan)
+    if (newUsername && newUsername !== (user.username || "")) changes.push("username")
+
+    // Update email di Supabase Auth (jika berubah)
+    if (newEmail && newEmail !== user.email.toLowerCase()) {
+      const { error: emailError } = await supabaseAdmin.auth.admin.updateUserById(user.authId, {
+        email: newEmail,
+        email_confirm: true,
+      })
+      if (emailError) {
+        return {
+          success: false,
+          message: `Gagal mengubah email di sistem login: ${emailError.message}`,
+        }
+      }
+
+      // Sinkronkan email ke SEMUA record User dengan authId sama
+      // (kasus satu orang punya beberapa role) agar email login konsisten.
+      await prisma.user.updateMany({
+        where: { authId: user.authId },
+        data: { email: newEmail },
+      })
+
+      changes.push("email")
+    }
+
+    // Update password di Supabase Auth (jika diisi)
+    if (password) {
+      const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(user.authId, {
+        password,
+      })
+      if (passwordError) {
+        return {
+          success: false,
+          message: `Gagal mengubah password: ${passwordError.message}`,
+        }
+      }
+      changes.push("password")
+    }
+
+    // Update di database (mulai dari kolom yang berubah saja)
+    // Catatan: email sudah disinkronkan via updateMany di atas.
+    const updateData: {
+      username?: string
+      passwordPlain?: string
+      mustChangePassword?: boolean
+      lastPasswordChange?: Date
+    } = {}
+
+    if (newUsername) updateData.username = newUsername
+    if (password) {
+      updateData.passwordPlain = password
+      updateData.mustChangePassword = true
+      updateData.lastPasswordChange = new Date()
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: updateData,
+      })
+    }
+
+    revalidatePath("/dashboard/siswa")
+    return {
+      success: true,
+      message:
+        changes.length > 0
+          ? `Akun siswa "${user.nama}" berhasil diperbarui (${changes.join(", ")}).`
+          : "Tidak ada perubahan pada akun siswa.",
+    }
+  } catch (error: unknown) {
+    console.error("Error updateAkunSiswa:", error)
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal memperbarui akun siswa",
+    }
+  }
+}
+
+// ========================================================
+// 6. GET KELAS LIST (untuk dropdown)
 // ========================================================
 
 type KelasListItem = {

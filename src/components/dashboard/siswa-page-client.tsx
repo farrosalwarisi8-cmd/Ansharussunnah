@@ -13,6 +13,7 @@ import {
   createSiswaManual,
   resetPasswordSiswaManual,
   resetPasswordOrangTuaManual,
+  updateAkunSiswa,
   getDaftarSiswaManual,
   getKelasList,
   hapusSiswaPermanent,
@@ -79,6 +80,8 @@ type SiswaListItem = {
   userId: string
   nama: string
   email: string
+  username: string | null
+  passwordPlain: string | null
   nisn: string | null
   nis: string | null
   kelasNama: string | null
@@ -311,6 +314,20 @@ export default function KelolaSiswaPage() {
   }>({ open: false, userId: "", nama: "", type: "SISWA" })
   const [resetLoading, setResetLoading] = React.useState(false)
 
+  // Update akun state (username, email, password)
+  const [editAkun, setEditAkun] = React.useState<{
+    open: boolean
+    userId: string
+    nama: string
+    username: string
+    email: string
+    passwordPlain: string | null
+  }>({ open: false, userId: "", nama: "", username: "", email: "", passwordPlain: null })
+  const [editUsername, setEditUsername] = React.useState("")
+  const [editEmail, setEditEmail] = React.useState("")
+  const [editPassword, setEditPassword] = React.useState("")
+  const [editingAkun, setEditingAkun] = React.useState(false)
+
   // Hapus siswa state
   const [hapusConfirm, setHapusConfirm] = React.useState<{
     open: boolean
@@ -495,6 +512,70 @@ export default function KelolaSiswaPage() {
       }
   }
 
+  const openEditAkun = (s: SiswaListItem) => {
+    setEditAkun({
+      open: true,
+      userId: s.userId,
+      nama: s.nama,
+      username: s.username || "",
+      email: s.email,
+      passwordPlain: s.passwordPlain,
+    })
+    setEditUsername(s.username || "")
+    setEditEmail(s.email || "")
+    setEditPassword("")
+  }
+
+  const handleUpdateAkun = async () => {
+    if (!editAkun.userId) return
+    setEditingAkun(true)
+
+    try {
+      const result = await updateAkunSiswa(editAkun.userId, {
+        username: editUsername.trim() || "",
+        email: editEmail.trim() || "",
+        password: editPassword || undefined,
+      })
+
+      if (result.success) {
+        setEditAkun((prev) => ({ ...prev, open: false }))
+        setEditPassword("")
+
+        // Refresh data
+        const siswaRes = await getDaftarSiswaManual()
+        if (siswaRes.success && siswaRes.data) {
+          setSiswaList(siswaRes.data as unknown as SiswaListItem[])
+        }
+
+        if (editPassword.trim()) {
+          setPasswordDisplay({
+            passwordSiswa: editPassword,
+            namaSiswa: editAkun.nama,
+          })
+        }
+
+        toast({
+          title: "Akun Berhasil Diperbarui! ✅",
+          description: result.message,
+        })
+      } else {
+        toast({
+          title: "Gagal Memperbarui Akun",
+          description: result.message,
+          variant: "destructive",
+        })
+      }
+    } catch {
+      toast({
+        title: "Gagal Memperbarui Akun",
+        description: "Terjadi kesalahan saat memperbarui akun.",
+        variant: "destructive",
+      })
+    } finally {
+      setEditingAkun(false)
+    }
+  }
+
   const handleHapusSiswa = async () => {
     if (!hapusConfirm.userId) return
     setHapusLoading(true)
@@ -549,6 +630,7 @@ export default function KelolaSiswaPage() {
         (s) =>
           s.nama.toLowerCase().includes(q) ||
           s.email.toLowerCase().includes(q) ||
+          (s.username && s.username.toLowerCase().includes(q)) ||
           (s.nisn && s.nisn.includes(q)) ||
           (s.nis && s.nis.includes(q))
       )
@@ -672,7 +754,15 @@ export default function KelolaSiswaPage() {
                             <span className="text-slate-400">—</span>
                           )}
                         </td>
-                        <td className="p-4 text-xs text-slate-600">{s.email}</td>
+                        <td className="p-4 text-xs">
+                          {s.username && (
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <User className="h-3 w-3 text-slate-400" />
+                              <span className="font-mono font-semibold text-slate-700">{s.username}</span>
+                            </div>
+                          )}
+                          <div className={s.username ? "text-slate-400" : "text-slate-600"}>{s.email}</div>
+                        </td>
                         <td className="p-4 text-xs text-slate-600">
                           {s.orangTua.length > 0 ? (
                             <div>
@@ -687,6 +777,15 @@ export default function KelolaSiswaPage() {
                           <StatusBadge status={s.aktif ? "AKTIF" : "NONAKTIF"} />
                         </td>
                         <td className="p-4 pr-6 text-right space-x-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openEditAkun(s)}
+                            className="rounded-xl text-xs font-semibold"
+                          >
+                            <Key className="h-3 w-3 mr-1" />
+                            Ubah Akun
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
@@ -760,6 +859,12 @@ export default function KelolaSiswaPage() {
                     </div>
 
                     <div className="text-xs text-slate-600 space-y-1 bg-white p-3 rounded-xl border border-slate-100">
+                      {s.username && (
+                        <div className="flex items-center gap-1">
+                          <User className="h-3 w-3 text-slate-400" />
+                          <span>Username: <strong className="font-mono">{s.username}</strong></span>
+                        </div>
+                      )}
                       <div>Email: <strong>{s.email}</strong></div>
                       {s.nisn && <div>NISN: {s.nisn}</div>}
                       {s.nis && <div>NIS: {s.nis}</div>}
@@ -769,6 +874,15 @@ export default function KelolaSiswaPage() {
                     </div>
 
                     <div className="flex gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openEditAkun(s)}
+                        className="flex-1 rounded-xl text-xs min-h-[40px]"
+                      >
+                        <Key className="h-3 w-3 mr-1" />
+                        Ubah Akun
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
@@ -1527,6 +1641,105 @@ export default function KelolaSiswaPage() {
             >
               <Check className="mr-2 h-4 w-4" />
               Saya sudah mencatat, Tutup
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============================================ */}
+      {/* MODAL: UBAH AKUN (username, email, password) */}
+      {/* ============================================ */}
+      <Dialog open={editAkun.open} onOpenChange={(open) => setEditAkun((prev) => ({ ...prev, open }))}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <Key className="h-5 w-5 text-yellow-500" />
+              Ubah Akun: {editAkun.nama}
+            </DialogTitle>
+            <p className="text-xs text-slate-500">
+              Ubah username, email, atau password siswa. Semua tersimpan permanen di database.
+            </p>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 block mb-1.5">
+                Username (Nama Pengguna)
+              </label>
+              <Input
+                placeholder="contoh: ahmad.fauzi"
+                value={editUsername}
+                onChange={(e) => setEditUsername(e.target.value)}
+                className="h-11 rounded-xl text-sm"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Hanya huruf kecil, angka, titik, strip, dan underscore. Dipakai untuk login.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 block mb-1.5">
+                Email (Alamat Login)
+              </label>
+              <Input
+                type="email"
+                placeholder="nama@sekolah.internal"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                className="h-11 rounded-xl text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 block mb-1.5">
+                Password Saat Ini (untuk dilihat bila siswa lupa)
+              </label>
+              <Input
+                readOnly
+                value={editAkun.passwordPlain || "Tidak tercatat"}
+                className="h-11 rounded-xl text-sm font-mono bg-slate-50"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 block mb-1.5">
+                Password Baru (opsional — kosongkan jika tidak diganti)
+              </label>
+              <Input
+                type="text"
+                placeholder="Minimal 6 karakter"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+                className="h-11 rounded-xl text-sm"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Jika diisi, siswa akan diminta mengganti password saat login berikutnya.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setEditAkun((prev) => ({ ...prev, open: false }))}
+              disabled={editingAkun}
+              className="rounded-xl min-h-[40px]"
+            >
+              Batal
+            </Button>
+            <Button
+              onClick={handleUpdateAkun}
+              disabled={editingAkun}
+              className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
+            >
+              {editingAkun ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                  Menyimpan...
+                </>
+              ) : (
+                "Simpan Perubahan"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

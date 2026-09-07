@@ -62,7 +62,8 @@ export async function login(formData: FormData): Promise<ActionResponse<{ hasMul
       }
     }
 
-    const normalizedEmail = email.toLowerCase().trim()
+    const input = email.toLowerCase().trim()
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input)
     const ip = await getClientIpFromHeaders()
     const userAgent = await getUserAgent()
 
@@ -73,7 +74,7 @@ export async function login(formData: FormData): Promise<ActionResponse<{ hasMul
     })
     if (!ipLimiter.success) {
       logLoginAttempt({
-        email: normalizedEmail,
+        email: input,
         ip,
         userAgent,
         status: "RATE_LIMITED",
@@ -85,10 +86,37 @@ export async function login(formData: FormData): Promise<ActionResponse<{ hasMul
       }
     }
 
+    // Resolusi identifier: bila input bukan email, perlakukan sebagai username.
+    // Cari di database → ambil email terkait agar bisa login via Supabase Auth.
+    let loginEmail: string | null = isEmail ? input : null
+    if (!loginEmail) {
+      const userByUsername = await prisma.user.findFirst({
+        where: { username: input, aktif: true },
+        select: { email: true },
+      })
+      if (userByUsername) {
+        loginEmail = userByUsername.email.toLowerCase().trim()
+      }
+    }
+
+    if (!loginEmail) {
+      logLoginAttempt({
+        email: input,
+        ip,
+        userAgent,
+        status: "FAILED",
+        reason: "identifier not found",
+      })
+      return {
+        success: false,
+        message: "Email atau password salah",
+      }
+    }
+
     const supabase = await createSupabaseServerClient()
 
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: loginEmail,
       password,
     })
 
@@ -96,13 +124,13 @@ export async function login(formData: FormData): Promise<ActionResponse<{ hasMul
       // Rate Limit #2: Per-email — maksimal 5 percobaan GAGAL per 15 menit.
       // Hanya dikenakan saat autentikasi GAGAL, sehingga serangan dengan
       // password salah tidak bisa mengunci email korban (anti DoS login).
-      const emailLimiter = await rateLimitAsync(`login-email:${normalizedEmail}`, {
+      const emailLimiter = await rateLimitAsync(`login-email:${loginEmail}`, {
         maxRequests: 5,
         windowMs: 15 * 60 * 1000, // 15 menit
       })
 
       logLoginAttempt({
-        email: normalizedEmail,
+        email: loginEmail,
         ip,
         userAgent,
         status: emailLimiter.success ? "FAILED" : "RATE_LIMITED",
@@ -120,7 +148,7 @@ export async function login(formData: FormData): Promise<ActionResponse<{ hasMul
     }
 
     logLoginAttempt({
-      email: normalizedEmail,
+      email: loginEmail,
       ip,
       userAgent,
       status: "SUCCESS",

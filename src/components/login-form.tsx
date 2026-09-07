@@ -53,15 +53,17 @@ export default function LoginForm() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email" className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-            Alamat Email
+            Username atau Email
           </Label>
           <div className="relative">
             <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
             <Input
               id="email"
               name="email"
-              type="email"
-              placeholder="nama@ansharussunnah.sch.id"
+              type="text"
+              autoCapitalize="none"
+              autoCorrect="off"
+              placeholder="username atau nama@sekolah.internal"
               required
               className="pl-10 h-12 bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus-visible:ring-yellow-500 text-base sm:text-sm"
             />

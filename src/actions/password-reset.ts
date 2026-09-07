@@ -260,6 +260,7 @@ export async function resetPassword(
         data: {
           mustChangePassword: false,
           lastPasswordChange: new Date(),
+          passwordPlain: newPassword,
         },
       })
       },

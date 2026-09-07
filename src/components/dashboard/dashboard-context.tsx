@@ -20,6 +20,7 @@ export interface DashboardUser {
   id: string
   nama: string
   email: string
+  username?: string | null
   role: Role
   isAdmin: boolean
   avatar?: string | null

@@ -3,6 +3,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
+import { deriveUniqueUsername } from "@/lib/username"
 import { requireGuru, requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
@@ -127,6 +128,8 @@ export async function createAkunGuru(
         const user = await tx.user.create({
           data: {
             email,
+            username: await deriveUniqueUsername(tx, email),
+            passwordPlain: password,
             nama,
             role: "GURU",
             authId,

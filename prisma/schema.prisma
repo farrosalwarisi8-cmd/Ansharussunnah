@@ -128,6 +128,8 @@ enum Kewarganegaraan {
 model User {
   id                 String    @id @default(cuid())
   email              String
+  username           String?   @unique
+  passwordPlain      String?   @map("password_plain")
   nama               String
   role               Role
   avatar             String?

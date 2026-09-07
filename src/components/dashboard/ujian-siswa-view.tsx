@@ -2,10 +2,11 @@
 
 import * as React from "react"
 import { getDaftarUjianSiswa } from "@/actions/ujian"
-import { Plus, Clock, FileText, Play, Calendar, Award, Loader2 } from "lucide-react"
+import { Clock, Play, Award, Loader2, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
+import { StatusBadge, type StatusType } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
 
 type UjianItem = {
@@ -136,11 +137,23 @@ export function SiswaUjianView() {
                       <span className="text-xs text-slate-400">{new Date(ex.waktuMulai).toLocaleDateString("id-ID")}</span>
                     </div>
                     <div className="font-bold text-slate-800 text-sm">{ex.judul}</div>
+                    <div>
+                      <StatusBadge status={(ex.statusPengerjaan || (ex.status as StatusType) || "SELESAI") as StatusType} size="sm" />
+                    </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-lg font-extrabold text-yellow-600 bg-yellow-50 px-3 py-1 rounded-xl border border-yellow-200">
-                      {ex.nilai != null ? Number(ex.nilai) : "-"}
-                    </div>
+                    {ex.nilai != null ? (
+                      <div className="text-lg font-extrabold text-yellow-600 bg-yellow-50 px-3 py-1 rounded-xl border border-yellow-200">
+                        {Number(ex.nilai)}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Nilai Belum Keluar
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

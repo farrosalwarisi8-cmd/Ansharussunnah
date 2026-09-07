@@ -85,6 +85,7 @@ export async function changePassword(
       data: {
         mustChangePassword: false,
         lastPasswordChange: new Date(),
+        passwordPlain: newPassword,
       },
     })
 

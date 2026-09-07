@@ -193,3 +193,42 @@ export const siswaManualSchema = z
   })
 
 export type SiswaManualFormValues = z.infer<typeof siswaManualSchema>
+
+/**
+ * Schema untuk update akun siswa oleh admin/guru:
+ * - username: nama pengguna (login alias) yang tersimpan di DB
+ * - email: email login (sinkron ke Supabase Auth)
+ * - password: password baru (sinkron ke Supabase Auth + disimpan di DB)
+ */
+export const updateAkunSiswaSchema = z
+  .object({
+    username: z
+      .string()
+      .trim()
+      .min(3, "Username minimal 3 karakter")
+      .max(50, "Username maksimal 50 karakter")
+      .regex(
+        /^[a-z0-9._-]+$/,
+        "Username hanya boleh berisi huruf kecil, angka, titik, strip, dan underscore"
+      )
+      .optional()
+      .or(z.literal("")),
+    email: z
+      .string()
+      .email("Format email tidak valid")
+      .optional()
+      .or(z.literal("")),
+    password: z
+      .string()
+      .optional()
+      .refine(
+        (val) => !val || val.length >= 6,
+        "Password minimal 6 karakter"
+      ),
+  })
+  .refine(
+    (data) => data.username || data.email || data.password,
+    "Minimal satu kolom harus diisi"
+  )
+
+export type UpdateAkunSiswaValues = z.infer<typeof updateAkunSiswaSchema>

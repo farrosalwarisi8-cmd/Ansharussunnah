@@ -3,6 +3,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
+import { deriveUniqueUsername } from "@/lib/username"
 import { requireGuru } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getSignedUrl } from "@/lib/storage"
@@ -372,6 +373,8 @@ export async function verifikasiPendaftaran(
             userOrtu = await tx.user.create({
               data: {
                 email: emailOrtu,
+                username: await deriveUniqueUsername(tx, emailOrtu),
+                passwordPlain: passwordOrangTua,
                 nama: pendaftaran.namaOrangTua,
                 role: Role.ORANG_TUA,
                 authId: authOrtuId,
@@ -460,6 +463,8 @@ export async function verifikasiPendaftaran(
               userSiswa = await tx.user.create({
                 data: {
                   email: emailSiswa,
+                  username: await deriveUniqueUsername(tx, emailSiswa),
+                  passwordPlain: passwordSiswa,
                   nama: pendaftaran.namaLengkap,
                   role: Role.SISWA,
                   authId: authSiswaId,

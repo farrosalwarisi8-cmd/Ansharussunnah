@@ -6,23 +6,71 @@ import * as React from "react"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { changePassword } from "@/actions/change-password"
+import { getAkunProfil, updateAkunProfil } from "@/actions/profil"
 import { logout } from "@/actions/auth"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Lock, ShieldCheck, Loader2, LogOut } from "lucide-react"
+import { Lock, ShieldCheck, Loader2, LogOut, UserRound, Mail } from "lucide-react"
 
 export default function ProfilPage() {
   const { user } = useDashboard()
   const { toast } = useToast()
+
+  // Biodata Akun Form State
+  const [username, setUsername] = React.useState(user.username || "")
+  const [email, setEmail] = React.useState(user.email || "")
+  const [savingAkun, setSavingAkun] = React.useState(false)
 
   // Change Password Form State
   const [oldPassword, setOldPassword] = React.useState("")
   const [newPassword, setNewPassword] = React.useState("")
   const [confirmPassword, setConfirmPassword] = React.useState("")
   const [loading, setLoading] = React.useState(false)
+
+  // Ambil data akun terbaru dari DB saat halaman dibuka
+  React.useEffect(() => {
+    getAkunProfil().then((result) => {
+      if (result.success && result.data) {
+        setUsername(result.data.username || "")
+        setEmail(result.data.email || "")
+      }
+    })
+  }, [])
+
+  const handleUpdateAkun = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingAkun(true)
+    try {
+      const result = await updateAkunProfil({
+        username: username.trim() || "",
+        email: email.trim() || "",
+      })
+
+      if (result.success) {
+        toast({
+          title: "Akun Berhasil Diperbarui! ✅",
+          description: "Username dan email Anda telah tersimpan di database.",
+        })
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Gagal Memperbarui Akun",
+          description: result.message,
+        })
+      }
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Gagal Memperbarui Akun",
+        description: "Terjadi kesalahan saat menyimpan data akun.",
+      })
+    } finally {
+      setSavingAkun(false)
+    }
+  }
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -113,8 +161,73 @@ export default function ProfilPage() {
           </div>
         </Card>
 
-        {/* Change Password Form Card */}
-        <Card className="md:col-span-2 rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 sm:p-8 space-y-6">
+        {/* Biodata Akun + Change Password */}
+        <div className="md:col-span-2 space-y-6">
+          {/* Biodata Akun Form Card */}
+          <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 sm:p-8 space-y-6">
+            <div>
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <UserRound className="h-4 w-4 text-yellow-500" />
+                <span>Biodata Akun (Username &amp; Email)</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Username &amp; email tersimpan permanen di database dan dipakai untuk login.
+              </p>
+            </div>
+
+            <form onSubmit={handleUpdateAkun} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                  Username (Nama Pengguna)
+                </label>
+                <Input
+                  placeholder="contoh: ahmad.fauzi"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="h-11 rounded-xl text-base sm:text-sm"
+                />
+                <p className="text-[11px] text-slate-400">
+                  Hanya huruf kecil, angka, titik, strip, dan underscore.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                  Email (Alamat Login)
+                </label>
+                <Input
+                  type="email"
+                  placeholder="nama@sekolah.internal"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-11 rounded-xl text-base sm:text-sm"
+                />
+              </div>
+
+              <div className="pt-2">
+                <Button
+                  type="submit"
+                  disabled={savingAkun}
+                  className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold h-11 rounded-xl min-h-[44px]"
+                >
+                  {savingAkun ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Menyimpan Perubahan...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4 mr-2" />
+                      Simpan Biodata Akun
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </Card>
+
+          {/* Change Password Form Card */}
+          <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 sm:p-8 space-y-6">
           <div>
             <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
               <Lock className="h-4 w-4 text-yellow-500" />
@@ -185,7 +298,8 @@ export default function ProfilPage() {
               </Button>
             </div>
           </form>
-        </Card>
+          </Card>
+        </div>
       </div>
     </div>
   )

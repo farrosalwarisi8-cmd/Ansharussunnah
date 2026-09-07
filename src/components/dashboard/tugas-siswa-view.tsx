@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { StatusBadge, type StatusType } from "@/components/ui/status-badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -141,14 +141,15 @@ export function SiswaTugasView() {
                     <span className="text-xs font-semibold text-slate-500">{tugas.mataPelajaran}</span>
                     <h4 className="font-bold text-slate-800 text-sm sm:text-base">{tugas.judul}</h4>
                   </div>
-                  {tugas.nilai != null ? (
-                    <div className="text-right">
-                      <span className="text-xs text-slate-400 block">Nilai</span>
-                      <span className="text-xl font-black text-yellow-600">{Number(tugas.nilai)}</span>
-                    </div>
-                  ) : (
+                  <div className="text-right shrink-0">
                     <StatusBadge status={tugas.statusPengumpulan as StatusType} />
-                  )}
+                    {tugas.nilai != null && (
+                      <div className="mt-1.5">
+                        <span className="text-xs text-slate-400 block">Nilai</span>
+                        <span className="text-xl font-black text-yellow-600">{Number(tugas.nilai)}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {tugas.feedback && (
