@@ -1,7 +1,8 @@
 // src/app/api/cron/tutup-ujian/route.ts
 // Cron job: menutup otomatis sesi pengerjaan ujian yang sudah melewati
 // deadline masing-masing (siswa menutup tab / tidak submit tepat waktu).
-// Dipanggil Vercel Cron (lihat vercel.json). Dilindungi dengan CRON_SECRET.
+// Dipanggil Vercel Cron 1x/hari (lihat vercel.json — plan Hobby hanya
+// mengizinkan cron harian). Dilindungi dengan CRON_SECRET.
 
 import { NextRequest, NextResponse } from "next/server"
 import { timingSafeEqual } from "crypto"

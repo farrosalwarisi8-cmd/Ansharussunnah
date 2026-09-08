@@ -995,7 +995,11 @@ export async function submitPengerjaanUjian(
 //
 // CARA SCHEDULING (pilih salah satu):
 // 1. Vercel Cron (direkomendasikan): tambahkan ke vercel.json:
-//    { "crons": [{ "path": "/api/cron/tutup-ujian", "schedule": "*/5 * * * *" }] }
+//    { "crons": [{ "path": "/api/cron/tutup-ujian", "schedule": "0 1 * * *" }] }
+//    Catatan: plan Hobby Vercel hanya mengizinkan cron 1x/hari — interval
+//    lebih cepat (mis. */5 * * * *) akan membuat deployment GAGAL dengan
+//    error "Hobby accounts are limited to daily cron jobs". Untuk interval
+//    cepat, upgrade ke Pro atau pakai pemicu lain seperti QStash.
 //    Buat Route Handler di src/app/api/cron/tutup-ujian/route.ts yang memanggil action ini
 //    setelah memvalidasi header "Authorization: Bearer <CRON_SECRET>".
 // 2. Trigger manual guru: tombol "Tutup Ujian" di dashboard guru memanggil fungsi ini

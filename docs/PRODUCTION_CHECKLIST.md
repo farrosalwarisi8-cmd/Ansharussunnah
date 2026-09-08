@@ -167,9 +167,10 @@ Gunakan sebagai panduan sebelum dan sesuai go-live.
 - [x] **Auto-close ujian kedaluwarsa** (sudah diimplementasikan):
   - Route Handler: `src/app/api/cron/tutup-ujian/route.ts` ✅
   - Validasi header `Authorization: Bearer <CRON_SECRET>` (timingSafeEqual) ✅
-  - Terdaftar di `vercel.json` dengan schedule `*/5 * * * *` ✅
+  - Terdaftar di `vercel.json` dengan schedule `0 1 * * *` (1x/hari, batas maksimal di plan Hobby) ✅
   - ⚠️ Pastikan `CRON_SECRET` di-set di environment variables Vercel
-  - Catatan: selain cron, lazy-close juga aktif — sesi kedaluwarsa otomatis ditutup saat guru membuka rekap (`getRekapHasilUjian`) dan saat siswa membuka daftar ujian (`getDaftarUjianSiswa`)
+  - ⚠️ Jangan ubah schedule ke interval < 1 hari (mis. `*/5 * * * *`) di plan Hobby — deployment Vercel akan gagal dengan error *"Hobby accounts are limited to daily cron jobs"*. Untuk interval lebih cepat, upgrade ke Pro atau gunakan QStash.
+  - Catatan: selain cron, lazy-close juga aktif — sesi kedaluwarsa otomatis ditutup saat guru membuka rekap (`getRekapHasilUjian`) dan saat siswa membuka daftar ujian (`getDaftarUjianSiswa`), sehingga penutupan harian oleh cron cukup sebagai jaring pengaman (safety net).
 
 ### Cleanup Policy
 

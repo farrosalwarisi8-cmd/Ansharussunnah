@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/tutup-ujian",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 1 * * *"
     }
   ]
 }
