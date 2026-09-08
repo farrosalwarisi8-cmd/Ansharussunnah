@@ -83,14 +83,14 @@ export default function CekPendaftaranPage() {
               Cek Status Pendaftaran
             </CardTitle>
             <CardDescription className="text-slate-500 text-xs sm:text-sm max-w-md mx-auto">
-              Masukkan Nomor Pendaftaran resmi yang Anda terima saat mendaftar (contoh: REG-2024-XXXXX).
+              Masukkan Nomor Pendaftaran resmi yang Anda terima saat mendaftar (contoh: REG-2024-00001-A1B2).
             </CardDescription>
           </CardHeader>
 
           <CardContent className="p-6 sm:p-8 pt-2 space-y-6">
             <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2.5">
               <Input
-                placeholder="REG-2024-XXXXX"
+                placeholder="REG-2024-00001-A1B2"
                 value={nomor}
                 onChange={(e) => setNomor(e.target.value)}
                 className="h-12 rounded-xl text-base sm:text-sm uppercase tracking-wider font-mono"

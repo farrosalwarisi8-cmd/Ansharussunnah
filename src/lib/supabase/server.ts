@@ -6,6 +6,7 @@ import { cache } from "react"
 
 export const createSupabaseServerClient = cache(async () => {
   const cookieStore = await cookies()
+  const isProduction = process.env.NODE_ENV === "production"
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,7 +19,13 @@ export const createSupabaseServerClient = cache(async () => {
         setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options)
+              cookieStore.set(name, value, {
+                ...options,
+                httpOnly: true,
+                sameSite: "lax",
+                secure: isProduction,
+                path: "/",
+              })
             })
           } catch {
             // Diabaikan jika dipanggil dari Server Component (Read-only)

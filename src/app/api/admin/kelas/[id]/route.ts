@@ -9,7 +9,9 @@ import prisma from "@/lib/prisma"
 type RouteContext = { params: Promise<{ id: string }> }
 
 export async function PUT(request: NextRequest, { params }: RouteContext) {
-  const auth = await authenticateApiRequest(request, [Role.GURU])
+  const auth = await authenticateApiRequest(request, [Role.GURU], {
+    requireAdmin: true,
+  })
   if (!auth.authenticated) return auth.errorResponse!
 
   try {
@@ -49,7 +51,9 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
-  const auth = await authenticateApiRequest(request, [Role.GURU])
+  const auth = await authenticateApiRequest(request, [Role.GURU], {
+    requireAdmin: true,
+  })
   if (!auth.authenticated) return auth.errorResponse!
 
   try {

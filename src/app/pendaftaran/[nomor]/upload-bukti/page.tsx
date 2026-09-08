@@ -4,7 +4,6 @@
 
 import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
-import { uploadFileToStorage } from "@/lib/storage"
 import { uploadBuktiTransferPendaftaran } from "@/actions/bukti-transfer"
 import { Button } from "@/components/ui/button"
 import { FileUpload } from "@/components/ui/file-upload"
@@ -32,27 +31,11 @@ export default function UploadBuktiPage() {
     setError(null)
 
     try {
-      // 1. Upload file ke Supabase Storage
-      const file = files[0]
-      const folder = `transfer/${nomorPendaftaran}`
-      const uploadResult = await uploadFileToStorage(
-        "bukti-transfer",
-        folder,
-        file
-      )
-
-      if (uploadResult.error) {
-        setError(uploadResult.error)
-        setIsUploading(false)
-        return
-      }
-
-      // 2. Simpan path ke database via server action
+      // File dikirim langsung ke server action — server yang mengunggahnya ke
+      // storage dengan service role (kontrol path & validasi keamanan penuh).
       const formData = new FormData()
       formData.append("nomorPendaftaran", nomorPendaftaran)
-      formData.append("urlFile", uploadResult.path)
-      formData.append("namaFile", file.name)
-      formData.append("ukuranFile", file.size.toString())
+      formData.append("file", files[0])
 
       const result = await uploadBuktiTransferPendaftaran(formData)
 

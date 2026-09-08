@@ -271,7 +271,10 @@ export async function submitBuktiPembayaranSpp(
       if (!hasAkses) {
         return { success: false, message: "Akses ditolak: Siswa ini bukan anak Anda" }
       }
-    } else if (sessionUser.role !== Role.ADMIN_KEUANGAN) {
+    } else if (
+      sessionUser.role !== Role.ADMIN_KEUANGAN &&
+      sessionUser.role !== Role.SUPER_ADMIN
+    ) {
       return { success: false, message: "Wewenang tidak mencukupi" }
     }
 
@@ -1396,7 +1399,10 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
       } catch {
         return { success: false, message: "Akses ditolak: Anda bukan wali kelas siswa ini" }
       }
-    } else if (sessionUser.role !== Role.ADMIN_KEUANGAN) {
+    } else if (
+      sessionUser.role !== Role.ADMIN_KEUANGAN &&
+      sessionUser.role !== Role.SUPER_ADMIN
+    ) {
       return { success: false, message: "Hak akses tidak valid" }
     }
 

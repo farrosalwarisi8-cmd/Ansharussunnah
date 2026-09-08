@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma"
 import { requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
+import { encryptSecret, decryptSecret } from "@/lib/crypto"
 import { siswaManualSchema, type SiswaManualFormValues, updateAkunSiswaSchema, type UpdateAkunSiswaValues } from "@/lib/validations/siswa-manual"
 import { deriveUniqueUsername } from "@/lib/username"
 import type { ActionResponse } from "@/types"
@@ -196,7 +197,7 @@ export async function createSiswaManual(
               data: {
                 email: emailOrtu,
                 username: await deriveUniqueUsername(tx, emailOrtu),
-                passwordPlain: passwordOrangTua,
+                passwordPlain: encryptSecret(passwordOrangTua),
                 nama: data.namaOrangTua,
                 role: Role.ORANG_TUA,
                 authId: authOrtuId,
@@ -248,7 +249,7 @@ export async function createSiswaManual(
               data: {
                 email: emailSiswa,
                 username: await deriveUniqueUsername(tx, emailSiswa),
-                passwordPlain: passwordSiswa,
+                passwordPlain: encryptSecret(passwordSiswa),
                 nama: data.namaLengkap,
                 role: Role.SISWA,
                 authId: authSiswaId,
@@ -396,7 +397,7 @@ export async function resetPasswordSiswaManual(
     // Set mustChangePassword: true
     await prisma.user.update({
       where: { id: siswaUserId },
-      data: { mustChangePassword: true, passwordPlain: newPassword },
+      data: { mustChangePassword: true, passwordPlain: encryptSecret(newPassword) },
     })
 
     revalidatePath("/dashboard/siswa")
@@ -456,7 +457,7 @@ export async function resetPasswordOrangTuaManual(
     // Set mustChangePassword: true
     await prisma.user.update({
       where: { id: orangTuaUserId },
-      data: { mustChangePassword: true, passwordPlain: newPassword },
+      data: { mustChangePassword: true, passwordPlain: encryptSecret(newPassword) },
     })
 
     revalidatePath("/dashboard/siswa")
@@ -552,7 +553,7 @@ export async function getDaftarSiswaManual(): Promise<ActionResponse<SiswaManual
       nama: s.user.nama,
       email: s.user.email,
       username: s.user.username,
-      passwordPlain: s.user.passwordPlain,
+      passwordPlain: decryptSecret(s.user.passwordPlain),
       nisn: s.nisn,
       nis: s.nis,
       kelasNama: s.kelas?.nama || null,
@@ -718,7 +719,7 @@ export async function updateAkunSiswa(
 
     if (newUsername) updateData.username = newUsername
     if (password) {
-      updateData.passwordPlain = password
+      updateData.passwordPlain = encryptSecret(password)
       updateData.mustChangePassword = true
       updateData.lastPasswordChange = new Date()
     }

@@ -75,9 +75,11 @@ describe("requestPasswordReset", () => {
       createdAt: new Date(),
     } as never)
 
+    // Cooldown tidak boleh mengungkap bahwa email terdaftar —
+    // respons harus identik dengan kasus email tidak dikenal.
     const result = await requestPasswordReset("test@example.com")
-    expect(result.success).toBe(false)
-    expect(result.message).toContain("tunggu")
+    expect(result.success).toBe(true)
+    expect(result.message).toContain("Jika email terdaftar")
   })
 })
 
@@ -99,9 +101,11 @@ describe("verifyResetOtp", () => {
       expiredAt: new Date(Date.now() + 600000),
     } as never)
 
+    // Anti-enumeration: lockout memakai pesan generik yang sama dengan
+    // OTP salah/kedaluwarsa agar tidak mengungkap status token.
     const result = await verifyResetOtp("test@example.com", "123456")
     expect(result.success).toBe(false)
-    expect(result.message).toContain("Terlalu banyak percobaan")
+    expect(result.message).toContain("Kode verifikasi tidak valid")
   })
 
   it("harus menambah counter gagal jika OTP salah", async () => {

@@ -129,7 +129,7 @@ model User {
   id                 String    @id @default(cuid())
   email              String
   username           String?   @unique
-  passwordPlain      String?   @map("password_plain")
+  passwordPlain      String?   @map("password_plain") // terenkripsi AES-256-GCM (lihat src/lib/crypto.ts)
   nama               String
   role               Role
   avatar             String?

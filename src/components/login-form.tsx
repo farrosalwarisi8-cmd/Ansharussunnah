@@ -9,13 +9,27 @@ import { login } from "@/actions/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Lock, Mail } from "lucide-react"
+import { Loader2, Lock, Mail, Eye, EyeOff } from "lucide-react"
+
+/**
+ * Validasi path redirect aman (anti open-redirect).
+ * Hanya menerima path absolut internal yang diawali "/" (tapi bukan "//"
+ * yang bisa diinterpretasikan sebagai protokol-relative / host eksternal).
+ */
+function isSafeRedirectPath(value: string | null): string | null {
+  if (!value) return null
+  if (!value.startsWith("/")) return null
+  if (value.startsWith("//") || value.startsWith("/\\")) return null
+  if (value.includes("\\")) return null
+  if (value.startsWith("/login") || value.startsWith("/lupa-password")) return null
+  return value
+}
 
 export default function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectedFrom = searchParams.get("redirectedFrom")
-
+  const [showPassword, setShowPassword] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -32,7 +46,7 @@ export default function LoginForm() {
       if (result.data?.hasMultipleRoles) {
         router.push("/pilih-role")
       } else {
-        router.push(redirectedFrom || "/dashboard")
+        router.push(isSafeRedirectPath(redirectedFrom) || "/dashboard")
       }
       router.refresh()
     } else {
@@ -63,6 +77,8 @@ export default function LoginForm() {
               type="text"
               autoCapitalize="none"
               autoCorrect="off"
+              autoComplete="username"
+              spellCheck={false}
               placeholder="username atau nama@sekolah.internal"
               required
               className="pl-10 h-12 bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus-visible:ring-yellow-500 text-base sm:text-sm"
@@ -87,11 +103,20 @@ export default function LoginForm() {
             <Input
               id="password"
               name="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
               placeholder="••••••••"
               required
-              className="pl-10 h-12 bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus-visible:ring-yellow-500 text-base sm:text-sm"
+              className="pl-10 pr-11 h-12 bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus-visible:ring-yellow-500 text-base sm:text-sm"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((s) => !s)}
+              aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+              className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-8 h-8 text-slate-400 hover:text-yellow-400 transition-colors"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
           </div>
         </div>
 

@@ -12,22 +12,25 @@ const PUBLIC_ROUTES = [
   "/login",
   "/lupa-password",
   "/api/cek-pendaftaran",
-  "/api/jenjang-kelas",
-  "/api/pendaftaran",
-  "/api/auth/login",
   "/api/pilih-role",
   "/pilih-role",
 ]
 
-
-
-// Route yang TIDAK boleh diakses jika sudah login (redirect ke dashboard)
+// Route yang TIDAK boleh diakses jika sudah login (redirect ke dashboard).
+// Sub-halaman /lupa-password/verifikasi & /lupa-password/reset dikecualikan
+// agar user yang baru saja reset password tidak ter-bounce ke dashboard.
 const GUEST_ONLY_ROUTES = ["/login", "/lupa-password"]
+const EXCLUDE_FROM_GUEST_CHECK = ["/lupa-password/verifikasi", "/lupa-password/reset"]
 
 function isPublicRoute(pathname: string): boolean {
   return PUBLIC_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(route + "/")
   )
+}
+
+function isGuestOnlyRoute(pathname: string): boolean {
+  if (EXCLUDE_FROM_GUEST_CHECK.some((p) => pathname.startsWith(p))) return false
+  return GUEST_ONLY_ROUTES.some((route) => pathname.startsWith(route))
 }
 
 export async function middleware(request: NextRequest) {
@@ -108,11 +111,15 @@ export async function middleware(request: NextRequest) {
   }
 
   // Jika SUDAH login dan mencoba akses halaman login/lupa-password
-  if (user && GUEST_ONLY_ROUTES.some((r) => pathname.startsWith(r))) {
+  if (user && isGuestOnlyRoute(pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = "/dashboard"
     return NextResponse.redirect(url)
   }
+
+  // Setelah autentikasi lolos, terusan pathname agar layout/dashboard bisa
+  // melakukan page-level role guard (defense-in-depth di sisi server).
+  supabaseResponse.headers.set("x-next-pathname", pathname)
 
   return supabaseResponse
 }

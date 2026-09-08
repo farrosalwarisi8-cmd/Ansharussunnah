@@ -43,7 +43,7 @@ const {
 }))
 
 vi.mock("@/lib/auth", () => ({
-  requireGuru: vi.fn().mockResolvedValue({
+  requireGuruAdmin: vi.fn().mockResolvedValue({
     id: "guru-1",
     email: "guru@sekolah.sch.id",
     role: "GURU",

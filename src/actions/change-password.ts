@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma"
 import { requireAuth } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
+import { encryptSecret } from "@/lib/crypto"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
@@ -74,9 +75,10 @@ export async function changePassword(
     )
 
     if (updateError) {
+      console.error("Supabase update password error:", updateError)
       return {
         success: false,
-        message: `Gagal memperbarui password: ${updateError.message}`,
+        message: "Gagal memperbarui password. Silakan coba lagi.",
       }
     }
 
@@ -85,7 +87,7 @@ export async function changePassword(
       data: {
         mustChangePassword: false,
         lastPasswordChange: new Date(),
-        passwordPlain: newPassword,
+        passwordPlain: encryptSecret(newPassword),
       },
     })
 
@@ -98,11 +100,11 @@ export async function changePassword(
       success: true,
       message: "Password berhasil diperbarui. Silakan login kembali.",
     }
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("Error changePassword:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal mengganti password",
+      message: "Gagal mengganti password. Silakan coba lagi.",
     }
   }
 }

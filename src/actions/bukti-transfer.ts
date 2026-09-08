@@ -4,13 +4,32 @@
 
 import prisma from "@/lib/prisma"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { validateFile } from "@/lib/storage"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
+import { nanoid } from "nanoid"
+
+// Ekstensi yang diizinkan (SPI/whitelist), kombinasi dengan magic bytes di validateFile
+const ALLOWED_EXTENSIONS = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "pdf",
+])
+
+function normalizeNomor(nomor: string): string {
+  return nomor.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "")
+}
 
 /**
- * ✅ FIX: Verifikasi file benar-benar ada di Supabase Storage
- * sebelum menyimpan record ke database.
+ * Upload bukti transfer PENDAFTARAN.
+ *
+ * Keamanan: file DIKIRIM ke server dan diunggah oleh server (service role) ke
+ * Supabase Storage. Klien tidak pernah menentukan path file — path dibuat
+ * server-side dengan nanoid sehingga path/URL dari klien tidak bisa dipalsukan
+ * atau digunakan untuk path traversal / bucket injection.
  */
 export async function uploadBuktiTransferPendaftaran(
   formData: FormData
@@ -29,37 +48,37 @@ export async function uploadBuktiTransferPendaftaran(
       }
     }
 
-    const nomorPendaftaran = formData.get("nomorPendaftaran") as string
-    const urlFile = formData.get("urlFile") as string
-    const namaFile = formData.get("namaFile") as string
-    const ukuranFile = parseInt(formData.get("ukuranFile") as string) || 0
+    const nomorPendaftaran = normalizeNomor(
+      (formData.get("nomorPendaftaran") as string) || ""
+    )
+    const file = formData.get("file") as File | null
 
-    if (!nomorPendaftaran || !urlFile || !namaFile) {
+    if (!nomorPendaftaran || !file) {
       return {
         success: false,
         message: "Data bukti transfer tidak lengkap",
       }
     }
 
-    // ✅ FIX: Validasi path file — cegah path traversal
-    // Path harus berada di folder transfer/{nomorPendaftaran}/
-    const expectedPrefix = `transfer/${nomorPendaftaran}/`
-    if (!urlFile.startsWith(expectedPrefix)) {
+    // Validasi magic bytes + ukuran file (server-side, bukan hanya klien)
+    const validation = await validateFile(file)
+    if (!validation.valid) {
       return {
         success: false,
-        message: "Path file tidak valid. File harus berada di folder pendaftaran yang sesuai.",
+        message: validation.error || "Berkas yang diunggah tidak valid",
       }
     }
 
-    // Cegah path traversal (../)
-    if (urlFile.includes("..") || urlFile.includes("//")) {
+    const fileExt = (file.name.split(".").pop() || "").toLowerCase()
+    if (!ALLOWED_EXTENSIONS.has(fileExt)) {
       return {
         success: false,
-        message: "Path file mengandung karakter tidak valid.",
+        message:
+          "Format berkas tidak valid (gunakan JPG, PNG, WEBP, atau PDF)",
       }
     }
 
-    // Cek apakah pendaftaran ada
+    // Cek apakah pendaftaran ada + valid untuk upload
     const pendaftaran = await prisma.pendaftaran.findUnique({
       where: { nomorPendaftaran },
     })
@@ -82,55 +101,64 @@ export async function uploadBuktiTransferPendaftaran(
       }
     }
 
-    // ✅ FIX: Verifikasi file benar-benar ada di Supabase Storage
+    // Server-side upload dengan service role. Path ditentukan server,
+    // tidak menerima input path apapun dari klien.
     const supabaseAdmin = createSupabaseAdmin()
-    const { data: fileList, error: listError } = await supabaseAdmin.storage
+    const generatedName = `${nanoid(12)}.${fileExt}`
+    const filePath = `transfer/${nomorPendaftaran}/${generatedName}`
+
+    const arrayBuffer = await file.arrayBuffer()
+    const { error: uploadError } = await supabaseAdmin.storage
       .from("bukti-transfer")
-      .list(`transfer/${nomorPendaftaran}`)
+      .upload(filePath, arrayBuffer, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type || undefined,
+      })
 
-    if (listError) {
-      console.error("Storage list error:", listError)
+    if (uploadError) {
+      console.error("Storage upload error:", uploadError)
       return {
         success: false,
-        message: "Gagal memverifikasi file di storage.",
+        message:
+          "Gagal mengunggah bukti transfer. Pastikan format dan ukuran file sesuai (maks. 5 MB).",
       }
     }
 
-    // Cek apakah file dengan nama yang sesuai benar-benar ada
-    const fileName = urlFile.split("/").pop()
-    const fileExists = fileList?.some((f) => f.name === fileName)
+    // Buat record bukti transfer + update status pendaftaran secara ATOMIC.
+    // Jika record gagal dibuat, file yang barusan diunggah dibersihkan.
+    try {
+      await prisma.$transaction(
+        async (tx) => {
+          await tx.buktiTransferPendaftaran.create({
+            data: {
+              pendaftaranId: pendaftaran.id,
+              urlFile: filePath,
+              namaFile: file.name,
+              ukuranFile: file.size,
+              status: "PENDING",
+            },
+          })
 
-    if (!fileExists) {
-      return {
-        success: false,
-        message: "File bukti transfer tidak ditemukan di storage. Silakan upload ulang.",
-      }
+          // Update status pendaftaran
+          await tx.pendaftaran.update({
+            where: { id: pendaftaran.id },
+            data: {
+              status: "MENUNGGU_VERIFIKASI",
+              alasanPenolakan: null,
+            },
+          })
+        },
+        { timeout: 10000, maxWait: 3000 }
+      )
+    } catch (dbError) {
+      // Cleanup: hapus file yang baru diunggah agar tidak jadi file yatim
+      await supabaseAdmin.storage
+        .from("bukti-transfer")
+        .remove([filePath])
+        .catch(() => {})
+      throw dbError
     }
-
-    // Buat record bukti transfer + update status pendaftaran secara ATOMIC
-    await prisma.$transaction(
-      async (tx) => {
-        await tx.buktiTransferPendaftaran.create({
-          data: {
-            pendaftaranId: pendaftaran.id,
-            urlFile,
-            namaFile,
-            ukuranFile,
-            status: "PENDING",
-          },
-        })
-
-        // Update status pendaftaran
-        await tx.pendaftaran.update({
-          where: { id: pendaftaran.id },
-          data: {
-            status: "MENUNGGU_VERIFIKASI",
-            alasanPenolakan: null,
-          },
-        })
-      },
-      { timeout: 10000, maxWait: 3000 }
-    )
 
     revalidatePath("/dashboard/pendaftaran")
 

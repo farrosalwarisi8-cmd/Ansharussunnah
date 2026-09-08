@@ -7,6 +7,7 @@ import { deriveUniqueUsername } from "@/lib/username"
 import { requireGuru, requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
+import { encryptSecret } from "@/lib/crypto"
 import { sendEmail, buildKredensialGuruEmail } from "@/lib/email"
 import {
   createAkunGuruSchema,
@@ -129,7 +130,7 @@ export async function createAkunGuru(
           data: {
             email,
             username: await deriveUniqueUsername(tx, email),
-            passwordPlain: password,
+            passwordPlain: encryptSecret(password),
             nama,
             role: "GURU",
             authId,

@@ -4,6 +4,7 @@ import type { Metadata } from "next"
 import { getCurrentUser, enforcePasswordChange } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { redirect } from "next/navigation"
+import { headers } from "next/headers"
 import { Role } from "@prisma/client"
 import { DashboardProvider, type DashboardUser, type ChildStudent } from "@/components/dashboard/dashboard-context"
 import { DashboardNavWrapper } from "@/components/dashboard/dashboard-nav-wrapper"
@@ -15,14 +16,40 @@ export const metadata: Metadata = {
   },
 }
 
+// Peta akses menu-admin per-prefix route (defense-in-depth di level layout).
+// Action server tetap menjadi penjaga final, tapi layout mencegah pengguna
+// yang menebak URL melihat kerangka menu di area terlarang.
+const ADMIN_MANAGEMENT_PREFIXES = [
+  "/dashboard/siswa",
+  "/dashboard/guru",
+  "/dashboard/kelas",
+  "/dashboard/mapel",
+  "/dashboard/periode-ajaran",
+  "/dashboard/kelola-akun-keuangan",
+  "/dashboard/kenaikan-kelas",
+  "/dashboard/verifikasi-pendaftaran",
+]
+
+const KEUNGAN_ONLY_PREFIXES = ["/dashboard/keuangan", "/dashboard/daftar-siswa"]
+
+function isAdminManagementRoute(pathname: string): boolean {
+  return ADMIN_MANAGEMENT_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(p + "/")
+  )
+}
+
+function isKeuanganRoute(pathname: string): boolean {
+  return KEUNGAN_ONLY_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(p + "/")
+  )
+}
+
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   // Guard: Paksa user ganti password jika mustChangePassword = true.
-  // getCurrentUser di-memoize per-request (React cache), jadi pemanggilan
-  // di bawah akan memakai hasil yang sama tanpa query Supabase/Prisma tambahan.
   await enforcePasswordChange("/dashboard")
 
   const user = await getCurrentUser()
@@ -30,6 +57,27 @@ export default async function DashboardLayout({
   // Defense-in-depth: jangan pernah menyediakan akun default bila sesi tidak aktif.
   if (!user) {
     redirect("/login")
+  }
+
+  // Page-level role guard — jalur peran yang BUKAN admin akademik/admin keuangan
+  // diblokir dari halaman manajemen data sekolah.
+  try {
+    const headerStore = await headers()
+    const pathname = headerStore.get("x-next-pathname") ?? "/dashboard"
+
+    const isAcademicAdmin =
+      user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN_AKADEMIK
+    const isGuruAdmin = user.role === Role.GURU && user.isAdmin
+
+    if (isAdminManagementRoute(pathname) && !isAcademicAdmin && !isGuruAdmin) {
+      redirect("/dashboard")
+    }
+
+    if (isKeuanganRoute(pathname) && user.role !== Role.ADMIN_KEUANGAN) {
+      if (!isAcademicAdmin) redirect("/dashboard")
+    }
+  } catch {
+    // Jika header tidak tersedia, lanjutkan — action server tetap mengamankan.
   }
 
   let childrenList: ChildStudent[] = []

@@ -4,10 +4,11 @@
 
 import prisma from "@/lib/prisma"
 import { deriveUniqueUsername } from "@/lib/username"
-import { requireGuru } from "@/lib/auth"
+import { requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getSignedUrl } from "@/lib/storage"
 import { generateSecurePassword } from "@/lib/password"
+import { encryptSecret } from "@/lib/crypto"
 import { sendEmail, buildKredensialEmail, buildKredensialEmailAnakKedua } from "@/lib/email"
 import {
   verifikasiPendaftaranSchema,
@@ -32,7 +33,7 @@ export async function getPendaftaranList(options?: {
   }>
 > {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const page = options?.page || 1
     const limit = options?.limit || 10
@@ -103,7 +104,7 @@ export async function getPendaftaranDetail(
   }>
 > {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const pendaftaran = await prisma.pendaftaran.findUnique({
       where: { id: pendaftaranId },
@@ -181,7 +182,7 @@ export async function verifikasiPendaftaran(
   payload: VerifikasiPendaftaranValues
 ): Promise<ActionResponse> {
   try {
-    const guruUser = await requireGuru()
+    const guruUser = await requireGuruAdmin()
 
     const validated = verifikasiPendaftaranSchema.safeParse(payload)
     if (!validated.success) {
@@ -374,7 +375,7 @@ export async function verifikasiPendaftaran(
               data: {
                 email: emailOrtu,
                 username: await deriveUniqueUsername(tx, emailOrtu),
-                passwordPlain: passwordOrangTua,
+                passwordPlain: encryptSecret(passwordOrangTua),
                 nama: pendaftaran.namaOrangTua,
                 role: Role.ORANG_TUA,
                 authId: authOrtuId,
@@ -464,7 +465,7 @@ export async function verifikasiPendaftaran(
                 data: {
                   email: emailSiswa,
                   username: await deriveUniqueUsername(tx, emailSiswa),
-                  passwordPlain: passwordSiswa,
+                  passwordPlain: encryptSecret(passwordSiswa),
                   nama: pendaftaran.namaLengkap,
                   role: Role.SISWA,
                   authId: authSiswaId,

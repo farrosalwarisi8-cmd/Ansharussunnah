@@ -5,6 +5,7 @@
 import prisma from "@/lib/prisma"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { createOtpWithHash, verifyOtp } from "@/lib/otp"
+import { encryptSecret } from "@/lib/crypto"
 import { sendEmail, buildOtpEmail } from "@/lib/email"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
@@ -53,13 +54,9 @@ export async function requestPasswordReset(
     })
 
     if (recentToken) {
-      const waitSeconds = Math.ceil(
-        (recentToken.createdAt.getTime() + OTP_RESEND_COOLDOWN_SECONDS * 1000 - Date.now()) / 1000
-      )
-      return {
-        success: false,
-        message: `Silakan tunggu ${waitSeconds} detik sebelum meminta kode baru.`,
-      }
+      // Jangan ungkap bahwa email terdaftar — balas dengan respons generik yang
+      // identik dengan kasus email tidak dikenal (anti email-enumeration).
+      return genericSuccessResponse
     }
 
     await prisma.passwordResetToken.updateMany({
@@ -144,7 +141,7 @@ export async function verifyResetOtp(
       })
       return {
         success: false,
-        message: "Terlalu banyak percobaan salah. Silakan minta kode verifikasi baru.",
+        message: "Kode verifikasi tidak valid atau sudah kedaluwarsa",
       }
     }
 
@@ -156,13 +153,9 @@ export async function verifyResetOtp(
         data: { jumlahGagal: { increment: 1 } },
       })
 
-      const sisaPercobaan = OTP_MAX_ATTEMPTS - token.jumlahGagal - 1
       return {
         success: false,
-        message:
-          sisaPercobaan > 0
-            ? `Kode salah. Sisa ${sisaPercobaan} percobaan lagi.`
-            : "Terlalu banyak percobaan salah. Silakan minta kode baru.",
+        message: "Kode verifikasi tidak valid atau sudah kedaluwarsa",
       }
     }
 
@@ -260,7 +253,7 @@ export async function resetPassword(
         data: {
           mustChangePassword: false,
           lastPasswordChange: new Date(),
-          passwordPlain: newPassword,
+          passwordPlain: encryptSecret(newPassword),
         },
       })
       },

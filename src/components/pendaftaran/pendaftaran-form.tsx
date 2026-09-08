@@ -12,6 +12,7 @@ import {
 } from "@/lib/validations/pendaftaran"
 import { createPendaftaran } from "@/actions/pendaftaran"
 import { uploadFileToStorage } from "@/lib/storage"
+import { nanoid } from "nanoid"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -286,9 +287,24 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
     setIsSubmitting(true)
     setServerError(null)
 
+    // File yang berhasil diunggah ke temp — dibersihkan jika proses gagal
+    // (best-effort; jika RLS bucket tidak mengizinkan delete, file yatim
+    // akan dibersihkan oleh job retensi temp di luar form).
+    const uploadedPaths: string[] = []
+
+    const cleanupUploadedFiles = async () => {
+      if (uploadedPaths.length === 0) return
+      try {
+        const { createSupabaseBrowserClient } = await import("@/lib/supabase/client")
+        const supabase = createSupabaseBrowserClient()
+        await supabase.storage.from("dokumen-pendaftaran").remove(uploadedPaths)
+      } catch {
+        // cleanup bersifat best-effort
+      }
+    }
+
     try {
-      const timestamp = Date.now()
-      const tempFolder = `dokumen-pendaftaran/pendaftaran/temp-${timestamp}`
+      const tempFolder = `dokumen-pendaftaran/pendaftaran/temp-${nanoid(10)}`
 
       let dokKKPath = ""
       let dokAktePath = ""
@@ -303,9 +319,11 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
         if (result.error) {
           setServerError(result.error)
           setIsSubmitting(false)
+          await cleanupUploadedFiles()
           return
         }
         dokKKPath = result.path
+        uploadedPaths.push(result.path)
       }
 
       if (filesAkte.length > 0) {
@@ -317,9 +335,11 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
         if (result.error) {
           setServerError(result.error)
           setIsSubmitting(false)
+          await cleanupUploadedFiles()
           return
         }
         dokAktePath = result.path
+        uploadedPaths.push(result.path)
       }
 
       if (filesFoto.length > 0) {
@@ -331,9 +351,11 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
         if (result.error) {
           setServerError(result.error)
           setIsSubmitting(false)
+          await cleanupUploadedFiles()
           return
         }
         dokFotoPath = result.path
+        uploadedPaths.push(result.path)
       }
 
       const formData = new FormData()
@@ -350,6 +372,8 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
       const result = await createPendaftaran(formData)
 
       if (result.success && result.data) {
+        // File dipertahankan (direferensikan oleh record pendaftaran)
+        uploadedPaths.length = 0
         router.push(
           `/pendaftaran/sukses?nomor=${result.data.nomorPendaftaran}`
         )
@@ -357,10 +381,12 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
         setServerError(
           result.message || "Terjadi kesalahan. Silakan coba lagi."
         )
+        await cleanupUploadedFiles()
       }
     } catch (error) {
       console.error("Submit error:", error)
       setServerError("Terjadi kesalahan. Silakan coba lagi.")
+      await cleanupUploadedFiles()
     } finally {
       setIsSubmitting(false)
     }

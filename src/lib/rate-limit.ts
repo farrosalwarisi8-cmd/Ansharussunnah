@@ -165,18 +165,62 @@ export async function rateLimitAsync(
   return rateLimiterInstance.limit(identifier, options)
 }
 
+// ---------------------------------------------------------------------------
+// IP ADDRESS EXTRACTION (anti-spoofing)
+// ---------------------------------------------------------------------------
+// Klien sebenarnya BISA mengirim header `x-forwarded-for` palsu. Di balik proxy
+// tepercaya (mis. Vercel Edge), IP asli klien selalu DITAMBAHKAN di AKHIR chain
+// (nilai paling kanan). Maka:
+//   1. Ambil nilai PALING KANAN dari x-forwarded-for (bukan yang paling kiri).
+//   2. Validasi berupa IP valid (v4/v6). Jika tidak valid → fallback lain.
+//   3. Jika tetap tidak bisa ditentukan, kembalikan "unknown" (bucket bersama,
+//      konservatif — hanya dipakai saat header benar-benar tidak tersedia).
+
+const IPV4_RE =
+  /^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)$/
+const IPV6_RE =
+  /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/
+
+function isValidIp(value: string): boolean {
+  return IPV4_RE.test(value) || IPV6_RE.test(value)
+}
+
+function extractClientIpFromHeaders(
+  forwarded: string | null,
+  realIp: string | null
+): string {
+  if (forwarded) {
+    // Ambil dari paling kanan: di chain yang benar, elemen paling kanan adalah
+    // yang ditambahkan oleh proxy terdekat (tepercaya). Elemen kiri bisa
+    // dipalsukan langsung oleh klien.
+    const parts = forwarded
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .reverse()
+    const trusted = parts.find(isValidIp)
+    if (trusted) return trusted
+  }
+
+  if (realIp && isValidIp(realIp)) return realIp
+
+  return "unknown"
+}
+
 export function getClientIp(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for")
-  if (forwarded) return forwarded.split(",")[0].trim()
-  return request.headers.get("x-real-ip") || "unknown"
+  return extractClientIpFromHeaders(
+    request.headers.get("x-forwarded-for"),
+    request.headers.get("x-real-ip")
+  )
 }
 
 export async function getClientIpFromHeaders(): Promise<string> {
   try {
     const headersList = await headers()
-    const forwarded = headersList.get("x-forwarded-for")
-    if (forwarded) return forwarded.split(",")[0].trim()
-    return headersList.get("x-real-ip") || "unknown"
+    return extractClientIpFromHeaders(
+      headersList.get("x-forwarded-for"),
+      headersList.get("x-real-ip")
+    )
   } catch {
     return "unknown"
   }

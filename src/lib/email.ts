@@ -2,6 +2,15 @@
 
 import { Resend } from "resend"
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+}
+
 function createResend() {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return null
@@ -65,18 +74,27 @@ export function buildKredensialEmail(params: {
   passwordSiswa: string
   nomorPendaftaran: string
 }): string {
-  const ortuAccount = params.passwordOrangTua
+  const namaOrangTua = escapeHtml(params.namaOrangTua)
+  const emailOrangTua = escapeHtml(params.emailOrangTua)
+  const namaSiswa = escapeHtml(params.namaSiswa)
+  const emailSiswa = escapeHtml(params.emailSiswa)
+  const passwordOrangTua = params.passwordOrangTua
+    ? escapeHtml(params.passwordOrangTua)
+    : undefined
+  const passwordSiswa = escapeHtml(params.passwordSiswa)
+  const nomorPendaftaran = escapeHtml(params.nomorPendaftaran)
+  const ortuAccount = passwordOrangTua
     ? `
         <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 12px 0;">
           <p style="margin: 0 0 8px 0;"><strong>Akun Orang Tua:</strong></p>
-          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.emailOrangTua}</code></p>
-          <p style="margin: 2px 0;">Password: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.passwordOrangTua}</code></p>
+          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${emailOrangTua}</code></p>
+          <p style="margin: 2px 0;">Password: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${passwordOrangTua}</code></p>
         </div>
       `
     : `
         <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 12px 0;">
           <p style="margin: 0 0 8px 0;"><strong>Akun Orang Tua:</strong></p>
-          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.emailOrangTua}</code></p>
+          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${emailOrangTua}</code></p>
           <p style="margin: 2px 0; color: #475569;">Anda sudah memiliki akun orang tua — gunakan password yang sudah ada (tidak berubah).</p>
         </div>
       `
@@ -87,8 +105,8 @@ export function buildKredensialEmail(params: {
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
       <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
         <h2 style="color: #1e40af; margin-top: 0;">🎉 Pendaftaran Diterima!</h2>
-        <p>Halo <strong>${params.namaOrangTua}</strong>,</p>
-        <p>Selamat! Pendaftaran siswa baru dengan nomor <strong>${params.nomorPendaftaran}</strong> atas nama <strong>${params.namaSiswa}</strong> telah <strong style="color: green;">DITERIMA</strong>.</p>
+        <p>Halo <strong>${namaOrangTua}</strong>,</p>
+        <p>Selamat! Pendaftaran siswa baru dengan nomor <strong>${nomorPendaftaran}</strong> atas nama <strong>${namaSiswa}</strong> telah <strong style="color: green;">DITERIMA</strong>.</p>
         
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
         
@@ -98,8 +116,8 @@ export function buildKredensialEmail(params: {
         
         <div style="background: #f0fdf4; border-radius: 8px; padding: 16px; margin: 12px 0;">
           <p style="margin: 0 0 8px 0;"><strong>Akun Siswa:</strong></p>
-          <p style="margin: 2px 0;">Email: <code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${params.emailSiswa}</code></p>
-          <p style="margin: 2px 0;">Password: <code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${params.passwordSiswa}</code></p>
+          <p style="margin: 2px 0;">Email: <code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${emailSiswa}</code></p>
+          <p style="margin: 2px 0;">Password: <code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${passwordSiswa}</code></p>
         </div>
         
         <div style="background: #fef3c7; border-radius: 8px; padding: 16px; margin: 16px 0;">
@@ -127,6 +145,12 @@ export function buildKredensialEmailAnakKedua(params: {
   passwordSiswa: string
   nomorPendaftaran: string
 }): string {
+  const namaOrangTua = escapeHtml(params.namaOrangTua)
+  const emailOrangTua = escapeHtml(params.emailOrangTua)
+  const namaSiswa = escapeHtml(params.namaSiswa)
+  const emailSiswa = escapeHtml(params.emailSiswa)
+  const passwordSiswa = escapeHtml(params.passwordSiswa)
+  const nomorPendaftaran = escapeHtml(params.nomorPendaftaran)
   return `
     <!DOCTYPE html>
     <html lang="id">
@@ -134,8 +158,8 @@ export function buildKredensialEmailAnakKedua(params: {
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
       <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
         <h2 style="color: #1e40af; margin-top: 0;">🎉 Santri Baru Diterima!</h2>
-        <p>Halo <strong>${params.namaOrangTua}</strong>,</p>
-        <p>Selamat! Anak Anda dengan nomor pendaftaran <strong>${params.nomorPendaftaran}</strong> atas nama <strong>${params.namaSiswa}</strong> telah <strong style="color: green;">DITERIMA</strong>.</p>
+        <p>Halo <strong>${namaOrangTua}</strong>,</p>
+        <p>Selamat! Anak Anda dengan nomor pendaftaran <strong>${nomorPendaftaran}</strong> atas nama <strong>${namaSiswa}</strong> telah <strong style="color: green;">DITERIMA</strong>.</p>
         
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
         
@@ -143,13 +167,13 @@ export function buildKredensialEmailAnakKedua(params: {
         
         <div style="background: #f0fdf4; border-radius: 8px; padding: 16px; margin: 12px 0;">
           <p style="margin: 0 0 8px 0;"><strong>Akun Siswa:</strong></p>
-          <p style="margin: 2px 0;">Email: <code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${params.emailSiswa}</code></p>
-          <p style="margin: 2px 0;">Password: <code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${params.passwordSiswa}</code></p>
+          <p style="margin: 2px 0;">Email: <code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${emailSiswa}</code></p>
+          <p style="margin: 2px 0;">Password: <code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${passwordSiswa}</code></p>
         </div>
         
         <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 12px 0;">
           <p style="margin: 0 0 4px 0;"><strong>👤 Akun Orang Tua Anda:</strong></p>
-          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.emailOrangTua}</code></p>
+          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${emailOrangTua}</code></p>
           <p style="margin: 6px 0 0 0; color: #475569; font-size: 13px;">Gunakan akun yang sama seperti sebelumnya untuk login. Password tidak berubah.</p>
         </div>
         
@@ -174,6 +198,9 @@ export function buildKredensialGuruEmail(params: {
   email: string
   password: string
 }): string {
+  const nama = escapeHtml(params.nama)
+  const email = escapeHtml(params.email)
+  const password = escapeHtml(params.password)
   return `
     <!DOCTYPE html>
     <html lang="id">
@@ -181,7 +208,7 @@ export function buildKredensialGuruEmail(params: {
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
       <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
         <h2 style="color: #1e40af; margin-top: 0;">👩‍🏫 Akun Guru Baru — Ansharussunnah</h2>
-        <p>Halo <strong>${params.nama}</strong>,</p>
+        <p>Halo <strong>${nama}</strong>,</p>
         <p>Anda telah terdaftar sebagai guru di sistem LMS Ansharussunnah. Berikut adalah informasi akun Anda:</p>
         
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
@@ -189,8 +216,8 @@ export function buildKredensialGuruEmail(params: {
         <h3 style="color: #333;">🔐 Informasi Akun Login</h3>
         
         <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 12px 0;">
-          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.email}</code></p>
-          <p style="margin: 2px 0;">Password: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.password}</code></p>
+          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${email}</code></p>
+          <p style="margin: 2px 0;">Password: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${password}</code></p>
         </div>
         
         <div style="background: #fef3c7; border-radius: 8px; padding: 16px; margin: 16px 0;">
@@ -214,6 +241,9 @@ export function buildOtpEmail(params: {
   kodeOtp: string
   expiryMinutes: number
 }): string {
+  const nama = escapeHtml(params.nama)
+  const kodeOtp = escapeHtml(params.kodeOtp)
+  const expiryMinutes = params.expiryMinutes
   return `
     <!DOCTYPE html>
     <html lang="id">
@@ -221,16 +251,16 @@ export function buildOtpEmail(params: {
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
       <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
         <h2 style="color: #1e40af; margin-top: 0;">🔑 Kode Verifikasi Lupa Password</h2>
-        <p>Halo <strong>${params.nama}</strong>,</p>
+        <p>Halo <strong>${nama}</strong>,</p>
         <p>Kami menerima permintaan untuk mereset password akun Anda. Gunakan kode berikut:</p>
         
         <div style="text-align: center; margin: 30px 0;">
           <div style="background: #eff6ff; border: 2px dashed #3b82f6; border-radius: 12px; padding: 24px; display: inline-block;">
-            <p style="margin: 0; font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #1e40af; font-family: monospace;">${params.kodeOtp}</p>
+            <p style="margin: 0; font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #1e40af; font-family: monospace;">${kodeOtp}</p>
           </div>
         </div>
         
-        <p style="color: #666;">Kode ini berlaku selama <strong>${params.expiryMinutes} menit</strong>. Jangan bagikan kode ini kepada siapapun.</p>
+        <p style="color: #666;">Kode ini berlaku selama <strong>${expiryMinutes} menit</strong>. Jangan bagikan kode ini kepada siapapun.</p>
         
         <div style="background: #fef2f2; border-radius: 8px; padding: 16px; margin: 16px 0;">
           <p style="margin: 0; color: #991b1b;">🚨 Jika Anda <strong>TIDAK</strong> meminta reset password, abaikan email ini. Seseorang mungkin mencoba mengakses akun Anda.</p>

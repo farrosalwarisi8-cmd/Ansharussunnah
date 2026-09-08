@@ -7,7 +7,8 @@ import { Role } from "@prisma/client"
 
 export async function authenticateApiRequest(
   request: NextRequest,
-  allowedRoles?: Role[]
+  allowedRoles?: Role[],
+  options?: { requireAdmin?: boolean }
 ) {
   try {
     const authHeader = request.headers.get("Authorization")
@@ -45,7 +46,13 @@ export async function authenticateApiRequest(
 
     const user = await prisma.user.findFirst({
       where: { authId: authUser.id },
-      include: { guru: true, siswa: true, orangTua: true },
+      orderBy: { role: "asc" },
+      select: {
+        id: true,
+        role: true,
+        aktif: true,
+        isAdmin: true,
+      },
     })
 
     if (!user || !user.aktif) {
@@ -69,6 +76,16 @@ export async function authenticateApiRequest(
             success: false,
             message: `Forbidden: Requires roles: ${allowedRoles.join(", ")}`,
           },
+          { status: 403 }
+        ),
+      }
+    }
+
+    if (options?.requireAdmin && !user.isAdmin) {
+      return {
+        authenticated: false,
+        errorResponse: Response.json(
+          { success: false, message: "Forbidden: Admin access required" },
           { status: 403 }
         ),
       }

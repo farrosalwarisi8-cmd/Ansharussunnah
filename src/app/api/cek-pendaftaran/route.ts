@@ -56,19 +56,28 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        nomorPendaftaran: pendaftaran.nomorPendaftaran,
-        namaLengkap: pendaftaran.namaLengkap,
-        status: pendaftaran.status,
-        jenjangTujuan: pendaftaran.jenjangTujuan.nama,
-        kelasTujuan: pendaftaran.kelasTujuan?.nama || null,
-        biayaPendaftaran: pendaftaran.biayaPendaftaran,
-        alasanPenolakan: pendaftaran.alasanPenolakan,
-        createdAt: pendaftaran.createdAt,
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          nomorPendaftaran: pendaftaran.nomorPendaftaran,
+          // Nama dimaskir untuk mengurangi ekspos PII di endpoint publik.
+          namaLengkap: maskName(pendaftaran.namaLengkap),
+          status: pendaftaran.status,
+          jenjangTujuan: pendaftaran.jenjangTujuan.nama,
+          kelasTujuan: pendaftaran.kelasTujuan?.nama || null,
+          biayaPendaftaran: pendaftaran.biayaPendaftaran,
+          alasanPenolakan: pendaftaran.alasanPenolakan,
+          createdAt: pendaftaran.createdAt,
+        },
       },
-    })
+      {
+        headers: {
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+        },
+      }
+    )
   } catch (error) {
     console.error("Error cek-pendaftaran API:", error)
     return NextResponse.json(
@@ -76,4 +85,20 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+/**
+ * Nama dimaskir di endpoint publik: tampilkan maksimal 2 kata pertama
+ * dan huruf awal kata terakhir (mis. "Ahmad F***").
+ */
+function maskName(nama: string): string {
+  const parts = nama.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return ""
+  if (parts.length === 1) {
+    const n = parts[0]
+    return n.length <= 2 ? n : `${n.slice(0, 2)}***`
+  }
+  const firstTwo = parts.slice(0, 2).join(" ")
+  const last = parts[parts.length - 1]
+  return `${firstTwo} ${last[0]}${"*".repeat(Math.max(2, last.length - 1))}`
 }

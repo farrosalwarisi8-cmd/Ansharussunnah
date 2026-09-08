@@ -102,7 +102,6 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
         { title: "Kelola Keuangan", href: "/dashboard/keuangan", icon: DollarSign, isPrimaryMobile: true },
         { title: "Tagihan Siswa", href: "/dashboard/tagihan", icon: CreditCard, isPrimaryMobile: true },
         { title: "Daftar Siswa", href: "/dashboard/daftar-siswa", icon: Users2, isPrimaryMobile: true },
-        { title: "Verifikasi Pendaftar", href: "/dashboard/verifikasi-pendaftaran", icon: UserCheck, isPrimaryMobile: true },
       ]
 
     case Role.SUPER_ADMIN:

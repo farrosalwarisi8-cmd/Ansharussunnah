@@ -13,6 +13,9 @@ export default defineConfig({
       include: ["src/lib/**", "src/actions/**"],
     },
     testTimeout: 10000,
+    env: {
+      PASSWORD_ENCRYPTION_KEY: "test-only-encryption-key-0123456789abcdef",
+    },
   },
   resolve: {
     alias: {

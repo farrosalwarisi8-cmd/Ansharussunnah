@@ -16,10 +16,28 @@ export async function POST() {
       )
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "Logout berhasil",
     })
+
+    // Hapus cookie role terpilih agar tidak tersisa saat login berikutnya
+    response.cookies.set("selected_role", "", {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 0,
+    })
+    response.cookies.set("selected_user_id", "", {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 0,
+    })
+
+    return response
   } catch {
     return NextResponse.json(
       { success: false, message: "Terjadi kesalahan saat logout" },
