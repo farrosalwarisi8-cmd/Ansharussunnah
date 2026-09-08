@@ -155,6 +155,15 @@ export default function KerjakanUjianPage() {
         jawaban: jawabanArray,
       })
 
+      if (!result.success) {
+        toast({
+          variant: "destructive",
+          title: "Gagal Mengumpulkan Ujian",
+          description: result.message || "Terjadi kesalahan saat mengirim jawaban. Silakan coba lagi.",
+        })
+        return
+      }
+
       toast({
         title: "Ujian Berhasil Dikumpulkan! 🏆",
         description: result.message || "Jawaban Anda telah tersimpan dan terkirim ke server.",

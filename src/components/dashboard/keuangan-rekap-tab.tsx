@@ -64,7 +64,7 @@ export function RekapTab() {
   const fetchRekap = React.useCallback(async () => {
     setLoadingRekap(true)
     try {
-      const filter = filterBulan ? { bulan: parseInt(filterBulan), tahun: new Date().getFullYear() } : undefined
+      const filter = filterBulan && filterBulan !== "all" ? { bulan: parseInt(filterBulan), tahun: new Date().getFullYear() } : undefined
       if (rekapView === "kelas") {
         const result = await getRekapSppPerKelas(filter)
         if (result.success && result.data) {
@@ -105,7 +105,7 @@ export function RekapTab() {
           </div>
           <div className="flex items-center gap-3">
             <div className="w-48">
-              <Select value={filterBulan} onValueChange={setFilterBulan}>
+              <Select value={filterBulan} onValueChange={(v) => setFilterBulan(v === "all" ? "" : v)}>
                 <SelectTrigger className="h-10 rounded-xl text-xs font-semibold"><SelectValue placeholder="Semua Periode" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Semua Periode</SelectItem>

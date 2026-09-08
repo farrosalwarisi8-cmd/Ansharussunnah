@@ -134,6 +134,13 @@ export function rateLimit(
   identifier: string,
   options: RateLimitOptions
 ): RateLimitResult {
+  if (identifier.endsWith(":unknown")) {
+    return {
+      success: true,
+      remaining: options.maxRequests,
+      resetAt: Date.now() + options.windowMs,
+    }
+  }
   const now = Date.now()
   const entry = localMemoryStore.get(identifier)
 
@@ -157,11 +164,26 @@ export function rateLimit(
 
 /**
  * Async rate limit mendukung Upstash Redis (untuk Route Handler/Vercel Serverless).
+ *
+ * ⚠️ Identitas "unknown": saat IP klien TIDAK bisa ditentukan (header proxy tidak
+ * tersedia, mis. Server Action di sebagian environment), semua pengguna jatuh ke
+ * SATU bucket bersama `:unknown`. Menerapkan batas ketat di bucket ini berarti
+ * setelah beberapa request, SELURUH pengunjung ikut terblokir — bukan hanya
+ * penyalahguna. Karena kita tidak bisa membedakan pengguna, memblokir semua orang
+ * lebih buruk daripada risiko spam yang dicegah, jadi bucket "unknown" dilewati
+ * (tidak di-rate-limit) daripada dijadikan batas bersama.
  */
 export async function rateLimitAsync(
   identifier: string,
   options: RateLimitOptions
 ): Promise<RateLimitResult> {
+  if (identifier.endsWith(":unknown")) {
+    return {
+      success: true,
+      remaining: options.maxRequests,
+      resetAt: Date.now() + options.windowMs,
+    }
+  }
   return rateLimiterInstance.limit(identifier, options)
 }
 

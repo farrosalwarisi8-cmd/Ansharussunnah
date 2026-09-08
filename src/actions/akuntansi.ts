@@ -1565,6 +1565,99 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
 }
 
 // ========================================================
+// 9. ADMIN KEUANGAN: KATEGORI & RIWAYAT TRANSAKSI (KASIR)
+// ========================================================
+
+/**
+ * Daftar kategori transaksi aktif untuk dropdown form kasir.
+ * Hanya ADMIN_KEUANGAN / SUPER_ADMIN.
+ */
+export async function getKategoriTransaksiList(): Promise<
+  ActionResponse<
+    Array<{ id: string; nama: string; tipe: TipeTransaksi }>
+  >
+> {
+  try {
+    await requireAdminKeuangan()
+
+    const kategori = await prisma.kategoriTransaksi.findMany({
+      where: { aktif: true },
+      select: { id: true, nama: true, tipe: true },
+      orderBy: { nama: "asc" },
+    })
+
+    return {
+      success: true,
+      message: "Daftar kategori transaksi berhasil dimuat",
+      data: kategori,
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal memuat daftar kategori",
+    }
+  }
+}
+
+/**
+ * Riwayat transaksi keuangan terbaru (aktif + dibatalkan) untuk tab Kasir.
+ * Hanya ADMIN_KEUANGAN / SUPER_ADMIN.
+ */
+export async function getDaftarTransaksiKeuangan(
+  limit: number = 20
+): Promise<
+  ActionResponse<
+    Array<{
+      id: string
+      tipe: TipeTransaksi
+      kategori: string
+      deskripsi: string
+      nominal: number
+      tanggal: Date
+      status: StatusTransaksi
+      alasanPembatalan: string | null
+      dibuatOleh: string
+    }>
+  >
+> {
+  try {
+    await requireAdminKeuangan()
+
+    const safeLimit = Math.min(Math.max(1, limit), 100)
+
+    const transaksi = await prisma.transaksiKeuangan.findMany({
+      include: {
+        kategori: { select: { nama: true } },
+        dibuatOleh: { select: { nama: true } },
+      },
+      orderBy: { tanggal: "desc" },
+      take: safeLimit,
+    })
+
+    return {
+      success: true,
+      message: "Riwayat transaksi berhasil dimuat",
+      data: transaksi.map((t) => ({
+        id: t.id,
+        tipe: t.tipe,
+        kategori: t.kategori.nama,
+        deskripsi: t.deskripsi,
+        nominal: Number(t.nominal),
+        tanggal: t.tanggal,
+        status: t.status,
+        alasanPembatalan: t.alasanPembatalan,
+        dibuatOleh: t.dibuatOleh.nama,
+      })),
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal memuat riwayat transaksi",
+    }
+  }
+}
+
+// ========================================================
 // PRIVATE UTIL
 // ========================================================
 

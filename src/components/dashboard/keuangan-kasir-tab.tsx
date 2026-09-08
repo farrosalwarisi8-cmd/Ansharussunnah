@@ -6,7 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { CheckCircle2, XCircle, Plus, Loader2 } from "lucide-react"
-import { createTransaksiKeuangan, batalkanTransaksiKeuangan, konfirmasiPembayaranSppManual } from "@/actions/akuntansi"
+import {
+  createTransaksiKeuangan,
+  batalkanTransaksiKeuangan,
+  konfirmasiPembayaranSppManual,
+  getKategoriTransaksiList,
+  getDaftarTransaksiKeuangan,
+} from "@/actions/akuntansi"
 import dynamic from "next/dynamic"
 const Dialog = dynamic(() => import("@/components/ui/dialog").then(m => m.Dialog), { ssr: false })
 const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogContent), { ssr: false })
@@ -14,15 +20,39 @@ const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.
 const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 
+type KategoriItem = {
+  id: string
+  nama: string
+  tipe: "PEMASUKAN" | "PENGELUARAN"
+}
+
+type TransaksiItem = {
+  id: string
+  tipe: "PEMASUKAN" | "PENGELUARAN"
+  kategori: string
+  deskripsi: string
+  nominal: number
+  tanggal: string | Date
+  status: string
+  alasanPembatalan: string | null
+  dibuatOleh: string
+}
+
+const formatRp = (n: number) => `Rp ${n.toLocaleString("id-ID")}`
+const formatTanggal = (t: string | Date) =>
+  new Date(t).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+
 export function KasirTab() {
   const { toast } = useToast()
-  const [transaksiList, setTransaksiList] = React.useState([
-    { id: "trx-1", kode: "TRX-2024-001", tipe: "PEMASUKAN", kategori: "Infaq & Donasi Sarana", deskripsi: "Wakaf AC masjid dari hamba Allah", nominal: 4500000, tanggal: "02 Maret 2024" },
-    { id: "trx-2", kode: "TRX-2024-002", tipe: "PENGELUARAN", kategori: "Konsumsi & Dapur Asrama", deskripsi: "Belanja bahan pokok beras & lauk pekan 1", nominal: 8750000, tanggal: "01 Maret 2024" },
-    { id: "trx-3", kode: "TRX-2024-003", tipe: "PENGELUARAN", kategori: "Operasional & Listrik", deskripsi: "Pembayaran token listrik asrama ikhwan", nominal: 1200000, tanggal: "28 Februari 2024" },
-  ])
+
+  // Data nyata dari database
+  const [kategoriList, setKategoriList] = React.useState<KategoriItem[]>([])
+  const [transaksiList, setTransaksiList] = React.useState<TransaksiItem[]>([])
+  const [loadingData, setLoadingData] = React.useState(true)
+
+  // Form transaksi
   const [tipeTransaksi, setTipeTransaksi] = React.useState<"PEMASUKAN" | "PENGELUARAN">("PEMASUKAN")
-  const [kategoriTransaksi, setKategoriTransaksi] = React.useState("Infaq / Donasi")
+  const [kategoriId, setKategoriId] = React.useState("")
   const [deskripsiTransaksi, setDeskripsiTransaksi] = React.useState("")
   const [nominalTransaksi, setNominalTransaksi] = React.useState("")
   const [savingTrx, setSavingTrx] = React.useState(false)
@@ -40,18 +70,72 @@ export function KasirTab() {
   const [cancelAlasan, setCancelAlasan] = React.useState("")
   const [cancelling, setCancelling] = React.useState(false)
 
+  const fetchData = React.useCallback(async () => {
+    setLoadingData(true)
+    try {
+      const [kategoriRes, trxRes] = await Promise.all([
+        getKategoriTransaksiList(),
+        getDaftarTransaksiKeuangan(20),
+      ])
+      if (kategoriRes.success && kategoriRes.data) {
+        setKategoriList(kategoriRes.data)
+        // Default pilih kategori pertama sesuai tipe yang dipilih
+        const k = kategoriRes.data.find((x) => x.tipe === tipeTransaksi) || kategoriRes.data[0]
+        if (k) setKategoriId((prev) => prev || k.id)
+      } else {
+        toast({ variant: "destructive", title: "Gagal memuat kategori", description: kategoriRes.message })
+      }
+      if (trxRes.success && trxRes.data) {
+        setTransaksiList(trxRes.data)
+      } else {
+        toast({ variant: "destructive", title: "Gagal memuat riwayat", description: trxRes.message })
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Gagal Memuat Data", description: "Terjadi kesalahan saat memuat data kasir." })
+    } finally {
+      setLoadingData(false)
+    }
+  }, [tipeTransaksi, toast])
+
+  React.useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  // Saat tipe berubah, pindahkan kategori terpilih ke kategori dengan tipe tersebut
+  const handleTipeChange = (val: "PEMASUKAN" | "PENGELUARAN") => {
+    setTipeTransaksi(val)
+    const k = kategoriList.find((x) => x.tipe === val)
+    setKategoriId(k?.id || "")
+  }
+
+  const kategoriTerpilih = kategoriList.find((k) => k.id === kategoriId)
+
   const handleAddTransaksi = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!nominalTransaksi || !deskripsiTransaksi) return
+    if (!kategoriId || !nominalTransaksi || !deskripsiTransaksi.trim()) {
+      toast({ variant: "destructive", title: "Data belum lengkap", description: "Pilih kategori, isi nominal, dan keterangan." })
+      return
+    }
     setSavingTrx(true)
     try {
-      await createTransaksiKeuangan({ kategoriId: "kat-operasional", nominal: parseFloat(nominalTransaksi), deskripsi: deskripsiTransaksi, tanggal: new Date().toISOString() })
-      setTransaksiList((prev) => [{ id: `trx-${Date.now()}`, kode: `TRX-2024-${String(prev.length + 1).padStart(3, "0")}`, tipe: tipeTransaksi, kategori: kategoriTransaksi, deskripsi: deskripsiTransaksi, nominal: parseFloat(nominalTransaksi), tanggal: "Hari Ini" }, ...prev])
-      toast({ title: "Transaksi Berhasil Dicatat! 💰", description: `${tipeTransaksi} sebesar Rp ${parseInt(nominalTransaksi).toLocaleString("id-ID")} tersimpan.` })
+      const result = await createTransaksiKeuangan({
+        kategoriId,
+        nominal: parseFloat(nominalTransaksi),
+        deskripsi: deskripsiTransaksi,
+        tanggal: new Date().toISOString(),
+      })
+      if (!result.success) {
+        toast({ variant: "destructive", title: "Gagal Menyimpan Transaksi", description: result.message })
+        return
+      }
+      toast({ title: "Transaksi Berhasil Dicatat! 💰", description: result.message })
       setDeskripsiTransaksi("")
       setNominalTransaksi("")
+      // Muat ulang riwayat dari database
+      const trxRes = await getDaftarTransaksiKeuangan(20)
+      if (trxRes.success && trxRes.data) setTransaksiList(trxRes.data)
     } catch {
-      toast({ title: "Transaksi Dicatat (Demo)", description: "Buku kas berhasil diperbarui." })
+      toast({ variant: "destructive", title: "Gagal Menyimpan", description: "Terjadi kesalahan saat menyimpan transaksi." })
     } finally {
       setSavingTrx(false)
     }
@@ -62,7 +146,12 @@ export function KasirTab() {
     if (!manualTagihanId.trim() || !manualNominal) return
     setProcessingManual(true)
     try {
-      const result = await konfirmasiPembayaranSppManual({ tagihanId: manualTagihanId, nominalDibayar: parseFloat(manualNominal), metodeBayar: manualMetode, catatan: manualCatatan || "Pembayaran tunai/manual" })
+      const result = await konfirmasiPembayaranSppManual({
+        tagihanId: manualTagihanId,
+        nominalDibayar: parseFloat(manualNominal),
+        metodeBayar: manualMetode,
+        catatan: manualCatatan || "Pembayaran tunai/manual",
+      })
       if (result.success) {
         toast({ title: "Pembayaran Manual Tercatat! 💰", description: result.message })
         setManualTagihanId("")
@@ -75,6 +164,31 @@ export function KasirTab() {
       toast({ variant: "destructive", title: "Gagal", description: "Terjadi kesalahan server." })
     } finally {
       setProcessingManual(false)
+    }
+  }
+
+  const handleCancelTransaksi = async () => {
+    if (!cancelTargetId || cancelAlasan.trim().length < 5) return
+    setCancelling(true)
+    try {
+      const result = await batalkanTransaksiKeuangan({
+        transaksiId: cancelTargetId,
+        alasanPembatalan: cancelAlasan,
+      })
+      if (result.success) {
+        toast({ title: "Transaksi Dibatalkan", description: result.message })
+        setCancelDialogOpen(false)
+        setCancelTargetId("")
+        setCancelAlasan("")
+        const trxRes = await getDaftarTransaksiKeuangan(20)
+        if (trxRes.success && trxRes.data) setTransaksiList(trxRes.data)
+      } else {
+        toast({ variant: "destructive", title: "Gagal Membatalkan", description: result.message })
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Gagal Membatalkan", description: "Terjadi kesalahan saat membatalkan transaksi." })
+    } finally {
+      setCancelling(false)
     }
   }
 
@@ -121,33 +235,48 @@ export function KasirTab() {
           <CardTitle className="text-base font-bold text-slate-800">Pencatatan Kas &amp; Transaksi Non-SPP</CardTitle>
         </CardHeader>
         <CardContent className="p-0 pt-4">
-          <form onSubmit={handleAddTransaksi} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-600 uppercase block mb-1">Tipe</label>
-              <select value={tipeTransaksi} onChange={(e) => setTipeTransaksi(e.target.value as "PEMASUKAN" | "PENGELUARAN")} className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold">
-                <option value="PEMASUKAN">Pemasukan (+)</option><option value="PENGELUARAN">Pengeluaran (-)</option>
-              </select>
+          {loadingData ? (
+            <div className="flex items-center justify-center p-4 text-sm text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Memuat kategori transaksi...
             </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600 uppercase block mb-1">Kategori</label>
-              <select value={kategoriTransaksi} onChange={(e) => setKategoriTransaksi(e.target.value)} className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold">
-                <option value="Infaq / Donasi">Infaq / Donasi</option><option value="Konsumsi Asrama">Konsumsi Asrama</option>
-                <option value="Operasional & Listrik">Operasional &amp; Listrik</option><option value="Perawatan Sarpras">Perawatan Sarpras</option>
-                <option value="Honor Asatidz">Honor Asatidz</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600 uppercase block mb-1">Nominal (Rp)</label>
-              <Input type="number" placeholder="1000000" value={nominalTransaksi} onChange={(e) => setNominalTransaksi(e.target.value)} className="h-11 rounded-xl text-sm" required />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600 uppercase block mb-1">Keterangan Singkat</label>
-              <div className="flex gap-2">
-                <Input placeholder="Uraian transaksi..." value={deskripsiTransaksi} onChange={(e) => setDeskripsiTransaksi(e.target.value)} className="h-11 rounded-xl text-sm" required />
-                <Button type="submit" disabled={savingTrx} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold h-11 px-4 rounded-xl shrink-0"><Plus className="h-4 w-4" /></Button>
+          ) : (
+            <form onSubmit={handleAddTransaksi} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 uppercase block mb-1">Tipe</label>
+                <select value={tipeTransaksi} onChange={(e) => handleTipeChange(e.target.value as "PEMASUKAN" | "PENGELUARAN")} className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold">
+                  <option value="PEMASUKAN">Pemasukan (+)</option><option value="PENGELUARAN">Pengeluaran (-)</option>
+                </select>
               </div>
-            </div>
-          </form>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 uppercase block mb-1">Kategori</label>
+                <select value={kategoriId} onChange={(e) => setKategoriId(e.target.value)} className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold">
+                  {kategoriList.filter((k) => k.tipe === tipeTransaksi).length > 0 ? (
+                    kategoriList.filter((k) => k.tipe === tipeTransaksi).map((k) => (
+                      <option key={k.id} value={k.id}>{k.nama}</option>
+                    ))
+                  ) : (
+                    <option value="">— Belum ada kategori —</option>
+                  )}
+                </select>
+                {kategoriList.length === 0 && (
+                  <p className="text-[11px] text-amber-600 mt-1">
+                    Belum ada kategori transaksi. Tambahkan via seed atau database.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 uppercase block mb-1">Nominal (Rp)</label>
+                <Input type="number" placeholder="1000000" value={nominalTransaksi} onChange={(e) => setNominalTransaksi(e.target.value)} className="h-11 rounded-xl text-sm" required />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 uppercase block mb-1">Keterangan Singkat</label>
+                <div className="flex gap-2">
+                  <Input placeholder="Uraian transaksi..." value={deskripsiTransaksi} onChange={(e) => setDeskripsiTransaksi(e.target.value)} className="h-11 rounded-xl text-sm" required />
+                  <Button type="submit" disabled={savingTrx || !kategoriTerpilih} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold h-11 px-4 rounded-xl shrink-0"><Plus className="h-4 w-4" /></Button>
+                </div>
+              </div>
+            </form>
+          )}
         </CardContent>
       </Card>
 
@@ -157,26 +286,43 @@ export function KasirTab() {
           <CardTitle className="text-base font-bold text-slate-800">Riwayat Transaksi Terakhir</CardTitle>
         </CardHeader>
         <CardContent className="p-5 divide-y divide-slate-100">
-          {transaksiList.map((trx) => (
-            <div key={trx.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-slate-400 font-bold">{trx.kode}</span>
-                  <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">{trx.kategori}</span>
-                </div>
-                <div className="font-bold text-slate-800 text-sm">{trx.deskripsi}</div>
-                <div className="text-xs text-slate-400">{trx.tanggal}</div>
-              </div>
-              <div className="text-right shrink-0 flex items-center gap-2">
-                <span className={`text-base font-black ${trx.tipe === "PEMASUKAN" ? "text-yellow-600" : "text-rose-600"}`}>
-                  {trx.tipe === "PEMASUKAN" ? "+" : "-"} Rp {trx.nominal.toLocaleString("id-ID")}
-                </span>
-                <Button size="sm" variant="outline" onClick={() => { setCancelTargetId(trx.id); setCancelAlasan(""); setCancelDialogOpen(true) }} className="rounded-lg text-xs text-rose-600 border-rose-200 hover:bg-rose-50 min-h-[32px] px-2" aria-label="Batalkan transaksi">
-                  <XCircle className="h-3 w-3" />
-                </Button>
-              </div>
+          {loadingData ? (
+            <div className="flex items-center justify-center py-8 text-sm text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Memuat riwayat transaksi...
             </div>
-          ))}
+          ) : transaksiList.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-400">
+              Belum ada transaksi keuangan yang tercatat.
+            </p>
+          ) : (
+            transaksiList.map((trx) => (
+              <div key={trx.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
+                <div className="space-y-0.5 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">{trx.kategori}</span>
+                    {trx.status === "DIBATALKAN" && (
+                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">DIBATALKAN</span>
+                    )}
+                  </div>
+                  <div className="font-bold text-slate-800 text-sm truncate">{trx.deskripsi}</div>
+                  <div className="text-xs text-slate-400">{formatTanggal(trx.tanggal)} • oleh {trx.dibuatOleh}</div>
+                  {trx.status === "DIBATALKAN" && trx.alasanPembatalan && (
+                    <div className="text-xs text-rose-500">Alasan: {trx.alasanPembatalan}</div>
+                  )}
+                </div>
+                <div className="text-right shrink-0 flex items-center gap-2">
+                  <span className={`text-base font-black ${trx.tipe === "PEMASUKAN" ? "text-yellow-600" : "text-rose-600"}`}>
+                    {trx.tipe === "PEMASUKAN" ? "+" : "-"} {formatRp(trx.nominal)}
+                  </span>
+                  {trx.status !== "DIBATALKAN" && (
+                    <Button size="sm" variant="outline" onClick={() => { setCancelTargetId(trx.id); setCancelAlasan(""); setCancelDialogOpen(true) }} className="rounded-lg text-xs text-rose-600 border-rose-200 hover:bg-rose-50 min-h-[32px] px-2" aria-label="Batalkan transaksi">
+                      <XCircle className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
         </CardContent>
       </Card>
 
@@ -195,7 +341,7 @@ export function KasirTab() {
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => { setCancelDialogOpen(false); setCancelTargetId(""); setCancelAlasan("") }} className="rounded-xl min-h-[40px]">Batal</Button>
-            <Button onClick={async () => { if (!cancelTargetId || !cancelAlasan.trim()) return; setCancelling(true); try { const result = await batalkanTransaksiKeuangan({ transaksiId: cancelTargetId, alasanPembatalan: cancelAlasan }); if (result.success) { toast({ title: "Transaksi Dibatalkan", description: result.message }); setTransaksiList((prev) => prev.filter((t) => t.id !== cancelTargetId)); setCancelDialogOpen(false); setCancelTargetId(""); setCancelAlasan(""); } else { toast({ variant: "destructive", title: "Gagal Membatalkan", description: result.message }); } } catch { toast({ variant: "destructive", title: "Gagal Membatalkan", description: "Terjadi kesalahan saat membatalkan transaksi." }); } finally { setCancelling(false); } }} disabled={cancelling || cancelAlasan.length < 5} variant="destructive" className="rounded-xl min-h-[40px]">
+            <Button onClick={handleCancelTransaksi} disabled={cancelling || cancelAlasan.trim().length < 5} variant="destructive" className="rounded-xl min-h-[40px]">
               {cancelling ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null} Ya, Batalkan
             </Button>
           </DialogFooter>

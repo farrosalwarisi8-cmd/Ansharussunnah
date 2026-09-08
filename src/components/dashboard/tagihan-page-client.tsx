@@ -388,7 +388,7 @@ function TagihanContent() {
 
     setSubmitting(true)
     try {
-      await submitBuktiPembayaranSpp({
+      const result = await submitBuktiPembayaranSpp({
         tagihanId: selectedTagihanId,
         nominalDibayar: parseFloat(jumlahTransfer) || selectedTagihan.nominal,
         metodeBayar: bankPengirim || "Transfer Bank",
@@ -396,6 +396,15 @@ function TagihanContent() {
         namaBukti: buktiUrl.split('/').pop() || 'bukti-transfer',
         catatan: `Transfer via ${bankPengirim} a.n ${namaPengirim}`,
       })
+
+      if (!result.success) {
+        toast({
+          variant: "destructive",
+          title: "Gagal Mengirim",
+          description: result.message || "Terjadi kesalahan saat mengirim bukti pembayaran.",
+        })
+        return
+      }
 
       toast({
         title: "Bukti Transfer Terkirim! 💳",

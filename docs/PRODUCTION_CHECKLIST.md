@@ -164,19 +164,12 @@ Gunakan sebagai panduan sebelum dan sesuai go-live.
 
 ### Cron Jobs
 
-- [ ] **Auto-close ujian kedaluwarsa** (opsional):
-  - Buat Route Handler di `src/app/api/cron/tutup-ujian/route.ts`
-  - Validasi header `Authorization: Bearer <CRON_SECRET>`
-  - Set `CRON_SECRET` di environment variables
-  - Konfigurasi di `vercel.json`:
-    ```json
-    {
-      "crons": [{
-        "path": "/api/cron/tutup-ujian",
-        "schedule": "*/5 * * * *"
-      }]
-    }
-    ```
+- [x] **Auto-close ujian kedaluwarsa** (sudah diimplementasikan):
+  - Route Handler: `src/app/api/cron/tutup-ujian/route.ts` ✅
+  - Validasi header `Authorization: Bearer <CRON_SECRET>` (timingSafeEqual) ✅
+  - Terdaftar di `vercel.json` dengan schedule `*/5 * * * *` ✅
+  - ⚠️ Pastikan `CRON_SECRET` di-set di environment variables Vercel
+  - Catatan: selain cron, lazy-close juga aktif — sesi kedaluwarsa otomatis ditutup saat guru membuka rekap (`getRekapHasilUjian`) dan saat siswa membuka daftar ujian (`getDaftarUjianSiswa`)
 
 ### Cleanup Policy
 

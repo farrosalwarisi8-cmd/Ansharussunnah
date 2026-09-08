@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma"
 import { requireRole } from "@/lib/auth"
 import { verifyGuruAksesKelas } from "@/lib/guru-auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { getSignedUrls } from "@/lib/storage"
+import { getSignedUrls, isExternalUrl } from "@/lib/storage"
 import {
   createMateriSchema,
   updateMateriSchema,
@@ -308,7 +308,7 @@ export async function getDaftarMateriGuru(
     // Batch: ambil semua signed URL materi yang punya file dalam SATU panggilan API
     const urlFileList = materiList
       .map((m) => m.urlFile)
-      .filter((u): u is string => !!u)
+      .filter((u): u is string => !!u && !isExternalUrl(u))
 
     const signedUrlMap = await getSignedUrls("materi", urlFileList)
 
@@ -371,7 +371,7 @@ export async function getDaftarMateriSiswa(): Promise<ActionResponse> {
     // Batch: ambil semua signed URL materi yang punya file dalam SATU panggilan API
     const urlFileList = materiList
       .map((m) => m.urlFile)
-      .filter((u): u is string => !!u)
+      .filter((u): u is string => !!u && !isExternalUrl(u))
 
     const signedUrlMap = await getSignedUrls("materi", urlFileList)
 
@@ -450,7 +450,7 @@ export async function getDaftarMateriAnak(
     // Batch: ambil semua signed URL materi yang punya file dalam SATU panggilan API
     const urlFileList = materiList
       .map((m) => m.urlFile)
-      .filter((u): u is string => !!u)
+      .filter((u): u is string => !!u && !isExternalUrl(u))
 
     const signedUrlMap = await getSignedUrls("materi", urlFileList)
 

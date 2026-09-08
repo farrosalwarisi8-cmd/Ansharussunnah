@@ -376,6 +376,11 @@ export async function getRekapHasilUjian(ujianId: string): Promise<ActionRespons
 
     await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
 
+    // LAZY CLOSE: tutup sesi pengerjaan yang sudah melewati deadlineFinal
+    // sebelum rekap ditampilkan, sehingga guru melihat status/nilai final
+    // (SELESAI/DINILAI) dan bukan sesi yang menggantung di SEDANG_MENGERJAKAN.
+    await tutupPengerjaanUjianKedaluwarsa(ujianId)
+
     const rekap = await prisma.pengerjaanUjian.findMany({
       where: { ujianId },
       include: {
@@ -604,6 +609,11 @@ export async function getDaftarUjianSiswa(): Promise<ActionResponse> {
     if (!user.siswa || !user.siswa.kelasId) {
       return { success: false, message: "Siswa belum terdaftar di kelas aktif" }
     }
+
+    // LAZY CLOSE: tutup semua sesi pengerjaan yang sudah melewati deadline
+    // (mis. siswa menutup tab saat ujian), agar status/nilai langsung final
+    // saat siswa melihat kembali daftar ujian.
+    await tutupPengerjaanUjianKedaluwarsa()
 
     const now = new Date()
 

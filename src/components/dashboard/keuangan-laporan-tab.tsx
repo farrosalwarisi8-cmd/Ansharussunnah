@@ -94,7 +94,11 @@ export function LaporanTab() {
             {BULAN_OPTIONS.map((b) => (<option key={b.value} value={b.value}>{b.label}</option>))}
           </select>
           <select value={String(laporanTahun)} onChange={(e) => setLaporanTahun(parseInt(e.target.value))} className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold">
-            {[2024, 2025, 2026].map((y) => (<option key={y} value={y}>{y}</option>))}
+            {(() => {
+              const thn = new Date().getFullYear()
+              const years = Array.from({ length: 5 }, (_, i) => thn - 4 + i)
+              return years.map((y) => (<option key={y} value={y}>{y}</option>))
+            })()}
           </select>
           <Button variant="outline" size="sm" onClick={() => { fetchLaporan(); fetchTunggakan() }} className="rounded-xl min-h-[40px]">
             <RefreshCw className="h-4 w-4 mr-1.5" /> Refresh

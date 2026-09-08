@@ -65,7 +65,7 @@ export function VerifikasiPembayaranTab() {
         toast({ title: "Gagal Memproses", description: result.message, variant: "destructive" })
       }
     } catch {
-      toast({ title: approve ? "Pembayaran Dikonfirmasi (Demo)" : "Pembayaran Ditolak (Demo)", description: "Status berhasil diupdate." })
+      toast({ variant: "destructive", title: "Gagal Memproses", description: "Terjadi kesalahan server. Coba lagi." })
     } finally {
       setProcessingId(null)
     }

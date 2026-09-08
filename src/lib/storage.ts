@@ -6,6 +6,19 @@ import { nanoid } from "nanoid"
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
 
+/**
+ * Deteksi apakah sebuah nilai adalah URL eksternal (http/https) dan bukan
+ * path relatif di dalam bucket Supabase Storage.
+ *
+ * Dipakai agar signed URL hanya dibuat untuk path internal.
+ * Nilai URL eksternal (mis. Google Drive) harus dilempar ke klien apa adanya —
+ * membuat signed URL untuk string "https://..." menghasilkan link rusak.
+ */
+export function isExternalUrl(value: string | null | undefined): boolean {
+  if (!value) return false
+  return /^https?:\/\//i.test(value)
+}
+
 // Magic bytes signatures untuk format valid
 
 
@@ -139,6 +152,10 @@ export async function getSignedUrl(
   path: string,
   expiresIn: number = 3600
 ): Promise<string | null> {
+  // URL eksternal (Google Drive / cloud) bukan path bucket —
+  // buat signed URL untuk nilai ini hanya menghasilkan link rusak.
+  if (isExternalUrl(path)) return null
+
   const supabase = createSupabaseAdmin()
   const { data, error } = await supabase.storage
     .from(bucket)
@@ -152,6 +169,9 @@ export async function getSignedUrl(
  * Batch: generate signed URL untuk banyak file dalam SATU panggilan API.
  * Mengembalikan Map<path, signedUrl | null>.
  * Path yang tidak ditemukan atau gagal akan bernilai null.
+ *
+ * URL eksternal (http/https, mis. Google Drive) TIDAK diproses — dilewati
+ * supaya tidak dibuatkan signed URL rusak. Akses via properti url asli.
  */
 export async function getSignedUrls(
   bucket: string,
@@ -160,6 +180,10 @@ export async function getSignedUrls(
 ): Promise<Map<string, string | null>> {
   const result = new Map<string, string | null>()
 
+  if (paths.length === 0) return result
+
+  // defense-in-depth: lewati URL eksternal (tidak valid untuk signed URL)
+  paths = paths.filter((p) => !isExternalUrl(p))
   if (paths.length === 0) return result
 
   const supabase = createSupabaseAdmin()

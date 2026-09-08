@@ -16,10 +16,14 @@ export async function createPendaftaran(
   formData: FormData
 ): Promise<ActionResponse<{ nomorPendaftaran: string }>> {
   try {
-    // ✅ Rate Limiting: 5 pendaftaran / 10 menit per IP
+    // ✅ Rate Limiting: 30 pendaftaran / 10 menit per IP
+    // Batas per-IP dibuat longgar karena satu IP publik sering dipakai bersama
+    // (WiFi sekolah/asrama/orang tua) dan musim PPDB bisa memunculkan gelombang
+    // pendaftaran sah dari jaringan yang sama dalam waktu singkat. IP yang tidak
+    // bisa ditentukan ("unknown") tidak di-rate-limit — lihat rateLimitAsync().
     const ip = await getClientIpFromHeaders()
     const limiter = await rateLimitAsync(`create-pendaftaran:${ip}`, {
-      maxRequests: 5,
+      maxRequests: 30,
       windowMs: 10 * 60 * 1000,
     })
 

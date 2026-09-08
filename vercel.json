@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/spp",
       "schedule": "0 1 1 * *"
+    },
+    {
+      "path": "/api/cron/tutup-ujian",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

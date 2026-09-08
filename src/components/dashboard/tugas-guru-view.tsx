@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Clock, Loader2, Trash2, Pencil } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
 import dynamic from "next/dynamic"
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
@@ -21,6 +22,7 @@ import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
 type GuruTugasItem = {
   id: string
   judul: string
+  deskripsi: string
   mataPelajaran: string
   deadline: string | Date
   periode: string
@@ -247,7 +249,7 @@ export function GuruTugasView() {
                     onClick={() => {
                       setEditTugas(item)
                       setEditJudul(item.judul)
-                      setEditDeskripsi("")
+                      setEditDeskripsi(item.deskripsi || "")
                       setEditDeadline(new Date(item.deadline).toISOString().slice(0, 16))
                       setIsEditOpen(true)
                     }}
@@ -283,7 +285,7 @@ export function GuruTugasView() {
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Deskripsi</label>
-                        <Input value={editDeskripsi} onChange={(e) => setEditDeskripsi(e.target.value)} className="h-11 rounded-xl text-sm" />
+                        <Textarea value={editDeskripsi} onChange={(e) => setEditDeskripsi(e.target.value)} className="rounded-xl min-h-[90px] text-sm" />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Deadline Baru</label>

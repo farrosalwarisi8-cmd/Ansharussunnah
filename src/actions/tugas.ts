@@ -7,7 +7,7 @@ import { requireRole } from "@/lib/auth"
 import { verifyGuruAksesKelas } from "@/lib/guru-auth"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { getSignedUrl, getSignedUrls } from "@/lib/storage"
+import { getSignedUrl, getSignedUrls, isExternalUrl } from "@/lib/storage"
 import {
   createTugasSchema,
   updateTugasSchema,
@@ -157,16 +157,23 @@ export async function updateTugas(
     const targetMapelId = mataPelajaranId ?? tugas.mataPelajaranId
     await verifyGuruAksesKelas(targetKelasId, targetMapelId)
 
-    // Cegah perubahan deadline jika sudah ada submission
+    // Cegah perubahan deadline jika sudah ada submission. Form edit selalu
+    // mengirim deadline (nilai lama), jadi bandingkan dulu: guru tetap boleh
+    // mengubah judul/deskripsi/lampiran walau siswa sudah mengumpulkan,
+    // hanya deadline yang dikunci.
     if (payload.deadline) {
-      const submissionCount = await prisma.pengumpulanTugas.count({
-        where: { tugasId },
-      })
-      if (submissionCount > 0) {
-        return {
-          success: false,
-          message:
-            "Tidak dapat mengubah deadline karena sudah ada siswa yang mengumpulkan",
+      const deadlineBaru = new Date(payload.deadline)
+      const deadlineBerubah = deadlineBaru.getTime() !== tugas.deadline.getTime()
+      if (deadlineBerubah) {
+        const submissionCount = await prisma.pengumpulanTugas.count({
+          where: { tugasId },
+        })
+        if (submissionCount > 0) {
+          return {
+            success: false,
+            message:
+              "Tidak dapat mengubah deadline karena sudah ada siswa yang mengumpulkan",
+          }
         }
       }
     }
@@ -252,6 +259,7 @@ export async function getDaftarTugasGuru(kelasId: string): Promise<ActionRespons
     const formatted = tugasList.map((t) => ({
       id: t.id,
       judul: t.judul,
+      deskripsi: t.deskripsi,
       mataPelajaran: t.mataPelajaran.nama,
       deadline: t.deadline,
       periode: t.periodeAjaran.nama,
@@ -376,10 +384,12 @@ export async function getRekapPengumpulanTugas(
       },
     })
 
-    // Batch: generate signed URL untuk file jawaban siswa agar guru bisa membukanya
+    // Batch: generate signed URL untuk file jawaban siswa agar guru bisa membukanya.
+    // URL eksternal (Google Drive / cloud) dilewati — bukan path bucket;
+    // klien membukanya langsung via properti urlFile.
     const urlFileList = pengumpulanList
       .map((p) => p.urlFile)
-      .filter((u): u is string => !!u)
+      .filter((u): u is string => !!u && !isExternalUrl(u))
     const signedUrlMap = await getSignedUrls("tugas-siswa", urlFileList)
 
     const pengumpulanMap = new Map(
@@ -781,13 +791,19 @@ export async function getDetailTugasSiswa(
 
     const pengumpulan = tugas.pengumpulan[0] || null
 
-    // Generate signed URLs
+    // Generate signed URLs — hanya untuk path internal bucket.
+    // URL eksternal (Google Drive / cloud) diteruskan apa adanya supaya klien
+    // tetap mendapat link yang bisa dibuka.
     const [signedLampiran, signedJawaban] = await Promise.all([
       tugas.lampiranUrl
-        ? getSignedUrl("tugas-siswa", tugas.lampiranUrl)
+        ? isExternalUrl(tugas.lampiranUrl)
+          ? tugas.lampiranUrl
+          : getSignedUrl("tugas-siswa", tugas.lampiranUrl)
         : null,
       pengumpulan?.urlFile
-        ? getSignedUrl("tugas-siswa", pengumpulan.urlFile)
+        ? isExternalUrl(pengumpulan.urlFile)
+          ? pengumpulan.urlFile
+          : getSignedUrl("tugas-siswa", pengumpulan.urlFile)
         : null,
     ])
 
