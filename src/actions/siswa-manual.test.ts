@@ -10,6 +10,7 @@ const {
   mockSiswaFindUnique,
   mockParentStudentFindUnique,
   mockParentStudentCreate,
+  mockKelasFindUnique,
   mockCreateUser,
   mockListUsers,
 } = vi.hoisted(() => ({
@@ -20,6 +21,7 @@ const {
   mockSiswaFindUnique: vi.fn(),
   mockParentStudentFindUnique: vi.fn(),
   mockParentStudentCreate: vi.fn(),
+  mockKelasFindUnique: vi.fn(),
   mockCreateUser: vi.fn(),
   mockListUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
 }))
@@ -48,6 +50,9 @@ vi.mock("@/lib/prisma", () => ({
     parentStudent: {
       findUnique: mockParentStudentFindUnique,
       create: mockParentStudentCreate,
+    },
+    kelas: {
+      findUnique: mockKelasFindUnique,
     },
     $transaction: mockPrismaTransaction,
   },
@@ -143,6 +148,7 @@ function setupTransactionMock() {
 describe("createSiswaManual — First Child (New Parent)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockKelasFindUnique.mockResolvedValue({ id: "kelas-1", nama: "Kelas 1", jenisKelamin: null })
   })
 
   it("harus membuat akun siswa, orang tua, dan ParentStudent baru", async () => {
@@ -198,6 +204,7 @@ describe("createSiswaManual — First Child (New Parent)", () => {
 describe("createSiswaManual — Second Child (Existing Parent)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockKelasFindUnique.mockResolvedValue({ id: "kelas-1", nama: "Kelas 1", jenisKelamin: null })
   })
 
   it("harus reuse akun orang tua yang sudah ada dan membuat ParentStudent baru", async () => {
@@ -317,6 +324,7 @@ describe("createSiswaManual — Second Child (Existing Parent)", () => {
 describe("createSiswaManual — Duplicate ParentStudent Guard", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockKelasFindUnique.mockResolvedValue({ id: "kelas-1", nama: "Kelas 1", jenisKelamin: null })
   })
 
   it("harus skip ParentStudent create jika relasi sudah ada", async () => {
@@ -375,6 +383,7 @@ describe("createSiswaManual — Duplicate ParentStudent Guard", () => {
 describe("createSiswaManual — Three Children, Same Parent Email", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockKelasFindUnique.mockResolvedValue({ id: "kelas-1", nama: "Kelas 1", jenisKelamin: null })
   })
 
   it("harus bisa membuat 3 siswa berbeda dengan 1 email orang tua", async () => {
@@ -386,6 +395,7 @@ describe("createSiswaManual — Three Children, Same Parent Email", () => {
 
     for (let i = 0; i < students.length; i++) {
       vi.clearAllMocks()
+      mockKelasFindUnique.mockResolvedValue({ id: "kelas-1", nama: "Kelas 1", jenisKelamin: null })
 
       // prisma.user.findFirst calls:
       // 1. siswa email check → null
@@ -442,5 +452,57 @@ describe("createSiswaManual — Three Children, Same Parent Email", () => {
         },
       })
     }
+  })
+})
+
+// ========================================================
+// 5. Gender: Kelas Khusus Harus Cocok dengan Jenis Kelamin Siswa
+// ========================================================
+
+describe("createSiswaManual — Gender Match Kelas", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("harus menolak siswa laki-laki yang dimasukkan ke kelas khusus Akhwat", async () => {
+    mockKelasFindUnique.mockResolvedValue({
+      id: "kelas-akhwat",
+      nama: "Kelas 3",
+      jenisKelamin: "PEREMPUAN",
+    })
+
+    const result = await createSiswaManual(validPayload({ kelasId: "kelas-akhwat" }))
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("kelas khusus Akhwat")
+    expect(mockCreateUser).not.toHaveBeenCalled()
+  })
+
+  it("harus menerima siswa laki-laki di kelas khusus Ikhwan", async () => {
+    mockKelasFindUnique.mockResolvedValue({
+      id: "kelas-ikhwan",
+      nama: "Kelas 1",
+      jenisKelamin: "LAKI_LAKI",
+    })
+
+    mockUserFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+    mockCreateUser
+      .mockResolvedValueOnce({ data: { user: { id: "auth-ortu-new" } }, error: null })
+      .mockResolvedValueOnce({ data: { user: { id: "auth-siswa-new" } }, error: null })
+    setupTransactionMock()
+    mockUserFindFirst.mockResolvedValueOnce(null)
+    mockUserCreate
+      .mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA" })
+      .mockResolvedValueOnce({ id: "user-siswa-1", role: "SISWA" })
+    mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-1" })
+    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-1" })
+    mockParentStudentFindUnique.mockResolvedValue(null)
+
+    const result = await createSiswaManual(validPayload({ kelasId: "kelas-ikhwan" }))
+
+    expect(result.success).toBe(true)
+    expect(result.data?.siswaUserId).toBe("user-siswa-1")
   })
 })

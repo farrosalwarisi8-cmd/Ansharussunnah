@@ -9,13 +9,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const {
   mockRequireRole,
   mockPembayaranSiswaFindMany,
+  mockPembayaranSiswaCount,
   mockSiswaFindMany,
   mockTagihanSiswaFindMany,
+  mockTagihanSiswaFindUnique,
+  mockTagihanSiswaUpdate,
 } = vi.hoisted(() => ({
   mockRequireRole: vi.fn(),
   mockPembayaranSiswaFindMany: vi.fn(),
+  mockPembayaranSiswaCount: vi.fn(),
   mockSiswaFindMany: vi.fn(),
   mockTagihanSiswaFindMany: vi.fn(),
+  mockTagihanSiswaFindUnique: vi.fn(),
+  mockTagihanSiswaUpdate: vi.fn(),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -27,12 +33,15 @@ vi.mock("@/lib/prisma", () => ({
   default: {
     pembayaranSiswa: {
       findMany: mockPembayaranSiswaFindMany,
+      count: mockPembayaranSiswaCount,
     },
     siswa: {
       findMany: mockSiswaFindMany,
     },
     tagihanSiswa: {
       findMany: mockTagihanSiswaFindMany,
+      findUnique: mockTagihanSiswaFindUnique,
+      update: mockTagihanSiswaUpdate,
     },
   },
 }))
@@ -63,6 +72,7 @@ vi.mock("next/cache", () => ({
 // ========================================================
 
 import {
+  batalkanTagihanSpp,
   getDaftarPembayaranPendingVerifikasi,
   getRekapSppPerKelas,
   getRekapSppPerJenjang,
@@ -666,5 +676,95 @@ describe("getRekapSppPerJenjang", () => {
 
     expect(result.success).toBe(false)
     expect(result.message).toContain("Connection refused")
+  })
+})
+
+// ========================================================
+// 4. batalkanTagihanSpp — guard pembatalan
+// ========================================================
+
+describe("batalkanTagihanSpp", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setupAdminAuth()
+  })
+
+  it("harus menolak pembatalan bila tagihan sudah menerima pembayaran DIKONFIRMASI", async () => {
+    mockTagihanSiswaFindUnique.mockResolvedValue({
+      id: "tagihan-1",
+      status: "BELUM_BAYAR",
+      totalTerbayar: 500000, // sudah lunas sebagian — ada uang masuk
+    })
+
+    const result = await batalkanTagihanSpp({
+      tagihanId: "tagihan-1",
+      alasanPembatalan: "Salah buat tagihan",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("DIKONFIRMASI")
+    expect(mockTagihanSiswaUpdate).not.toHaveBeenCalled()
+  })
+
+  it("harus menolak pembatalan bila ada bukti transfer PENDING menunggu verifikasi", async () => {
+    mockTagihanSiswaFindUnique.mockResolvedValue({
+      id: "tagihan-1",
+      status: "BELUM_BAYAR",
+      totalTerbayar: null,
+    })
+    mockPembayaranSiswaCount.mockResolvedValue(1)
+
+    const result = await batalkanTagihanSpp({
+      tagihanId: "tagihan-1",
+      alasanPembatalan: "Duplikat tagihan",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("menunggu verifikasi")
+    expect(mockTagihanSiswaUpdate).not.toHaveBeenCalled()
+  })
+
+  it("harus membatalkan tagihan bila belum ada pembayaran sama sekali", async () => {
+    mockTagihanSiswaFindUnique.mockResolvedValue({
+      id: "tagihan-1",
+      status: "BELUM_BAYAR",
+      totalTerbayar: null,
+    })
+    mockPembayaranSiswaCount.mockResolvedValue(0)
+    mockTagihanSiswaUpdate.mockResolvedValue({ id: "tagihan-1", status: "DIBATALKAN" })
+
+    const result = await batalkanTagihanSpp({
+      tagihanId: "tagihan-1",
+      alasanPembatalan: "Salah nominal tagihan",
+    })
+
+    expect(result.success).toBe(true)
+    expect(mockTagihanSiswaUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "tagihan-1" },
+        data: expect.objectContaining({
+          status: "DIBATALKAN",
+          alasanPembatalan: "Salah nominal tagihan",
+          dibatalkanOlehId: "admin-keu-1",
+        }),
+      })
+    )
+  })
+
+  it("harus mengembalikan error bila tagihan sudah dibatalkan sebelumnya", async () => {
+    mockTagihanSiswaFindUnique.mockResolvedValue({
+      id: "tagihan-1",
+      status: "DIBATALKAN",
+      totalTerbayar: null,
+    })
+
+    const result = await batalkanTagihanSpp({
+      tagihanId: "tagihan-1",
+      alasanPembatalan: "Percobaan dobel",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("sudah dibatalkan")
+    expect(mockTagihanSiswaUpdate).not.toHaveBeenCalled()
   })
 })

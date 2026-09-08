@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Plus, Loader2 } from "lucide-react"
-import { createAkunAdminKeuangan, getDaftarAdminKeuangan } from "@/actions/admin-keuangan"
+import { createAkunAdminKeuangan } from "@/actions/admin-keuangan"
 import { useToast } from "@/hooks/use-toast"
 
 interface Props {

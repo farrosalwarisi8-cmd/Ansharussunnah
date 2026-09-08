@@ -12,16 +12,19 @@ const {
   mockUserFindUnique,
   mockUserFindFirst,
   mockUserCreate,
+  mockUserUpdate,
+  mockUserDelete,
+  mockUserCount,
   mockGuruFindUnique,
   mockGuruCreate,
   mockGuruKelasCreateMany,
   mockMapelFindMany,
   mockKelasFindMany,
   mockPrismaTransaction,
-  mockUserUpdate,
   mockGuruUpdate,
   mockCreateUser,
   mockListUsers,
+  mockDeleteUserAuth,
   mockSendEmail,
 } = vi.hoisted(() => ({
   mockRequireGuru: vi.fn(),
@@ -29,16 +32,19 @@ const {
   mockUserFindUnique: vi.fn(),
   mockUserFindFirst: vi.fn(),
   mockUserCreate: vi.fn(),
+  mockUserUpdate: vi.fn(),
+  mockUserDelete: vi.fn(),
+  mockUserCount: vi.fn(),
   mockGuruFindUnique: vi.fn(),
   mockGuruCreate: vi.fn(),
   mockGuruKelasCreateMany: vi.fn(),
   mockMapelFindMany: vi.fn(),
   mockKelasFindMany: vi.fn(),
   mockPrismaTransaction: vi.fn(),
-  mockUserUpdate: vi.fn(),
   mockGuruUpdate: vi.fn(),
   mockCreateUser: vi.fn(),
   mockListUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
+  mockDeleteUserAuth: vi.fn(),
   mockSendEmail: vi.fn().mockResolvedValue({}),
 }))
 
@@ -54,6 +60,8 @@ vi.mock("@/lib/prisma", () => ({
       findFirst: mockUserFindFirst,
       create: mockUserCreate,
       update: mockUserUpdate,
+      delete: mockUserDelete,
+      count: mockUserCount,
     },
     guru: {
       findUnique: mockGuruFindUnique,
@@ -79,6 +87,7 @@ vi.mock("@/lib/supabase/admin", () => ({
       admin: {
         createUser: mockCreateUser,
         listUsers: mockListUsers,
+        deleteUser: mockDeleteUserAuth,
       },
     },
   }),
@@ -101,7 +110,7 @@ vi.mock("next/cache", () => ({
 // Import setelah semua vi.mock() terdaftar
 // ========================================================
 
-import { createAkunGuru, updateAkunGuru } from "@/actions/guru"
+import { createAkunGuru, updateAkunGuru, hapusAkunGuruPermanent } from "@/actions/guru"
 
 // ========================================================
 // Data dummy
@@ -457,7 +466,7 @@ describe("createAkunGuru - Otorisasi & Penugasan Otomatis", () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.message).toContain("otomatis ditugaskan ke semua mapel aktif")
+    expect(result.message).toContain("otomatis ditugaskan")
 
     // Penugasan default = mapel x kelas
     const createManyCall = mockGuruKelasCreateMany.mock.calls[0][0]
@@ -471,6 +480,50 @@ describe("createAkunGuru - Otorisasi & Penugasan Otomatis", () => {
     )
     // Kredensial dikirim via email
     expect(mockSendEmail).toHaveBeenCalled()
+  })
+
+  // --------------------------------------------------------
+  // KASUS 1b: Guru Ikhwan → hanya kelas Ikhwan & Campuran yang ditugaskan
+  // --------------------------------------------------------
+  it("harus menugaskan guru Ikhwan hanya ke kelas Ikhwan & Campuran", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
+    mockUserFindFirst.mockResolvedValue(null)
+    mockGuruFindUnique.mockResolvedValue(null)
+
+    // 1 mapel x 3 kelas = 3 kandidat, namun kelas Akhwat (PEREMPUAN) harus tersingkir
+    mockMapelFindMany.mockResolvedValue([{ id: "mapel-1" }])
+    mockKelasFindMany.mockResolvedValue([
+      { id: "kelas-ikhwan", jenisKelamin: "LAKI_LAKI" },
+      { id: "kelas-akhwat", jenisKelamin: "PEREMPUAN" },
+      { id: "kelas-campuran", jenisKelamin: null },
+    ])
+
+    mockCreateUser.mockResolvedValue({ data: { user: { id: "auth-1b" } }, error: null })
+
+    setupCreateTransaction()
+    mockUserCreate.mockResolvedValue({ id: "user-1b" })
+    mockGuruCreate.mockResolvedValue({ id: "guru-1b" })
+    mockGuruKelasCreateMany.mockResolvedValue({ count: 2 })
+
+    const result = await createAkunGuru({
+      nama: "Ustadz Ikhwan",
+      email: "ikhwan@sekolah.sch.id",
+      jenisKelamin: "LAKI_LAKI",
+      isAdmin: false,
+    })
+
+    expect(result.success).toBe(true)
+    const createManyCall = mockGuruKelasCreateMany.mock.calls[0][0]
+    expect(createManyCall.data).toHaveLength(2)
+    expect(createManyCall.data).toEqual(
+      expect.arrayContaining([
+        { guruId: "guru-1b", kelasId: "kelas-ikhwan", mataPelajaranId: "mapel-1" },
+        { guruId: "guru-1b", kelasId: "kelas-campuran", mataPelajaranId: "mapel-1" },
+      ])
+    )
+    // Kelas Akhwat tidak boleh muncul sama sekali
+    const kelasTerverifikasi = createManyCall.data.map((d: { kelasId: string }) => d.kelasId)
+    expect(kelasTerverifikasi).not.toContain("kelas-akhwat")
   })
 
   // --------------------------------------------------------
@@ -561,5 +614,168 @@ describe("createAkunGuru - Otorisasi & Penugasan Otomatis", () => {
 
     expect(result.success).toBe(false)
     expect(result.message).toContain("Email sudah terdaftar")
+  })
+})
+
+// ========================================================
+// hapusAkunGuruPermanent — Hard Delete
+// ========================================================
+
+describe("hapusAkunGuruPermanent - Hard Delete", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const zeroCounts = {
+    guru: { _count: { waliKelas: 0, catatanRapor: 0, ekskulDibina: 0 } },
+    _count: {
+      ujianDibuat: 0,
+      tugasDibuat: 0,
+      materiDiunggah: 0,
+      absensiDiinput: 0,
+      nilaiRaporDiinput: 0,
+      catatanRaporDibuat: 0,
+      transaksiDibuat: 0,
+      transaksiDibatalkan: 0,
+      pembayaranDikonfirmasi: 0,
+      verifikasiPendaftaran: 0,
+    },
+  }
+
+  const targetGuru = {
+    id: "guru-2",
+    nama: "Guru Dua",
+    role: "GURU",
+    authId: "auth-guru-2",
+    guru: {
+      id: "guru-record-2",
+      _count: zeroCounts.guru._count,
+    },
+    _count: zeroCounts._count,
+  }
+
+  // --------------------------------------------------------
+  // KASUS 1: Berhasil hapus permanen (bukan akun sendiri)
+  // --------------------------------------------------------
+  it("harus berhasil menghapus guru secara permanen", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "guru-admin-1", isAdmin: true })
+    mockUserFindUnique.mockResolvedValue(targetGuru)
+    // authId tidak dipakai role lain
+    mockUserCount.mockResolvedValue(0)
+    mockDeleteUserAuth.mockResolvedValue({ error: null })
+
+    const result = await hapusAkunGuruPermanent("guru-2")
+
+    expect(result.success).toBe(true)
+    expect(result.message).toContain("berhasil dihapus secara permanen")
+
+    // Auth dihapus, user dihapus (cascade)
+    expect(mockDeleteUserAuth).toHaveBeenCalledWith("auth-guru-2")
+    expect(mockUserDelete).toHaveBeenCalledWith({ where: { id: "guru-2" } })
+  })
+
+  // --------------------------------------------------------
+  // KASUS 2: Menolak menghapus akun diri sendiri
+  // --------------------------------------------------------
+  it("harus menolak menghapus akun diri sendiri", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "guru-admin-1", isAdmin: true })
+    mockUserFindUnique.mockResolvedValue({
+      ...targetGuru,
+      id: "guru-admin-1",
+    })
+
+    const result = await hapusAkunGuruPermanent("guru-admin-1")
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("diri sendiri")
+    expect(mockUserDelete).not.toHaveBeenCalled()
+    expect(mockDeleteUserAuth).not.toHaveBeenCalled()
+  })
+
+  // --------------------------------------------------------
+  // KASUS 3: Ditolak jika guru masih jadi wali kelas
+  // --------------------------------------------------------
+  it("harus menolak jika guru masih menjadi wali kelas", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "guru-admin-1", isAdmin: true })
+    mockUserFindUnique.mockResolvedValue({
+      ...targetGuru,
+      guru: {
+        id: "guru-record-2",
+        _count: { waliKelas: 1, catatanRapor: 0, ekskulDibina: 0 },
+      },
+    })
+
+    const result = await hapusAkunGuruPermanent("guru-2")
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("wali kelas")
+    expect(mockUserDelete).not.toHaveBeenCalled()
+    expect(mockDeleteUserAuth).not.toHaveBeenCalled()
+  })
+
+  // --------------------------------------------------------
+  // KASUS 4: Ditolak jika guru memiliki riwayat membuat data
+  // --------------------------------------------------------
+  it("harus menolak jika guru memiliki riwayat data", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "guru-admin-1", isAdmin: true })
+    mockUserFindUnique.mockResolvedValue({
+      ...targetGuru,
+      _count: {
+        ...zeroCounts._count,
+        ujianDibuat: 2,
+        absensiDiinput: 1,
+      },
+    })
+
+    const result = await hapusAkunGuruPermanent("guru-2")
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("membuat ujian")
+    expect(result.message).toContain("mengisi absensi")
+    expect(mockUserDelete).not.toHaveBeenCalled()
+  })
+
+  // --------------------------------------------------------
+  // KASUS 5: Target user bukan role GURU → ditolak
+  // --------------------------------------------------------
+  it("harus menolak target yang bukan role GURU", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "guru-admin-1", isAdmin: true })
+    mockUserFindUnique.mockResolvedValue({ id: "user-siswa", role: "SISWA" })
+
+    const result = await hapusAkunGuruPermanent("user-siswa")
+
+    expect(result.success).toBe(false)
+    expect(result.message).toBe("Akun guru tidak ditemukan")
+  })
+
+  // --------------------------------------------------------
+  // KASUS 6: requireGuruAdmin menolak (bukan admin) → error di-catch
+  // --------------------------------------------------------
+  it("harus gagal jika bukan guru admin", async () => {
+    mockRequireGuruAdmin.mockRejectedValue(
+      new Error("Akses ditolak: Fitur ini hanya untuk admin")
+    )
+
+    const result = await hapusAkunGuruPermanent("guru-2")
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("hanya untuk admin")
+    expect(mockUserFindUnique).not.toHaveBeenCalled()
+  })
+
+  // --------------------------------------------------------
+  // KASUS 7: Tidak menghapus auth Supabase jika authId dipakai role lain
+  // --------------------------------------------------------
+  it("harus tidak menghapus auth if dipakai role lain (multi-role)", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "guru-admin-1", isAdmin: true })
+    mockUserFindUnique.mockResolvedValue(targetGuru)
+    // 1 user lain pakai authId yang sama (multi-role)
+    mockUserCount.mockResolvedValue(1)
+
+    const result = await hapusAkunGuruPermanent("guru-2")
+
+    expect(result.success).toBe(true)
+    expect(mockDeleteUserAuth).not.toHaveBeenCalled()
+    expect(mockUserDelete).toHaveBeenCalled()
   })
 })

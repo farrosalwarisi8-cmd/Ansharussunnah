@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const {
   mockRequireGuru,
+  mockRequireGuruAdmin,
   mockMataPelajaranFindMany,
   mockMataPelajaranFindFirst,
   mockMataPelajaranFindUnique,
@@ -21,6 +22,7 @@ const {
   mockKelasFindMany,
 } = vi.hoisted(() => ({
   mockRequireGuru: vi.fn(),
+  mockRequireGuruAdmin: vi.fn(),
   mockMataPelajaranFindMany: vi.fn(),
   mockMataPelajaranFindFirst: vi.fn(),
   mockMataPelajaranFindUnique: vi.fn(),
@@ -36,6 +38,7 @@ const {
 
 vi.mock("@/lib/auth", () => ({
   requireGuru: mockRequireGuru,
+  requireGuruAdmin: mockRequireGuruAdmin,
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -166,8 +169,8 @@ describe("getKelasByJenjang", () => {
 
   it("should return active kelas for a jenjang", async () => {
     mockKelasFindMany.mockResolvedValue([
-      { id: "k1", nama: "Kelas 1" },
-      { id: "k2", nama: "Kelas 2" },
+      { id: "k1", nama: "Kelas 1", jenisKelamin: "LAKI_LAKI" },
+      { id: "k2", nama: "Kelas 2", jenisKelamin: null },
     ])
 
     const result = await getKelasByJenjang("jenjang-1")
@@ -177,7 +180,7 @@ describe("getKelasByJenjang", () => {
     expect(mockKelasFindMany).toHaveBeenCalledWith({
       where: { jenjangId: "jenjang-1", aktif: true },
       orderBy: { nama: "asc" },
-      select: { id: true, nama: true },
+      select: { id: true, nama: true, jenisKelamin: true },
     })
   })
 })
@@ -223,6 +226,7 @@ describe("createMapel", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockRequireGuru.mockResolvedValue(mockUser)
+    mockRequireGuruAdmin.mockResolvedValue(mockUser)
   })
 
   it("should create mapel with jenjangId and kelasIds", async () => {
@@ -331,6 +335,7 @@ describe("updateMapel", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockRequireGuru.mockResolvedValue(mockUser)
+    mockRequireGuruAdmin.mockResolvedValue(mockUser)
     mockTransaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
       callback({
         mapelKelas: {
@@ -351,6 +356,8 @@ describe("updateMapel", () => {
     mockKelasFindMany.mockResolvedValue([{ id: "kelas-3" }])
 
     const result = await updateMapel("mapel-1", {
+      kode: "MTK",
+      nama: "Matematika",
       jenjangId: "jenjang-2",
       kelasIds: ["kelas-3"],
     })
@@ -377,6 +384,8 @@ describe("updateMapel", () => {
     mockMataPelajaranUpdate.mockResolvedValue(mockMapel)
 
     const result = await updateMapel("mapel-1", {
+      kode: "MTK",
+      nama: "Matematika",
       kelasIds: [],
     })
 
@@ -391,6 +400,7 @@ describe("updateMapel", () => {
     mockMataPelajaranUpdate.mockResolvedValue(mockMapel)
 
     const result = await updateMapel("mapel-1", {
+      kode: "MTK",
       nama: "Matematika Updated",
     })
 
@@ -403,6 +413,7 @@ describe("updateMapel", () => {
     mockMataPelajaranFindUnique.mockResolvedValue(null)
 
     const result = await updateMapel("nonexistent", {
+      kode: "TEST",
       nama: "Test",
     })
 
@@ -419,6 +430,7 @@ describe("deleteMapel", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockRequireGuru.mockResolvedValue(mockUser)
+    mockRequireGuruAdmin.mockResolvedValue(mockUser)
   })
 
   it("should delete mapel with no relations", async () => {

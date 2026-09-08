@@ -1,6 +1,7 @@
 // src/lib/validations/jenjang-kelas.ts
 
 import { z } from "zod"
+import { JenisKelamin } from "@prisma/client"
 
 export const jenjangSchema = z.object({
   nama: z
@@ -37,6 +38,11 @@ export const kelasSchema = z.object({
     .min(1, "Kapasitas minimal 1")
     .max(100, "Kapasitas maksimal 100")
     .default(30),
+  // Ikhwan (LAKI_LAKI), Akhwat (PEREMPUAN), atau campuran (null)
+  jenisKelamin: z
+    .union([z.literal(""), z.nativeEnum(JenisKelamin)])
+    .optional()
+    .transform((v) => (v === "" || v === undefined ? null : v)),
 })
 
 export type KelasFormValues = z.infer<typeof kelasSchema>

@@ -22,6 +22,21 @@ const PUBLIC_ROUTES = [
 const GUEST_ONLY_ROUTES = ["/login", "/lupa-password"]
 const EXCLUDE_FROM_GUEST_CHECK = ["/lupa-password/verifikasi", "/lupa-password/reset"]
 
+// Header yang dipakai meng-forward hasil verifikasi middleware ke Server
+// Components. Hanya boleh berisi user.id hasil agregasi getUser() yang trusted.
+// Karena nilai ini dipakai getCurrentUser untuk melewati panggilan getUser(),
+// header WAJIB dihapus di SEMUA cabang yang TIDAK menimpa nilainya (route
+// publik / static / env tidak terkonfigurasi) agar tidak bisa dipalsukan klien.
+const AUTH_USER_ID_HEADER = "x-opencode-auth-user-id"
+
+function clearAuthUserHeader(
+  request: NextRequest,
+  response: NextResponse
+): void {
+  request.headers.delete(AUTH_USER_ID_HEADER)
+  response.headers.delete(AUTH_USER_ID_HEADER)
+}
+
 function isPublicRoute(pathname: string): boolean {
   return PUBLIC_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(route + "/")
@@ -41,26 +56,32 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // Abaikan static files
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon") ||
-    pathname.includes(".")
-  ) {
+  // Abaikan static files. (Ekstensi/aset statis sudah dikecualikan oleh
+  // matcher; cek prefix ini sebagai lapisan kedua. Pemilahan via
+  // "pathname.includes('.')" sengaja TIDAK dipakai karena bisa dipakai untuk
+  // menciptakan path berbentuk `/foo.bar/...` yang lolos cek autentikasi.)
+  if (pathname.startsWith("/_next") || pathname.startsWith("/favicon")) {
+    clearAuthUserHeader(request, supabaseResponse)
     return supabaseResponse
   }
 
-  // If Supabase env vars are not configured, skip auth check entirely
+  // If Supabase env vars are not configured, skip auth check entirely.
+  // Header auth tetap dihapus agar nilai yang dikirim klien tidak sampai ke
+  // Server Component sebagai identitas yang dipercaya.
   if (!supabaseUrl || !supabaseAnonKey) {
     console.warn(
       "[middleware] NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set. Auth middleware is disabled."
     )
+    clearAuthUserHeader(request, supabaseResponse)
     return supabaseResponse
   }
 
   // Short-circuit: untuk route publik, kita TIDAK perlu menyentuh Supabase.
   // Ini menghilangkan 1 round-trip jaringan tiap navigasi ke halaman publik.
+  // Header auth dihapus (bukan dibiarkan) agar nilai rampasan dari klien tidak
+  // diteruskan sebagai identitas pengguna yang sudah terverifikasi.
   if (isPublicRoute(pathname)) {
+    clearAuthUserHeader(request, supabaseResponse)
     return supabaseResponse
   }
 
@@ -93,7 +114,6 @@ export async function middleware(request: NextRequest) {
   // Nilai SELALU ditimpa oleh middleware (diambil dari getUser() yang trusted),
   // jadi client tidak bisa memalsukannya. Dipakai getCurrentUser untuk melewati
   // panggilan getUser() yang redundan di server render.
-  const AUTH_USER_ID_HEADER = "x-opencode-auth-user-id"
   if (user) {
     request.headers.set(AUTH_USER_ID_HEADER, user.id)
     supabaseResponse.headers.set(AUTH_USER_ID_HEADER, user.id)
@@ -102,8 +122,11 @@ export async function middleware(request: NextRequest) {
     supabaseResponse.headers.delete(AUTH_USER_ID_HEADER)
   }
 
-  // Jika TIDAK login dan mencoba akses protected route
-  if (!user && !isPublicRoute(pathname)) {
+  // Jika TIDAK login dan mencoba akses protected route.
+  // /api/* dibiarkan sampai ke route handler agar mereka bisa menangani autentikasi
+  // sendiri (Bearer token). Redirect ke /login bisa merusak respons JSON yang
+  // diharapkan oleh klien API/token.
+  if (!user && !isPublicRoute(pathname) && !pathname.startsWith("/api/")) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     url.searchParams.set("redirectedFrom", pathname)

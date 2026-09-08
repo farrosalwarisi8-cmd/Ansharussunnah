@@ -43,6 +43,7 @@ type KelasItem = {
   kelasId: string
   namaKelas: string
   jenjang: string
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   mataPelajaranId: string
   jumlahSiswa: number
 }
@@ -57,9 +58,8 @@ export default function MateriPage() {
 }
 
 function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isParent: boolean }) {
-  const { user, selectedChild } = useDashboard()
+  const { selectedChild } = useDashboard()
   const { toast } = useToast()
-
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
   const [selectedMapelFilter, setSelectedMapelFilter] = React.useState("SEMUA")
@@ -300,7 +300,8 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
               >
                 {kelasList.map((k) => (
                   <option key={k.kelasId} value={k.kelasId}>
-                    {k.namaKelas} — {k.jumlahSiswa} siswa
+                    {k.jenjang} - {k.namaKelas}
+                    {k.jenisKelamin === "LAKI_LAKI" ? " (Ikhwan)" : k.jenisKelamin === "PEREMPUAN" ? " (Akhwat)" : ""} — {k.jumlahSiswa} siswa
                   </option>
                 ))}
               </select>

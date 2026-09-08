@@ -12,6 +12,11 @@ export const createAkunGuruSchema = z.object({
   nip: z.string().max(30, "NIP maksimal 30 karakter").optional(),
   jabatan: z.string().max(100, "Jabatan maksimal 100 karakter").optional(),
   noHp: z.string().max(20, "Nomor HP maksimal 20 karakter").optional(),
+  jenisKelamin: z
+    .enum(["LAKI_LAKI", "PEREMPUAN", ""])
+    .transform((v) => (v === "" ? null : v))
+    .nullable()
+    .optional(),
   isAdmin: z.boolean().optional().default(false),
 })
 
@@ -22,6 +27,11 @@ export const updateAkunGuruSchema = z.object({
   nip: z.string().max(30, "NIP maksimal 30 karakter").optional().nullable(),
   jabatan: z.string().max(100, "Jabatan maksimal 100 karakter").optional().nullable(),
   noHp: z.string().max(20, "Nomor HP maksimal 20 karakter").optional().nullable(),
+  jenisKelamin: z
+    .enum(["LAKI_LAKI", "PEREMPUAN", ""])
+    .transform((v) => (v === "" ? null : v))
+    .nullable()
+    .optional(),
 })
 
 export type UpdateAkunGuruValues = z.infer<typeof updateAkunGuruSchema>

@@ -63,7 +63,11 @@ export default function MapelPage() {
   const [loading, setLoading] = React.useState(false)
 
   const [jenjangList, setJenjangList] = React.useState<Array<{ id: string; nama: string; urutan: number }>>([])
-  const [kelasOptions, setKelasOptions] = React.useState<Array<{ id: string; nama: string }>>([])
+  const [kelasOptions, setKelasOptions] = React.useState<Array<{
+    id: string
+    nama: string
+    jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
+  }>>([])
   const [kelasLoading, setKelasLoading] = React.useState(false)
 
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
@@ -584,7 +588,14 @@ export default function MapelPage() {
                           }}
                           className="rounded border-slate-300 text-yellow-500 focus:ring-yellow-500/20"
                         />
-                        <span className="text-xs font-medium">{k.nama}</span>
+                        <span className="text-xs font-medium">
+                          {jenjangList.find((j) => j.id === jenjangId)?.nama} - {k.nama}
+                          {k.jenisKelamin === "LAKI_LAKI"
+                            ? " (Ikhwan)"
+                            : k.jenisKelamin === "PEREMPUAN"
+                              ? " (Akhwat)"
+                              : ""}
+                        </span>
                       </label>
                     ))}
                   </div>

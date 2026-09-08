@@ -27,6 +27,7 @@ export async function getStrukturKelasSiswaAkademik(): Promise<
         id: string
         nama: string
         kapasitas: number
+        jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
       }>
     }>
   }>
@@ -64,6 +65,7 @@ export async function getStrukturKelasSiswaAkademik(): Promise<
             id: true,
             nama: true,
             kapasitas: true,
+            jenisKelamin: true,
           },
         },
       },

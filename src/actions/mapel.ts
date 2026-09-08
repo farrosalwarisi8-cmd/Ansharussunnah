@@ -3,7 +3,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireGuru } from "@/lib/auth"
+import { requireGuru, requireGuruAdmin } from "@/lib/auth"
 import { mapelSchema, type MapelFormValues } from "@/lib/validations/mapel"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
@@ -85,13 +85,13 @@ export async function getJenjangList(): Promise<
 // ========================================================
 
 export async function getKelasByJenjang(jenjangId: string): Promise<
-  ActionResponse<Array<{ id: string; nama: string }>>
+  ActionResponse<Array<{ id: string; nama: string; jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null }>>
 > {
   try {
     const kelas = await prisma.kelas.findMany({
       where: { jenjangId, aktif: true },
       orderBy: { nama: "asc" },
-      select: { id: true, nama: true },
+      select: { id: true, nama: true, jenisKelamin: true },
     })
 
     return {
@@ -189,7 +189,7 @@ export async function getAdminMapelList(): Promise<
 
 export async function createMapel(payload: MapelFormValues): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const validated = mapelSchema.safeParse(payload)
     if (!validated.success) {
@@ -250,10 +250,10 @@ export async function createMapel(payload: MapelFormValues): Promise<ActionRespo
 
 export async function updateMapel(
   id: string,
-  payload: Partial<MapelFormValues> & { aktif?: boolean }
+  payload: MapelFormValues
 ): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const mapel = await prisma.mataPelajaran.findUnique({ where: { id } })
     if (!mapel) {
@@ -313,7 +313,6 @@ export async function updateMapel(
             nama: payload.nama,
             kelompok: payload.kelompok !== undefined ? payload.kelompok ?? null : undefined,
             jenjangId: payload.jenjangId !== undefined ? payload.jenjangId ?? null : undefined,
-            aktif: payload.aktif,
           },
         })
       })
@@ -325,7 +324,6 @@ export async function updateMapel(
           nama: payload.nama,
           kelompok: payload.kelompok !== undefined ? payload.kelompok ?? null : undefined,
           jenjangId: payload.jenjangId !== undefined ? payload.jenjangId ?? null : undefined,
-          aktif: payload.aktif,
         },
       })
     }
@@ -346,7 +344,7 @@ export async function updateMapel(
 
 export async function deleteMapel(id: string): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const checkRelations = await prisma.mataPelajaran.findUnique({
       where: { id },
@@ -402,7 +400,7 @@ export async function deleteMapel(id: string): Promise<ActionResponse> {
 
 export async function toggleMapelAktif(id: string): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const mapel = await prisma.mataPelajaran.findUnique({ where: { id } })
     if (!mapel) {

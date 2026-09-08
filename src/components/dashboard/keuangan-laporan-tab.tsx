@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Loader2, RefreshCw } from "lucide-react"
-import { getLaporanKeuangan, getRekapTunggakanSpp } from "@/actions/akuntansi"
+import { getLaporanKeuangan, getRekapTunggakanSpp, batalkanTagihanSpp } from "@/actions/akuntansi"
 import { StatusBadge, type StatusType } from "@/components/ui/status-badge"
 import dynamic from "next/dynamic"
 const Dialog = dynamic(() => import("@/components/ui/dialog").then(m => m.Dialog), { ssr: false })
@@ -36,7 +36,6 @@ export function LaporanTab() {
     tunggakanMurni: Array<{ tagihanId: string; namaSiswa: string; kelas: string; periode: string; nominal: number; sisaTunggakan: number; status: string }>
     dibayarSebagian: Array<{ tagihanId: string; namaSiswa: string; kelas: string; periode: string; nominal: number; sisaTunggakan: number; status: string }>
   } | null>(null)
-  const [loadingTunggakan, setLoadingTunggakan] = React.useState(false)
 
   // Cancel states
   const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false)
@@ -57,12 +56,32 @@ export function LaporanTab() {
   }, [laporanBulan, laporanTahun])
 
   const fetchTunggakan = React.useCallback(async () => {
-    setLoadingTunggakan(true)
     try {
       const result = await getRekapTunggakanSpp(undefined, laporanBulan, laporanTahun)
       if (result.success && result.data) { setTunggakanData(result.data as typeof tunggakanData) }
-    } catch { /* silent */ } finally { setLoadingTunggakan(false) }
+    } catch { /* silent */ }
   }, [laporanBulan, laporanTahun])
+
+  const handleCancelTagihan = React.useCallback(async () => {
+    if (!cancelTargetId || cancelAlasan.length < 5) return
+    setCancelling(true)
+    try {
+      const result = await batalkanTagihanSpp({ tagihanId: cancelTargetId, alasanPembatalan: cancelAlasan })
+      if (result.success) {
+        toast({ title: "Tagihan dibatalkan", description: "Tagihan SPP berhasil dibatalkan." })
+        setCancelDialogOpen(false)
+        setCancelTargetId("")
+        setCancelAlasan("")
+        await Promise.all([fetchLaporan(), fetchTunggakan()])
+      } else {
+        toast({ variant: "destructive", title: "Gagal membatalkan", description: result.message })
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Gagal membatalkan", description: "Terjadi kesalahan. Coba lagi." })
+    } finally {
+      setCancelling(false)
+    }
+  }, [cancelTargetId, cancelAlasan, fetchLaporan, fetchTunggakan, toast])
 
   React.useEffect(() => { fetchLaporan(); fetchTunggakan() }, [fetchLaporan, fetchTunggakan])
 
@@ -197,7 +216,9 @@ export function LaporanTab() {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setCancelDialogOpen(false)} className="rounded-xl min-h-[40px]">Batal</Button>
-            <Button disabled={cancelling || cancelAlasan.length < 5} variant="destructive" className="rounded-xl min-h-[40px]">Ya, Batalkan</Button>
+            <Button disabled={cancelling || cancelAlasan.length < 5} variant="destructive" onClick={handleCancelTagihan} className="rounded-xl min-h-[40px]">
+              {cancelling ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}Ya, Batalkan
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

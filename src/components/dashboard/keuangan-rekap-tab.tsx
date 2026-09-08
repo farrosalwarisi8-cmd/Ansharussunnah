@@ -3,11 +3,11 @@
 import * as React from "react"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table"
 import { Loader2, RefreshCw } from "lucide-react"
-import { getRekapSppPerKelas, getRekapSppPerJenjang, batalkanTagihanSpp } from "@/actions/akuntansi"
+import { getRekapSppPerKelas, getRekapSppPerJenjang } from "@/actions/akuntansi"
 
 type RekapKelasItem = {
   kelasId: string

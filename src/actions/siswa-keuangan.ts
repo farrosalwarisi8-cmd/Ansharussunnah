@@ -93,7 +93,11 @@ export async function getStrukturKelasUntukKeuangan(): Promise<
       id: string
       nama: string
       urutan: number
-      kelas: Array<{ id: string; nama: string }>
+      kelas: Array<{
+        id: string
+        nama: string
+        jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
+      }>
     }>
   }>
 > {
@@ -107,7 +111,7 @@ export async function getStrukturKelasUntukKeuangan(): Promise<
         kelas: {
           where: { aktif: true },
           orderBy: { nama: "asc" },
-          select: { id: true, nama: true },
+          select: { id: true, nama: true, jenisKelamin: true },
         },
       },
     })

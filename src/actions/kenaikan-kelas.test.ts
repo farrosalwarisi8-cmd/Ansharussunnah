@@ -14,6 +14,7 @@ const {
   mockPrismaTransaction,
   mockRiwayatCreateMany,
   mockSiswaUpdateMany,
+  mockTxKelasFindUnique,
 } = vi.hoisted(() => ({
   mockRequireGuruAdmin: vi.fn(),
   mockPeriodeAjaranFindUnique: vi.fn(),
@@ -22,6 +23,7 @@ const {
   mockPrismaTransaction: vi.fn(),
   mockRiwayatCreateMany: vi.fn(),
   mockSiswaUpdateMany: vi.fn(),
+  mockTxKelasFindUnique: vi.fn(),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -69,8 +71,8 @@ const periode = {
   semester: "Ganjil",
 }
 
-const kelasBaru1 = { id: "kelas-8A", nama: "8A" }
-const kelasBaru2 = { id: "kelas-8B", nama: "8B" }
+const kelasBaru1 = { id: "kelas-8A", nama: "8A", kapasitas: 0, _count: { siswa: 0 } }
+const kelasBaru2 = { id: "kelas-8B", nama: "8B", kapasitas: 0, _count: { siswa: 0 } }
 
 const siswaList = [
   { id: "siswa-1", kelasId: "kelas-7A" },
@@ -98,12 +100,19 @@ function setupHappyPath() {
   mockPeriodeAjaranFindUnique.mockResolvedValue(periode)
   mockKelasFindMany.mockResolvedValue([kelasBaru1, kelasBaru2])
   mockSiswaFindMany.mockResolvedValue(siswaList)
+  mockTxKelasFindUnique.mockResolvedValue({
+    id: "kelas-x",
+    nama: "Kelas X",
+    kapasitas: 100,
+    _count: { siswa: 0 },
+  })
 
   // Transaction executor: panggil callback tx seperti Prisma
   mockPrismaTransaction.mockImplementation(async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
     return fn({
       riwayatKelasSiswa: { createMany: mockRiwayatCreateMany.mockResolvedValue({ count: 5 }) },
       siswa: { updateMany: mockSiswaUpdateMany.mockResolvedValue({ count: 5 }) },
+      kelas: { findUnique: mockTxKelasFindUnique },
     })
   })
 }
@@ -218,7 +227,7 @@ describe("promosiSiswaMassal - Batch Optimization", () => {
 
   // --------------------------------------------------------
   // KASUS 4: Siswa tanpa kelas asal (kelasId: null)
-  //   → riwayat TIDAK disimpan (data kosong), tapi tetap dipromosikan
+  //   → riwayat TIDAK disimpan (kelasAsalId null), tapi tetap dipromosikan
   // --------------------------------------------------------
   it("harus skip riwayat untuk siswa tanpa kelas asal", async () => {
     mockRequireGuruAdmin.mockResolvedValue(adminUser)
@@ -232,6 +241,12 @@ describe("promosiSiswaMassal - Batch Optimization", () => {
       return fn({
         riwayatKelasSiswa: { createMany: mockRiwayatCreateMany.mockResolvedValue({ count: 0 }) },
         siswa: { updateMany: mockSiswaUpdateMany.mockResolvedValue({ count: 1 }) },
+        kelas: { findUnique: mockTxKelasFindUnique.mockResolvedValue({
+          id: "kelas-8A",
+          nama: "8A",
+          kapasitas: 100,
+          _count: { siswa: 0 },
+        }) },
       })
     })
 
@@ -244,7 +259,7 @@ describe("promosiSiswaMassal - Batch Optimization", () => {
     expect(result.data?.totalBerhasil).toBe(1)
 
     // createMany TIDAK dipanggil karena semua siswa punya kelasId: null
-    // → riwayatData kosong → if (riwayatData.length > 0) guard melewati createMany
+    // → kelasAsalId null → riwayatData kosong → guard melewati createMany
     expect(mockRiwayatCreateMany).not.toHaveBeenCalled()
 
     // updateMany tetap dipanggil untuk memindahkan siswa
@@ -513,8 +528,8 @@ describe("promosiSiswaMassal - Batch Optimization", () => {
     expect(createManyCall.data[0]).toEqual(
       expect.objectContaining({
         siswaId: "siswa-1",
-        kelasId: "kelas-7A",
-        kelasAsalId: "kelas-7A",
+        kelasId: "kelas-8A", // kelas tujuan (dihuni selama periode tujuan)
+        kelasAsalId: "kelas-7A", // kelas asal sebelum promosi
         periodeAjaranId: "periode-1",
       })
     )
@@ -534,5 +549,74 @@ describe("promosiSiswaMassal - Batch Optimization", () => {
 
     expect(result.success).toBe(false)
     expect(result.message).toBe("Data promosi tidak valid")
+  })
+
+  // --------------------------------------------------------
+  // KASUS 16: Kelas tujuan penuh — siswa dilewati (pre-validation)
+  // --------------------------------------------------------
+  it("harus melewati siswa jika kelas tujuan sudah penuh (capaacity pre-validation)", async () => {
+    mockRequireGuruAdmin.mockResolvedValue(adminUser)
+    mockPeriodeAjaranFindUnique.mockResolvedValue(periode)
+    // Kelas tujuan sudah penuh 5/5
+    mockKelasFindMany.mockResolvedValue([
+      { id: "kelas-8A", nama: "8A", kapasitas: 5, _count: { siswa: 5 } },
+    ])
+    mockSiswaFindMany.mockResolvedValue([
+      { id: "siswa-1", kelasId: "kelas-7A" },
+    ])
+
+    const result = await promosiSiswaMassal({
+      periodeAjaranId: "periode-1",
+      mapping: [{ siswaId: "siswa-1", kelasBaruId: "kelas-8A" }],
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data?.totalBerhasil).toBe(0)
+    expect(result.data?.totalGagal).toBe(1)
+    // Tidak ada siswa valid → transaction tidak dijalankan
+    expect(mockPrismaTransaction).not.toHaveBeenCalled()
+  })
+
+  // --------------------------------------------------------
+  // KASUS 17: Race protection di dalam transaction (kelas penuh saat eksekusi)
+  // --------------------------------------------------------
+  it("harus membatalkan seluruh promosi jika kuota kelas terisi penuh saat eksekusi", async () => {
+    mockRequireGuruAdmin.mockResolvedValue(adminUser)
+    mockPeriodeAjaranFindUnique.mockResolvedValue(periode)
+    // Pre-validasi lolos: kapasitas besar, kelas kosong
+    mockKelasFindMany.mockResolvedValue([
+      { id: "kelas-8A", nama: "8A", kapasitas: 100, _count: { siswa: 0 } },
+    ])
+    mockSiswaFindMany.mockResolvedValue([
+      { id: "siswa-1", kelasId: "kelas-7A" },
+      { id: "siswa-2", kelasId: "kelas-7A" },
+    ])
+
+    mockPrismaTransaction.mockImplementation(async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+      return fn({
+        riwayatKelasSiswa: { createMany: mockRiwayatCreateMany.mockResolvedValue({ count: 2 }) },
+        siswa: { updateMany: mockSiswaUpdateMany.mockResolvedValue({ count: 2 }) },
+        kelas: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: "kelas-8A",
+            nama: "8A",
+            kapasitas: 2,
+            _count: { siswa: 1 }, // sudah ada 1, +2 siswa = melebihi
+          }),
+        },
+      })
+    })
+
+    const result = await promosiSiswaMassal({
+      periodeAjaranId: "periode-1",
+      mapping: [
+        { siswaId: "siswa-1", kelasBaruId: "kelas-8A" },
+        { siswaId: "siswa-2", kelasBaruId: "kelas-8A" },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("sudah penuh")
+    expect(mockSiswaUpdateMany).not.toHaveBeenCalled()
   })
 })

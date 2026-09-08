@@ -87,7 +87,7 @@ export async function createAkunAdminKeuangan(
       }
     }
 
-    const { nama, email, noHp } = validated.data
+    const { nama, email } = validated.data
 
     // Cek duplikasi email untuk role yang sama
     const existingEmail = await prisma.user.findFirst({ where: { email, role: Role.ADMIN_KEUANGAN } })

@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const {
   mockPendaftaranCreate,
+  mockPendaftaranFindFirst,
   mockJenjangFindUnique,
   mockKelasFindFirst,
   mockGenerateNomorPendaftaran,
@@ -15,6 +16,7 @@ const {
   mockGetClientIp,
 } = vi.hoisted(() => ({
   mockPendaftaranCreate: vi.fn(),
+  mockPendaftaranFindFirst: vi.fn(),
   mockJenjangFindUnique: vi.fn(),
   mockKelasFindFirst: vi.fn(),
   mockGenerateNomorPendaftaran: vi.fn(),
@@ -26,6 +28,7 @@ vi.mock("@/lib/prisma", () => ({
   default: {
     pendaftaran: {
       create: mockPendaftaranCreate,
+      findFirst: mockPendaftaranFindFirst,
     },
     jenjang: {
       findUnique: mockJenjangFindUnique,
@@ -129,6 +132,9 @@ beforeEach(() => {
 
   // Default: generate nomor pendaftaran
   mockGenerateNomorPendaftaran.mockResolvedValue("REG-2026-00001")
+
+  // Default: tidak ada pendaftaran duplikat aktif
+  mockPendaftaranFindFirst.mockResolvedValue(null)
 
   // Default: create berhasil
   mockPendaftaranCreate.mockResolvedValue(mockPendaftaranCreated)
@@ -476,6 +482,110 @@ describe("createPendaftaran — Validasi Data Referensi", () => {
       nama: "Kelas 1",
       kapasitas: 30,
       _count: { siswa: 28 },
+    })
+
+    const formData = makeFormData(baseData)
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(true)
+    expect(mockPendaftaranCreate).toHaveBeenCalledOnce()
+  })
+})
+
+// ========================================================
+// 3b. Duplikat Pendaftaran Aktif
+// ========================================================
+
+describe("createPendaftaran — Duplikat Aktif", () => {
+  it("harus menolak jika sudah ada pendaftaran MENUNGGU_PEMBAYARAN untuk email+jenjang yang sama", async () => {
+    mockPendaftaranFindFirst.mockResolvedValue({
+      nomorPendaftaran: "REG-2026-00001",
+      status: "MENUNGGU_PEMBAYARAN",
+    })
+
+    const formData = makeFormData(baseData)
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("Sudah ada pendaftaran aktif")
+    expect(result.message).toContain("REG-2026-00001")
+    expect(mockPendaftaranCreate).not.toHaveBeenCalled()
+  })
+
+  it("harus menolak jika sudah ada pendaftaran MENUNGGU_VERIFIKASI untuk email+jenjang yang sama", async () => {
+    mockPendaftaranFindFirst.mockResolvedValue({
+      nomorPendaftaran: "REG-2026-00002",
+      status: "MENUNGGU_VERIFIKASI",
+    })
+
+    const formData = makeFormData(baseData)
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("sedang diverifikasi")
+    expect(mockPendaftaranCreate).not.toHaveBeenCalled()
+  })
+
+  it("harus mengikuti pencocokan email case-insensitive", async () => {
+    mockPendaftaranFindFirst.mockResolvedValue(null)
+
+    const formData = makeFormData({ ...baseData, emailOrangTua: "BUDI@example.com" })
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(true)
+    const findFirstCall = mockPendaftaranFindFirst.mock.calls[0][0]
+    expect(findFirstCall.where.emailOrangTua).toEqual({
+      equals: "budi@example.com",
+      mode: "insensitive",
+    })
+  })
+})
+
+// ========================================================
+// 3c. Gender: Kelas Khusus Hanya Menerima Gender yang Cocok
+// ========================================================
+
+describe("createPendaftaran — Gender Match Kelas", () => {
+  it("harus menolak calon laki-laki yang memilih kelas khusus Akhwat", async () => {
+    mockKelasFindFirst.mockResolvedValue({
+      id: "kelas-akhwat",
+      nama: "Kelas 3",
+      kapasitas: 30,
+      jenisKelamin: "PEREMPUAN",
+      _count: { siswa: 15 },
+    })
+
+    const formData = makeFormData(baseData) // baseData = LAKI_LAKI
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("kelas khusus Akhwat")
+    expect(mockPendaftaranCreate).not.toHaveBeenCalled()
+  })
+
+  it("harus menerima calon laki-laki di kelas khusus Ikhwan", async () => {
+    mockKelasFindFirst.mockResolvedValue({
+      id: "kelas-ikhwan",
+      nama: "Kelas 1",
+      kapasitas: 30,
+      jenisKelamin: "LAKI_LAKI",
+      _count: { siswa: 15 },
+    })
+
+    const formData = makeFormData(baseData)
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(true)
+    expect(mockPendaftaranCreate).toHaveBeenCalledOnce()
+  })
+
+  it("harus menerima calon laki-laki di kelas campuran", async () => {
+    mockKelasFindFirst.mockResolvedValue({
+      id: "kelas-campuran",
+      nama: "Kelas 2",
+      kapasitas: 30,
+      jenisKelamin: null,
+      _count: { siswa: 15 },
     })
 
     const formData = makeFormData(baseData)

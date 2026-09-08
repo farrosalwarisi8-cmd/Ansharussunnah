@@ -14,6 +14,7 @@ import {
   deleteKelas,
 } from "@/actions/jenjang-kelas"
 import { getDaftarGuru } from "@/actions/guru"
+import { guruCocokKelas } from "@/lib/guru-kelas-gender"
 
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -34,12 +35,14 @@ interface GuruOption {
   id: string
   userId: string
   nama: string
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   aktif: boolean
 }
 
 interface KelasItem {
   id: string
   nama: string
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   kapasitas: number
   aktif: boolean
   waliKelasNama: string | null
@@ -67,6 +70,7 @@ export default function KelolaKelasPage() {
   const [selectedJenjangId, setSelectedJenjangId] = React.useState("")
   const [kapasitas, setKapasitas] = React.useState("30")
   const [selectedWaliKelasId, setSelectedWaliKelasId] = React.useState("")
+  const [jenisKelaminKelas, setJenisKelaminKelas] = React.useState<"" | "LAKI_LAKI" | "PEREMPUAN">("")
   const [loading, setLoading] = React.useState(false)
 
   // Modal Tambah/Edit Jenjang
@@ -100,6 +104,7 @@ export default function KelolaKelasPage() {
           kelas: Array<{
             id: string
             nama: string
+            jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
             kapasitas: number
             aktif: boolean
             waliKelas: { user: { nama: string } } | null
@@ -113,6 +118,7 @@ export default function KelolaKelasPage() {
           kelasList: j.kelas.map((k) => ({
             id: k.id,
             nama: k.nama,
+            jenisKelamin: k.jenisKelamin,
             kapasitas: k.kapasitas,
             aktif: k.aktif,
             waliKelasNama: k.waliKelas?.user?.nama || null,
@@ -131,6 +137,7 @@ export default function KelolaKelasPage() {
           id: string
           userId: string
           nama: string
+          jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
           aktif: boolean
         }>).filter((g) => g.aktif)
         setGuruList(gurus)
@@ -160,6 +167,7 @@ export default function KelolaKelasPage() {
         jenjangId: selectedJenjangId,
         kapasitas: parseInt(kapasitas) || 30,
         waliKelasId: selectedWaliKelasId || undefined,
+        jenisKelamin: (jenisKelaminKelas || null) as "LAKI_LAKI" | "PEREMPUAN" | null,
       })
 
       if (result.success) {
@@ -169,6 +177,7 @@ export default function KelolaKelasPage() {
         setNamaKelas("")
         setKapasitas("30")
         setSelectedWaliKelasId("")
+        setJenisKelaminKelas("")
       } else {
         toast({ title: "Gagal Membuat Kelas ❌", description: result.message, variant: "destructive" })
       }
@@ -258,6 +267,10 @@ export default function KelolaKelasPage() {
       setDeleteTarget(null)
     }
   }
+
+  const waliKelasCocok = guruList.filter((g) =>
+    guruCocokKelas(g.jenisKelamin ?? null, jenisKelaminKelas || null)
+  )
 
   if (pageLoading) {
     return (
@@ -412,7 +425,22 @@ export default function KelolaKelasPage() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <h4 className="font-extrabold text-base text-slate-800">{k.nama}</h4>
+                            <h4 className="font-extrabold text-base text-slate-800 flex items-center gap-2">
+                              {k.nama}
+                              {k.jenisKelamin === "LAKI_LAKI" ? (
+                                <span className="text-[11px] font-bold text-sky-600 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-full">
+                                  Ikhwan
+                                </span>
+                              ) : k.jenisKelamin === "PEREMPUAN" ? (
+                                <span className="text-[11px] font-bold text-pink-600 bg-pink-50 border border-pink-200 px-2 py-0.5 rounded-full">
+                                  Akhwat
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                                  Campuran
+                                </span>
+                              )}
+                            </h4>
                             <p className="text-xs text-yellow-700 font-semibold flex items-center gap-1 mt-0.5">
                               <UserCheck className="h-3.5 w-3.5" />
                               Wali Kelas: {k.waliKelasNama || "Belum Ditentukan"}
@@ -501,12 +529,27 @@ export default function KelolaKelasPage() {
                 Nama Kelas / Rombel *
               </label>
               <Input
-                placeholder="Contoh: Kelas 8B - Akhwat"
+                placeholder="Contoh: Kelas 8B"
                 value={namaKelas}
                 onChange={(e) => setNamaKelas(e.target.value)}
                 className="h-11 rounded-xl text-sm"
                 required
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                Jenis Kelamin Kelas
+              </label>
+              <select
+                value={jenisKelaminKelas}
+                onChange={(e) => setJenisKelaminKelas(e.target.value as "" | "LAKI_LAKI" | "PEREMPUAN")}
+                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-yellow-500"
+              >
+                <option value="">Campuran</option>
+                <option value="LAKI_LAKI">Ikhwan (Laki-laki)</option>
+                <option value="PEREMPUAN">Akhwat (Perempuan)</option>
+              </select>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -532,12 +575,27 @@ export default function KelolaKelasPage() {
                   className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
                 >
                   <option value="">— Pilih Wali Kelas —</option>
-                  {guruList.map((g) => (
+                  {waliKelasCocok.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.nama}
+                      {g.jenisKelamin === "LAKI_LAKI"
+                        ? " (Ikhwan)"
+                        : g.jenisKelamin === "PEREMPUAN"
+                          ? " (Akhwat)"
+                          : ""}
                     </option>
                   ))}
                 </select>
+                {waliKelasCocok.length === 0 && (
+                  <p className="text-[11px] text-amber-600">
+                    Tidak ada guru yang cocok dengan jenis kelamin kelas
+                    {jenisKelaminKelas === "LAKI_LAKI"
+                      ? " (Ikhwan)"
+                      : jenisKelaminKelas === "PEREMPUAN"
+                        ? " (Akhwat)"
+                        : ""}. Atur jenis kelamin guru di menu Guru terlebih dahulu.
+                  </p>
+                )}
               </div>
             </div>
 

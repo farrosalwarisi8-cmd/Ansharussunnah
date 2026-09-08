@@ -5,6 +5,16 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import prisma from "@/lib/prisma"
 import { Role } from "@prisma/client"
 
+// Semakin kecil indeks = semakin tinggi hak akses.
+const ROLE_PRIVILEGE_INDEX: Record<Role, number> = {
+  [Role.SUPER_ADMIN]: 0,
+  [Role.ADMIN_AKADEMIK]: 1,
+  [Role.ADMIN_KEUANGAN]: 2,
+  [Role.GURU]: 3,
+  [Role.SISWA]: 4,
+  [Role.ORANG_TUA]: 5,
+}
+
 export async function authenticateApiRequest(
   request: NextRequest,
   allowedRoles?: Role[],
@@ -44,9 +54,10 @@ export async function authenticateApiRequest(
       }
     }
 
-    const user = await prisma.user.findFirst({
+    // Resolusi role: jika satu authId terhubung ke beberapa akun (multi-role),
+    // pilih akun dengan hak akses tertinggi yang masih aktif, bukan urutan alfabetis.
+    const userRecords = await prisma.user.findMany({
       where: { authId: authUser.id },
-      orderBy: { role: "asc" },
       select: {
         id: true,
         role: true,
@@ -54,6 +65,13 @@ export async function authenticateApiRequest(
         isAdmin: true,
       },
     })
+
+    const user = userRecords
+      .filter((u) => u.aktif)
+      .sort(
+        (a, b) =>
+          (ROLE_PRIVILEGE_INDEX[a.role] ?? 999) - (ROLE_PRIVILEGE_INDEX[b.role] ?? 999)
+      )[0] ?? null
 
     if (!user || !user.aktif) {
       return {

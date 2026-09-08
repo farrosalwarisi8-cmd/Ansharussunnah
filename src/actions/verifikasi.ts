@@ -4,6 +4,7 @@
 
 import prisma from "@/lib/prisma"
 import { deriveUniqueUsername } from "@/lib/username"
+import { siswaCocokKelas } from "@/lib/guru-kelas-gender"
 import { requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getSignedUrl } from "@/lib/storage"
@@ -278,6 +279,15 @@ export async function verifikasiPendaftaran(
             message: `Kelas "${kelas.nama}" sudah penuh (${kelas._count.siswa}/${kelas.kapasitas}). Pilih kelas lain sebelum menerima pendaftaran.`,
           }
         }
+
+        // ✅ Validasi kecocokan gender pendaftar dengan kelas tujuan
+        if (kelas && kelas.jenisKelamin && pendaftaran.jenisKelamin && kelas.jenisKelamin !== pendaftaran.jenisKelamin) {
+          const labelKelas = kelas.jenisKelamin === "LAKI_LAKI" ? "Ikhwan" : "Akhwat"
+          return {
+            success: false,
+            message: `Kelas "${kelas.nama}" adalah kelas khusus ${labelKelas} dan tidak sesuai dengan jenis kelamin pendaftar. Ubah kelas tujuan pada pendaftaran sebelum menerima.`,
+          }
+        }
       }
 
       // Amankan credentials secara random
@@ -431,26 +441,33 @@ export async function verifikasiPendaftaran(
             }
           }
 
-          if (!userSiswa) {
-            // Re-check kapasitas kelas DI DALAM transaction untuk meminimalkan
-            // race window (TOCTOU) — pengecekan pertama di atas bisa melewati
-            // jika dua approval berjalan bersamaan.
-            if (pendaftaran.kelasTujuanId) {
-              const kelasTx = await tx.kelas.findUnique({
-                where: { id: pendaftaran.kelasTujuanId },
-                include: { _count: { select: { siswa: true } } },
-              })
-              if (
-                kelasTx &&
-                kelasTx.kapasitas > 0 &&
-                kelasTx._count.siswa >= kelasTx.kapasitas
-              ) {
-                throw new Error(
-                  `Kelas "${kelasTx.nama}" sudah penuh (${kelasTx._count.siswa}/${kelasTx.kapasitas}).`
-                )
-              }
+          // Re-check kapasitas + gender kelas DI DALAM transaction untuk
+          // meminimalkan race window (TOCTOU) — pengecekan pertama di atas
+          // bisa melewati jika dua approval berjalan bersamaan. Ditempatkan
+          // di luar blok !userSiswa agar juga melindungi jalur "anak kedua /
+          // re-registrasi" yang memakai record siswa lama.
+          if (pendaftaran.kelasTujuanId) {
+            const kelasTx = await tx.kelas.findUnique({
+              where: { id: pendaftaran.kelasTujuanId },
+              include: { _count: { select: { siswa: true } } },
+            })
+            if (
+              kelasTx &&
+              kelasTx.kapasitas > 0 &&
+              kelasTx._count.siswa >= kelasTx.kapasitas
+            ) {
+              throw new Error(
+                `Kelas "${kelasTx.nama}" sudah penuh (${kelasTx._count.siswa}/${kelasTx.kapasitas}).`
+              )
             }
+            if (kelasTx && !siswaCocokKelas(pendaftaran.jenisKelamin, kelasTx.jenisKelamin)) {
+              throw new Error(
+                `Kelas "${kelasTx.nama}" adalah kelas khusus gender yang tidak sesuai dengan jenis kelamin pendaftar.`
+              )
+            }
+          }
 
+          if (!userSiswa) {
             const existingByEmail = await tx.user.findFirst({
               where: { email: emailSiswa },
             })
@@ -472,30 +489,30 @@ export async function verifikasiPendaftaran(
                   mustChangePassword: true,
                   siswa: {
                     create: {
-                    nisn: pendaftaran.nisn || null,
-                    agama: pendaftaran.agama || null,
-                    tempatLahir: pendaftaran.tempatLahir,
-                    tanggalLahir: pendaftaran.tanggalLahir,
-                    jenisKelamin: pendaftaran.jenisKelamin,
-                    alamat: pendaftaran.alamatSiswa,
-                    noHpSiswa: pendaftaran.noHpSiswa || null,
-                    namaAyahKandung: pendaftaran.namaAyahKandung || null,
-                    statusAyahKandung: pendaftaran.statusAyahKandung || null,
-                    nikAyah: pendaftaran.nikAyah || null,
-                    namaIbuKandung: pendaftaran.namaIbuKandung || null,
-                    statusIbuKandung: pendaftaran.statusIbuKandung || null,
-                    nikIbu: pendaftaran.nikIbu || null,
-                    statusWali: pendaftaran.statusWali || null,
-                    namaWali: pendaftaran.namaWali || null,
-                    kewarganegaraan: pendaftaran.kewarganegaraan || "WNI",
-                    kitas: pendaftaran.kitas || null,
-                    asalNegara: pendaftaran.asalNegara || null,
-                    kelasId: pendaftaran.kelasTujuanId || null,
-                    pendaftaranId: pendaftaran.id,
+                      nisn: pendaftaran.nisn || null,
+                      agama: pendaftaran.agama || null,
+                      tempatLahir: pendaftaran.tempatLahir,
+                      tanggalLahir: pendaftaran.tanggalLahir,
+                      jenisKelamin: pendaftaran.jenisKelamin,
+                      alamat: pendaftaran.alamatSiswa,
+                      noHpSiswa: pendaftaran.noHpSiswa || null,
+                      namaAyahKandung: pendaftaran.namaAyahKandung || null,
+                      statusAyahKandung: pendaftaran.statusAyahKandung || null,
+                      nikAyah: pendaftaran.nikAyah || null,
+                      namaIbuKandung: pendaftaran.namaIbuKandung || null,
+                      statusIbuKandung: pendaftaran.statusIbuKandung || null,
+                      nikIbu: pendaftaran.nikIbu || null,
+                      statusWali: pendaftaran.statusWali || null,
+                      namaWali: pendaftaran.namaWali || null,
+                      kewarganegaraan: pendaftaran.kewarganegaraan || "WNI",
+                      kitas: pendaftaran.kitas || null,
+                      asalNegara: pendaftaran.asalNegara || null,
+                      kelasId: pendaftaran.kelasTujuanId || null,
+                      pendaftaranId: pendaftaran.id,
+                    },
                   },
                 },
-              },
-            })
+              })
             }
           }
 
@@ -580,6 +597,7 @@ export async function verifikasiPendaftaran(
       })
 
       revalidatePath("/dashboard/pendaftaran")
+      revalidatePath("/dashboard/siswa")
       return {
         success: true,
         message: `Pendaftaran ${pendaftaran.nomorPendaftaran} DITERIMA. Akun login telah dikirimkan ke ${emailOrtu}.`,

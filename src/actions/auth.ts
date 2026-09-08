@@ -137,13 +137,12 @@ export async function login(formData: FormData): Promise<ActionResponse<{ hasMul
         reason: emailLimiter.success ? error.message : "Email rate limit exceeded",
       })
 
+      // Pesan error dibuat IDENTIK untuk email terdaftar vs tidak terdaftar
+      // (anti email-enumeration). Rate limit per-email tetap ditegakkan di
+      // sisi server walaupun tidak diumumkan di pesan ini.
       return {
         success: false,
-        message:
-          "Email atau password salah" +
-          (emailLimiter.success
-            ? ""
-            : ". Terlalu banyak percobaan gagal untuk email ini. Silakan coba lagi dalam 15 menit."),
+        message: "Email atau password salah",
       }
     }
 
@@ -166,6 +165,15 @@ export async function login(formData: FormData): Promise<ActionResponse<{ hasMul
       })
       hasMultipleRoles = userRecords.length > 1
     }
+
+    // Bersihkan cookie pemilihan role dari SESSION SEBELUMNYA. Tanpa ini,
+    // role yang dipilih user lain (atau akun yang sama di sesi lama) masih
+    // menempel setelah login baru, dan meski loadUserRecord memvalidasi authId,
+    // state role yang tersisa bisa menimbulkan kebingungan mode akun.
+    const { cookies } = await import("next/headers")
+    const cookieStore = await cookies()
+    cookieStore.delete("selected_role")
+    cookieStore.delete("selected_user_id")
 
     return {
       success: true,

@@ -5,7 +5,6 @@
 import prisma from "@/lib/prisma"
 import { requireAuth } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { encryptSecret } from "@/lib/crypto"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
@@ -54,16 +53,28 @@ export async function changePassword(
       }
     }
 
-    // Verifikasi validitas password saat ini menggunakan server client (anon key)
-    // Agar rate limiting Supabase Auth berlaku per-user, bukan global via service role
-    const supabase = await createSupabaseServerClient()
-    const { data: signInData, error: signInError } =
-      await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: currentPassword,
-      })
+    // Verifikasi validitas password saat ini TANPA membuat sesi baru.
+    // Client dibuat dengan persistSession: false sehingga signInWithPassword
+    // tidak menulis cookie sesi sementara (client sesi lama menciptakan sesi
+    // tidak berguna yang harus dibereskan lewat signOut global). Tetap memakai
+    // anon key sehingga rate limiting Supabase Auth per-user tetap berlaku.
+    const { createClient } = await import("@supabase/supabase-js")
+    const verifySupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    )
+    const { error: signInError } = await verifySupabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
+    })
 
-    if (signInError || !signInData.user) {
+    if (signInError) {
       return { success: false, message: "Password saat ini yang Anda masukkan salah" }
     }
 
@@ -93,6 +104,13 @@ export async function changePassword(
 
     // Sign out global
     await supabaseAdmin.auth.admin.signOut(user.authId)
+
+    // Bersihkan cookie pemilihan role agar akun/role yang dipilih sebelumnya
+    // tidak terbawa saat login kembali setelah ganti password.
+    const { cookies } = await import("next/headers")
+    const cookieStore = await cookies()
+    cookieStore.delete("selected_role")
+    cookieStore.delete("selected_user_id")
 
     revalidatePath("/", "layout")
 

@@ -85,7 +85,11 @@ type JenjangKeuanganOption = {
   id: string
   nama: string
   urutan: number
-  kelas: Array<{ id: string; nama: string }>
+  kelas: Array<{
+    id: string
+    nama: string
+    jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
+  }>
 }
 
 function SiswaKeuanganSelector({
@@ -200,7 +204,10 @@ function SiswaKeuanganSelector({
             >
               <option value="">— Semua Kelas —</option>
               {selectedJenjang?.kelas.map((k) => (
-                <option key={k.id} value={k.id}>Kelas {k.nama}</option>
+                <option key={k.id} value={k.id}>
+                  {selectedJenjang.nama} - {k.nama}
+                  {k.jenisKelamin === "LAKI_LAKI" ? " (Ikhwan)" : k.jenisKelamin === "PEREMPUAN" ? " (Akhwat)" : ""}
+                </option>
               ))}
             </select>
           </div>
@@ -270,7 +277,6 @@ function SiswaKeuanganSelector({
 
 export default function TagihanPage() {
   const { user } = useDashboard()
-  const { toast } = useToast()
   const router = useRouter()
 
   // KEPUTUSAN PRODUK: Siswa TIDAK BOLEH melihat data akuntansi/tagihan SPP

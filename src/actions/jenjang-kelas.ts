@@ -3,7 +3,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireGuru } from "@/lib/auth"
+import { requireGuru, requireGuruAdmin } from "@/lib/auth"
 import {
   jenjangSchema,
   kelasSchema,
@@ -11,6 +11,7 @@ import {
   type KelasFormValues,
 } from "@/lib/validations/jenjang-kelas"
 import type { ActionResponse, JenjangWithKelas, KelasWithRelations } from "@/types"
+import { guruCocokKelas } from "@/lib/guru-kelas-gender"
 import { revalidatePath } from "next/cache"
 
 // ========================================================
@@ -30,6 +31,7 @@ export async function getJenjangDenganKelas(): Promise<
         id: string
         nama: string
         kapasitas: number
+        jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
       }>
     }>
   >
@@ -46,6 +48,7 @@ export async function getJenjangDenganKelas(): Promise<
             id: true,
             nama: true,
             kapasitas: true,
+            jenisKelamin: true,
           },
         },
       },
@@ -112,7 +115,7 @@ export async function createJenjang(
   payload: JenjangFormValues
 ): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const validated = jenjangSchema.safeParse(payload)
     if (!validated.success) {
@@ -169,7 +172,7 @@ export async function updateJenjang(
   payload: Partial<JenjangFormValues> & { aktif?: boolean }
 ): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const jenjang = await prisma.jenjang.findUnique({ where: { id } })
     if (!jenjang) {
@@ -207,7 +210,7 @@ export async function updateJenjang(
  */
 export async function deleteJenjang(id: string): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     // Validasi apakah jenjang terpakai
     const checkRelations = await prisma.jenjang.findUnique({
@@ -217,6 +220,7 @@ export async function deleteJenjang(id: string): Promise<ActionResponse> {
           select: {
             kelas: true,
             pendaftaran: true,
+            mataPelajaran: true,
           },
         },
       },
@@ -226,11 +230,15 @@ export async function deleteJenjang(id: string): Promise<ActionResponse> {
       return { success: false, message: "Jenjang tidak ditemukan" }
     }
 
-    if (checkRelations._count.kelas > 0 || checkRelations._count.pendaftaran > 0) {
+    if (
+      checkRelations._count.kelas > 0 ||
+      checkRelations._count.pendaftaran > 0 ||
+      checkRelations._count.mataPelajaran > 0
+    ) {
       return {
         success: false,
         message:
-          "Tidak dapat menghapus jenjang karena masih memiliki data kelas atau data pendaftaran aktif",
+          "Tidak dapat menghapus jenjang karena masih memiliki data kelas, pendaftaran aktif, atau mata pelajaran",
       }
     }
 
@@ -293,7 +301,7 @@ export async function getAdminKelasList(): Promise<ActionResponse<KelasWithRelat
  */
 export async function createKelas(payload: KelasFormValues): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const validated = kelasSchema.safeParse(payload)
     if (!validated.success) {
@@ -304,7 +312,7 @@ export async function createKelas(payload: KelasFormValues): Promise<ActionRespo
       }
     }
 
-    const { nama, jenjangId, waliKelasId, kapasitas } = validated.data
+    const { nama, jenjangId, waliKelasId, kapasitas, jenisKelamin } = validated.data
 
     // Cek apakah kombinasi nama dan jenjang sudah terdaftar
     const existing = await prisma.kelas.findUnique({
@@ -323,12 +331,37 @@ export async function createKelas(payload: KelasFormValues): Promise<ActionRespo
       }
     }
 
+    const kelasJenisKelamin = jenisKelamin ?? null
+
+    // ✅ Validasi kecocokan gender guru wali kelas dengan gender kelas
+    if (waliKelasId) {
+      const wali = await prisma.guru.findUnique({
+        where: { id: waliKelasId },
+        select: {
+          id: true,
+          jenisKelamin: true,
+          user: { select: { nama: true } },
+        },
+      })
+      if (!wali) {
+        return { success: false, message: "Guru wali kelas tidak ditemukan" }
+      }
+      if (!guruCocokKelas(wali.jenisKelamin, kelasJenisKelamin)) {
+        const labelKelas = kelasJenisKelamin === "LAKI_LAKI" ? "Ikhwan" : "Akhwat"
+        return {
+          success: false,
+          message: `Kelas khusus ${labelKelas} hanya dapat diampu oleh guru ${labelKelas}, namun "${wali.user.nama}" ${wali.jenisKelamin === "LAKI_LAKI" ? "laki-laki" : "perempuan"}.`,
+        }
+      }
+    }
+
     await prisma.kelas.create({
       data: {
         nama,
         jenjangId,
         waliKelasId: waliKelasId || null,
         kapasitas,
+        jenisKelamin: kelasJenisKelamin,
         aktif: true,
       },
     })
@@ -356,11 +389,38 @@ export async function updateKelas(
   payload: Partial<KelasFormValues> & { aktif?: boolean }
 ): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const kelas = await prisma.kelas.findUnique({ where: { id } })
     if (!kelas) {
       return { success: false, message: "Kelas tidak ditemukan" }
+    }
+
+    const kelasJenisKelamin =
+      payload.jenisKelamin !== undefined ? payload.jenisKelamin ?? null : kelas.jenisKelamin
+    const waliKelasId =
+      payload.waliKelasId !== undefined ? payload.waliKelasId : kelas.waliKelasId
+
+    // ✅ Validasi kecocokan gender guru wali kelas dengan gender kelas (hasil update)
+    if (waliKelasId) {
+      const wali = await prisma.guru.findUnique({
+        where: { id: waliKelasId },
+        select: {
+          id: true,
+          jenisKelamin: true,
+          user: { select: { nama: true } },
+        },
+      })
+      if (!wali) {
+        return { success: false, message: "Guru wali kelas tidak ditemukan" }
+      }
+      if (!guruCocokKelas(wali.jenisKelamin, kelasJenisKelamin)) {
+        const labelKelas = kelasJenisKelamin === "LAKI_LAKI" ? "Ikhwan" : "Akhwat"
+        return {
+          success: false,
+          message: `Kelas khusus ${labelKelas} hanya dapat diampu oleh guru ${labelKelas}, namun "${wali.user.nama}" ${wali.jenisKelamin === "LAKI_LAKI" ? "laki-laki" : "perempuan"}.`,
+        }
+      }
     }
 
     await prisma.kelas.update({
@@ -370,6 +430,8 @@ export async function updateKelas(
         jenjangId: payload.jenjangId,
         waliKelasId: payload.waliKelasId !== undefined ? payload.waliKelasId : undefined,
         kapasitas: payload.kapasitas,
+        jenisKelamin:
+          payload.jenisKelamin !== undefined ? payload.jenisKelamin ?? null : undefined,
         aktif: payload.aktif,
       },
     })
@@ -394,7 +456,7 @@ export async function updateKelas(
  */
 export async function deleteKelas(id: string): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const checkRelations = await prisma.kelas.findUnique({
       where: { id },
@@ -403,6 +465,13 @@ export async function deleteKelas(id: string): Promise<ActionResponse> {
           select: {
             siswa: true,
             pendaftaran: true,
+            ujian: true,
+            absensi: true,
+            tugas: true,
+            materi: true,
+            nilaiRapor: true,
+            riwayatSebagaiKelas: true,
+            riwayatSebagaiKelasAsal: true,
           },
         },
       },
@@ -412,11 +481,24 @@ export async function deleteKelas(id: string): Promise<ActionResponse> {
       return { success: false, message: "Kelas tidak ditemukan" }
     }
 
-    if (checkRelations._count.siswa > 0 || checkRelations._count.pendaftaran > 0) {
+    const { siswa, pendaftaran, ujian, absensi, tugas, materi, nilaiRapor, riwayatSebagaiKelas, riwayatSebagaiKelasAsal } =
+      checkRelations._count
+
+    if (
+      siswa > 0 ||
+      pendaftaran > 0 ||
+      ujian > 0 ||
+      absensi > 0 ||
+      tugas > 0 ||
+      materi > 0 ||
+      nilaiRapor > 0 ||
+      riwayatSebagaiKelas > 0 ||
+      riwayatSebagaiKelasAsal > 0
+    ) {
       return {
         success: false,
         message:
-          "Tidak dapat menghapus kelas karena masih memiliki siswa atau pendaftar aktif",
+          "Tidak dapat menghapus kelas karena masih memiliki data terkait (siswa, pendaftaran, ujian, absensi, tugas, materi, nilai rapor, atau riwayat kelas)",
       }
     }
 

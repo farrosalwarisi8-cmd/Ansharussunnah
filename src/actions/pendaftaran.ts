@@ -4,10 +4,11 @@
 
 import prisma from "@/lib/prisma"
 import { generateNomorPendaftaran } from "@/lib/registration-number"
+import { siswaCocokKelas } from "@/lib/guru-kelas-gender"
 import { pendaftaranSchema } from "@/lib/validations/pendaftaran"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
-import { Prisma } from "@prisma/client"
+import { Prisma, StatusPendaftaran } from "@prisma/client"
 
 const MAX_RETRY = 5
 
@@ -93,6 +94,15 @@ export async function createPendaftaran(
         }
       }
 
+      // ✅ Validasi kecocokan gender calon siswa dengan kelas tujuan
+      if (!siswaCocokKelas(data.jenisKelamin, kelas.jenisKelamin)) {
+        const labelKelas = kelas.jenisKelamin === "LAKI_LAKI" ? "Ikhwan" : "Akhwat"
+        return {
+          success: false,
+          message: `Kelas "${kelas.nama}" adalah kelas khusus ${labelKelas} dan hanya dapat diisi oleh calon santri ${labelKelas}. Pilih kelas yang sesuai jenis kelamin.`,
+        }
+      }
+
       // ✅ Validasi kapasitas kelas
       if (kelas.kapasitas > 0 && kelas._count.siswa >= kelas.kapasitas) {
         return {
@@ -100,6 +110,31 @@ export async function createPendaftaran(
           message: `Kelas "${kelas.nama}" sudah penuh (${kelas._count.siswa}/${kelas.kapasitas})`,
         }
       }
+    }
+
+    // ✅ Cegah duplikasi pendaftaran aktif: satu email orang tua per jenjang
+    // hanya boleh memiliki SATU pendaftaran yang belum final (MENUNGGU_PEMBAYARAN
+    // / MENUNGGU_VERIFIKASI). Melindungi dari submit ganda/retry yang membuat
+    // banyak nomor pendaftaran untuk anak yang sama. Pendaftaran yang sudah
+    // DITERIMA/DITOLAK tidak memblokir karena alurnya sudah keluar dari antrean.
+    const emailOrtu = data.emailOrangTua.toLowerCase().trim()
+    const duplikatAktif = await prisma.pendaftaran.findFirst({
+      where: {
+        emailOrangTua: { equals: emailOrtu, mode: "insensitive" },
+        jenjangTujuanId: data.jenjangTujuanId,
+        status: {
+          in: [StatusPendaftaran.MENUNGGU_PEMBAYARAN, StatusPendaftaran.MENUNGGU_VERIFIKASI],
+        },
+      },
+      select: { nomorPendaftaran: true, status: true },
+    })
+
+    if (duplikatAktif) {
+      const pesan =
+        duplikatAktif.status === StatusPendaftaran.MENUNGGU_PEMBAYARAN
+          ? `Sudah ada pendaftaran aktif untuk email ini (Nomor: ${duplikatAktif.nomorPendaftaran}) yang menunggu pembayaran. Lanjutkan pembayaran dan upload bukti transfer dengan nomor tersebut.`
+          : `Sudah ada pendaftaran aktif untuk email ini (Nomor: ${duplikatAktif.nomorPendaftaran}) yang sedang diverifikasi admin.`
+      return { success: false, message: pesan }
     }
 
     const dokKK = formData.get("dokKartuKeluarga") as string | null

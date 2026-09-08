@@ -547,7 +547,7 @@ describe("verifikasiPendaftaran — Edge Cases", () => {
     const result = await verifikasiPendaftaran({
       pendaftaranId: "",
       status: "INVALID",
-    } as any)
+    } as unknown as Parameters<typeof verifikasiPendaftaran>[0])
 
     expect(result.success).toBe(false)
     expect(result.errors).toBeDefined()
@@ -771,5 +771,67 @@ describe("verifikasiPendaftaran — Multi-Child (Same Parent Email)", () => {
 
     // ParentStudent tetap dibuat
     expect(mockParentStudentCreate).toHaveBeenCalled()
+  })
+})
+
+// ========================================================
+// 18. Gender: Kelas Khusus Harus Cocok dengan Jenis Kelamin Pendaftar
+// ========================================================
+
+describe("verifikasiPendaftaran — Gender Match Kelas", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("harus menolak approve jika kelas tujuan khusus gender tidak cocok", async () => {
+    // Pendaftar laki-laki (pendaftaranWithEmis.jenisKelamin = LAKI_LAKI)
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranWithEmis)
+    mockKelasFindUnique.mockResolvedValue({
+      id: "kelas-1",
+      nama: "Kelas 3",
+      jenisKelamin: "PEREMPUAN",
+      kapasitas: 30,
+      _count: { siswa: 15 },
+    })
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("kelas khusus")
+    // Tidak boleh ada akun Supabase yang dibuat
+    expect(mockCreateUser).not.toHaveBeenCalled()
+    expect(mockPendaftaranUpdate).not.toHaveBeenCalled()
+  })
+
+  it("harus menerima approve jika gender pendaftar cocok dengan kelas khusus", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranWithEmis)
+    mockKelasFindUnique.mockResolvedValue({
+      id: "kelas-1",
+      nama: "Kelas 1",
+      jenisKelamin: "LAKI_LAKI",
+      kapasitas: 30,
+      _count: { siswa: 15 },
+    })
+
+    setupAuthMocks()
+    setupTransactionMock()
+
+    mockUserFindUnique.mockResolvedValueOnce(null)
+    mockUserCreate
+      .mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA" })
+      .mockResolvedValueOnce({ id: "user-siswa-1", role: "SISWA" })
+    mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-1" })
+    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-1" })
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    })
+
+    expect(result.success).toBe(true)
+    expect(mockPendaftaranUpdate).toHaveBeenCalled()
   })
 })

@@ -8,7 +8,7 @@ import Image from "next/image"
 
 export default async function PendaftaranPage() {
   // Ambil data jenjang & kelas dari server
-  let jenjangData: { success: boolean; data?: Array<{ id: string; nama: string; urutan: number; kelas: Array<{ id: string; nama: string; kapasitas: number }> }> } = { success: false, data: [] }
+  let jenjangData: Awaited<ReturnType<typeof getJenjangDenganKelas>> = { success: false, message: "Data jenjang tidak tersedia.", data: [] }
   try {
     jenjangData = await getJenjangDenganKelas()
   } catch {

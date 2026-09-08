@@ -3,6 +3,7 @@
 // Dipanggil Vercel Cron (lihat vercel.json). Dilindungi dengan CRON_SECRET.
 
 import { NextRequest, NextResponse } from "next/server"
+import { timingSafeEqual } from "crypto"
 import { generateTagihanSppInternal } from "@/actions/akuntansi"
 
 export const runtime = "nodejs"
@@ -11,11 +12,17 @@ export const dynamic = "force-dynamic"
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("Authorization")
   const secret = process.env.CRON_SECRET
-  const expected = `Bearer ${secret}`
+  const expected = `Bearer ${secret ?? ""}`
 
   // Guard: hanya panggilan cron yang sah (memiliki CRON_SECRET) yang boleh
   // menjalankan pembuatan tagihan. Tanpa secret yang valid → 401.
-  if (!secret || authHeader !== expected) {
+  // Pembandingan dilakukan konstan-waktu (timingSafeEqual) agar pemain yang
+  // mengirim tebakan tidak bisa mengukur panjang/isi secret dari waktu respons.
+  const safeToRun =
+    !!secret && authHeader !== null && authHeader.length === expected.length &&
+    timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))
+
+  if (!safeToRun) {
     return NextResponse.json(
       { success: false, message: "Unauthorized" },
       { status: 401 }

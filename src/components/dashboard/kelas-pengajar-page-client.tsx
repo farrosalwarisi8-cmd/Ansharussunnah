@@ -15,6 +15,7 @@ import {
 } from "@/actions/guru-kelas"
 import { getDaftarGuru } from "@/actions/guru"
 import { getMapelTersedia } from "@/actions/struktur-akademik"
+import { guruCocokKelas } from "@/lib/guru-kelas-gender"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -35,6 +36,7 @@ interface GuruOption {
   email: string
   nip: string | null
   jabatan: string | null
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   aktif: boolean
 }
 
@@ -50,6 +52,7 @@ interface PengajarEntry {
   nama: string
   email: string
   aktif: boolean
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   mataPelajaran: MataPelajaranInfo
   createdAt: string
 }
@@ -62,6 +65,7 @@ export default function PengajarKelasPage() {
   const [pengajarList, setPengajarList] = React.useState<PengajarEntry[]>([])
   const [guruList, setGuruList] = React.useState<GuruOption[]>([])
   const [kelasName, setKelasName] = React.useState("")
+  const [kelasJenisKelamin, setKelasJenisKelamin] = React.useState<"LAKI_LAKI" | "PEREMPUAN" | null>(null)
   const [loading, setLoading] = React.useState(true)
 
   // Modal Tambah Pengajar
@@ -103,6 +107,7 @@ export default function PengajarKelasPage() {
             email: string
             nip: string | null
             jabatan: string | null
+            jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
             aktif: boolean
             isAdmin: boolean
             waliKelas: string[]
@@ -115,9 +120,11 @@ export default function PengajarKelasPage() {
           const kelas = (kelasRes.data as Array<{
             kelasId: string
             namaKelas: string
+            jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
           }>).find((k) => k.kelasId === kelasId)
           if (kelas) {
             setKelasName(kelas.namaKelas)
+            setKelasJenisKelamin(kelas.jenisKelamin ?? null)
           }
         }
 
@@ -183,6 +190,20 @@ export default function PengajarKelasPage() {
     }
   }
 
+  const renderGenderBadge = (jk: "LAKI_LAKI" | "PEREMPUAN" | null) => {
+    if (jk === "LAKI_LAKI") {
+      return <span className="text-[11px] font-bold text-sky-600 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-full">Ikhwan</span>
+    }
+    if (jk === "PEREMPUAN") {
+      return <span className="text-[11px] font-bold text-pink-600 bg-pink-50 border border-pink-200 px-2 py-0.5 rounded-full">Akhwat</span>
+    }
+    return <span className="text-[11px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">Belum diatur</span>
+  }
+
+  const guruCocok = guruList.filter((g) =>
+    guruCocokKelas(g.jenisKelamin ?? null, kelasJenisKelamin)
+  )
+
   const handleDeleteConfirm = async () => {
     if (!deleteDialog.pengajar) return
     setDeleting(true)
@@ -232,8 +253,8 @@ export default function PengajarKelasPage() {
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       <DashboardHeader
-        title={`Kelola Pengajar — ${kelasName || "Kelas"}`}
-        subtitle="Manajemen penugasan guru mata pelajaran untuk kelas ini. Hanya guru admin yang dapat mengelola."
+        title={`Kelola Pengajar — ${kelasName || "Kelas"}${kelasJenisKelamin === "LAKI_LAKI" ? " (Ikhwan)" : kelasJenisKelamin === "PEREMPUAN" ? " (Akhwat)" : " (Campuran)"}`}
+        subtitle="Manajemen penugasan guru mata pelajaran untuk kelas ini. Guru difilter sesuai jenis kelamin kelas. Hanya guru admin yang dapat mengelola."
         action={
           <div className="flex items-center gap-2">
             <Link
@@ -293,8 +314,9 @@ export default function PengajarKelasPage() {
                     {pengajarList.map((p) => (
                       <tr key={p.id} className="hover:bg-slate-50/80">
                         <td className="p-4 pl-6">
-                          <div className="font-bold text-slate-800">
+                          <div className="font-bold text-slate-800 flex items-center gap-2">
                             {p.nama}
+                            {renderGenderBadge(p.jenisKelamin)}
                           </div>
                         </td>
                         <td className="p-4">
@@ -342,8 +364,9 @@ export default function PengajarKelasPage() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="font-bold text-slate-800 text-sm">
+                        <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
                           {p.nama}
+                          {renderGenderBadge(p.jenisKelamin)}
                         </div>
                         <div className="text-xs text-blue-700 font-semibold flex items-center gap-1 mt-0.5">
                           <BookOpen className="h-3 w-3" />
@@ -408,12 +431,28 @@ export default function PengajarKelasPage() {
                 required
               >
                 <option value="">— Pilih Guru —</option>
-                {guruList.map((g) => (
+                {guruCocok.map((g) => (
                   <option key={g.id} value={g.id}>
-                    {g.nama} {g.nip ? `(NIP: ${g.nip})` : ""}
+                    {g.nama}{" "}
+                    {g.jenisKelamin === "LAKI_LAKI"
+                      ? "(Ikhwan)"
+                      : g.jenisKelamin === "PEREMPUAN"
+                        ? "(Akhwat)"
+                        : ""}{" "}
+                    {g.nip ? `(NIP: ${g.nip})` : ""}
                   </option>
                 ))}
               </select>
+              {guruCocok.length === 0 && (
+                <p className="text-[11px] text-amber-600">
+                  Tidak ada guru yang cocok dengan jenis kelamin kelas ini
+                  {kelasJenisKelamin === "LAKI_LAKI"
+                    ? " (Ikhwan)"
+                    : kelasJenisKelamin === "PEREMPUAN"
+                      ? " (Akhwat)"
+                      : ""}. Atur jenis kelamin guru terlebih dahulu di menu Guru.
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">

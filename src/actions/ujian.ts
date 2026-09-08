@@ -116,7 +116,66 @@ export async function updateUjian(
       return { success: false, message: "Ujian tidak ditemukan" }
     }
 
-    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
+    // Jika mataPelajaran diubah, cari ID baru
+    let mataPelajaranId: string | undefined
+    if (payload.mataPelajaran) {
+      const mapel = await prisma.mataPelajaran.findFirst({ where: { nama: payload.mataPelajaran } })
+      if (!mapel) {
+        return { success: false, message: `Mata pelajaran "${payload.mataPelajaran}" tidak ditemukan` }
+      }
+      mataPelajaranId = mapel.id
+    }
+
+    // Verifikasi akses terhadap KELAS & MAPEL TUJUAN (setelah perubahan),
+    // bukan hanya yang lama — mencegah guru memindahkan ujian ke kelas/mapel
+    // yang bukan wewenangnya.
+    const targetKelasId = payload.kelasId ?? ujian.kelasId
+    const targetMapelId = mataPelajaranId ?? ujian.mataPelajaranId
+    await verifyGuruAksesKelas(targetKelasId, targetMapelId)
+
+    // Validasi transisi status (tidak boleh sembarangan):
+    // DRAFT → PUBLISHED, PUBLISHED → SELESAI (status sama diperbolehkan).
+    if (payload.status && payload.status !== ujian.status) {
+      const { status: dariStatus } = ujian
+      const keStatus = payload.status
+
+      const diizinkan =
+        (dariStatus === StatusUjian.DRAFT && keStatus === StatusUjian.PUBLISHED) ||
+        (dariStatus === StatusUjian.PUBLISHED && keStatus === StatusUjian.SELESAI)
+
+      if (!diizinkan) {
+        return {
+          success: false,
+          message:
+            "Transisi status ujian tidak diizinkan (hanya DRAFT → PUBLISHED → SELESAI)",
+        }
+      }
+
+      // Saat mempublikasikan, pastikan ujian memiliki minimal 1 soal.
+      if (keStatus === StatusUjian.PUBLISHED) {
+        const soalCount = await prisma.soalUjian.count({ where: { ujianId } })
+        if (soalCount < 1) {
+          return {
+            success: false,
+            message: "Tidak dapat mempublikasikan ujian yang belum memiliki soal",
+          }
+        }
+
+        // Validasi jendela waktu efektif (payload bila ada, sisanya dari record).
+        const waktuMulai = payload.waktuMulai
+          ? new Date(payload.waktuMulai)
+          : ujian.waktuMulai
+        const waktuSelesai = payload.waktuSelesai
+          ? new Date(payload.waktuSelesai)
+          : ujian.waktuSelesai
+        if (waktuSelesai <= waktuMulai) {
+          return {
+            success: false,
+            message: "Waktu selesai harus lebih akhir dari waktu mulai",
+          }
+        }
+      }
+    }
 
     // Jika ujian sudah berjalan dan ada siswa yang mulai mengerjakan, cegah perubahan waktu/durasi fatal
     if (ujian.status === StatusUjian.PUBLISHED) {
@@ -129,16 +188,6 @@ export async function updateUjian(
           message: "Tidak dapat mengubah durasi/kelas karena ujian sudah mulai dikerjakan siswa",
         }
       }
-    }
-
-    // Jika mataPelajaran diubah, cari ID baru
-    let mataPelajaranId: string | undefined
-    if (payload.mataPelajaran) {
-      const mapel = await prisma.mataPelajaran.findFirst({ where: { nama: payload.mataPelajaran } })
-      if (!mapel) {
-        return { success: false, message: `Mata pelajaran "${payload.mataPelajaran}" tidak ditemukan` }
-      }
-      mataPelajaranId = mapel.id
     }
 
     await prisma.ujian.update({
@@ -214,8 +263,17 @@ export async function addOrUpdateSoalUjian(
 
     await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
 
-    if (ujian.status === StatusUjian.SELESAI) {
-      return { success: false, message: "Ujian sudah selesai, soal tidak dapat diubah" }
+    if (
+      ujian.status === StatusUjian.PUBLISHED ||
+      ujian.status === StatusUjian.SELESAI
+    ) {
+      return {
+        success: false,
+        message:
+          ujian.status === StatusUjian.PUBLISHED
+            ? "Ujian sudah dipublikasikan, soal tidak dapat diubah"
+            : "Ujian sudah selesai, soal tidak dapat diubah",
+      }
     }
 
     await prisma.$transaction(
@@ -275,6 +333,19 @@ export async function deleteSoalUjian(
     if (!ujian) return { success: false, message: "Ujian tidak ditemukan" }
 
     await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
+
+    if (
+      ujian.status === StatusUjian.PUBLISHED ||
+      ujian.status === StatusUjian.SELESAI
+    ) {
+      return {
+        success: false,
+        message:
+          ujian.status === StatusUjian.PUBLISHED
+            ? "Ujian sudah dipublikasikan, soal tidak dapat dihapus"
+            : "Ujian sudah selesai, soal tidak dapat dihapus",
+      }
+    }
 
     await prisma.soalUjian.delete({
       where: {
@@ -1055,8 +1126,6 @@ export async function getDaftarUjianGuru(
   try {
     await verifyGuruAksesKelas(kelasId)
 
-    const now = new Date()
-
     const ujianList = await prisma.ujian.findMany({
       where: { kelasId },
       include: {
@@ -1126,8 +1195,6 @@ export async function getDaftarUjianAnak(
       return { success: false, message: "Data kelas siswa tidak valid" }
     }
 
-    const now = new Date()
-
     const ujianList = await prisma.ujian.findMany({
       where: {
         kelasId: siswa.kelasId,
@@ -1153,8 +1220,6 @@ export async function getDaftarUjianAnak(
 
     const formatted = ujianList.map((u) => {
       const pengerjaan = u.pengerjaan[0] || null
-      const isExpired = now > u.waktuSelesai
-      const isStarted = now >= u.waktuMulai
 
       return {
         id: u.id,

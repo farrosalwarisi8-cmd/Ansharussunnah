@@ -102,9 +102,12 @@ export async function updateAkunProfil(
         email_confirm: true,
       })
       if (authError) {
+        // Jangan bocorkan detail internal Supabase (enumeration/pesan teknis)
+        // ke klien; berikan pesan generik yang aman.
+        console.error("Supabase update email error:", authError)
         return {
           success: false,
-          message: `Gagal mengubah email di sistem login: ${authError.message}`,
+          message: "Gagal mengubah email di sistem login. Silakan coba lagi.",
         }
       }
 

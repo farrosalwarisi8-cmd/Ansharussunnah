@@ -6,19 +6,20 @@ import * as React from "react"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { promosiSiswaMassal, getSiswaUntukPromosi } from "@/actions/kenaikan-kelas"
 import { getAdminJenjangList } from "@/actions/jenjang-kelas"
-import { getPeriodeAjaranAktif } from "@/actions/periode-ajaran"
+import { getPeriodeAjaranAktif, getDaftarPeriodeAjaran } from "@/actions/periode-ajaran"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import dynamic from "next/dynamic"
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
 import { EmptyState } from "@/components/ui/empty-state"
-import { ArrowUpRight, CheckCircle2, Loader2, AlertCircle } from "lucide-react"
+import { ArrowUpRight, Loader2, AlertCircle } from "lucide-react"
 
 interface KelasTujuan {
   id: string
   nama: string
   jenjang: string
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   terisi: number
   kapasitas: number
   sisaKuota: number
@@ -28,6 +29,7 @@ interface SiswaPromosi {
   siswaId: string
   nama: string
   nisn: string
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   kelasAsal: string
   kelasTujuanId: string | null
 }
@@ -36,7 +38,10 @@ interface KelasOption {
   id: string
   nama: string
   jenjangNama: string
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
 }
+
+type GenderFilter = "SEMUA" | "LAKI_LAKI" | "PEREMPUAN"
 
 export default function KenaikanKelasPage() {
   const { toast } = useToast()
@@ -47,6 +52,7 @@ export default function KenaikanKelasPage() {
 
   const [kelasAsalId, setKelasAsalId] = React.useState("")
   const [periodeAjaranId, setPeriodeAjaranId] = React.useState("")
+  const [periodeOptions, setPeriodeOptions] = React.useState<{ id: string; label: string }[]>([])
   const [isConfirmOpen, setIsConfirmOpen] = React.useState(false)
   const [processing, setProcessing] = React.useState(false)
 
@@ -55,6 +61,12 @@ export default function KenaikanKelasPage() {
   const [kelasTujuanList, setKelasTujuanList] = React.useState<KelasTujuan[]>([])
   const [loadingSiswa, setLoadingSiswa] = React.useState(false)
   const [siswaError, setSiswaError] = React.useState<string | null>(null)
+  const [genderFilter, setGenderFilter] = React.useState<GenderFilter>("SEMUA")
+
+  const siswaTampil =
+    genderFilter === "SEMUA"
+      ? siswaList
+      : siswaList.filter((s) => s.jenisKelamin === genderFilter)
 
   // Kelas asal info
   const [kelasAsalInfo, setKelasAsalInfo] = React.useState<{
@@ -74,13 +86,20 @@ export default function KenaikanKelasPage() {
           for (const jenjang of result.data as Array<{
             id: string
             nama: string
-            kelas: Array<{ id: string; nama: string }>
+            kelas: Array<{ id: string; nama: string; jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null }>
           }>) {
             for (const kelas of jenjang.kelas) {
+              const genderSuffix =
+                kelas.jenisKelamin === "LAKI_LAKI"
+                  ? " (Ikhwan)"
+                  : kelas.jenisKelamin === "PEREMPUAN"
+                    ? " (Akhwat)"
+                    : ""
               options.push({
                 id: kelas.id,
-                nama: `${jenjang.nama} - ${kelas.nama}`,
+                nama: `${jenjang.nama} - ${kelas.nama}${genderSuffix}`,
                 jenjangNama: jenjang.nama,
+                jenisKelamin: kelas.jenisKelamin,
               })
             }
           }
@@ -98,13 +117,31 @@ export default function KenaikanKelasPage() {
     fetchKelas()
   }, [kelasAsalId])
 
-  // Muat periode ajaran aktif
+  // Muat daftar periode ajaran (dropdown), default ke periode aktif
   React.useEffect(() => {
     let mounted = true
     async function loadPeriode() {
-      const res = await getPeriodeAjaranAktif()
-      if (mounted && res.success && res.data?.id) {
-        setPeriodeAjaranId(res.data.id)
+      const [listRes, aktifRes] = await Promise.all([
+        getDaftarPeriodeAjaran(),
+        getPeriodeAjaranAktif(),
+      ])
+      if (!mounted) return
+      const options = (listRes.success && listRes.data
+        ? (listRes.data as Array<{
+            id: string
+            nama: string
+            aktif: boolean
+          }>)
+        : []
+      ).map((p) => ({
+        id: p.id,
+        label: p.aktif ? `${p.nama} (Aktif)` : p.nama,
+      }))
+      setPeriodeOptions(options)
+      if (aktifRes.success && aktifRes.data?.id) {
+        setPeriodeAjaranId(aktifRes.data.id)
+      } else if (options.length > 0) {
+        setPeriodeAjaranId(options[0].id)
       }
     }
     loadPeriode()
@@ -131,6 +168,7 @@ export default function KenaikanKelasPage() {
               siswaId: string
               nama: string
               nisn: string
+              jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
               kelasAsal: string
               rekomendasiKelasId: string | null
             }>
@@ -144,10 +182,12 @@ export default function KenaikanKelasPage() {
             siswaId: s.siswaId,
             nama: s.nama,
             nisn: s.nisn,
+            jenisKelamin: s.jenisKelamin,
             kelasAsal: s.kelasAsal,
             kelasTujuanId: s.rekomendasiKelasId,
           }))
           setSiswaList(mapped)
+          setGenderFilter("SEMUA")
         } else {
           setSiswaError(result.message || "Gagal memuat data siswa")
           setSiswaList([])
@@ -171,7 +211,7 @@ export default function KenaikanKelasPage() {
   }
 
   const handlePromosiMassal = async () => {
-    if (siswaList.length === 0) {
+    if (siswaTampil.length === 0) {
       toast({ variant: "destructive", title: "Tidak ada siswa untuk dipromosikan" })
       return
     }
@@ -179,7 +219,7 @@ export default function KenaikanKelasPage() {
     setProcessing(true)
     try {
       // Filter siswa yang punya kelas tujuan
-      const validMapping = siswaList
+      const validMapping = siswaTampil
         .filter((s) => s.kelasTujuanId && s.kelasTujuanId !== "")
         .map((s) => ({
           siswaId: s.siswaId,
@@ -226,7 +266,7 @@ export default function KenaikanKelasPage() {
     }
   }
 
-  const totalValidSiswa = siswaList.filter((s) => s.kelasTujuanId && s.kelasTujuanId !== "").length
+  const totalValidSiswa = siswaTampil.filter((s) => s.kelasTujuanId && s.kelasTujuanId !== "").length
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -259,19 +299,23 @@ export default function KenaikanKelasPage() {
             <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">
               Periode Ajaran Tujuan
             </label>
-            <input
-              type="text"
-              value={periodeAjaranId ? "Periode aktif" : "Memuat periode aktif..."}
-              readOnly
-              disabled
-              className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-500"
-            />
+            <select
+              value={periodeAjaranId}
+              onChange={(e) => setPeriodeAjaranId(e.target.value)}
+              disabled={periodeOptions.length === 0}
+              className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-yellow-500"
+            >
+              <option value="">— Pilih Periode —</option>
+              {periodeOptions.map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
           </div>
 
           <div className="flex justify-end">
             <Button
               onClick={() => setIsConfirmOpen(true)}
-              disabled={siswaList.length === 0 || processing}
+              disabled={siswaTampil.length === 0 || totalValidSiswa === 0 || processing || periodeAjaranId === ""}
               className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl h-11 min-h-[44px] shadow-md"
             >
               <ArrowUpRight className="h-4 w-4 mr-1.5" />
@@ -284,6 +328,14 @@ export default function KenaikanKelasPage() {
         {kelasAsalInfo && (
           <div className="mt-4 p-3 rounded-xl bg-yellow-50 border border-yellow-200 text-xs text-yellow-700">
             <strong>Kelas Asal:</strong> {kelasAsalInfo.nama} ({kelasAsalInfo.jenjang}) — {kelasAsalInfo.totalSiswa} siswa aktif
+          </div>
+        )}
+
+        {/* Peringatan: jenjang tertinggi — tidak ada kelas tujuan */}
+        {!loadingSiswa && !siswaError && siswaList.length > 0 && kelasTujuanList.length === 0 && (
+          <div className="mt-4 p-3 rounded-xl bg-slate-100 border border-slate-200 text-xs text-slate-600">
+            Kelas ini berada pada <strong>jenjang tertinggi</strong> — tidak ada kelas tujuan promosi yang tersedia.
+            Siswa di kelas ini tidak dapat diproses untuk kenaikan kelas di fitur ini.
           </div>
         )}
       </Card>
@@ -316,14 +368,42 @@ export default function KenaikanKelasPage() {
       {/* Santri List with Auto Recommendation */}
       {!loadingSiswa && !siswaError && siswaList.length > 0 && (
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
-          <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
+          <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between flex-wrap gap-3">
             <div>
               <CardTitle className="text-base font-bold text-slate-800">
-                Daftar Santri &amp; Rekomendasi Kelas Tujuan ({siswaList.length} Siswa)
+                Daftar Santri &amp; Rekomendasi Kelas Tujuan ({siswaTampil.length} Siswa)
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
                 Kelas tujuan otomatis terisi berdasarkan jenjang berikutnya. Dapat disesuaikan manual per siswa.
               </CardDescription>
+            </div>
+
+            {/* Filter Akhwat / Ikhwan */}
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: "SEMUA" as GenderFilter, label: "Semua" },
+                {
+                  key: "PEREMPUAN" as GenderFilter,
+                  label: `Akhwat (${siswaList.filter((s) => s.jenisKelamin === "PEREMPUAN").length})`,
+                },
+                {
+                  key: "LAKI_LAKI" as GenderFilter,
+                  label: `Ikhwan (${siswaList.filter((s) => s.jenisKelamin === "LAKI_LAKI").length})`,
+                },
+              ].map((o) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => setGenderFilter(o.key)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold border transition ${
+                    genderFilter === o.key
+                      ? "bg-yellow-500 text-white border-yellow-500"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
             </div>
           </CardHeader>
 
@@ -340,9 +420,20 @@ export default function KenaikanKelasPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {siswaList.map((s) => (
+                  {siswaTampil.map((s) => (
                     <tr key={s.siswaId} className="hover:bg-slate-50/80">
-                      <td className="p-4 pl-6 font-bold text-slate-800">{s.nama}</td>
+                      <td className="p-4 pl-6 font-bold text-slate-800">
+                        {s.nama}{" "}
+                        <span
+                          className={`inline-block ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            s.jenisKelamin === "PEREMPUAN"
+                              ? "bg-pink-50 text-pink-600"
+                              : "bg-blue-50 text-blue-600"
+                          }`}
+                        >
+                          {s.jenisKelamin === "PEREMPUAN" ? "Akhwat" : "Ikhwan"}
+                        </span>
+                      </td>
                       <td className="p-4 text-xs font-mono text-slate-500">{s.nisn}</td>
                       <td className="p-4 text-xs text-slate-600">{s.kelasAsal}</td>
                       <td className="p-4 pr-6">
@@ -352,11 +443,24 @@ export default function KenaikanKelasPage() {
                           className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-yellow-800 focus:ring-2 focus:ring-yellow-500"
                         >
                           <option value="">— Pilih —</option>
-                          {kelasTujuanList.map((kt) => (
-                            <option key={kt.id} value={kt.id}>
-                              {kt.nama} ({kt.terisi}/{kt.kapasitas}) {kt.sisaKuota <= 0 ? "— PENUH" : ""}
-                            </option>
-                          ))}
+                          {kelasTujuanList
+                            .filter(
+                              (kt) =>
+                                !s.jenisKelamin ||
+                                !kt.jenisKelamin ||
+                                kt.jenisKelamin === s.jenisKelamin
+                            )
+                            .map((kt) => (
+                              <option key={kt.id} value={kt.id}>
+                                {kt.jenjang} - {kt.nama}
+                                {kt.jenisKelamin === "LAKI_LAKI"
+                                  ? " (Ikhwan)"
+                                  : kt.jenisKelamin === "PEREMPUAN"
+                                    ? " (Akhwat)"
+                                    : ""}{" "}
+                                ({kt.terisi}/{kt.kapasitas}) {kt.sisaKuota <= 0 ? "— PENUH" : ""}
+                              </option>
+                            ))}
                         </select>
                       </td>
                     </tr>
@@ -367,11 +471,22 @@ export default function KenaikanKelasPage() {
 
             {/* Mobile Card List View */}
             <div className="md:hidden p-4 space-y-3">
-              {siswaList.map((s) => (
+              {siswaTampil.map((s) => (
                 <div key={s.siswaId} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="font-bold text-slate-800 text-sm">{s.nama}</div>
+                      <div className="font-bold text-slate-800 text-sm">
+                        {s.nama}{" "}
+                        <span
+                          className={`inline-block ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            s.jenisKelamin === "PEREMPUAN"
+                              ? "bg-pink-50 text-pink-600"
+                              : "bg-blue-50 text-blue-600"
+                          }`}
+                        >
+                          {s.jenisKelamin === "PEREMPUAN" ? "Akhwat" : "Ikhwan"}
+                        </span>
+                      </div>
                       <div className="text-xs text-slate-500 font-mono">NISN: {s.nisn}</div>
                       <div className="text-xs text-slate-400">Kelas: {s.kelasAsal}</div>
                     </div>
@@ -385,11 +500,24 @@ export default function KenaikanKelasPage() {
                       className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-yellow-800"
                     >
                       <option value="">— Pilih —</option>
-                      {kelasTujuanList.map((kt) => (
-                        <option key={kt.id} value={kt.id}>
-                          {kt.nama} ({kt.sisaKuota} sisa kuota)
-                        </option>
-                      ))}
+                      {kelasTujuanList
+                        .filter(
+                          (kt) =>
+                            !s.jenisKelamin ||
+                            !kt.jenisKelamin ||
+                            kt.jenisKelamin === s.jenisKelamin
+                        )
+                        .map((kt) => (
+                          <option key={kt.id} value={kt.id}>
+                            {kt.jenjang} - {kt.nama}
+                            {kt.jenisKelamin === "LAKI_LAKI"
+                              ? " (Ikhwan)"
+                              : kt.jenisKelamin === "PEREMPUAN"
+                                ? " (Akhwat)"
+                                : ""}{" "}
+                            ({kt.sisaKuota} sisa kuota)
+                          </option>
+                        ))}
                     </select>
                   </div>
                 </div>

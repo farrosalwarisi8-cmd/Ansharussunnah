@@ -2,7 +2,6 @@
 
 import prisma from "@/lib/prisma"
 import { requireGuru, isAcademicAdminRole } from "@/lib/auth"
-import { Role } from "@prisma/client"
 
 /**
  * Memverifikasi apakah user yang sedang login berhak mengelola kelas tertentu.

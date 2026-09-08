@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Plus, Clock, Loader2, Trash2, Pencil } from "lucide-react"
+import { Clock, Loader2, Trash2, Pencil } from "lucide-react"
 import Link from "next/link"
 import dynamic from "next/dynamic"
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
@@ -33,6 +33,7 @@ type KelasItem = {
   kelasId: string
   namaKelas: string
   jenjang: string
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   mataPelajaranId: string
   jumlahSiswa: number
 }
@@ -178,7 +179,8 @@ export function GuruTugasView() {
             >
               {kelasList.map((k) => (
                 <option key={k.kelasId} value={k.kelasId}>
-                  {k.namaKelas} — {k.jumlahSiswa} siswa
+                  {k.jenjang} - {k.namaKelas}
+                  {k.jenisKelamin === "LAKI_LAKI" ? " (Ikhwan)" : k.jenisKelamin === "PEREMPUAN" ? " (Akhwat)" : ""} — {k.jumlahSiswa} siswa
                 </option>
               ))}
             </select>

@@ -11,6 +11,7 @@ import {
   nonaktifkanAkunGuru,
   aktifkanKembaliAkunGuru,
   setGuruAdmin,
+  hapusAkunGuruPermanent,
   updateAkunGuru,
 } from "@/actions/guru"
 import { useToast } from "@/hooks/use-toast"
@@ -26,7 +27,7 @@ const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.
 const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
-import { Plus, ShieldCheck, Loader2, Pencil, AlertTriangle, Users } from "lucide-react"
+import { Plus, ShieldCheck, Loader2, Pencil, AlertTriangle, Users, Trash2 } from "lucide-react"
 
 export default function KelolaGuruPage() {
   const { toast } = useToast()
@@ -39,6 +40,7 @@ export default function KelolaGuruPage() {
     nip: string | null
     jabatan: string | null
     noHp: string | null
+    jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
     aktif: boolean
     isAdmin: boolean
     mustChangePassword: boolean
@@ -79,6 +81,7 @@ export default function KelolaGuruPage() {
   const [nip, setNip] = React.useState("")
   const [jabatan, setJabatan] = React.useState("")
   const [noHp, setNoHp] = React.useState("")
+  const [jenisKelamin, setJenisKelamin] = React.useState<"" | "LAKI_LAKI" | "PEREMPUAN">("")
   const [isAdminInput, setIsAdminInput] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
 
@@ -89,18 +92,20 @@ export default function KelolaGuruPage() {
   const [editNip, setEditNip] = React.useState("")
   const [editJabatan, setEditJabatan] = React.useState("")
   const [editNoHp, setEditNoHp] = React.useState("")
+  const [editJenisKelamin, setEditJenisKelamin] = React.useState<"" | "LAKI_LAKI" | "PEREMPUAN">("")
   const [editing, setEditing] = React.useState(false)
 
   // Confirm Action Dialog
   const [confirmDialog, setConfirmDialog] = React.useState<{
     open: boolean
     guru: typeof guruList[0] | null
-    type: "TOGGLE_ACTIVE" | "TOGGLE_ADMIN"
+    type: "TOGGLE_ACTIVE" | "TOGGLE_ADMIN" | "DELETE"
   }>({
     open: false,
     guru: null,
     type: "TOGGLE_ACTIVE",
   })
+  const [confirming, setConfirming] = React.useState(false)
 
   const handleAddGuru = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -114,6 +119,7 @@ export default function KelolaGuruPage() {
         nip: nip || undefined,
         jabatan: jabatan || undefined,
         noHp: noHp || undefined,
+        jenisKelamin: jenisKelamin || undefined,
         isAdmin: isAdminInput,
       })
 
@@ -134,6 +140,7 @@ export default function KelolaGuruPage() {
       setNip("")
       setJabatan("")
       setNoHp("")
+      setJenisKelamin("")
     } catch {
       toast({ variant: "destructive", title: "Gagal Membuat Akun", description: "Terjadi kesalahan saat membuat akun guru." })
     } finally {
@@ -151,13 +158,14 @@ export default function KelolaGuruPage() {
         nip: editNip || undefined,
         jabatan: editJabatan || undefined,
         noHp: editNoHp || undefined,
+        jenisKelamin: (editJenisKelamin || null) as "LAKI_LAKI" | "PEREMPUAN" | null,
       })
 
       if (result.success) {
         setGuruList((prev) =>
           prev.map((g) =>
             g.userId === editGuru.userId
-              ? { ...g, nama: editNama || g.nama, nip: editNip || g.nip, jabatan: editJabatan || g.jabatan, noHp: editNoHp || g.noHp }
+              ? { ...g, nama: editNama || g.nama, nip: editNip || g.nip, jabatan: editJabatan || g.jabatan, noHp: editNoHp || g.noHp, jenisKelamin: (editJenisKelamin || null) as "LAKI_LAKI" | "PEREMPUAN" | null }
               : g
           )
         )
@@ -174,9 +182,20 @@ export default function KelolaGuruPage() {
     }
   }
 
+  const renderGenderBadge = (jk: "LAKI_LAKI" | "PEREMPUAN" | null) => {
+    if (jk === "LAKI_LAKI") {
+      return <span className="text-[11px] font-bold text-sky-600 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-full">Ikhwan</span>
+    }
+    if (jk === "PEREMPUAN") {
+      return <span className="text-[11px] font-bold text-pink-600 bg-pink-50 border border-pink-200 px-2 py-0.5 rounded-full">Akhwat</span>
+    }
+    return <span className="text-[11px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">Belum diatur</span>
+  }
+
   const handleExecuteConfirm = async () => {
-    if (!confirmDialog.guru) return
+    if (!confirmDialog.guru || confirming) return
     const g = confirmDialog.guru
+    setConfirming(true)
 
     try {
       if (confirmDialog.type === "TOGGLE_ACTIVE") {
@@ -194,6 +213,17 @@ export default function KelolaGuruPage() {
           title: g.aktif ? "Akun Dinonaktifkan" : "Akun Berhasil Diaktifkan",
           description: `Status akun ${g.nama} telah diperbarui.`,
         })
+      } else if (confirmDialog.type === "DELETE") {
+        const result = await hapusAkunGuruPermanent(g.userId)
+        if (!result.success) {
+          toast({ variant: "destructive", title: "Gagal Menghapus", description: result.message })
+          return
+        }
+        setGuruList((prev) => prev.filter((item) => item.id !== g.id))
+        toast({
+          title: "Akun Berhasil Dihapus",
+          description: result.message,
+        })
       } else {
         await setGuruAdmin(g.userId, !g.isAdmin)
         setGuruList((prev) =>
@@ -209,6 +239,7 @@ export default function KelolaGuruPage() {
     } catch {
       toast({ variant: "destructive", title: "Aksi Gagal", description: "Terjadi kesalahan saat memperbarui status akun." })
     } finally {
+      setConfirming(false)
       setConfirmDialog({ open: false, guru: null, type: "TOGGLE_ACTIVE" })
     }
   }
@@ -278,7 +309,10 @@ export default function KelolaGuruPage() {
                 {guruList.map((g) => (
                   <tr key={g.id} className="hover:bg-slate-50/80">
                     <td className="p-4 pl-6">
-                      <div className="font-bold text-slate-800">{g.nama}</div>
+                      <div className="font-bold text-slate-800 flex items-center gap-2">
+                        {g.nama}
+                        {renderGenderBadge(g.jenisKelamin)}
+                      </div>
                       <div className="text-xs text-slate-400 font-mono">NIP: {g.nip}</div>
                     </td>
                     <td className="p-4 text-xs text-slate-600">
@@ -309,6 +343,7 @@ export default function KelolaGuruPage() {
                           setEditNip(g.nip || "")
                           setEditJabatan(g.jabatan || "")
                           setEditNoHp(g.noHp || "")
+                          setEditJenisKelamin(g.jenisKelamin || "")
                           setIsEditOpen(true)
                         }}
                         className="rounded-xl text-xs font-semibold"
@@ -344,6 +379,21 @@ export default function KelolaGuruPage() {
                       >
                         {g.aktif ? "Nonaktifkan" : "Aktifkan"}
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setConfirmDialog({
+                            open: true,
+                            guru: g,
+                            type: "DELETE",
+                          })
+                        }
+                        className="rounded-xl text-xs font-semibold text-rose-600 hover:text-rose-700 border-rose-200 hover:bg-rose-50"
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Hapus
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -364,6 +414,10 @@ export default function KelolaGuruPage() {
                 </div>
 
                 <div className="text-xs text-slate-600 space-y-1 bg-white p-3 rounded-xl border border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span>{g.nama}</span>
+                    {renderGenderBadge(g.jenisKelamin)}
+                  </div>
                   <div>Email: <strong>{g.email}</strong></div>
                   <div>No. HP: {g.noHp}</div>
                   <div>Peran: <strong>{g.isAdmin ? "Guru Admin" : "Guru Standar"}</strong></div>
@@ -379,6 +433,7 @@ export default function KelolaGuruPage() {
                       setEditNip(g.nip || "")
                       setEditJabatan(g.jabatan || "")
                       setEditNoHp(g.noHp || "")
+                      setEditJenisKelamin(g.jenisKelamin || "")
                       setIsEditOpen(true)
                     }}
                     className="flex-1 rounded-xl text-xs min-h-[40px]"
@@ -413,6 +468,21 @@ export default function KelolaGuruPage() {
                     className="flex-1 rounded-xl text-xs min-h-[40px]"
                   >
                     {g.aktif ? "Nonaktifkan" : "Aktifkan"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setConfirmDialog({
+                        open: true,
+                        guru: g,
+                        type: "DELETE",
+                      })
+                    }
+                    className="rounded-xl text-xs min-h-[40px] text-rose-600 hover:text-rose-700 border-rose-200 hover:bg-rose-50"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Hapus
                   </Button>
                 </div>
               </div>
@@ -482,6 +552,22 @@ export default function KelolaGuruPage() {
             </div>
 
             <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Jenis Kelamin Guru</label>
+              <select
+                value={jenisKelamin}
+                onChange={(e) => setJenisKelamin(e.target.value as "" | "LAKI_LAKI" | "PEREMPUAN")}
+                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-yellow-500"
+              >
+                <option value="">— Pilih Jenis Kelamin —</option>
+                <option value="LAKI_LAKI">Ikhwan (Laki-laki)</option>
+                <option value="PEREMPUAN">Akhwat (Perempuan)</option>
+              </select>
+              <p className="text-[11px] text-slate-400">
+                Dipakai untuk mencocokkan penugasan guru dengan kelas khusus Ikhwan/Akhwat.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Jabatan / Tugas Mengajar</label>
               <Input
                 placeholder="Contoh: Guru Bahasa Arab & Wali Kelas 7"
@@ -506,9 +592,10 @@ export default function KelolaGuruPage() {
 
             {!isAdminInput && (
               <p className="text-xs text-slate-500 bg-slate-50 rounded-xl px-3 py-2 border border-slate-100">
-                Guru tanpa hak admin otomatis ditugaskan ke semua mapel aktif di semua kelas aktif, sehingga
-                langsung bisa mengisi tugas, materi, dan ujian. Pengaturan kelas/mapel tetap bisa dipangkas lewat
-                halaman Kelola Pengajar.
+                Guru tanpa hak admin otomatis ditugaskan ke mapel aktif di kelas aktif yang
+                sesuai jenis kelaminnya (Ikhwan → kelas Ikhwan/Campuran, Akhwat → kelas Akhwat/Campuran),
+                sehingga langsung bisa mengisi tugas, materi, dan ujian. Pengaturan kelas/mapel tetap
+                bisa dipangkas lewat halaman Kelola Pengajar.
               </p>
             )}
 
@@ -580,6 +667,19 @@ export default function KelolaGuruPage() {
               />
             </div>
 
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Jenis Kelamin Guru</label>
+              <select
+                value={editJenisKelamin}
+                onChange={(e) => setEditJenisKelamin(e.target.value as "" | "LAKI_LAKI" | "PEREMPUAN")}
+                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold focus:ring-2 focus:ring-yellow-500"
+              >
+                <option value="">— Belum diatur —</option>
+                <option value="LAKI_LAKI">Ikhwan (Laki-laki)</option>
+                <option value="PEREMPUAN">Akhwat (Perempuan)</option>
+              </select>
+            </div>
+
             <DialogFooter className="gap-2 sm:gap-0 pt-2">
               <Button type="button" variant="outline" onClick={() => { setIsEditOpen(false); setEditGuru(null) }} className="rounded-xl min-h-[40px]">
                 Batal
@@ -603,17 +703,22 @@ export default function KelolaGuruPage() {
           open={confirmDialog.open}
           onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, open }))}
           title={
-            confirmDialog.type === "TOGGLE_ACTIVE"
-              ? `${confirmDialog.guru.aktif ? "Nonaktifkan" : "Aktifkan"} Akun Guru?`
-              : `${confirmDialog.guru.isAdmin ? "Cabut Hak Admin" : "Jadikan Guru Admin"}?`
+            confirmDialog.type === "DELETE"
+              ? "Hapus Akun Guru Secara Permanen?"
+              : confirmDialog.type === "TOGGLE_ACTIVE"
+                ? `${confirmDialog.guru.aktif ? "Nonaktifkan" : "Aktifkan"} Akun Guru?`
+                : `${confirmDialog.guru.isAdmin ? "Cabut Hak Admin" : "Jadikan Guru Admin"}?`
           }
           description={
-            confirmDialog.type === "TOGGLE_ACTIVE"
-              ? `Apakah Anda yakin ingin ${confirmDialog.guru.aktif ? "menonaktifkan" : "mengaktifkan"} akun ${confirmDialog.guru.nama}?`
-              : `Apakah Anda yakin ingin mengubah hak akses administratif untuk ${confirmDialog.guru.nama}?`
+            confirmDialog.type === "DELETE"
+              ? `Akun ${confirmDialog.guru.nama} beserta seluruh data loginnya akan dihapus permanen dari database dan tidak dapat dikembalikan. Pastikan guru ini tidak memiliki riwayat mengajar/data penting. Yakin ingin melanjutkan?`
+              : confirmDialog.type === "TOGGLE_ACTIVE"
+                ? `Apakah Anda yakin ingin ${confirmDialog.guru.aktif ? "menonaktifkan" : "mengaktifkan"} akun ${confirmDialog.guru.nama}?`
+                : `Apakah Anda yakin ingin mengubah hak akses administratif untuk ${confirmDialog.guru.nama}?`
           }
-          confirmText="Lanjutkan"
-          variant={confirmDialog.type === "TOGGLE_ACTIVE" && confirmDialog.guru.aktif ? "destructive" : "default"}
+          confirmText={confirmDialog.type === "DELETE" ? "Ya, Hapus Permanen" : "Lanjutkan"}
+          variant={confirmDialog.type === "DELETE" ? "destructive" : confirmDialog.type === "TOGGLE_ACTIVE" && confirmDialog.guru.aktif ? "destructive" : "default"}
+          isLoading={confirming}
           onConfirm={handleExecuteConfirm}
         />
       )}

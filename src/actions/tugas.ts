@@ -7,7 +7,7 @@ import { requireRole } from "@/lib/auth"
 import { verifyGuruAksesKelas } from "@/lib/guru-auth"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { getSignedUrl } from "@/lib/storage"
+import { getSignedUrl, getSignedUrls } from "@/lib/storage"
 import {
   createTugasSchema,
   updateTugasSchema,
@@ -140,7 +140,22 @@ export async function updateTugas(
       return { success: false, message: "Tugas tidak ditemukan" }
     }
 
-    await verifyGuruAksesKelas(tugas.kelasId, tugas.mataPelajaranId)
+    // Jika mataPelajaran diubah, cari ID baru
+    let mataPelajaranId: string | undefined
+    if (payload.mataPelajaran) {
+      const mapel = await prisma.mataPelajaran.findFirst({ where: { nama: payload.mataPelajaran } })
+      if (!mapel) {
+        return { success: false, message: `Mata pelajaran "${payload.mataPelajaran}" tidak ditemukan` }
+      }
+      mataPelajaranId = mapel.id
+    }
+
+    // Verifikasi akses terhadap KELAS & MAPEL TUJUAN (setelah perubahan),
+    // bukan hanya yang lama — mencegah guru memindahkan tugas ke kelas/mapel
+    // yang bukan wewenangnya.
+    const targetKelasId = payload.kelasId ?? tugas.kelasId
+    const targetMapelId = mataPelajaranId ?? tugas.mataPelajaranId
+    await verifyGuruAksesKelas(targetKelasId, targetMapelId)
 
     // Cegah perubahan deadline jika sudah ada submission
     if (payload.deadline) {
@@ -154,16 +169,6 @@ export async function updateTugas(
             "Tidak dapat mengubah deadline karena sudah ada siswa yang mengumpulkan",
         }
       }
-    }
-
-    // Jika mataPelajaran diubah, cari ID baru
-    let mataPelajaranId: string | undefined
-    if (payload.mataPelajaran) {
-      const mapel = await prisma.mataPelajaran.findFirst({ where: { nama: payload.mataPelajaran } })
-      if (!mapel) {
-        return { success: false, message: `Mata pelajaran "${payload.mataPelajaran}" tidak ditemukan` }
-      }
-      mataPelajaranId = mapel.id
     }
 
     await prisma.tugas.update({
@@ -371,6 +376,12 @@ export async function getRekapPengumpulanTugas(
       },
     })
 
+    // Batch: generate signed URL untuk file jawaban siswa agar guru bisa membukanya
+    const urlFileList = pengumpulanList
+      .map((p) => p.urlFile)
+      .filter((u): u is string => !!u)
+    const signedUrlMap = await getSignedUrls("tugas-siswa", urlFileList)
+
     const pengumpulanMap = new Map(
       pengumpulanList.map((p) => [p.siswaId, p])
     )
@@ -391,6 +402,11 @@ export async function getRekapPengumpulanTugas(
         feedback: pengumpulan?.feedback || null,
         jumlahRevisi: pengumpulan?.jumlahRevisi || 0,
         penilai: pengumpulan?.dinilaiOleh?.nama || null,
+        namaFile: pengumpulan?.namaFile || null,
+        urlFile: pengumpulan?.urlFile || null,
+        signedUrl: pengumpulan?.urlFile
+          ? (signedUrlMap.get(pengumpulan.urlFile) ?? null)
+          : null,
       }
     })
 

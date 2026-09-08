@@ -173,21 +173,6 @@ export async function updateMateri(
       return { success: false, message: "Materi tidak ditemukan" }
     }
 
-    await verifyGuruAksesKelas(materi.kelasId, materi.mataPelajaranId)
-
-    // Validasi path file baru jika diubah
-    if (payload.urlFile) {
-      const expectedPrefix = `materi/${materi.kelasId}/`
-      const isInternalPath = payload.urlFile.startsWith("materi/")
-      const isExternalUrl = /^https?:\/\//i.test(payload.urlFile)
-      if (isInternalPath && !urlFileCheck(payload.urlFile, expectedPrefix)) {
-        return { success: false, message: "Struktur lokasi berkas tidak valid" }
-      }
-      if (!isInternalPath && !isExternalUrl) {
-        return { success: false, message: "Struktur lokasi berkas tidak valid" }
-      }
-    }
-
     // Jika mataPelajaran diubah, cari ID baru
     let mataPelajaranId: string | undefined
     if (payload.mataPelajaran) {
@@ -196,6 +181,45 @@ export async function updateMateri(
         return { success: false, message: `Mata pelajaran "${payload.mataPelajaran}" tidak ditemukan` }
       }
       mataPelajaranId = mapel.id
+    }
+
+    // Verifikasi akses terhadap KELAS & MAPEL TUJUAN (setelah perubahan),
+    // bukan hanya yang lama — mencegah guru memindahkan materi ke kelas/mapel
+    // yang bukan wewenangnya.
+    const targetKelasId = payload.kelasId ?? materi.kelasId
+    const targetMapelId = mataPelajaranId ?? materi.mataPelajaranId
+    await verifyGuruAksesKelas(targetKelasId, targetMapelId)
+
+    // Validasi path file baru jika diubah (pakai kelas tujuan untuk prefix)
+    if (payload.urlFile) {
+      const expectedPrefix = `materi/${targetKelasId}/`
+      const isInternalPath = payload.urlFile.startsWith("materi/")
+      const isExternalUrl = /^https?:\/\//i.test(payload.urlFile)
+      if (!isInternalPath && !isExternalUrl) {
+        return { success: false, message: "Struktur lokasi berkas tidak valid" }
+      }
+      if (isInternalPath) {
+        if (!urlFileCheck(payload.urlFile, expectedPrefix)) {
+          return { success: false, message: "Struktur lokasi berkas tidak valid" }
+        }
+
+        // Verifikasi file ada di Supabase Storage
+        const supabaseAdmin = createSupabaseAdmin()
+        const fileName = payload.urlFile.split("/").pop()
+        const { data: fileList, error: listError } = await supabaseAdmin.storage
+          .from("materi")
+          .list(`materi/${targetKelasId}`)
+
+        if (listError) {
+          console.error("Storage list error (materi):", listError)
+          return { success: false, message: "Gagal memverifikasi berkas di storage." }
+        }
+
+        const fileExists = fileList?.some((f) => f.name === fileName)
+        if (!fileExists) {
+          return { success: false, message: "Berkas materi tidak ditemukan di server" }
+        }
+      }
     }
 
     await prisma.materiPembelajaran.update({
@@ -236,6 +260,17 @@ export async function deleteMateri(materiId: string): Promise<ActionResponse> {
     await verifyGuruAksesKelas(materi.kelasId, materi.mataPelajaranId)
 
     await prisma.materiPembelajaran.delete({ where: { id: materiId } })
+
+    // Best-effort: hapus file dari bucket jika materi menyimpan berkas internal.
+    // Kegagalan di sini tidak menggagalkan penghapusan record di database.
+    if (materi.urlFile && materi.urlFile.startsWith("materi/")) {
+      try {
+        const supabaseAdmin = createSupabaseAdmin()
+        await supabaseAdmin.storage.from("materi").remove([materi.urlFile])
+      } catch (storageError) {
+        console.error("Storage cleanup error (deleteMateri):", storageError)
+      }
+    }
 
     revalidatePath("/dashboard/guru/materi")
     return { success: true, message: "Materi berhasil dihapus" }

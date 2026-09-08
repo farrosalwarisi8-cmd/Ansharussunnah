@@ -96,6 +96,7 @@ async function main() {
             nip: "198501012010011001",
             jabatan: "Kepala Panitia PPDB",
             noHp: "081234567890",
+            jenisKelamin: JenisKelamin.LAKI_LAKI,
           },
         },
       },

@@ -21,7 +21,7 @@ const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m
 const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogHeader), { ssr: false })
 const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
-import { ArrowLeft, Upload, CheckCircle2, Link as LinkIcon, Loader2, AlertCircle } from "lucide-react"
+import { ArrowLeft, Upload, CheckCircle2, Link as LinkIcon, Loader2, AlertCircle, Download } from "lucide-react"
 
 interface SubmisiItem {
   siswaId: string
@@ -34,6 +34,9 @@ interface SubmisiItem {
   feedback: string | null
   jumlahRevisi: number
   penilai: string | null
+  namaFile?: string | null
+  urlFile?: string | null
+  signedUrl?: string | null
 }
 
 interface RekapData {
@@ -363,7 +366,18 @@ export default function DetailTugasPage() {
                           <td className="p-4">
                             <StatusBadge status={sub.status as StatusType} />
                           </td>
-                          <td className="p-4 pr-6 text-right">
+                          <td className="p-4 pr-6 text-right space-x-1.5">
+                            {sub.status !== "BELUM_DIKUMPULKAN" && (sub.signedUrl || (sub.urlFile && sub.urlFile.startsWith("http"))) && (
+                              <a
+                                href={sub.signedUrl || (sub.urlFile!.startsWith("http") ? sub.urlFile! : "#")}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-3 min-h-[36px] text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                              >
+                                <Download className="h-3 w-3" />
+                                Jawaban
+                              </a>
+                            )}
                             {sub.status !== "BELUM_DIKUMPULKAN" && (
                               <Button
                                 size="sm"
@@ -404,21 +418,34 @@ export default function DetailTugasPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center justify-between gap-2 pt-1">
                         <StatusBadge status={sub.status as StatusType} size="sm" />
-                        {sub.status !== "BELUM_DIKUMPULKAN" && (
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setSelectedSubmisi(sub)
-                              setSkorNilai(sub.nilai !== null ? String(Number(sub.nilai)) : "")
-                              setFeedbackGuru(sub.feedback || "")
-                            }}
-                            className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl min-h-[40px] text-xs font-bold"
-                          >
-                            {sub.nilai !== null ? "Edit Nilai" : "Beri Nilai"}
-                          </Button>
-                        )}
+                        <div className="flex gap-2">
+                          {sub.status !== "BELUM_DIKUMPULKAN" && (sub.signedUrl || (sub.urlFile && sub.urlFile.startsWith("http"))) && (
+                            <a
+                              href={sub.signedUrl || (sub.urlFile!.startsWith("http") ? sub.urlFile! : "#")}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-3 min-h-[40px] text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                              <Download className="h-3 w-3" />
+                              Jawaban
+                            </a>
+                          )}
+                          {sub.status !== "BELUM_DIKUMPULKAN" && (
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setSelectedSubmisi(sub)
+                                setSkorNilai(sub.nilai !== null ? String(Number(sub.nilai)) : "")
+                                setFeedbackGuru(sub.feedback || "")
+                              }}
+                              className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl min-h-[40px] text-xs font-bold"
+                            >
+                              {sub.nilai !== null ? "Edit Nilai" : "Beri Nilai"}
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}

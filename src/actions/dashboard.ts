@@ -481,8 +481,6 @@ export async function getRangkumanAdminHome(): Promise<
   try {
     await requireRole([Role.SUPER_ADMIN, Role.ADMIN_AKADEMIK])
 
-    const now = new Date()
-
     const [
       jumlahSantri,
       jumlahGuru,

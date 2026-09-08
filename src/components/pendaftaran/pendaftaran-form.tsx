@@ -200,6 +200,7 @@ interface PendaftaranFormProps {
       id: string
       nama: string
       kapasitas: number
+      jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
     }>
   }>
 }
@@ -215,7 +216,12 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
   const [filesFoto, setFilesFoto] = React.useState<File[]>([])
 
   const [availableKelas, setAvailableKelas] = React.useState<
-    Array<{ id: string; nama: string }>
+    Array<{
+      id: string
+      nama: string
+      jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
+      jenjangNama: string
+    }>
   >([])
 
   const {
@@ -246,12 +252,40 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
   React.useEffect(() => {
     if (selectedJenjang) {
       const jenjang = jenjangList.find((j) => j.id === selectedJenjang)
-      setAvailableKelas(jenjang?.kelas || [])
+      setAvailableKelas(
+        (jenjang?.kelas || []).map((kk) => ({
+          id: kk.id,
+          nama: kk.nama,
+          jenisKelamin: kk.jenisKelamin,
+          jenjangNama: jenjang?.nama || "",
+        }))
+      )
       setValue("kelasTujuanId", "")
     } else {
       setAvailableKelas([])
     }
   }, [selectedJenjang, jenjangList, setValue])
+
+  const jenisKelaminValue = watch("jenisKelamin")
+
+  // Kelas yang bisa dipilih dibatasi oleh jenis kelamin calon santri:
+  // kelas khusus Ikhwan/Akhwat hanya muncul untuk gender yang cocok,
+  // kelas Campuran (jenisKelamin null) muncul untuk semua gender.
+  const kelasCocokGender = availableKelas.filter(
+    (k) => !jenisKelaminValue || !k.jenisKelamin || k.jenisKelamin === jenisKelaminValue
+  )
+
+  // Jika jenis kelamin berubah setelah kelas terpilih, dan kelas tersebut
+  // sekarang tidak cocok, kosongkan pilihan agar tidak ter-submit kelas salah.
+  React.useEffect(() => {
+    if (!jenisKelaminValue) return
+    const terpilihKelas = watch("kelasTujuanId")
+    if (!terpilihKelas) return
+    const k = availableKelas.find((x) => x.id === terpilihKelas)
+    if (k && k.jenisKelamin && k.jenisKelamin !== jenisKelaminValue) {
+      setValue("kelasTujuanId", "")
+    }
+  }, [jenisKelaminValue, availableKelas, setValue, watch])
 
   const stepFields: Record<number, (keyof PendaftaranFormValues)[]> = {
     1: ["namaLengkap", "tempatLahir", "tanggalLahir", "jenisKelamin", "alamatSiswa"],
@@ -985,25 +1019,38 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
                 </Label>
                 <Select
                   onValueChange={(value) => setValue("kelasTujuanId", value)}
-                  disabled={availableKelas.length === 0}
+                  disabled={kelasCocokGender.length === 0}
                 >
                   <SelectTrigger>
                     <SelectValue
                       placeholder={
                         availableKelas.length === 0
                           ? "Pilih jenjang terlebih dahulu"
-                          : "Pilih kelas"
+                          : kelasCocokGender.length === 0
+                            ? "Tidak ada kelas yang sesuai jenis kelamin"
+                            : "Pilih kelas"
                       }
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableKelas.map((k) => (
+                    {kelasCocokGender.map((k) => (
                       <SelectItem key={k.id} value={k.id}>
-                        {k.nama}
+                        {k.jenjangNama} - {k.nama}
+                        {k.jenisKelamin === "LAKI_LAKI"
+                          ? " (Ikhwan)"
+                          : k.jenisKelamin === "PEREMPUAN"
+                            ? " (Akhwat)"
+                            : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {kelasCocokGender.length === 0 && availableKelas.length > 0 && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Di jenjang ini belum ada kelas yang sesuai dengan jenis kelamin calon santri.
+                    Pilih jenjang lain atau hubungi panitia.
+                  </p>
+                )}
                 {errors.kelasTujuanId && (
                   <p className="text-xs text-destructive mt-1">
                     {errors.kelasTujuanId.message}

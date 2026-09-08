@@ -17,6 +17,7 @@ import {
   getDaftarSiswaManual,
   getKelasList,
   hapusSiswaPermanent,
+  getPasswordSiswaSaatIni,
 } from "@/actions/siswa-manual"
 import { useToast } from "@/hooks/use-toast"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
@@ -81,9 +82,9 @@ type SiswaListItem = {
   nama: string
   email: string
   username: string | null
-  passwordPlain: string | null
   nisn: string | null
   nis: string | null
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   kelasNama: string | null
   jenjangNama: string | null
   aktif: boolean
@@ -101,6 +102,7 @@ type KelasItem = {
   id: string
   nama: string
   jenjangNama: string
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   kapasitas: number
   jumlahSiswa: number
 }
@@ -291,9 +293,9 @@ export default function KelolaSiswaPage() {
 
   // Data state
   const [siswaList, setSiswaList] = React.useState<SiswaListItem[]>([])
-  const [kelasList, setKelasList] = React.useState<KelasItem[]>([])
   const [loadingData, setLoadingData] = React.useState(true)
   const [filterKelas, setFilterKelas] = React.useState<string>("ALL")
+  const [filterGender, setFilterGender] = React.useState<string>("ALL")
   const [searchQuery, setSearchQuery] = React.useState("")
 
   // Modal state
@@ -322,7 +324,8 @@ export default function KelolaSiswaPage() {
     username: string
     email: string
     passwordPlain: string | null
-  }>({ open: false, userId: "", nama: "", username: "", email: "", passwordPlain: null })
+    loadingPassword: boolean
+  }>({ open: false, userId: "", nama: "", username: "", email: "", passwordPlain: null, loadingPassword: false })
   const [editUsername, setEditUsername] = React.useState("")
   const [editEmail, setEditEmail] = React.useState("")
   const [editPassword, setEditPassword] = React.useState("")
@@ -366,6 +369,24 @@ export default function KelolaSiswaPage() {
   const nikAyahValue = watch("nikAyah")
   const nikIbuValue = watch("nikIbu")
   const selectedKelasId = watch("kelasId")
+  const jenisKelaminValue = watch("jenisKelamin")
+
+  // Kelas yang bisa dipilih admin dibatasi jenis kelamin siswa yang didaftarkan:
+  // kelas khusus Ikhwan/Akhwat hanya muncul untuk gender yang cocok,
+  // kelas Campuran (jenisKelamin null) tersedia untuk semua gender.
+  const kelasCocokGender = availableKelas.filter(
+    (k) => !jenisKelaminValue || !k.jenisKelamin || k.jenisKelamin === jenisKelaminValue
+  )
+
+  // Reset pilihan kelas jika jenis kelamin berubah dan kelas terpilih tidak lagi cocok.
+  React.useEffect(() => {
+    if (!jenisKelaminValue) return
+    if (!selectedKelasId) return
+    const k = availableKelas.find((x) => x.id === selectedKelasId)
+    if (k && k.jenisKelamin && k.jenisKelamin !== jenisKelaminValue) {
+      setValue("kelasId", "")
+    }
+  }, [jenisKelaminValue, selectedKelasId, availableKelas, setValue])
 
   // Load data on mount
   React.useEffect(() => {
@@ -380,7 +401,6 @@ export default function KelolaSiswaPage() {
           setSiswaList(siswaRes.data as unknown as SiswaListItem[])
         }
         if (kelasRes.success && kelasRes.data) {
-          setKelasList(kelasRes.data)
           setAvailableKelas(kelasRes.data)
         }
       } catch {
@@ -512,18 +532,35 @@ export default function KelolaSiswaPage() {
       }
   }
 
-  const openEditAkun = (s: SiswaListItem) => {
+  const openEditAkun = async (s: SiswaListItem) => {
     setEditAkun({
       open: true,
       userId: s.userId,
       nama: s.nama,
       username: s.username || "",
       email: s.email,
-      passwordPlain: s.passwordPlain,
+      passwordPlain: null,
+      loadingPassword: true,
     })
     setEditUsername(s.username || "")
     setEditEmail(s.email || "")
     setEditPassword("")
+
+    // Ambil password hanya untuk siswa ini (on-demand, bukan massal)
+    try {
+      const res = await getPasswordSiswaSaatIni(s.userId)
+      if (res.success) {
+        setEditAkun((prev) => ({
+          ...prev,
+          passwordPlain: res.data?.password ?? null,
+          loadingPassword: false,
+        }))
+      } else {
+        setEditAkun((prev) => ({ ...prev, loadingPassword: false }))
+      }
+    } catch {
+      setEditAkun((prev) => ({ ...prev, loadingPassword: false }))
+    }
   }
 
   const handleUpdateAkun = async () => {
@@ -624,6 +661,10 @@ export default function KelolaSiswaPage() {
       filtered = filtered.filter((s) => s.kelasNama === filterKelas)
     }
 
+    if (filterGender !== "ALL") {
+      filtered = filtered.filter((s) => s.jenisKelamin === filterGender)
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       filtered = filtered.filter(
@@ -637,7 +678,7 @@ export default function KelolaSiswaPage() {
     }
 
     return filtered
-  }, [siswaList, filterKelas, searchQuery])
+  }, [siswaList, filterKelas, filterGender, searchQuery])
 
   // Get unique kelas names for filter
   const kelasNames = React.useMemo(() => {
@@ -684,6 +725,16 @@ export default function KelolaSiswaPage() {
                   {nama}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterGender} onValueChange={setFilterGender}>
+            <SelectTrigger className="w-full sm:w-[180px] h-10 rounded-xl text-sm">
+              <SelectValue placeholder="Semua Gender" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Semua Gender</SelectItem>
+              <SelectItem value="LAKI_LAKI">Ikhwan</SelectItem>
+              <SelectItem value="PEREMPUAN">Akhwat</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>
@@ -736,7 +787,19 @@ export default function KelolaSiswaPage() {
                     {filteredSiswa.map((s) => (
                       <tr key={s.id} className="hover:bg-slate-50/80">
                         <td className="p-4 pl-6">
-                          <div className="font-bold text-slate-800">{s.nama}</div>
+                          <div className="font-bold text-slate-800">
+                            {s.nama}
+                            {s.jenisKelamin === "LAKI_LAKI" && (
+                              <span className="ml-2 inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-800 align-middle">
+                                Ikhwan
+                              </span>
+                            )}
+                            {s.jenisKelamin === "PEREMPUAN" && (
+                              <span className="ml-2 inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-pink-100 text-pink-800 align-middle">
+                                Akhwat
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-slate-400 font-mono">
                             {s.nisn && `NISN: ${s.nisn}`}
                             {s.nisn && s.nis && " | "}
@@ -848,7 +911,19 @@ export default function KelolaSiswaPage() {
                   <div key={s.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="font-bold text-slate-800 text-sm">{s.nama}</div>
+                        <div className="font-bold text-slate-800 text-sm">
+                          {s.nama}
+                          {s.jenisKelamin === "LAKI_LAKI" && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-800 align-middle">
+                              Ikhwan
+                            </span>
+                          )}
+                          {s.jenisKelamin === "PEREMPUAN" && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-pink-100 text-pink-800 align-middle">
+                              Akhwat
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-slate-500">
                           {s.kelasNama
                             ? `${s.jenjangNama ? s.jenjangNama + " " : ""}${s.kelasNama}`
@@ -1464,18 +1539,36 @@ export default function KelolaSiswaPage() {
                   <Select
                     value={selectedKelasId}
                     onValueChange={(value) => setValue("kelasId", value)}
+                    disabled={kelasCocokGender.length === 0}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Pilih kelas" />
+                      <SelectValue
+                        placeholder={
+                          kelasCocokGender.length === 0
+                            ? "Tidak ada kelas yang sesuai jenis kelamin"
+                            : "Pilih kelas"
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableKelas.map((k) => (
+                      {kelasCocokGender.map((k) => (
                         <SelectItem key={k.id} value={k.id}>
-                          {k.jenjangNama} {k.nama} ({k.jumlahSiswa}/{k.kapasitas} siswa)
+                          {k.jenjangNama} - {k.nama}
+                          {k.jenisKelamin === "LAKI_LAKI" ? " (Ikhwan)" : k.jenisKelamin === "PEREMPUAN" ? " (Akhwat)" : ""} ({k.jumlahSiswa}/{k.kapasitas} siswa)
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {kelasCocokGender.length === 0 && availableKelas.length > 0 && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      Belum ada kelas yang sesuai dengan jenis kelamin siswa ({jenisKelaminValue === "LAKI_LAKI" ? "Ikhwan" : "Akhwat"}).
+                    </p>
+                  )}
+                  {kelasCocokGender.length === 0 && availableKelas.length === 0 && (
+                    <p className="text-xs text-slate-400 mt-1">
+                      Tidak ada kelas aktif untuk dipilih saat ini.
+                    </p>
+                  )}
                   {errors.kelasId && (
                     <p className="text-xs text-destructive mt-1">{errors.kelasId.message}</p>
                   )}
@@ -1696,7 +1789,7 @@ export default function KelolaSiswaPage() {
               </label>
               <Input
                 readOnly
-                value={editAkun.passwordPlain || "Tidak tercatat"}
+                value={editAkun.loadingPassword ? "Memuat..." : editAkun.passwordPlain || "Tidak tercatat"}
                 className="h-11 rounded-xl text-sm font-mono bg-slate-50"
               />
             </div>

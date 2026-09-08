@@ -16,7 +16,11 @@ export interface JenjangOption {
   id: string
   nama: string
   urutan: number
-  kelas: Array<{ id: string; nama: string }>
+  kelas: Array<{
+    id: string
+    nama: string
+    jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
+  }>
 }
 
 interface KelasMapelSelectorProps {
@@ -149,7 +153,8 @@ export function KelasMapelSelector({
           <option value="">— Pilih Kelas —</option>
           {kelasTerpilihJenjang?.kelas.map((k) => (
             <option key={k.id} value={k.id}>
-              Kelas {k.nama}
+              {kelasTerpilihJenjang.nama} - {k.nama}
+              {k.jenisKelamin === "LAKI_LAKI" ? " (Ikhwan)" : k.jenisKelamin === "PEREMPUAN" ? " (Akhwat)" : ""}
             </option>
           ))}
         </select>

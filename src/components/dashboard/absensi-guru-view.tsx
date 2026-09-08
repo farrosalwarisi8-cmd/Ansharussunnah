@@ -20,6 +20,7 @@ type KelasItem = {
   kelasId: string
   namaKelas: string
   jenjang: string
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   mataPelajaranId: string
   jumlahSiswa: number
 }
@@ -236,7 +237,8 @@ export function GuruAbsensiView() {
               >
                 {kelasList.map((k) => (
                   <option key={k.kelasId} value={k.kelasId}>
-                    {k.namaKelas} ({k.jumlahSiswa} siswa)
+                    {k.jenjang} - {k.namaKelas}
+                    {k.jenisKelamin === "LAKI_LAKI" ? " (Ikhwan)" : k.jenisKelamin === "PEREMPUAN" ? " (Akhwat)" : ""} ({k.jumlahSiswa} siswa)
                   </option>
                 ))}
               </select>

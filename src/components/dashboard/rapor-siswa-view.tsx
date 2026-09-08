@@ -3,7 +3,7 @@
 import * as React from "react"
 import { getRaporSiswa, getRaporAnak } from "@/actions/rapor"
 import { getDaftarPeriodeAjaran } from "@/actions/periode-ajaran"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
 import Image from "next/image"
 import { Loader2 } from "lucide-react"

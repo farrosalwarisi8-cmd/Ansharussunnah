@@ -63,17 +63,32 @@ export const getCurrentUser = cache(async (): Promise<UserWithRelations | null> 
  * Nilai ini SELALU ditimpa middleware dari getUser() yang trusted pada route
  * yang dilindungi. Mengembalikan null bila tidak tersedia (mis. route publik
  * yang di-short-circuit sebelum middleware memverifikasi).
+ *
+ * Defense-in-depth: nilai header DIPERIKSA formatnya (UUID Supabase) sebelum
+ * dipercaya. Header `x-opencode-auth-user-id` adalah header internal yang
+ * boleh dikirim klien; jejak eksploitasi lama (header tidak dihapus pada route
+ * publik) membuat pemeriksaan ini menjamin nilai yang ramah tidak bisa
+ * disalahgunakan sebagai identitas pengguna. Nilai non-UUID → dianggap tidak
+ * ada, sehingga getCurrentUser akan turun ke getUser() yang trusted.
  */
 async function getAuthUserIdFromMiddleware(): Promise<string | null> {
   try {
     const headerStore = await headers()
     // Next.js dapat men-prefix header middleware dengan 'x-middleware-' saat
     // dibaca dari Server Component; cek kedua bentuk demi robust.
-    return (
+    const raw =
       headerStore.get("x-opencode-auth-user-id") ??
       headerStore.get("x-middleware-opencode-auth-user-id") ??
       null
-    )
+
+    if (!raw) return null
+
+    // Supabase auth user.id selalu berbentuk UUID v4.
+    const UUID_RE =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    if (!UUID_RE.test(raw)) return null
+
+    return raw
   } catch {
     return null
   }

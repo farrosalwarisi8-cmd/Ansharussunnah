@@ -3,7 +3,8 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireGuru, requireGuruAdmin } from "@/lib/auth"
+import { requireGuruAdmin } from "@/lib/auth"
+import { verifyGuruAksesKelas } from "@/lib/guru-auth"
 import {
   promosiSiswaMassalSchema,
   type PromosiSiswaMassalValues,
@@ -46,10 +47,11 @@ export async function promosiSiswaMassal(
       return { success: false, message: "Periode ajaran tidak ditemukan" }
     }
 
-    // Validasi semua kelasBaruId exist
+    // Validasi semua kelasBaruId exist (ikutkan okupansi untuk cek kapasitas)
     const kelasBaruIds = [...new Set(mapping.map((m) => m.kelasBaruId))]
     const kelasBaruList = await prisma.kelas.findMany({
       where: { id: { in: kelasBaruIds } },
+      include: { _count: { select: { siswa: true } } },
     })
 
     if (kelasBaruList.length !== kelasBaruIds.length) {
@@ -99,8 +101,11 @@ export async function promosiSiswaMassal(
 
     // --- Fase 1: Pre-validasi & siapkan data ---
     const siswaMap = new Map(siswaList.map((s) => [s.id, s]))
+    const kelasBaruMap = new Map(kelasBaruList.map((k) => [k.id, k]))
     const validItems: { siswaId: string; kelasBaruId: string }[] = []
     const kelasAsalMap = new Map<string, string | null>() // siswaId → kelasAsalId
+    // Rencana penempatan per kelas tujuan (digunakan untuk cek kapasitas)
+    const rencanaPenempatan = new Map<string, number>() // kelasBaruId → jumlah siswa
 
     for (const item of mapping) {
       const siswa = siswaMap.get(item.siswaId)
@@ -109,6 +114,35 @@ export async function promosiSiswaMassal(
         console.error(`Siswa ${item.siswaId} tidak ditemukan, dilewati`)
         continue
       }
+      const kelasBaru = kelasBaruMap.get(item.kelasBaruId)
+      // Cegah penempatan ke kelas dengan gender berbeda (akhwat/ikhwan terpisah).
+      // Kelas campuran (jenisKelamin null) menerima semua gender.
+      if (
+        kelasBaru?.jenisKelamin &&
+        siswa.jenisKelamin &&
+        kelasBaru.jenisKelamin !== siswa.jenisKelamin
+      ) {
+        totalGagal++
+        console.error(
+          `Siswa ${item.siswaId} (${siswa.jenisKelamin}) tidak cocok dengan kelas tujuan ${item.kelasBaruId} (${kelasBaru.jenisKelamin}), dilewati`
+        )
+        continue
+      }
+      // Cegah overkapasitas: temuan sebelumnya tidak boleh melampaui kuota
+      // kelas tujuan (termasuk siswa yang memang sudah berada di sana).
+      const jumlahRencana = (rencanaPenempatan.get(item.kelasBaruId) || 0) + 1
+      if (
+        kelasBaru?.kapasitas &&
+        kelasBaru.kapasitas > 0 &&
+        kelasBaru._count.siswa + jumlahRencana > kelasBaru.kapasitas
+      ) {
+        totalGagal++
+        console.error(
+          `Kelas tujuan ${item.kelasBaruId} sudah penuh (${kelasBaru._count.siswa}/${kelasBaru.kapasitas}), siswa ${item.siswaId} dilewati`
+        )
+        continue
+      }
+      rencanaPenempatan.set(item.kelasBaruId, jumlahRencana)
       validItems.push(item)
       kelasAsalMap.set(item.siswaId, siswa.kelasId)
     }
@@ -117,16 +151,18 @@ export async function promosiSiswaMassal(
     if (validItems.length > 0) {
       await prisma.$transaction(
         async (tx) => {
-          // Batch 1: Simpan histori kelas asal (riwayat sebelum promosi)
-          // Hanya siswa yang punya kelas asal perlu disimpan riwayatnya
+          // Batch 1: Simpan histori kelas siswa pada periode tujuan.
+          // - kelasId = kelas baru yang dihuni selama periode tujuan.
+          // - kelasAsalId = kelas sebelum promosi (nullable — kosong jika siswa
+          //   tidak punya kelas asal tercatat, mis. siswa baru).
           const riwayatData = validItems
             .map((item) => ({
               siswaId: item.siswaId,
-              kelasId: kelasAsalMap.get(item.siswaId)!, // Kelas asal (sebelum promosi)
+              kelasId: item.kelasBaruId,
               periodeAjaranId,
-              kelasAsalId: kelasAsalMap.get(item.siswaId)!,
+              kelasAsalId: kelasAsalMap.get(item.siswaId) ?? null,
             }))
-            .filter((item) => item.kelasId) // Filter siswa tanpa kelas asal
+            .filter((item) => item.kelasAsalId) // Filter siswa tanpa kelas asal
 
           if (riwayatData.length > 0) {
             // skipDuplicates: true — jika riwayat sudah ada untuk periode ini,
@@ -146,7 +182,24 @@ export async function promosiSiswaMassal(
             grupPerKelas.set(item.kelasBaruId, existing)
           }
 
+          // Otoritatif di dalam transaction: pantau kuota ulang agar dua
+          // promosi yang berjalan bersamaan tidak mengisi kelas melebihi
+          // kapasitas (race window). Gagal = seluruh batch dibatalkan.
           for (const [kelasBaruId, siswaIds] of grupPerKelas) {
+            const kelasTx = await tx.kelas.findUnique({
+              where: { id: kelasBaruId },
+              include: { _count: { select: { siswa: true } } },
+            })
+            if (
+              kelasTx &&
+              kelasTx.kapasitas > 0 &&
+              kelasTx._count.siswa + siswaIds.length > kelasTx.kapasitas
+            ) {
+              throw new Error(
+                `Kelas "${kelasTx.nama}" sudah penuh (${kelasTx._count.siswa}/${kelasTx.kapasitas}). Tidak dapat menempatkan ${siswaIds.length} siswa.`
+              )
+            }
+
             await tx.siswa.updateMany({
               where: { id: { in: siswaIds } },
               data: { kelasId: kelasBaruId },
@@ -167,6 +220,7 @@ export async function promosiSiswaMassal(
     }
 
     revalidatePath("/dashboard/guru/kenaikan-kelas")
+    revalidatePath("/dashboard/siswa")
     return {
       success: true,
       message: `Promosi selesai. Berhasil: ${totalBerhasil} siswa, Gagal: ${totalGagal} siswa`,
@@ -193,7 +247,7 @@ export async function getSiswaUntukPromosi(
   kelasId: string
 ): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await verifyGuruAksesKelas(kelasId)
 
     const kelas = await prisma.kelas.findUnique({
       where: { id: kelasId },
@@ -219,6 +273,7 @@ export async function getSiswaUntukPromosi(
             id: true,
             nama: true,
             kapasitas: true,
+            jenisKelamin: true,
             _count: { select: { siswa: true } },
           },
         },
@@ -240,6 +295,7 @@ export async function getSiswaUntukPromosi(
           id: k.id,
           nama: k.nama,
           jenjang: jenjangBerikutnya.nama,
+          jenisKelamin: k.jenisKelamin,
           terisi: k._count.siswa,
           kapasitas: k.kapasitas,
           sisaKuota: k.kapasitas - k._count.siswa,
@@ -250,20 +306,31 @@ export async function getSiswaUntukPromosi(
     const formatted = siswaList.map((siswa) => {
       // Rekomendasi: kelas dengan nama mirip di jenjang berikutnya
       // Contoh: "7A" → cari "8A" di jenjang berikutnya
+      // Utamakan kelas dengan jenis kelamin yang sama (akhwat/ikhwan terpisah).
       let rekomendasiKelasId: string | null = null
       if (kelasTujuan.length > 0) {
         const namaAsal = kelas.nama
         const suffixAsal = namaAsal.replace(/\d+/, "") // Ambil suffix huruf, contoh: "A" dari "7A"
-        const rekomendasi = kelasTujuan.find(
-          (k) => k.nama.endsWith(suffixAsal) && k.sisaKuota > 0
+        const kandidat = kelasTujuan.filter((k) => k.sisaKuota > 0)
+        const kandidatSuffix = kandidat.filter((k) => k.nama.endsWith(suffixAsal))
+        const kandidatGenderSama = kandidat.filter(
+          (k) => !k.jenisKelamin || siswa.jenisKelamin === k.jenisKelamin
         )
-        rekomendasiKelasId = rekomendasi?.id || kelasTujuan[0]?.id || null
+        const rekomendasi =
+          kandidatSuffix.find(
+            (k) => !k.jenisKelamin || siswa.jenisKelamin === k.jenisKelamin
+          ) ||
+          kandidatGenderSama[0] ||
+          kandidatSuffix[0] ||
+          null
+        rekomendasiKelasId = rekomendasi?.id ?? null
       }
 
       return {
         siswaId: siswa.id,
         nama: siswa.user.nama,
         nisn: siswa.nisn,
+        jenisKelamin: siswa.jenisKelamin,
         kelasAsal: kelas.nama,
         rekomendasiKelasId,
       }
@@ -306,7 +373,20 @@ export async function getRiwayatKelasSiswa(
   siswaId: string
 ): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    // Batasi akses: hanya guru yang mengajar/menjadi wali di kelas siswa
+    // (atau admin akademik) yang boleh melihat riwayat kelas siswa tersebut.
+    const siswa = await prisma.siswa.findUnique({
+      where: { id: siswaId },
+      include: { kelas: { select: { id: true } } },
+    })
+    if (!siswa) {
+      return { success: false, message: "Siswa tidak ditemukan" }
+    }
+    if (!siswa.kelasId) {
+      await requireGuruAdmin()
+    } else {
+      await verifyGuruAksesKelas(siswa.kelasId)
+    }
 
     const riwayatList = await prisma.riwayatKelasSiswa.findMany({
       where: { siswaId },

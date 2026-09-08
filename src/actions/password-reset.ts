@@ -248,8 +248,11 @@ export async function resetPassword(
         data: { digunakan: true },
       })
 
-      await tx.user.update({
-        where: { id: user.id },
+      // Akun multi-role berbagi authId yang sama (mis. SISWA + ORANG_TUA).
+      // Perbarui SEMUA record dengan authId tersebut agar flag
+      // mustChangePassword & password cadangan konsisten di tiap role.
+      await tx.user.updateMany({
+        where: { authId: user.authId },
         data: {
           mustChangePassword: false,
           lastPasswordChange: new Date(),

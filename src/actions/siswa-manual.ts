@@ -8,6 +8,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
 import { encryptSecret, decryptSecret } from "@/lib/crypto"
 import { siswaManualSchema, type SiswaManualFormValues, updateAkunSiswaSchema, type UpdateAkunSiswaValues } from "@/lib/validations/siswa-manual"
+import { siswaCocokKelas } from "@/lib/guru-kelas-gender"
 import { deriveUniqueUsername } from "@/lib/username"
 import type { ActionResponse } from "@/types"
 import { Role } from "@prisma/client"
@@ -46,6 +47,22 @@ export async function createSiswaManual(
 
     const data = validated.data
     const supabaseAdmin = createSupabaseAdmin()
+
+    // ✅ Validasi kecocokan gender siswa dengan kelas tujuan
+    const kelas = await prisma.kelas.findUnique({
+      where: { id: data.kelasId },
+      select: { id: true, nama: true, jenisKelamin: true },
+    })
+    if (!kelas) {
+      return { success: false, message: "Kelas tujuan tidak ditemukan" }
+    }
+    if (!siswaCocokKelas(data.jenisKelamin, kelas.jenisKelamin)) {
+      const labelKelas = kelas.jenisKelamin === "LAKI_LAKI" ? "Ikhwan" : "Akhwat"
+      return {
+        success: false,
+        message: `Kelas "${kelas.nama}" adalah kelas khusus ${labelKelas} dan tidak cocok untuk siswa yang berjenis kelamin ${data.jenisKelamin === "LAKI_LAKI" ? "laki-laki" : "perempuan"}.`,
+      }
+    }
 
     // Generate email siswa jika tidak diisi
     const cleanNama = data.namaLengkap
@@ -484,9 +501,9 @@ type SiswaManualListItem = {
   nama: string
   email: string
   username: string | null
-  passwordPlain: string | null
   nisn: string | null
   nis: string | null
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   kelasNama: string | null
   jenjangNama: string | null
   aktif: boolean
@@ -515,7 +532,6 @@ export async function getDaftarSiswaManual(): Promise<ActionResponse<SiswaManual
             nama: true,
             email: true,
             username: true,
-            passwordPlain: true,
             aktif: true,
             createdAt: true,
           },
@@ -553,9 +569,9 @@ export async function getDaftarSiswaManual(): Promise<ActionResponse<SiswaManual
       nama: s.user.nama,
       email: s.user.email,
       username: s.user.username,
-      passwordPlain: decryptSecret(s.user.passwordPlain),
       nisn: s.nisn,
       nis: s.nis,
+      jenisKelamin: s.jenisKelamin,
       kelasNama: s.kelas?.nama || null,
       jenjangNama: s.kelas?.jenjang?.nama || null,
       aktif: s.user.aktif,
@@ -578,6 +594,44 @@ export async function getDaftarSiswaManual(): Promise<ActionResponse<SiswaManual
     return {
       success: false,
       message: error instanceof Error ? error.message : "Gagal memuat daftar siswa",
+    }
+  }
+}
+
+/**
+ * Mengambil password siswa SAAT INI secara on-demand (per-siswa).
+ * Dipisah dari getDaftarSiswaManual agar password tidak dikirim massal
+ * ke klien di setiap pemuatan daftar. Hanya dipanggil saat admin/ guru
+ * membuka dialog ubah akun dan membutuhkan password untuk dilihat.
+ */
+export async function getPasswordSiswaSaatIni(
+  siswaUserId: string
+): Promise<ActionResponse<{ password: string | null }>> {
+  try {
+    await requireGuruAdmin()
+
+    if (!siswaUserId) {
+      return { success: false, message: "ID siswa tidak valid" }
+    }
+
+    const siswaUser = await prisma.user.findUnique({
+      where: { id: siswaUserId },
+      include: { siswa: { select: { id: true } } },
+    })
+
+    if (!siswaUser || !siswaUser.siswa) {
+      return { success: false, message: "Akun siswa tidak ditemukan" }
+    }
+
+    const password = siswaUser.passwordPlain
+      ? decryptSecret(siswaUser.passwordPlain)
+      : null
+
+    return { success: true, message: "Password berhasil diambil", data: { password } }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal mengambil password siswa",
     }
   }
 }
@@ -756,6 +810,7 @@ type KelasListItem = {
   id: string
   nama: string
   jenjangNama: string
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   kapasitas: number
   jumlahSiswa: number
 }
@@ -780,6 +835,7 @@ export async function getKelasList(): Promise<ActionResponse<KelasListItem[]>> {
       id: k.id,
       nama: k.nama,
       jenjangNama: k.jenjang.nama,
+      jenisKelamin: k.jenisKelamin,
       kapasitas: k.kapasitas,
       jumlahSiswa: k._count.siswa,
     }))

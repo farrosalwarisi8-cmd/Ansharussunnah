@@ -8,6 +8,7 @@ import {
   assignGuruKeKelasSchema,
   type AssignGuruKeKelasValues,
 } from "@/lib/validations/guru"
+import { guruCocokKelas } from "@/lib/guru-kelas-gender"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
 
@@ -46,6 +47,17 @@ export async function assignGuruKeKelas(
     const kelas = await prisma.kelas.findUnique({ where: { id: kelasId } })
     if (!kelas) {
       return { success: false, message: "Kelas tidak ditemukan" }
+    }
+
+    // Cek kecocokan gender guru dengan jenis kelamin kelas
+    if (!guruCocokKelas(guru.jenisKelamin, kelas.jenisKelamin)) {
+      const labelGuru = guru.jenisKelamin === "LAKI_LAKI" ? "ikhwan" : "akhwat"
+      const labelKelas =
+        kelas.jenisKelamin === "LAKI_LAKI" ? "kelas Ikhwan" : "kelas Akhwat"
+      return {
+        success: false,
+        message: `Guru berjenis kelamin ${labelGuru} tidak dapat ditugaskan di ${labelKelas} (kelas khusus gender).`,
+      }
     }
 
     // Cek apakah kombinasi guru+kelas+mapel sudah ada
@@ -161,6 +173,7 @@ export async function getDaftarPengajarKelas(
       nama: p.guru.user.nama,
       email: p.guru.user.email,
       aktif: p.guru.user.aktif,
+      jenisKelamin: p.guru.jenisKelamin,
       mataPelajaran: {
         id: p.mataPelajaran.id,
         nama: p.mataPelajaran.nama,
@@ -218,6 +231,7 @@ export async function getDaftarKelasYangDiajarGuru(
         kelasId: k.id,
         namaKelas: k.nama,
         jenjang: k.jenjang.nama,
+        jenisKelamin: k.jenisKelamin,
         mataPelajaranId: null,
         jumlahSiswa: k._count.siswa,
       }))
@@ -260,22 +274,24 @@ export async function getDaftarKelasYangDiajarGuru(
     })
 
     const formatted = [
-      ...guruKelasList.map((gk) => ({
-        guruKelasId: gk.id,
-        kelasId: gk.kelasId,
-        namaKelas: gk.kelas.nama,
-        jenjang: gk.kelas.jenjang.nama,
-        mataPelajaranId: gk.mataPelajaranId,
-        jumlahSiswa: gk.kelas._count.siswa,
-      })),
-      ...waliKelasList.map((k) => ({
-        guruKelasId: null,
-        kelasId: k.id,
-        namaKelas: k.nama,
-        jenjang: k.jenjang.nama,
-        mataPelajaranId: null,
-        jumlahSiswa: k._count.siswa,
-      })),
+...guruKelasList.map((gk) => ({
+          guruKelasId: gk.id,
+          kelasId: gk.kelasId,
+          namaKelas: gk.kelas.nama,
+          jenjang: gk.kelas.jenjang.nama,
+          jenisKelamin: gk.kelas.jenisKelamin,
+          mataPelajaranId: gk.mataPelajaranId,
+          jumlahSiswa: gk.kelas._count.siswa,
+        })),
+        ...waliKelasList.map((k) => ({
+          guruKelasId: null,
+          kelasId: k.id,
+          namaKelas: k.nama,
+          jenjang: k.jenjang.nama,
+          jenisKelamin: k.jenisKelamin,
+          mataPelajaranId: null,
+          jumlahSiswa: k._count.siswa,
+        })),
     ]
 
     return {

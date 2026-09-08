@@ -29,7 +29,11 @@ type JenjangOption = {
   id: string
   nama: string
   urutan: number
-  kelas: Array<{ id: string; nama: string }>
+  kelas: Array<{
+    id: string
+    nama: string
+    jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
+  }>
 }
 
 export default function DaftarSiswaKeuanganPage() {
@@ -153,7 +157,10 @@ function DaftarSiswaKeuanganContent() {
               >
                 <option value="">— Semua Kelas di Jenjang Ini —</option>
                 {selectedJenjang?.kelas.map((k) => (
-                  <option key={k.id} value={k.id}>Kelas {k.nama}</option>
+                  <option key={k.id} value={k.id}>
+                    {selectedJenjang.nama} - {k.nama}
+                    {k.jenisKelamin === "LAKI_LAKI" ? " (Ikhwan)" : k.jenisKelamin === "PEREMPUAN" ? " (Akhwat)" : ""}
+                  </option>
                 ))}
               </select>
             </div>

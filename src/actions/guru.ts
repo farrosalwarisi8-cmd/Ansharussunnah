@@ -9,6 +9,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
 import { encryptSecret } from "@/lib/crypto"
 import { sendEmail, buildKredensialGuruEmail } from "@/lib/email"
+import { guruCocokKelas } from "@/lib/guru-kelas-gender"
 import {
   createAkunGuruSchema,
   updateAkunGuruSchema,
@@ -47,7 +48,7 @@ export async function createAkunGuru(
       }
     }
 
-    const { nama, email, nip, jabatan, noHp, isAdmin } = validated.data
+    const { nama, email, nip, jabatan, noHp, jenisKelamin, isAdmin } = validated.data
 
     // Cek duplikasi email untuk role yang sama
     const existingEmail = await prisma.user.findFirst({ where: { email, role: Role.GURU } })
@@ -65,6 +66,8 @@ export async function createAkunGuru(
 
     // Auto-tugaskan guru baru (non-admin) ke semua mapel aktif di semua kelas aktif,
     // agar langsung bisa memakai semua fitur (tugas, materi, ujian).
+    // Jika gender guru diisi, kelas yang ditugaskan difilter hanya yang sesuai gender
+    // (Ikhwan → kelas Ikhwan/Campuran, Akhwat → kelas Akhwat/Campuran).
     // Untuk guru admin tidak perlu — hak isAdmin sudah membuka akses semua kelas & mapel.
     let penugasanDefault: Array<{ kelasId: string; mataPelajaranId: string }> = []
     if (!isAdmin) {
@@ -75,11 +78,14 @@ export async function createAkunGuru(
         }),
         prisma.kelas.findMany({
           where: { aktif: true },
-          select: { id: true },
+          select: { id: true, jenisKelamin: true },
         }),
       ])
+      const kelasTerfilter = kelasAktif.filter((k) =>
+        guruCocokKelas(jenisKelamin ?? null, k.jenisKelamin)
+      )
       penugasanDefault = mapelAktif.flatMap((m) =>
-        kelasAktif.map((k) => ({ kelasId: k.id, mataPelajaranId: m.id }))
+        kelasTerfilter.map((k) => ({ kelasId: k.id, mataPelajaranId: m.id }))
       )
     }
 
@@ -146,6 +152,7 @@ export async function createAkunGuru(
             nip: nip || null,
             jabatan: jabatan || null,
             noHp: noHp || null,
+            jenisKelamin: jenisKelamin ?? null,
           },
         })
 
@@ -189,7 +196,7 @@ export async function createAkunGuru(
     revalidatePath("/dashboard/guru")
     const infoPenugasan =
       !isAdmin && penugasanDefault.length > 0
-        ? " Guru otomatis ditugaskan ke semua mapel aktif di semua kelas aktif."
+        ? ` Guru otomatis ditugaskan ke mapel aktif di kelas aktif yang sesuai gender guru (${jenisKelamin ? (jenisKelamin === "LAKI_LAKI" ? "Ikhwan" : "Akhwat") : "semua gender"}).`
         : ""
     return {
       success: true,
@@ -271,6 +278,7 @@ export async function updateAkunGuru(
           nip: validated.data.nip !== undefined ? validated.data.nip : undefined,
           jabatan: validated.data.jabatan !== undefined ? validated.data.jabatan : undefined,
           noHp: validated.data.noHp !== undefined ? validated.data.noHp : undefined,
+          jenisKelamin: validated.data.jenisKelamin !== undefined ? validated.data.jenisKelamin : undefined,
         },
       })
       },
@@ -435,6 +443,149 @@ export async function setGuruAdmin(
 }
 
 /**
+ * Menghapus akun guru secara permanen (hard delete).
+ * Benar-benar dihapus dari database (User + Guru + relasi yang ikut cascade)
+ * sekaligus dari Supabase Auth agar tidak bisa login lagi.
+ *
+ * Hanya bisa dipanggil oleh guru admin (requireGuruAdmin).
+ * Tidak memperbolehkan admin menghapus akun sendiri.
+ *
+ * Diblokir jika guru masih terhubung dengan data penting yang sebaiknya
+ * dipertahankan (wali kelas, catatan rapor, pembina ekskul, atau data yang
+ * ia buat). Untuk kasus seperti itu, gunakan fitur "Nonaktifkan" agar data
+ * historis tetap tersimpan.
+ */
+export async function hapusAkunGuruPermanent(
+  userId: string
+): Promise<ActionResponse> {
+  try {
+    const currentUser = await requireGuruAdmin()
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        guru: {
+          include: {
+            _count: {
+              select: {
+                waliKelas: true,
+                catatanRapor: true,
+                ekskulDibina: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            ujianDibuat: true,
+            tugasDibuat: true,
+            materiDiunggah: true,
+            absensiDiinput: true,
+            nilaiRaporDiinput: true,
+            catatanRaporDibuat: true,
+            transaksiDibuat: true,
+            transaksiDibatalkan: true,
+            pembayaranDikonfirmasi: true,
+            verifikasiPendaftaran: true,
+          },
+        },
+      },
+    })
+
+    if (!user || user.role !== Role.GURU) {
+      return { success: false, message: "Akun guru tidak ditemukan" }
+    }
+
+    if (!user.guru) {
+      return { success: false, message: "Data guru tidak ditemukan" }
+    }
+
+    if (currentUser.id === userId) {
+      return {
+        success: false,
+        message: "Tidak dapat menghapus akun diri sendiri",
+      }
+    }
+
+    const permintaanHapusDitolak: string[] = []
+
+    if (user.guru._count.waliKelas > 0) {
+      permintaanHapusDitolak.push("menjadi wali kelas")
+    }
+    if (user.guru._count.catatanRapor > 0) {
+      permintaanHapusDitolak.push("memiliki catatan rapor")
+    }
+    if (user.guru._count.ekskulDibina > 0) {
+      permintaanHapusDitolak.push("membina ekstrakurikuler")
+    }
+    if (user._count.ujianDibuat > 0) {
+      permintaanHapusDitolak.push("membuat ujian")
+    }
+    if (user._count.tugasDibuat > 0) {
+      permintaanHapusDitolak.push("membuat tugas")
+    }
+    if (user._count.materiDiunggah > 0) {
+      permintaanHapusDitolak.push("mengunggah materi")
+    }
+    if (user._count.absensiDiinput > 0) {
+      permintaanHapusDitolak.push("mengisi absensi")
+    }
+    if (user._count.nilaiRaporDiinput > 0) {
+      permintaanHapusDitolak.push("menginput nilai rapor")
+    }
+    if (user._count.catatanRaporDibuat > 0) {
+      permintaanHapusDitolak.push("menginput catatan rapor")
+    }
+    if (user._count.transaksiDibuat > 0 || user._count.transaksiDibatalkan > 0) {
+      permintaanHapusDitolak.push("memproses transaksi keuangan")
+    }
+    if (user._count.pembayaranDikonfirmasi > 0) {
+      permintaanHapusDitolak.push("mengkonfirmasi pembayaran")
+    }
+    if (user._count.verifikasiPendaftaran > 0) {
+      permintaanHapusDitolak.push("memverifikasi pendaftaran")
+    }
+
+    if (permintaanHapusDitolak.length > 0) {
+      return {
+        success: false,
+        message: `Tidak dapat menghapus guru "${user.nama}" secara permanen karena masih memiliki riwayat: ${permintaanHapusDitolak.join(", ")}. Gunakan fitur "Nonaktifkan" untuk menonaktifkan akun tanpa menghapus data historis.`,
+      }
+    }
+
+    // Hapus Supabase Auth hanya jika authId tidak dipakai role lain (multi-role)
+    const otherUsersWithAuth = await prisma.user.count({
+      where: { authId: user.authId, id: { not: user.id } },
+    })
+
+    if (otherUsersWithAuth === 0) {
+      const supabaseAdmin = createSupabaseAdmin()
+      const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
+        user.authId
+      )
+      if (authError) {
+        console.error("Supabase auth delete user error:", authError)
+      }
+    }
+
+    // Hapus User -> cascade ke Guru, GuruKelas, dll
+    await prisma.user.delete({ where: { id: user.id } })
+
+    revalidatePath("/dashboard/guru")
+    return {
+      success: true,
+      message: `Akun guru "${user.nama}" berhasil dihapus secara permanen.`,
+    }
+  } catch (error: unknown) {
+    console.error("Error hapus guru:", error)
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal menghapus akun guru",
+    }
+  }
+}
+
+/**
  * Mengambil daftar semua guru beserta info akun.
  */
 export async function getDaftarGuru(): Promise<ActionResponse> {
@@ -475,6 +626,7 @@ export async function getDaftarGuru(): Promise<ActionResponse> {
       nip: g.nip,
       jabatan: g.jabatan,
       noHp: g.noHp,
+      jenisKelamin: g.jenisKelamin,
       aktif: g.user.aktif,
       isAdmin: g.user.isAdmin,
       mustChangePassword: g.user.mustChangePassword,
