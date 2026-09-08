@@ -7,20 +7,27 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 function createPrismaClient() {
-  // Tambahkan pool config ke DATABASE_URL dengan aman
-  // Default: connection_limit=10, pool_timeout=20
+  // Konfigurasi pool yang tepat untuk serverless (Vercel):
+  // - Lewat transaction pooler (Supabase `pgbouncer=true` / Neon `-pooler`):
+  //   1 koneksi per instance. connection_limit tinggi justru memicu
+  //   P2024 (pool exhaustion) saat banyak lambda berjalan bersamaan.
+  // - Koneksi langsung tanpa pooler: batasi 5 agar aman untuk banyak request.
   const dbUrl = process.env.DATABASE_URL ?? ""
   let datasourceUrl: string | undefined
 
   try {
     const url = new URL(dbUrl)
     const params = url.searchParams
+
     if (!params.has("connection_limit")) {
-      params.set("connection_limit", "10")
+      const viaPooler = params.get("pgbouncer") === "true"
+      params.set("connection_limit", viaPooler ? "1" : "5")
     }
     if (!params.has("pool_timeout")) {
-      params.set("pool_timeout", "20")
+      // Fail fast ketimbang menggantung 20s saat pool penuh.
+      params.set("pool_timeout", "5")
     }
+
     datasourceUrl = url.toString()
   } catch {
     // URL tidak valid atau kosong — biarkan Prisma handle sendiri
