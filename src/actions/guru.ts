@@ -10,6 +10,7 @@ import { generateSecurePassword } from "@/lib/password"
 import { encryptSecret } from "@/lib/crypto"
 import { sendEmail, buildKredensialGuruEmail } from "@/lib/email"
 import { guruCocokKelas } from "@/lib/guru-kelas-gender"
+import { toUserFriendlyError } from "@/lib/prisma-error"
 import {
   createAkunGuruSchema,
   updateAkunGuruSchema,
@@ -204,9 +205,10 @@ export async function createAkunGuru(
       data: { userId: result.userId },
     }
   } catch (error: unknown) {
+    console.error("Error createAkunGuru:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal membuat akun guru",
+      message: toUserFriendlyError(error, "Gagal membuat akun guru. Silakan coba lagi atau hubungi admin."),
     }
   }
 }

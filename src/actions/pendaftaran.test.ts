@@ -11,6 +11,7 @@ const {
   mockPendaftaranFindFirst,
   mockJenjangFindUnique,
   mockKelasFindFirst,
+  mockSiswaFindUnique,
   mockGenerateNomorPendaftaran,
   mockRateLimitAsync,
   mockGetClientIp,
@@ -19,6 +20,7 @@ const {
   mockPendaftaranFindFirst: vi.fn(),
   mockJenjangFindUnique: vi.fn(),
   mockKelasFindFirst: vi.fn(),
+  mockSiswaFindUnique: vi.fn(),
   mockGenerateNomorPendaftaran: vi.fn(),
   mockRateLimitAsync: vi.fn(),
   mockGetClientIp: vi.fn(),
@@ -35,6 +37,9 @@ vi.mock("@/lib/prisma", () => ({
     },
     kelas: {
       findFirst: mockKelasFindFirst,
+    },
+    siswa: {
+      findUnique: mockSiswaFindUnique,
     },
   },
 }))
@@ -135,6 +140,9 @@ beforeEach(() => {
 
   // Default: tidak ada pendaftaran duplikat aktif
   mockPendaftaranFindFirst.mockResolvedValue(null)
+
+  // Default: tidak ada siswa yang memakai NISN
+  mockSiswaFindUnique.mockResolvedValue(null)
 
   // Default: create berhasil
   mockPendaftaranCreate.mockResolvedValue(mockPendaftaranCreated)
@@ -385,7 +393,7 @@ describe("createPendaftaran — Validasi Gagal", () => {
     expect(mockPendaftaranCreate).not.toHaveBeenCalled()
   })
 
-  it("harus MENOLAK jika kelasTujuanId tidak dikirim (kini wajib)", async () => {
+  it("harus lolos tanpa kelasTujuanId (kelas opsional — ditentukan panitia saat verifikasi)", async () => {
     const withoutKelas: Record<string, string> = {}
     for (const [k, v] of Object.entries(baseData)) {
       if (k !== "kelasTujuanId") withoutKelas[k] = v
@@ -393,10 +401,9 @@ describe("createPendaftaran — Validasi Gagal", () => {
     const formData = makeFormData(withoutKelas)
     const result = await createPendaftaran(formData)
 
-    expect(result.success).toBe(false)
-    expect(result.message).toBe("Data pendaftaran tidak valid")
-    expect(result.errors?.kelasTujuanId).toBeDefined()
-    expect(mockPendaftaranCreate).not.toHaveBeenCalled()
+    expect(result.success).toBe(true)
+    const createCall = mockPendaftaranCreate.mock.calls[0][0]
+    expect(createCall.data.kelasTujuanId).toBeUndefined()
   })
 
   it("harus MENOLAK agama jika opsi tidak valid", async () => {
@@ -538,6 +545,79 @@ describe("createPendaftaran — Duplikat Aktif", () => {
       equals: "budi@example.com",
       mode: "insensitive",
     })
+  })
+})
+
+// ========================================================
+// 3cb. Duplikat NISN
+// ========================================================
+
+describe("createPendaftaran — Duplikat NISN", () => {
+  it("harus menolak jika NISN sudah dipakai siswa yang sudah diterima", async () => {
+    mockSiswaFindUnique.mockResolvedValue({
+      id: "siswa-1",
+      user: { nama: "Ahmad Fauzi" },
+    })
+
+    const formData = makeFormData({ ...baseData, nisn: "0081234567" })
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("NISN")
+    expect(result.message).toContain("Ahmad Fauzi")
+    expect(mockPendaftaranCreate).not.toHaveBeenCalled()
+  })
+
+  it("harus menolak jika NISN sudah dipakai pendaftaran aktif lain (MENUNGGU_VERIFIKASI)", async () => {
+    // Email-dup check → null; NISN pendaftaran check → ada pendaftaran aktif lain
+    mockPendaftaranFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: "pend-lain",
+        nomorPendaftaran: "REG-2026-00009",
+        status: "MENUNGGU_VERIFIKASI",
+        namaLengkap: "Siswa Lain",
+      })
+
+    const formData = makeFormData({ ...baseData, nisn: "0081234567" })
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("NISN")
+    expect(result.message).toContain("REG-2026-00009")
+    expect(result.message).toContain("diverifikasi admin")
+    expect(mockPendaftaranCreate).not.toHaveBeenCalled()
+  })
+
+  it("harus menolak jika NISN sudah dipakai pendaftaran aktif lain (MENUNGGU_PEMBAYARAN)", async () => {
+    mockPendaftaranFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: "pend-lain",
+        nomorPendaftaran: "REG-2026-00010",
+        status: "MENUNGGU_PEMBAYARAN",
+        namaLengkap: "Siswa Lain",
+      })
+
+    const formData = makeFormData({ ...baseData, nisn: "0081234567" })
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("NISN")
+    expect(result.message).toContain("REG-2026-00010")
+    expect(result.message).toContain("menunggu pembayaran")
+    expect(mockPendaftaranCreate).not.toHaveBeenCalled()
+  })
+
+  it("harus menerima jika NISN belum dipakai siapa pun", async () => {
+    mockSiswaFindUnique.mockResolvedValue(null)
+    mockPendaftaranFindFirst.mockResolvedValue(null)
+
+    const formData = makeFormData({ ...baseData, nisn: "0081234567" })
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(true)
+    expect(mockPendaftaranCreate).toHaveBeenCalledOnce()
   })
 })
 

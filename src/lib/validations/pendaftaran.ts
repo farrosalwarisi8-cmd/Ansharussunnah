@@ -90,9 +90,10 @@ export const pendaftaranSchema = z
     jenjangTujuanId: z
       .string()
       .min(1, "Pilih jenjang tujuan"),
-    kelasTujuanId: z
-      .string()
-      .min(1, "Pilih kelas tujuan"),
+    // kelasTujuanId bersifat opsional: bila jenjang tujuan tidak memiliki kelas
+    // yang sesuai jenis kelamin, pendaftar tetap bisa melanjutkan dan kelas akan
+    // ditentukan panitia saat verifikasi pendaftaran.
+    kelasTujuanId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     const kewarganegaraan = data.kewarganegaraan || "WNI"
@@ -180,6 +181,10 @@ export const verifikasiPendaftaranSchema = z.object({
   status: z.enum(["DITERIMA", "DITOLAK"]),
   catatanAdmin: z.string().optional(),
   alasanPenolakan: z.string().optional(),
+  // Override kelas tujuan saat menerima pendaftaran (opsional). Dipakai bila
+  // pendaftar mendaftar tanpa kelas (tidak ada kelas yang cocok gender) sehingga
+  // panitia dapat langsung menentukan kelas saat approve.
+  kelasTujuanId: z.string().min(1).optional(),
 })
 
 export type VerifikasiPendaftaranValues = z.infer<typeof verifikasiPendaftaranSchema>

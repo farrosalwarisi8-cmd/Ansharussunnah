@@ -94,7 +94,7 @@ export type JenjangWithKelas = Prisma.JenjangGetPayload<{
 
 export type PendaftaranWithRelations = Prisma.PendaftaranGetPayload<{
   include: {
-    jenjangTujuan: true
+    jenjangTujuan: { include: { kelas: true } }
     kelasTujuan: true
     buktiTransfer: true
     diverifikasiOleh: true

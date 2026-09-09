@@ -31,6 +31,7 @@ import {
 import type { ActionResponse } from "@/types"
 import { Role, StatusTagihan, StatusPembayaran, StatusTransaksi, TipeTransaksi } from "@prisma/client"
 import { Prisma } from "@prisma/client"
+import { toUserFriendlyError } from "@/lib/prisma-error"
 import { revalidatePath } from "next/cache"
 
 const BULAN_NAMES = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
@@ -1271,9 +1272,10 @@ export async function getRekapSppPerKelas(
       },
     }
   } catch (error: unknown) {
+    console.error("Error getRekapSppPerKelas:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menghitung rekap SPP per kelas",
+      message: toUserFriendlyError(error, "Gagal menghitung rekap SPP per kelas. Silakan coba lagi atau hubungi admin."),
     }
   }
 }
@@ -1421,9 +1423,10 @@ export async function getRekapSppPerJenjang(
       },
     }
   } catch (error: unknown) {
+    console.error("Error getRekapSppPerJenjang:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menghitung rekap SPP per jenjang",
+      message: toUserFriendlyError(error, "Gagal menghitung rekap SPP per jenjang. Silakan coba lagi atau hubungi admin."),
     }
   }
 }

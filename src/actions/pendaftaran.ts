@@ -7,6 +7,7 @@ import { generateNomorPendaftaran } from "@/lib/registration-number"
 import { siswaCocokKelas } from "@/lib/guru-kelas-gender"
 import { pendaftaranSchema } from "@/lib/validations/pendaftaran"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
+import { toUserFriendlyError } from "@/lib/prisma-error"
 import type { ActionResponse } from "@/types"
 import { Prisma, StatusPendaftaran } from "@prisma/client"
 
@@ -141,6 +142,52 @@ export async function createPendaftaran(
       return { success: false, message: pesan }
     }
 
+    // ✅ Validasi NISN: pastikan belum dipakai siswa yang sudah diterima ATAU
+    // pendaftaran aktif lain. Kolom nisn di model Siswa @unique — tanpa cek ini,
+    // error P2002 muncul mentah di layar (biasanya saat admin approve, tetapi
+    // lebih baik dicek sejak awal agar calon pendaftar langsung tahu).
+    // Satu NISN harus unik milik SATU siswa: tidak boleh ada dua pendaftaran
+    // aktif (MENUNGGU_PEMBAYARAN/MENUNGGU_VERIFIKASI) yang memakai NISN sama.
+    if (data.nisn) {
+      const [nisnSiswa, nisnPendaftaran] = await Promise.all([
+        prisma.siswa.findUnique({
+          where: { nisn: data.nisn },
+          select: { id: true, user: { select: { nama: true } } },
+        }),
+        prisma.pendaftaran.findFirst({
+          where: {
+            nisn: data.nisn,
+            status: {
+              in: [
+                StatusPendaftaran.MENUNGGU_PEMBAYARAN,
+                StatusPendaftaran.MENUNGGU_VERIFIKASI,
+              ],
+            },
+          },
+          select: {
+            id: true,
+            nomorPendaftaran: true,
+            status: true,
+            namaLengkap: true,
+          },
+        }),
+      ])
+
+      if (nisnSiswa) {
+        return {
+          success: false,
+          message: `NISN "${data.nisn}" sudah terdaftar atas nama ${nisnSiswa.user.nama}. Mohon gunakan NISN yang berbeda atau hubungi admin sekolah.`,
+        }
+      }
+
+      if (nisnPendaftaran) {
+        return {
+          success: false,
+          message: `NISN "${data.nisn}" sudah digunakan pada pendaftaran lain (Nomor: ${nisnPendaftaran.nomorPendaftaran}, atas nama ${nisnPendaftaran.namaLengkap}) yang sedang ${nisnPendaftaran.status === StatusPendaftaran.MENUNGGU_VERIFIKASI ? "diverifikasi admin" : "menunggu pembayaran"}. Satu NISN hanya boleh untuk satu calon siswa. Mohon periksa kembali.`,
+        }
+      }
+    }
+
     const dokKK = formData.get("dokKartuKeluarga") as string | null
     const dokAkte = formData.get("dokAkteLahir") as string | null
     const dokFoto = formData.get("dokFoto") as string | null
@@ -223,7 +270,7 @@ export async function createPendaftaran(
     console.error("Error createPendaftaran:", error)
     return {
       success: false,
-      message: "Gagal memproses pendaftaran baru.",
+      message: toUserFriendlyError(error, "Gagal memproses pendaftaran baru. Silakan coba lagi."),
     }
   }
 }

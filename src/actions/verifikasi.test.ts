@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const {
   mockPrismaTransaction,
   mockPendaftaranFindUnique,
+  mockPendaftaranFindFirst,
   mockPendaftaranUpdate,
   mockDeleteUser,
   mockCreateUser,
@@ -20,6 +21,7 @@ const {
 } = vi.hoisted(() => ({
   mockPrismaTransaction: vi.fn(),
   mockPendaftaranFindUnique: vi.fn(),
+  mockPendaftaranFindFirst: vi.fn().mockResolvedValue(null),
   mockPendaftaranUpdate: vi.fn(),
   mockDeleteUser: vi.fn().mockResolvedValue({ error: null }),
   mockCreateUser: vi.fn(),
@@ -230,6 +232,7 @@ function setupTransactionMock() {
           findUnique: mockParentStudentFindUnique,
         },
         pendaftaran: {
+          findFirst: mockPendaftaranFindFirst,
           update: mockPendaftaranUpdate,
         },
         buktiTransferPendaftaran: {
@@ -278,7 +281,11 @@ describe("verifikasiPendaftaran — EMIS Fields Copy (Field Lengkap)", () => {
       // user.create untuk siswa
       .mockResolvedValueOnce({ id: "user-siswa-1", role: "SISWA" })
     mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-1" })
-    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-1" })
+    // Call #1: cek NISN duplikat (harus null / tidak dipakai)
+    // Call #2: ambil siswaRecord di dalam transaction
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: "siswa-1" })
 
     const result = await verifikasiPendaftaran({
       pendaftaranId: "pend-1",
@@ -399,6 +406,118 @@ describe("verifikasiPendaftaran — EMIS Fields Copy (Field Lengkap)", () => {
     expect(siswaData.agama).toBe("Islam")
     expect(siswaData.namaAyahKandung).toBe("Mohammed Al-Farisi")
     expect(siswaData.namaIbuKandung).toBe("Fatimah Al-Farisi")
+  })
+})
+
+// ========================================================
+// 1b. Override Kelas Tujuan — pendaftar tanpa kelas
+// ========================================================
+
+describe("verifikasiPendaftaran — Override Kelas Tujuan (pendaftar tanpa kelas)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("harus memakai override kelasTujuanId saat menerima pendaftaran yang mendaftar tanpa kelas", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranMinimal)
+    setupAuthMocks("ortumin@example.com")
+    setupTransactionMock()
+
+    mockUserFindUnique.mockResolvedValueOnce(null)
+    mockUserCreate
+      .mockResolvedValueOnce({ id: "user-ortu-4", role: "ORANG_TUA" })
+      .mockResolvedValueOnce({ id: "user-siswa-4", role: "SISWA" })
+    mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-4" })
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: "siswa-4" })
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-2",
+      status: "DITERIMA",
+      kelasTujuanId: "kelas-1",
+    })
+
+    expect(result.success).toBe(true)
+
+    const userCreateCalls = mockUserCreate.mock.calls
+    const siswaCreateCall = userCreateCalls.find(
+      (call) => call[0]?.data?.role === "SISWA"
+    )
+    const siswaData = siswaCreateCall![0].data.siswa.create
+    expect(siswaData.kelasId).toBe("kelas-1")
+
+    // Kelas override juga dipersist ke record pendaftaran (rekap konsisten)
+    expect(mockPendaftaranUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ kelasTujuanId: "kelas-1" }),
+      })
+    )
+  })
+
+  it("harus tetap menerima pendaftaran tanpa kelas jika override tidak dikirim", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranMinimal)
+    setupAuthMocks("ortumin@example.com")
+    setupTransactionMock()
+
+    mockUserFindUnique.mockResolvedValueOnce(null)
+    mockUserCreate
+      .mockResolvedValueOnce({ id: "user-ortu-5", role: "ORANG_TUA" })
+      .mockResolvedValueOnce({ id: "user-siswa-5", role: "SISWA" })
+    mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-5" })
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: "siswa-5" })
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-2",
+      status: "DITERIMA",
+    })
+
+    expect(result.success).toBe(true)
+
+    const userCreateCalls = mockUserCreate.mock.calls
+    const siswaCreateCall = userCreateCalls.find(
+      (call) => call[0]?.data?.role === "SISWA"
+    )
+    const siswaData = siswaCreateCall![0].data.siswa.create
+    expect(siswaData.kelasId).toBeNull()
+  })
+
+  it("harus MENOLAK override kelas yang tidak ditemukan sebelum membuat akun auth", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranMinimal)
+    mockKelasFindUnique.mockResolvedValue(null)
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-2",
+      status: "DITERIMA",
+      kelasTujuanId: "kelas-tidak-ada",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("Kelas tujuan tidak ditemukan")
+    expect(mockCreateUser).not.toHaveBeenCalled()
+  })
+
+  it("harus MENOLAK override kelas yang tidak cocok gender pendaftar", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranMinimal)
+    mockKelasFindUnique.mockResolvedValue({
+      id: "kelas-ikhwan",
+      nama: "Kelas Ikhwan",
+      kapasitas: 0,
+      jenisKelamin: "LAKI_LAKI",
+      _count: { siswa: 0 },
+    })
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-2",
+      status: "DITERIMA",
+      kelasTujuanId: "kelas-ikhwan",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("kelas khusus Ikhwan")
+    expect(mockCreateUser).not.toHaveBeenCalled()
   })
 })
 
@@ -824,7 +943,123 @@ describe("verifikasiPendaftaran — Gender Match Kelas", () => {
       .mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA" })
       .mockResolvedValueOnce({ id: "user-siswa-1", role: "SISWA" })
     mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-1" })
-    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-1" })
+    // Call #1: cek NISN duplikat (harus null / tidak dipakai)
+    // Call #2+: ambil siswaRecord
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: "siswa-1" })
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    })
+
+    expect(result.success).toBe(true)
+    expect(mockPendaftaranUpdate).toHaveBeenCalled()
+  })
+})
+
+// ========================================================
+// 19. NISN: Duplikat dengan Siswa yang Sudah Ada / Pendaftaran Aktif Lain
+// ========================================================
+
+describe("verifikasiPendaftaran — Duplikat NISN", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("harus menolak jika NISN sudah dipakai siswa yang sudah diterima", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranWithEmis)
+    mockPendaftaranFindFirst.mockResolvedValue(null)
+    setupAuthMocks()
+    setupTransactionMock()
+
+    // NISN check → siswa dengan NISN sama sudah ada
+    mockSiswaFindUnique.mockResolvedValue({
+      id: "siswa-existing",
+      user: { nama: "Santri Lama", id: "user-lama" },
+    })
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("NISN")
+    expect(result.message).toContain("Santri Lama")
+    // Tidak ada akun/record yang dibuat
+    expect(mockUserCreate).not.toHaveBeenCalled()
+    expect(mockPendaftaranUpdate).not.toHaveBeenCalled()
+  })
+
+  it("harus menolak jika NISN sudah dipakai pendaftaran aktif lain (MENUNGGU_VERIFIKASI)", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranWithEmis)
+    mockSiswaFindUnique.mockResolvedValue(null)
+    setupAuthMocks()
+    setupTransactionMock()
+
+    // NISN siswa → null (tidak ada siswa), tapi ada pendaftaran aktif lain
+    mockPendaftaranFindFirst.mockResolvedValue({
+      id: "pend-lain",
+      nomorPendaftaran: "REG-2026-00099",
+      namaLengkap: "Calon Lain",
+      status: "MENUNGGU_VERIFIKASI",
+    })
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("NISN")
+    expect(result.message).toContain("REG-2026-00099")
+    expect(result.message).toContain("diverifikasi admin")
+    expect(mockUserCreate).not.toHaveBeenCalled()
+    expect(mockPendaftaranUpdate).not.toHaveBeenCalled()
+  })
+
+  it("harus menolak jika NISN sudah dipakai pendaftaran aktif lain (MENUNGGU_PEMBAYARAN)", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranWithEmis)
+    mockSiswaFindUnique.mockResolvedValue(null)
+    setupAuthMocks()
+    setupTransactionMock()
+
+    mockPendaftaranFindFirst.mockResolvedValue({
+      id: "pend-lain",
+      nomorPendaftaran: "REG-2026-00100",
+      namaLengkap: "Calon Lain",
+      status: "MENUNGGU_PEMBAYARAN",
+    })
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("NISN")
+    expect(result.message).toContain("REG-2026-00100")
+    expect(result.message).toContain("menunggu pembayaran")
+    expect(mockUserCreate).not.toHaveBeenCalled()
+    expect(mockPendaftaranUpdate).not.toHaveBeenCalled()
+  })
+
+  it("harus menerima jika NISN belum dipakai siapa pun", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranWithEmis)
+    mockPendaftaranFindFirst.mockResolvedValue(null)
+    setupAuthMocks()
+    setupTransactionMock()
+
+    mockUserFindUnique.mockResolvedValueOnce(null)
+    mockUserCreate
+      .mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA" })
+      .mockResolvedValueOnce({ id: "user-siswa-1", role: "SISWA" })
+    mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-1" })
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: "siswa-1" })
 
     const result = await verifikasiPendaftaran({
       pendaftaranId: "pend-1",

@@ -15,6 +15,7 @@ import {
   verifikasiPendaftaranSchema,
   type VerifikasiPendaftaranValues,
 } from "@/lib/validations/pendaftaran"
+import { toUserFriendlyError, AppError } from "@/lib/prisma-error"
 import type { ActionResponse, PendaftaranWithRelations } from "@/types"
 import { StatusPendaftaran, StatusVerifikasiBukti, Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
@@ -64,7 +65,7 @@ export async function getPendaftaranList(options?: {
         skip,
         take: limit,
         include: {
-          jenjangTujuan: true,
+          jenjangTujuan: { include: { kelas: true } },
           kelasTujuan: true,
           buktiTransfer: { orderBy: { waktuUpload: "desc" } },
           diverifikasiOleh: true,
@@ -84,9 +85,10 @@ export async function getPendaftaranList(options?: {
       },
     }
   } catch (error: unknown) {
+    console.error("Error getPendaftaranList:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat data pendaftaran",
+      message: toUserFriendlyError(error, "Gagal memuat daftar pendaftaran. Silakan coba lagi atau hubungi admin."),
     }
   }
 }
@@ -110,7 +112,7 @@ export async function getPendaftaranDetail(
     const pendaftaran = await prisma.pendaftaran.findUnique({
       where: { id: pendaftaranId },
       include: {
-        jenjangTujuan: true,
+        jenjangTujuan: { include: { kelas: true } },
         kelasTujuan: true,
         buktiTransfer: { orderBy: { waktuUpload: "desc" } },
         diverifikasiOleh: true,
@@ -153,9 +155,10 @@ export async function getPendaftaranDetail(
       },
     }
   } catch (error: unknown) {
+    console.error("Error getPendaftaranDetail:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat detail pendaftaran",
+      message: toUserFriendlyError(error, "Gagal memuat detail pendaftaran. Silakan coba lagi atau hubungi admin."),
     }
   }
 }
@@ -194,7 +197,7 @@ export async function verifikasiPendaftaran(
       }
     }
 
-    const { pendaftaranId, status, catatanAdmin, alasanPenolakan } = validated.data
+    const { pendaftaranId, status, catatanAdmin, alasanPenolakan, kelasTujuanId } = validated.data
 
     const pendaftaran = await prisma.pendaftaran.findUnique({
       where: { id: pendaftaranId },
@@ -218,6 +221,10 @@ export async function verifikasiPendaftaran(
     }
 
     const latestBuktiId = pendaftaran.buktiTransfer[0]?.id
+
+    // Kelas tujuan final: pakai override dari admin bila dikirim, selain itu
+    // gunakan kelas tujuan yang dipilih pendaftar saat mendaftar.
+    const finalKelasId = kelasTujuanId || pendaftaran.kelasTujuanId || null
 
     // --- CASE A: PENDAFTARAN DITOLAK ---
     if (status === "DITOLAK") {
@@ -268,12 +275,18 @@ export async function verifikasiPendaftaran(
       const supabaseAdmin = createSupabaseAdmin()
 
       // ✅ Validasi kapasitas kelas sebelum menerima pendaftaran
-      if (pendaftaran.kelasTujuanId) {
+      if (finalKelasId) {
         const kelas = await prisma.kelas.findUnique({
-          where: { id: pendaftaran.kelasTujuanId },
+          where: { id: finalKelasId },
           include: { _count: { select: { siswa: true } } },
         })
-        if (kelas && kelas.kapasitas > 0 && kelas._count.siswa >= kelas.kapasitas) {
+        if (!kelas) {
+          return {
+            success: false,
+            message: "Kelas tujuan tidak ditemukan. Pilih kelas yang tersedia sebelum menerima pendaftaran.",
+          }
+        }
+        if (kelas.kapasitas > 0 && kelas._count.siswa >= kelas.kapasitas) {
           return {
             success: false,
             message: `Kelas "${kelas.nama}" sudah penuh (${kelas._count.siswa}/${kelas.kapasitas}). Pilih kelas lain sebelum menerima pendaftaran.`,
@@ -285,7 +298,7 @@ export async function verifikasiPendaftaran(
           const labelKelas = kelas.jenisKelamin === "LAKI_LAKI" ? "Ikhwan" : "Akhwat"
           return {
             success: false,
-            message: `Kelas "${kelas.nama}" adalah kelas khusus ${labelKelas} dan tidak sesuai dengan jenis kelamin pendaftar. Ubah kelas tujuan pada pendaftaran sebelum menerima.`,
+            message: `Kelas "${kelas.nama}" adalah kelas khusus ${labelKelas} dan tidak sesuai dengan jenis kelamin pendaftar. Pilih kelas tujuan yang sesuai sebelum menerima.`,
           }
         }
       }
@@ -357,6 +370,46 @@ export async function verifikasiPendaftaran(
       try {
         await prisma.$transaction(
           async (tx) => {
+            // ✅ Validasi NISN agar tidak duplikat dengan siswa yang SUDAH ADA
+            // ATAU pendaftaran aktif lain. Kolom nisn di model Siswa bersifat
+            // @unique — tanpa pengecekan proaktif ini, approve akan crash dengan
+            // error mentah P2002 langsung ke layar admin. Kita cek lebih awal dan
+            // beri pesan yang jelas. Satu NISN hanya boleh milik SATU calon siswa:
+            // dicek juga terhadap pendaftaran aktif (MENUNGGU_PEMBAYARAN /
+            // MENUNGGU_VERIFIKASI) lain, paritas dengan jalur pendaftaran online
+            // & siswa manual.
+            if (pendaftaran.nisn) {
+              const [nisnSiswa, nisnPendaftaran] = await Promise.all([
+                tx.siswa.findUnique({
+                  where: { nisn: pendaftaran.nisn },
+                  select: { id: true, user: { select: { nama: true, id: true } } },
+                }),
+                tx.pendaftaran.findFirst({
+                  where: {
+                    nisn: pendaftaran.nisn,
+                    id: { not: pendaftaran.id },
+                    status: {
+                      in: [
+                        StatusPendaftaran.MENUNGGU_PEMBAYARAN,
+                        StatusPendaftaran.MENUNGGU_VERIFIKASI,
+                      ],
+                    },
+                  },
+                  select: { nomorPendaftaran: true, namaLengkap: true, status: true },
+                }),
+              ])
+              if (nisnSiswa) {
+                throw new AppError(
+                  `NISN "${pendaftaran.nisn}" sudah terdaftar atas nama ${nisnSiswa.user.nama}. Mohon periksa kembali data pendaftaran ini sebelum melanjutkan.`
+                )
+              }
+              if (nisnPendaftaran) {
+                throw new AppError(
+                  `NISN "${pendaftaran.nisn}" sudah digunakan pada pendaftaran lain (Nomor: ${nisnPendaftaran.nomorPendaftaran}, atas nama ${nisnPendaftaran.namaLengkap}) yang sedang ${nisnPendaftaran.status === StatusPendaftaran.MENUNGGU_VERIFIKASI ? "diverifikasi admin" : "menunggu pembayaran"}. Satu NISN hanya boleh untuk satu calon siswa. Mohon periksa kembali.`
+                )
+              }
+            }
+
             // Find existing user by authId + role first, then by email as fallback
           // (handles cases where authId differs but email matches — e.g. parent
           // re-registers with a new Supabase auth but the DB still has the old record)
@@ -446,22 +499,25 @@ export async function verifikasiPendaftaran(
           // bisa melewati jika dua approval berjalan bersamaan. Ditempatkan
           // di luar blok !userSiswa agar juga melindungi jalur "anak kedua /
           // re-registrasi" yang memakai record siswa lama.
-          if (pendaftaran.kelasTujuanId) {
+          if (finalKelasId) {
             const kelasTx = await tx.kelas.findUnique({
-              where: { id: pendaftaran.kelasTujuanId },
+              where: { id: finalKelasId },
               include: { _count: { select: { siswa: true } } },
             })
+            if (!kelasTx) {
+              throw new AppError("Kelas tujuan tidak ditemukan pada saat verifikasi.")
+            }
             if (
               kelasTx &&
               kelasTx.kapasitas > 0 &&
               kelasTx._count.siswa >= kelasTx.kapasitas
             ) {
-              throw new Error(
+              throw new AppError(
                 `Kelas "${kelasTx.nama}" sudah penuh (${kelasTx._count.siswa}/${kelasTx.kapasitas}).`
               )
             }
             if (kelasTx && !siswaCocokKelas(pendaftaran.jenisKelamin, kelasTx.jenisKelamin)) {
-              throw new Error(
+              throw new AppError(
                 `Kelas "${kelasTx.nama}" adalah kelas khusus gender yang tidak sesuai dengan jenis kelamin pendaftar.`
               )
             }
@@ -507,7 +563,7 @@ export async function verifikasiPendaftaran(
                       kewarganegaraan: pendaftaran.kewarganegaraan || "WNI",
                       kitas: pendaftaran.kitas || null,
                       asalNegara: pendaftaran.asalNegara || null,
-                      kelasId: pendaftaran.kelasTujuanId || null,
+                      kelasId: finalKelasId,
                       pendaftaranId: pendaftaran.id,
                     },
                   },
@@ -557,6 +613,7 @@ export async function verifikasiPendaftaran(
             data: {
               status: StatusPendaftaran.DITERIMA,
               catatanAdmin: catatanAdmin || null,
+              kelasTujuanId: finalKelasId,
               diverifikasiOlehId: guruUser.id,
               waktuVerifikasi: new Date(),
             },
@@ -609,7 +666,7 @@ export async function verifikasiPendaftaran(
     console.error("Error verifikasiPendaftaran:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memproses verifikasi pendaftaran",
+      message: toUserFriendlyError(error, "Terjadi kesalahan saat memproses verifikasi. Silakan coba lagi atau hubungi admin."),
     }
   }
 }

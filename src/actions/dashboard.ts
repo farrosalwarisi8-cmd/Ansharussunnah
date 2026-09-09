@@ -13,6 +13,7 @@ import {
   JenisTagihan,
 } from "@prisma/client"
 import type { ActionResponse } from "@/types"
+import { toUserFriendlyError } from "@/lib/prisma-error"
 
 // ========================================================
 // TIPE DATA RANGKUMAN (dipakai komponen role-home)
@@ -389,9 +390,10 @@ export async function getRangkumanGuruHome(): Promise<
       },
     }
   } catch (error: unknown) {
+    console.error("Error getRangkumanGuruHome:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat rangkuman guru",
+      message: toUserFriendlyError(error, "Gagal memuat rangkuman dashboard guru. Silakan coba lagi atau hubungi admin."),
     }
   }
 }
@@ -418,9 +420,10 @@ export async function getRangkumanSiswaHome(): Promise<
       data,
     }
   } catch (error: unknown) {
+    console.error("Error getRangkumanSiswaHome:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat rangkuman siswa",
+      message: toUserFriendlyError(error, "Gagal memuat rangkuman dashboard siswa. Silakan coba lagi atau hubungi admin."),
     }
   }
 }
@@ -464,9 +467,10 @@ export async function getRangkumanOrangTuaHome(
       data,
     }
   } catch (error: unknown) {
+    console.error("Error getRangkumanOrangTuaHome:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat rangkuman orang tua",
+      message: toUserFriendlyError(error, "Gagal memuat rangkuman dashboard orang tua. Silakan coba lagi atau hubungi admin."),
     }
   }
 }
@@ -545,9 +549,10 @@ export async function getRangkumanAdminHome(): Promise<
       },
     }
   } catch (error: unknown) {
+    console.error("Error getRangkumanAdminHome:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat rangkuman admin",
+      message: toUserFriendlyError(error, "Gagal memuat rangkuman dashboard admin. Silakan coba lagi atau hubungi admin."),
     }
   }
 }

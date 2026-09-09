@@ -48,6 +48,8 @@ vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdmin: vi.fn() }))
 vi.mock("@/lib/storage", () => ({ getSignedUrl: vi.fn() }))
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 
+import { AppError } from "@/lib/prisma-error"
+
 // ========================================================
 // Import setelah semua vi.mock() terdaftar
 // ========================================================
@@ -73,7 +75,7 @@ function setupAdmin() {
 }
 
 function setupNonAdmin() {
-  mockRequireRole.mockRejectedValue(new Error("Forbidden: Anda tidak memiliki akses. Role yang dibutuhkan: ADMIN_KEUANGAN"))
+  mockRequireRole.mockRejectedValue(new AppError("Forbidden: Anda tidak memiliki akses. Role yang dibutuhkan: ADMIN_KEUANGAN"))
 }
 
 // ========================================================
@@ -498,9 +500,9 @@ describe("Cross-Cutting — Auth & Error Handling", () => {
     expect(r1.success).toBe(false)
     expect(r1.message).toContain("Connection pool exhausted")
     expect(r2.success).toBe(false)
-    expect(r2.message).toContain("Connection pool exhausted")
+    expect(r2.message).toContain("Gagal menghitung rekap SPP per kelas")
     expect(r3.success).toBe(false)
-    expect(r3.message).toContain("Connection pool exhausted")
+    expect(r3.message).toContain("Gagal menghitung rekap SPP per jenjang")
   })
 
   it("requireRole harus dipanggil dengan argumen ['ADMIN_KEUANGAN', 'SUPER_ADMIN'] untuk ketiga fungsi", async () => {

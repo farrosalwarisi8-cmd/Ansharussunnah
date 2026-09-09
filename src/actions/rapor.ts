@@ -17,6 +17,7 @@ import {
 } from "@/lib/validations/rapor"
 import type { ActionResponse } from "@/types"
 import { Role, StatusPengerjaan, StatusPengumpulan } from "@prisma/client"
+import { toUserFriendlyError } from "@/lib/prisma-error"
 import { revalidatePath } from "next/cache"
 
 // ========================================================
@@ -542,9 +543,10 @@ export async function getRekapRaporKelas(
       },
     }
   } catch (error: unknown) {
+    console.error("Error getRekapRaporKelas:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat rekap rapor kelas",
+      message: toUserFriendlyError(error, "Gagal menghitung rekap rapor kelas. Silakan coba lagi atau hubungi admin."),
     }
   }
 }

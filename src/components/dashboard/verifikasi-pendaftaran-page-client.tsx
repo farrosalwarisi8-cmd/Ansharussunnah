@@ -8,6 +8,7 @@ import { getPendaftaranList, getPendaftaranDetail, verifikasiPendaftaran } from 
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -95,6 +96,7 @@ export default function VerifikasiPendaftaranPage() {
   const [isRejectDialogOpen, setIsRejectDialogOpen] = React.useState(false)
   const [isApproveConfirmOpen, setIsApproveConfirmOpen] = React.useState(false)
   const [processing, setProcessing] = React.useState(false)
+  const [selectedKelasTujuanId, setSelectedKelasTujuanId] = React.useState("")
 
   // Debounce search
   React.useEffect(() => {
@@ -140,6 +142,7 @@ export default function VerifikasiPendaftaranPage() {
     setSelectedId(id)
     setLoadingDetail(true)
     setDetailData(null)
+    setSelectedKelasTujuanId("")
     try {
       const result = await getPendaftaranDetail(id)
       if (result.success && result.data) {
@@ -169,6 +172,7 @@ export default function VerifikasiPendaftaranPage() {
       const result = await verifikasiPendaftaran({
         pendaftaranId: detailData.pendaftaran.id,
         status: "DITERIMA",
+        kelasTujuanId: selectedKelasTujuanId || undefined,
       })
       if (result.success) {
         toast({ title: "Pendaftaran Disetujui!", description: result.message })
@@ -212,6 +216,18 @@ export default function VerifikasiPendaftaranPage() {
 
   const pendaftar = detailData?.pendaftaran
   const signedUrls = detailData?.signedUrls
+
+  // Kelas calon santri yang bisa dipilih saat approve (sesuai jenis kelamin),
+  // dipakai ketika pendaftar mendaftar tanpa kelas tujuan.
+  const kelasCocokPendaftar = React.useMemo(() => {
+    if (!pendaftar) return []
+    return (pendaftar.jenjangTujuan?.kelas ?? []).filter(
+      (k) =>
+        !k.jenisKelamin ||
+        !pendaftar.jenisKelamin ||
+        k.jenisKelamin === pendaftar.jenisKelamin
+    )
+  }, [pendaftar])
 
   // DetailRow helper
   const DetailRow = ({ label, value }: { label: string; value?: string | null }) => (
@@ -577,6 +593,45 @@ export default function VerifikasiPendaftaranPage() {
                   </div>
                 </div>
               </div>
+
+              {!!pendaftar &&
+                !pendaftar.kelasTujuan &&
+                pendaftar.status === "MENUNGGU_VERIFIKASI" && (
+                  <div className="p-4 rounded-2xl bg-sky-50 border border-sky-200 space-y-2">
+                    <h3 className="font-bold text-sky-900 uppercase text-xs">Kelas Tujuan</h3>
+                    <p className="text-xs text-slate-600">
+                      Pendaftar ini mendaftar tanpa kelas tujuan. Pilih kelas agar santri langsung masuk
+                      kelas saat diterima — atau biarkan kosong dan pendaftaran tetap dapat diproses
+                      (kelas diatur kemudian).
+                    </p>
+                    <Select
+                      value={selectedKelasTujuanId || undefined}
+                      onValueChange={setSelectedKelasTujuanId}
+                    >
+                      <SelectTrigger className="w-full bg-white">
+                        <SelectValue
+                          placeholder={
+                            kelasCocokPendaftar.length === 0
+                              ? "Belum ada kelas yang cocok — lanjutkan tanpa kelas"
+                              : "Pilih kelas (opsional)"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {kelasCocokPendaftar.map((k) => (
+                          <SelectItem key={k.id} value={k.id}>
+                            {k.nama}
+                            {k.jenisKelamin === "LAKI_LAKI"
+                              ? " (Ikhwan)"
+                              : k.jenisKelamin === "PEREMPUAN"
+                                ? " (Akhwat)"
+                                : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
               <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t border-slate-100">
                 {detailData?.pendaftaran.status === "MENUNGGU_VERIFIKASI" ? (

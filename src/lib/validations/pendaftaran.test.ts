@@ -131,17 +131,11 @@ describe("pendaftaranSchema — Validasi Field Dasar", () => {
     expect(result.success).toBe(false)
   })
 
-  it("harus gagal jika kelasTujuanId kosong (kini wajib diisi)", () => {
+  it("harus lolos jika kelasTujuanId kosong (opsional — kelas ditentukan panitia saat verifikasi)", () => {
     const result = pendaftaranSchema.safeParse(
       validBase({ kelasTujuanId: "" })
     )
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      const kelasErrors = result.error.issues.filter(
-        (i) => i.path[0] === "kelasTujuanId"
-      )
-      expect(kelasErrors.length).toBeGreaterThan(0)
-    }
+    expect(result.success).toBe(true)
   })
 })
 

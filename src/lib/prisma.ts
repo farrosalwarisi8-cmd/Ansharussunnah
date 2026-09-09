@@ -24,8 +24,10 @@ function createPrismaClient() {
       params.set("connection_limit", viaPooler ? "1" : "5")
     }
     if (!params.has("pool_timeout")) {
-      // Fail fast ketimbang menggantung 20s saat pool penuh.
-      params.set("pool_timeout", "5")
+      // Memberi toleransi lebih lama (15s) sebelum menyerah menunggu slot koneksi.
+      // connection_limit tetap rendah (1 untuk pooler) sesuai best practice serverless —
+      // menaikkan limit justru bisa membebani pooler saat banyak instance jalan bersamaan.
+      params.set("pool_timeout", "15")
     }
 
     datasourceUrl = url.toString()

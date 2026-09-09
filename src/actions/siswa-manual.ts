@@ -10,8 +10,9 @@ import { encryptSecret, decryptSecret } from "@/lib/crypto"
 import { siswaManualSchema, type SiswaManualFormValues, updateAkunSiswaSchema, type UpdateAkunSiswaValues } from "@/lib/validations/siswa-manual"
 import { siswaCocokKelas } from "@/lib/guru-kelas-gender"
 import { deriveUniqueUsername } from "@/lib/username"
+import { toUserFriendlyError } from "@/lib/prisma-error"
 import type { ActionResponse } from "@/types"
-import { Role } from "@prisma/client"
+import { Role, StatusPendaftaran } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
 // ========================================================
@@ -81,6 +82,56 @@ export async function createSiswaManual(
 
     // Cek duplikasi email orang tua untuk role yang sama
     const existingOrtu = await prisma.user.findFirst({ where: { email: emailOrtu, role: Role.ORANG_TUA } })
+
+    // ✅ Cek duplikasi NISN / NIS dengan siswa yang SUDAH ADA ATAU pendaftaran
+    // aktif lain. Kolom nisn & nis di model Siswa @unique — dicek proaktif agar
+    // tidak crash dengan pesan error mentah P2002 di layar admin.
+    // NISN & NIS adalah identitas penting: satu nilai hanya boleh milik SATU siswa.
+    if (data.nisn) {
+      const [nisnSiswa, nisnPendaftaran] = await Promise.all([
+        prisma.siswa.findUnique({
+          where: { nisn: data.nisn },
+          select: { id: true, user: { select: { nama: true } } },
+        }),
+        prisma.pendaftaran.findFirst({
+          where: {
+            nisn: data.nisn,
+            status: {
+              in: [
+                StatusPendaftaran.MENUNGGU_PEMBAYARAN,
+                StatusPendaftaran.MENUNGGU_VERIFIKASI,
+              ],
+            },
+          },
+          select: { nomorPendaftaran: true, namaLengkap: true },
+        }),
+      ])
+      if (nisnSiswa) {
+        return {
+          success: false,
+          message: `NISN "${data.nisn}" sudah terdaftar atas nama ${nisnSiswa.user.nama}. Mohon periksa kembali input Anda.`,
+        }
+      }
+      if (nisnPendaftaran) {
+        return {
+          success: false,
+          message: `NISN "${data.nisn}" sudah digunakan pada pendaftaran lain (Nomor: ${nisnPendaftaran.nomorPendaftaran}, atas nama ${nisnPendaftaran.namaLengkap}). Satu NISN hanya boleh untuk satu calon siswa.`,
+        }
+      }
+    }
+
+    if (data.nis) {
+      const nisDipakai = await prisma.siswa.findUnique({
+        where: { nis: data.nis },
+        select: { user: { select: { nama: true } } },
+      })
+      if (nisDipakai) {
+        return {
+          success: false,
+          message: `NIS "${data.nis}" sudah terdaftar atas nama ${nisDipakai.user.nama}. Mohon periksa kembali input Anda.`,
+        }
+      }
+    }
 
     // Generate atau pakai password manual
     const passwordSiswa = data.passwordManual || generateSecurePassword(14)
@@ -361,7 +412,7 @@ export async function createSiswaManual(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal membuat akun siswa",
+      message: toUserFriendlyError(error, "Gagal membuat akun siswa secara manual. Silakan coba lagi atau hubungi admin."),
     }
   }
 }

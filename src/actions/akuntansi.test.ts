@@ -77,6 +77,7 @@ import {
   getRekapSppPerKelas,
   getRekapSppPerJenjang,
 } from "@/actions/akuntansi"
+import { AppError } from "@/lib/prisma-error"
 
 // ========================================================
 // Data dummy — admin keuangan yang sah
@@ -98,7 +99,7 @@ function setupAdminAuth() {
 
 function setupNonAdminAuth() {
   mockRequireRole.mockRejectedValue(
-    new Error("Forbidden: Anda tidak memiliki akses. Role yang dibutuhkan: ADMIN_KEUANGAN")
+    new AppError("Forbidden: Anda tidak memiliki akses. Role yang dibutuhkan: ADMIN_KEUANGAN")
   )
 }
 
@@ -460,7 +461,7 @@ describe("getRekapSppPerKelas", () => {
     const result = await getRekapSppPerKelas()
 
     expect(result.success).toBe(false)
-    expect(result.message).toContain("Connection refused")
+    expect(result.message).toContain("Gagal menghitung rekap SPP per kelas")
   })
 })
 
@@ -675,7 +676,7 @@ describe("getRekapSppPerJenjang", () => {
     const result = await getRekapSppPerJenjang()
 
     expect(result.success).toBe(false)
-    expect(result.message).toContain("Connection refused")
+    expect(result.message).toContain("Gagal menghitung rekap SPP per jenjang")
   })
 })
 

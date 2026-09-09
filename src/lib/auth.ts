@@ -6,6 +6,7 @@ import { Role, Prisma } from "@prisma/client"
 import { redirect } from "next/navigation"
 import { cookies, headers } from "next/headers"
 import { cache } from "react"
+import { AppError } from "@/lib/prisma-error"
 
 const ROLE_COOKIE = "selected_role"
 const USER_ID_COOKIE = "selected_user_id"
@@ -133,7 +134,7 @@ async function loadUserRecord(authUserId: string): Promise<UserWithRelations | n
 
   // Defense-in-depth: cek apakah akun masih aktif
   if (user && !user.aktif) {
-    throw new Error("Akun Anda telah dinonaktifkan. Hubungi admin sekolah.")
+    throw new AppError("Akun Anda telah dinonaktifkan. Hubungi admin sekolah.")
   }
 
   return user
@@ -142,7 +143,7 @@ async function loadUserRecord(authUserId: string): Promise<UserWithRelations | n
 export async function requireAuth() {
   const user = await getCurrentUser()
   if (!user) {
-    throw new Error("Unauthorized: Anda harus login terlebih dahulu")
+    throw new AppError("Unauthorized: Anda harus login terlebih dahulu")
   }
   return user
 }
@@ -150,7 +151,7 @@ export async function requireAuth() {
 export async function requireRole(allowedRoles: Role[]) {
   const user = await requireAuth()
   if (!allowedRoles.includes(user.role)) {
-    throw new Error(
+    throw new AppError(
       `Forbidden: Anda tidak memiliki akses. Role yang dibutuhkan: ${allowedRoles.join(", ")}`
     )
   }

@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireGuru, isAcademicAdminRole } from "@/lib/auth"
+import { AppError } from "@/lib/prisma-error"
 
 /**
  * Memverifikasi apakah user yang sedang login berhak mengelola kelas tertentu.
@@ -42,7 +43,7 @@ export async function verifyGuruAksesKelas(
   // Admin akademik / super admin bebas mengelola semua kelas
   if (isAcademicAdminRole(user.role) || user.isAdmin) {
     if (!user.guru) {
-      throw new Error("Forbidden: Profil guru tidak ditemukan")
+      throw new AppError("Forbidden: Profil guru tidak ditemukan")
     }
 
     // Admin dapat memakai mapel yang terdaftar di master mapel meskipun belum
@@ -52,7 +53,7 @@ export async function verifyGuruAksesKelas(
         where: { ...mapelFilter, aktif: true },
       })
       if (!mapel) {
-        throw new Error(
+        throw new AppError(
           `Mata pelajaran "${mataPelajaran}" tidak ditemukan`
         )
       }
@@ -62,7 +63,7 @@ export async function verifyGuruAksesKelas(
   }
 
   if (!user.guru) {
-    throw new Error("Forbidden: Profil guru tidak ditemukan")
+    throw new AppError("Forbidden: Profil guru tidak ditemukan")
   }
 
   const guruId = user.guru.id
@@ -88,7 +89,7 @@ export async function verifyGuruAksesKelas(
   })
 
   if (!pengajar) {
-    throw new Error(
+    throw new AppError(
       "Forbidden: Anda tidak memiliki wewenang mengajar/mengelola kelas ini"
     )
   }

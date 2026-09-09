@@ -230,6 +230,8 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
     setValue,
     watch,
     trigger,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm<PendaftaranFormValues>({
     resolver: zodResolver(pendaftaranSchema),
@@ -299,7 +301,24 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
     const fields = stepFields[step]
     if (!fields || fields.length === 0) return true
     const valid = await trigger(fields)
-    return valid
+    if (!valid) return false
+
+    // Tahap 4: kelas tujuan wajib dipilih HANYA jika tersedia kelas yang cocok
+    // gender. Jika jenjang tujuan tidak punya kelas yang sesuai (mis. jenjang
+    // hanya punya kelas khusus Ikhwan dan pendaftar perempuan), pengguna boleh
+    // lanjut tanpa kelas — kelas akan ditentukan panitia saat verifikasi.
+    if (step === 4) {
+      const kelasVal = watch("kelasTujuanId")
+      if (kelasCocokGender.length > 0 && !kelasVal) {
+        setError("kelasTujuanId", {
+          type: "manual",
+          message: "Pilih kelas tujuan",
+        })
+        return false
+      }
+      clearErrors("kelasTujuanId")
+    }
+    return true
   }
 
   const goToNextStep = async () => {
@@ -1015,7 +1034,10 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
               </div>
               <div>
                 <Label>
-                  Kelas <span className="text-destructive">*</span>
+                  Kelas{" "}
+                  {kelasCocokGender.length > 0 && (
+                    <span className="text-destructive">*</span>
+                  )}
                 </Label>
                 <Select
                   onValueChange={(value) => setValue("kelasTujuanId", value)}
@@ -1027,7 +1049,7 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
                         availableKelas.length === 0
                           ? "Pilih jenjang terlebih dahulu"
                           : kelasCocokGender.length === 0
-                            ? "Tidak ada kelas yang sesuai jenis kelamin"
+                            ? "Kelas ditentukan panitia saat verifikasi"
                             : "Pilih kelas"
                       }
                     />
@@ -1048,7 +1070,7 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
                 {kelasCocokGender.length === 0 && availableKelas.length > 0 && (
                   <p className="text-xs text-amber-600 mt-1">
                     Di jenjang ini belum ada kelas yang sesuai dengan jenis kelamin calon santri.
-                    Pilih jenjang lain atau hubungi panitia.
+                    Anda tetap dapat melanjutkan pendaftaran; kelas akan ditentukan oleh panitia saat verifikasi.
                   </p>
                 )}
                 {errors.kelasTujuanId && (

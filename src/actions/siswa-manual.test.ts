@@ -13,6 +13,7 @@ const {
   mockKelasFindUnique,
   mockCreateUser,
   mockListUsers,
+  mockPendaftaranFindFirst,
 } = vi.hoisted(() => ({
   mockPrismaTransaction: vi.fn(),
   mockUserFindFirst: vi.fn(),
@@ -24,6 +25,7 @@ const {
   mockKelasFindUnique: vi.fn(),
   mockCreateUser: vi.fn(),
   mockListUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
+  mockPendaftaranFindFirst: vi.fn(),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -53,6 +55,9 @@ vi.mock("@/lib/prisma", () => ({
     },
     kelas: {
       findUnique: mockKelasFindUnique,
+    },
+    pendaftaran: {
+      findFirst: mockPendaftaranFindFirst,
     },
     $transaction: mockPrismaTransaction,
   },
@@ -149,6 +154,7 @@ describe("createSiswaManual — First Child (New Parent)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockKelasFindUnique.mockResolvedValue({ id: "kelas-1", nama: "Kelas 1", jenisKelamin: null })
+    mockPendaftaranFindFirst.mockResolvedValue(null)
   })
 
   it("harus membuat akun siswa, orang tua, dan ParentStudent baru", async () => {
@@ -174,7 +180,13 @@ describe("createSiswaManual — First Child (New Parent)", () => {
       .mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA" }) // tx: create ortu
       .mockResolvedValueOnce({ id: "user-siswa-1", role: "SISWA" }) // tx: create siswa
     mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-1" })
-    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-1" })
+    // Call #1: cek NISN duplikat → null (tidak dipakai)
+    // Call #2: cek NIS duplikat → null (tidak dipakai)
+    // Call #3+: ambil siswaRecord di dalam transaction
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: "siswa-1" })
     mockParentStudentFindUnique.mockResolvedValue(null)
 
     const result = await createSiswaManual(validPayload())
@@ -205,6 +217,7 @@ describe("createSiswaManual — Second Child (Existing Parent)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockKelasFindUnique.mockResolvedValue({ id: "kelas-1", nama: "Kelas 1", jenisKelamin: null })
+    mockPendaftaranFindFirst.mockResolvedValue(null)
   })
 
   it("harus reuse akun orang tua yang sudah ada dan membuat ParentStudent baru", async () => {
@@ -240,7 +253,13 @@ describe("createSiswaManual — Second Child (Existing Parent)", () => {
       role: "SISWA",
     }) // tx: create siswa
     mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-existing" })
-    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-new" })
+    // Call #1: cek NISN duplikat → null (tidak dipakai)
+    // Call #2: cek NIS duplikat → null (tidak dipakai)
+    // Call #3+: ambil siswaRecord di dalam transaction
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: "siswa-new" })
     mockParentStudentFindUnique.mockResolvedValue(null)
 
     const result = await createSiswaManual(
@@ -302,7 +321,13 @@ describe("createSiswaManual — Second Child (Existing Parent)", () => {
       .mockResolvedValueOnce({ id: "user-ortu-new", role: "ORANG_TUA" })
       .mockResolvedValueOnce({ id: "user-siswa-new", role: "SISWA" })
     mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-new" })
-    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-new" })
+    // Call #1: cek NISN duplikat → null (tidak dipakai)
+    // Call #2: cek NIS duplikat → null (tidak dipakai)
+    // Call #3+: ambil siswaRecord di dalam transaction
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: "siswa-new" })
     mockParentStudentFindUnique.mockResolvedValue(null)
 
     const result = await createSiswaManual(validPayload())
@@ -325,6 +350,7 @@ describe("createSiswaManual — Duplicate ParentStudent Guard", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockKelasFindUnique.mockResolvedValue({ id: "kelas-1", nama: "Kelas 1", jenisKelamin: null })
+    mockPendaftaranFindFirst.mockResolvedValue(null)
   })
 
   it("harus skip ParentStudent create jika relasi sudah ada", async () => {
@@ -358,7 +384,13 @@ describe("createSiswaManual — Duplicate ParentStudent Guard", () => {
       role: "SISWA",
     })
     mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-existing" })
-    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-new" })
+    // Call #1: cek NISN duplikat → null (tidak dipakai)
+    // Call #2: cek NIS duplikat → null (tidak dipakai)
+    // Call #3+: ambil siswaRecord di dalam transaction
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: "siswa-new" })
 
     // Relasi sudah ada
     mockParentStudentFindUnique.mockResolvedValue({
@@ -384,6 +416,7 @@ describe("createSiswaManual — Three Children, Same Parent Email", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockKelasFindUnique.mockResolvedValue({ id: "kelas-1", nama: "Kelas 1", jenisKelamin: null })
+    mockPendaftaranFindFirst.mockResolvedValue(null)
   })
 
   it("harus bisa membuat 3 siswa berbeda dengan 1 email orang tua", async () => {
@@ -396,6 +429,7 @@ describe("createSiswaManual — Three Children, Same Parent Email", () => {
     for (let i = 0; i < students.length; i++) {
       vi.clearAllMocks()
       mockKelasFindUnique.mockResolvedValue({ id: "kelas-1", nama: "Kelas 1", jenisKelamin: null })
+      mockPendaftaranFindFirst.mockResolvedValue(null)
 
       // prisma.user.findFirst calls:
       // 1. siswa email check → null
@@ -427,7 +461,13 @@ describe("createSiswaManual — Three Children, Same Parent Email", () => {
         role: "SISWA",
       })
       mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-existing" })
-      mockSiswaFindUnique.mockResolvedValue({ id: `siswa-${i}` })
+      // Call #1: cek NISN duplikat → null (tidak dipakai)
+      // Call #2: cek NIS duplikat → null (tidak dipakai)
+      // Call #3+: ambil siswaRecord di dalam transaction
+      mockSiswaFindUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue({ id: `siswa-${i}` })
       mockParentStudentFindUnique.mockResolvedValue(null)
 
       const result = await createSiswaManual(
@@ -462,6 +502,7 @@ describe("createSiswaManual — Three Children, Same Parent Email", () => {
 describe("createSiswaManual — Gender Match Kelas", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockPendaftaranFindFirst.mockResolvedValue(null)
   })
 
   it("harus menolak siswa laki-laki yang dimasukkan ke kelas khusus Akhwat", async () => {
@@ -497,7 +538,13 @@ describe("createSiswaManual — Gender Match Kelas", () => {
       .mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA" })
       .mockResolvedValueOnce({ id: "user-siswa-1", role: "SISWA" })
     mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-1" })
-    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-1" })
+    // Call #1: cek NISN duplikat → null (tidak dipakai)
+    // Call #2: cek NIS duplikat → null (tidak dipakai)
+    // Call #3+: ambil siswaRecord di dalam transaction
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: "siswa-1" })
     mockParentStudentFindUnique.mockResolvedValue(null)
 
     const result = await createSiswaManual(validPayload({ kelasId: "kelas-ikhwan" }))
