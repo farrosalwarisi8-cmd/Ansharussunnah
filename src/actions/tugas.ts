@@ -4,7 +4,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireRole } from "@/lib/auth"
-import { verifyGuruAksesKelas } from "@/lib/guru-auth"
+import { verifyGuruAksesKelas, getMapelIdYangDiajarDiKelas } from "@/lib/guru-auth"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getSignedUrl, getSignedUrls, isExternalUrl } from "@/lib/storage"
@@ -61,6 +61,7 @@ export async function createTugas(
       deskripsi,
       mataPelajaran,
       kelasId,
+      targetGender,
       periodeAjaranId,
       deadline,
       lampiranUrl,
@@ -73,6 +74,18 @@ export async function createTugas(
     if (!mapel) {
       return { success: false, message: `Mata pelajaran "${mataPelajaran}" tidak ditemukan` }
     }
+
+    // Validasi kecocokan gender mapel dengan target gender tugas (bila mapel khusus gender)
+    if (mapel.jenisKelamin && targetGender && mapel.jenisKelamin !== targetGender) {
+      const labelMapel = mapel.jenisKelamin === "LAKI_LAKI" ? "khusus Ikhwan" : "khusus Akhwat"
+      return {
+        success: false,
+        message: `Mata pelajaran "${mataPelajaran}" adalah mapel ${labelMapel}. Target gender tugas tidak sesuai.`,
+      }
+    }
+
+    // Bila mapel khusus gender & targetGender belum diisi, otomatis ikut gender mapel
+    const effectiveTargetGender = mapel.jenisKelamin ?? targetGender ?? null
 
     const periode = await prisma.periodeAjaran.findUnique({
       where: { id: periodeAjaranId },
@@ -95,6 +108,7 @@ export async function createTugas(
         deskripsi,
         mataPelajaranId: mapel.id,
         kelasId,
+        targetGender: effectiveTargetGender,
         periodeAjaranId,
         deadline: deadlineDate,
         lampiranUrl,
@@ -102,7 +116,7 @@ export async function createTugas(
       },
     })
 
-    revalidatePath("/dashboard/guru/tugas")
+    revalidatePath("/dashboard/tugas")
     return {
       success: true,
       message: "Tugas berhasil dibuat",
@@ -142,13 +156,42 @@ export async function updateTugas(
 
     // Jika mataPelajaran diubah, cari ID baru
     let mataPelajaranId: string | undefined
+    let mapelJenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null | undefined
     if (payload.mataPelajaran) {
       const mapel = await prisma.mataPelajaran.findFirst({ where: { nama: payload.mataPelajaran } })
       if (!mapel) {
         return { success: false, message: `Mata pelajaran "${payload.mataPelajaran}" tidak ditemukan` }
       }
       mataPelajaranId = mapel.id
+      mapelJenisKelamin = mapel.jenisKelamin
+    } else {
+      const mapelSaatIni = await prisma.mataPelajaran.findUnique({
+        where: { id: tugas.mataPelajaranId },
+        select: { jenisKelamin: true },
+      })
+      mapelJenisKelamin = mapelSaatIni?.jenisKelamin
     }
+
+    // Validasi kecocokan gender mapel dengan target gender tugas
+    if (
+      mapelJenisKelamin &&
+      payload.targetGender &&
+      mapelJenisKelamin !== payload.targetGender
+    ) {
+      const labelMapel = mapelJenisKelamin === "LAKI_LAKI" ? "khusus Ikhwan" : "khusus Akhwat"
+      return {
+        success: false,
+        message: `Mata pelajaran tersebut adalah mapel ${labelMapel}. Target gender tugas tidak sesuai.`,
+      }
+    }
+    // Bila mapel khusus gender, target otomatis ikut gender mapel;
+    // jika tidak, gunakan target dari payload (null = semua, boleh menghapus pilihan).
+    const effectiveTargetGender =
+      mapelJenisKelamin !== undefined && mapelJenisKelamin !== null
+        ? mapelJenisKelamin
+        : payload.targetGender !== undefined
+          ? payload.targetGender
+          : undefined
 
     // Verifikasi akses terhadap KELAS & MAPEL TUJUAN (setelah perubahan),
     // bukan hanya yang lama — mencegah guru memindahkan tugas ke kelas/mapel
@@ -185,13 +228,14 @@ export async function updateTugas(
         deskripsi: payload.deskripsi,
         mataPelajaranId,
         kelasId: payload.kelasId,
+        targetGender: effectiveTargetGender,
         periodeAjaranId: payload.periodeAjaranId,
         deadline: payload.deadline ? new Date(payload.deadline) : undefined,
         lampiranUrl: payload.lampiranUrl,
       },
     })
 
-    revalidatePath("/dashboard/guru/tugas")
+    revalidatePath("/dashboard/tugas")
     return { success: true, message: "Tugas berhasil diperbarui" }
   } catch (error: unknown) {
     return {
@@ -228,7 +272,7 @@ export async function deleteTugas(tugasId: string): Promise<ActionResponse> {
 
     await prisma.tugas.delete({ where: { id: tugasId } })
 
-    revalidatePath("/dashboard/guru/tugas")
+    revalidatePath("/dashboard/tugas")
     return { success: true, message: "Tugas berhasil dihapus" }
   } catch (error: unknown) {
     return {
@@ -245,12 +289,25 @@ export async function getDaftarTugasGuru(kelasId: string): Promise<ActionRespons
   try {
     await verifyGuruAksesKelas(kelasId)
 
+    const aksesMapel = await getMapelIdYangDiajarDiKelas(kelasId)
+    // Pengajar tanpa penugasan mapel → tidak ada konten yang boleh dilihat
+    if (aksesMapel !== "ALL" && aksesMapel.length === 0) {
+      return {
+        success: true,
+        message: "Daftar tugas kosong",
+        data: [],
+      }
+    }
+
     const tugasList = await prisma.tugas.findMany({
-      where: { kelasId },
+      where: {
+        kelasId,
+        ...(aksesMapel !== "ALL" ? { mataPelajaranId: { in: aksesMapel } } : {}),
+      },
       include: {
         periodeAjaran: { select: { nama: true } },
         dibuatOleh: { select: { nama: true } },
-        mataPelajaran: { select: { nama: true } },
+        mataPelajaran: { select: { nama: true, jenisKelamin: true } },
         _count: { select: { pengumpulan: true } },
       },
       orderBy: { deadline: "desc" },
@@ -261,6 +318,8 @@ export async function getDaftarTugasGuru(kelasId: string): Promise<ActionRespons
       judul: t.judul,
       deskripsi: t.deskripsi,
       mataPelajaran: t.mataPelajaran.nama,
+      targetGender: t.targetGender,
+      mapelGender: t.mataPelajaran.jenisKelamin,
       deadline: t.deadline,
       periode: t.periodeAjaran.nama,
       guru: t.dibuatOleh.nama,
@@ -334,7 +393,7 @@ export async function beriNilaiTugas(
       },
     })
 
-    revalidatePath(`/dashboard/guru/tugas/${pengumpulan.tugasId}`)
+    revalidatePath(`/dashboard/tugas/${pengumpulan.tugasId}`)
     return {
       success: true,
       message: `Nilai ${nilai} berhasil disimpan`,
@@ -477,7 +536,23 @@ export async function getDaftarTugasSiswa(): Promise<ActionResponse> {
     }
 
     const tugasList = await prisma.tugas.findMany({
-      where: { kelasId: user.siswa.kelasId },
+      where: {
+        kelasId: user.siswa.kelasId,
+        AND: [
+          {
+            OR: [
+              { targetGender: null },
+              { targetGender: user.siswa.jenisKelamin },
+            ],
+          },
+          {
+            OR: [
+              { mataPelajaran: { jenisKelamin: null } },
+              { mataPelajaran: { jenisKelamin: user.siswa.jenisKelamin } },
+            ],
+          },
+        ],
+      },
       include: {
         periodeAjaran: { select: { nama: true } },
         dibuatOleh: { select: { nama: true } },
@@ -587,6 +662,9 @@ export async function submitTugas(
 
     const tugas = await prisma.tugas.findUnique({
       where: { id: tugasId },
+      include: {
+        mataPelajaran: { select: { jenisKelamin: true } },
+      },
     })
     if (!tugas) {
       return { success: false, message: "Tugas tidak ditemukan" }
@@ -597,6 +675,26 @@ export async function submitTugas(
       return {
         success: false,
         message: "Tugas ini bukan untuk kelas Anda",
+      }
+    }
+
+    // Validasi gender: tugas khusus gender hanya untuk siswa dengan gender sama
+    if (
+      tugas.targetGender &&
+      tugas.targetGender !== user.siswa.jenisKelamin
+    ) {
+      return {
+        success: false,
+        message: "Tugas ini khusus untuk gender lain",
+      }
+    }
+    if (
+      tugas.mataPelajaran.jenisKelamin &&
+      tugas.mataPelajaran.jenisKelamin !== user.siswa.jenisKelamin
+    ) {
+      return {
+        success: false,
+        message: "Tugas ini dari mapel khusus untuk gender lain",
       }
     }
 
@@ -707,7 +805,7 @@ export async function submitTugas(
         { timeout: 10000, maxWait: 3000 }
       )
 
-      revalidatePath("/dashboard/siswa/tugas")
+      revalidatePath(`/dashboard/tugas/${tugasId}`)
       return {
         success: true,
         message: isTerlambat
@@ -729,7 +827,7 @@ export async function submitTugas(
       },
     })
 
-    revalidatePath("/dashboard/siswa/tugas")
+    revalidatePath(`/dashboard/tugas/${tugasId}`)
     return {
       success: true,
       message: isTerlambat
@@ -762,6 +860,7 @@ export async function getDetailTugasSiswa(
       include: {
         dibuatOleh: { select: { nama: true } },
         periodeAjaran: { select: { nama: true } },
+        mataPelajaran: { select: { nama: true, jenisKelamin: true } },
         pengumpulan: {
           where: { siswaId: user.siswa.id },
           include: {
@@ -782,6 +881,26 @@ export async function getDetailTugasSiswa(
       return {
         success: false,
         message: "Tugas ini bukan untuk kelas Anda",
+      }
+    }
+
+    // Validasi gender: tugas khusus gender hanya bisa diakses siswa dengan gender yang sama
+    if (
+      tugas.targetGender &&
+      tugas.targetGender !== user.siswa.jenisKelamin
+    ) {
+      return {
+        success: false,
+        message: "Tugas ini khusus untuk gender lain",
+      }
+    }
+    if (
+      tugas.mataPelajaran.jenisKelamin &&
+      tugas.mataPelajaran.jenisKelamin !== user.siswa.jenisKelamin
+    ) {
+      return {
+        success: false,
+        message: "Tugas ini dari mapel khusus untuk gender lain",
       }
     }
 
@@ -811,7 +930,8 @@ export async function getDetailTugasSiswa(
           id: tugas.id,
           judul: tugas.judul,
           deskripsi: tugas.deskripsi,
-          mataPelajaran: tugas.mataPelajaranId,
+          mataPelajaran: tugas.mataPelajaran.nama,
+          targetGender: tugas.targetGender,
           deadline: tugas.deadline,
           guru: tugas.dibuatOleh.nama,
           periode: tugas.periodeAjaran.nama,
@@ -887,9 +1007,26 @@ export async function getTugasAnak(
     }
 
     const tugasList = await prisma.tugas.findMany({
-      where: { kelasId: siswa.kelasId },
+      where: {
+        kelasId: siswa.kelasId,
+        AND: [
+          {
+            OR: [
+              { targetGender: null },
+              { targetGender: siswa.jenisKelamin },
+            ],
+          },
+          {
+            OR: [
+              { mataPelajaran: { jenisKelamin: null } },
+              { mataPelajaran: { jenisKelamin: siswa.jenisKelamin } },
+            ],
+          },
+        ],
+      },
       include: {
         dibuatOleh: { select: { nama: true } },
+        mataPelajaran: { select: { nama: true } },
         pengumpulan: {
           where: { siswaId },
           select: {
@@ -909,7 +1046,7 @@ export async function getTugasAnak(
       return {
         id: t.id,
         judul: t.judul,
-        mataPelajaran: t.mataPelajaranId,
+        mataPelajaran: t.mataPelajaran.nama,
         deadline: t.deadline,
         guru: t.dibuatOleh.nama,
         statusPengumpulan: pengumpulan

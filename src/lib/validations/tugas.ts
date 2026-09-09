@@ -7,6 +7,7 @@ export const createTugasSchema = z.object({
   deskripsi: z.string().min(10, "Deskripsi minimal 10 karakter"),
   mataPelajaran: z.string().min(2, "Mata pelajaran wajib diisi"),
   kelasId: z.string().min(1, "Kelas wajib dipilih"),
+  targetGender: z.enum(["LAKI_LAKI", "PEREMPUAN"]).optional().nullable(),
   periodeAjaranId: z.string().min(1, "Periode ajaran wajib dipilih"),
   deadline: z.string().refine((val) => !isNaN(Date.parse(val)), {
     message: "Format deadline tidak valid",

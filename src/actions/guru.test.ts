@@ -110,7 +110,7 @@ vi.mock("next/cache", () => ({
 // Import setelah semua vi.mock() terdaftar
 // ========================================================
 
-import { createAkunGuru, updateAkunGuru, hapusAkunGuruPermanent } from "@/actions/guru"
+import { createAkunGuru, updateAkunGuru, hapusAkunGuruPermanent, setGuruAdmin } from "@/actions/guru"
 
 // ========================================================
 // Data dummy
@@ -553,6 +553,32 @@ describe("createAkunGuru - Otorisasi & Penugasan Otomatis", () => {
   })
 
   // --------------------------------------------------------
+  // KASUS 2B: Guru admin dibuat dengan role ADMIN_AKADEMIK (bukan GURU)
+  // agar konsisten dengan constraint DB chk_admin_role_consistency
+  // --------------------------------------------------------
+  it("harus membuat user ber-role ADMIN_AKADEMIK untuk guru dengan hak admin", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
+    mockUserFindFirst.mockResolvedValue(null)
+    mockGuruFindUnique.mockResolvedValue(null)
+    mockCreateUser.mockResolvedValue({ data: { user: { id: "auth-2" } }, error: null })
+
+    setupCreateTransaction()
+    mockUserCreate.mockResolvedValue({ id: "user-admin" })
+    mockGuruCreate.mockResolvedValue({ id: "guru-admin" })
+
+    const result = await createAkunGuru({
+      nama: "Guru Admin",
+      email: "guruadmin@sekolah.sch.id",
+      isAdmin: true,
+    })
+
+    expect(result.success).toBe(true)
+    const userCreateData = mockUserCreate.mock.calls[0][0].data
+    expect(userCreateData.role).toBe("ADMIN_AKADEMIK")
+    expect(userCreateData.isAdmin).toBe(true)
+  })
+
+  // --------------------------------------------------------
   // KASUS 3: Tidak ada mapel/kelas aktif → sukses tanpa penugasan
   // --------------------------------------------------------
   it("harus tetap sukses meski tidak ada mapel atau kelas aktif", async () => {
@@ -777,5 +803,92 @@ describe("hapusAkunGuruPermanent - Hard Delete", () => {
     expect(result.success).toBe(true)
     expect(mockDeleteUserAuth).not.toHaveBeenCalled()
     expect(mockUserDelete).toHaveBeenCalled()
+  })
+})
+
+// ========================================================
+// setGuruAdmin — Naik/Turunkan Hak Admin Guru + role consistency
+// ========================================================
+
+describe("setGuruAdmin - Role Consistency", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("harus mengubah role ke ADMIN_AKADEMIK saat guru diangkat admin", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
+    mockUserFindUnique.mockResolvedValue({
+      id: "guru-2",
+      nama: "Guru Dua",
+      role: "GURU",
+      guru: { id: "guru-record-2" },
+    })
+    mockUserUpdate.mockResolvedValue({})
+
+    const result = await setGuruAdmin("guru-2", true)
+
+    expect(result.success).toBe(true)
+    expect(result.message).toContain("diangkat menjadi admin")
+    const updateData = mockUserUpdate.mock.calls[0][0].data
+    expect(updateData.isAdmin).toBe(true)
+    expect(updateData.role).toBe("ADMIN_AKADEMIK")
+  })
+
+  it("harus mengembalikan role ke GURU saat admin diturunkan", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
+    mockUserFindUnique.mockResolvedValue({
+      id: "guru-2",
+      nama: "Guru Dua",
+      role: "ADMIN_AKADEMIK",
+      guru: { id: "guru-record-2" },
+    })
+    mockUserUpdate.mockResolvedValue({})
+
+    const result = await setGuruAdmin("guru-2", false)
+
+    expect(result.success).toBe(true)
+    expect(result.message).toContain("diturunkan dari admin")
+    const updateData = mockUserUpdate.mock.calls[0][0].data
+    expect(updateData.isAdmin).toBe(false)
+    expect(updateData.role).toBe("GURU")
+  })
+
+  it("harus menolak target yang bukan role GURU", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
+    mockUserFindUnique.mockResolvedValue({ id: "user-siswa", role: "SISWA" })
+
+    const result = await setGuruAdmin("user-siswa", true)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toBe("Akun guru tidak ditemukan")
+    expect(mockUserUpdate).not.toHaveBeenCalled()
+  })
+
+  it("harus menolak mengubah status admin diri sendiri", async () => {
+    mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
+    mockUserFindUnique.mockResolvedValue({
+      id: "admin-1",
+      nama: "Admin Satu",
+      role: "GURU",
+      guru: { id: "guru-record-1" },
+    })
+
+    const result = await setGuruAdmin("admin-1", true)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("diri sendiri")
+    expect(mockUserUpdate).not.toHaveBeenCalled()
+  })
+
+  it("harus gagal jika dipanggil oleh non-admin", async () => {
+    mockRequireGuruAdmin.mockRejectedValue(
+      new Error("Akses ditolak: Fitur ini hanya untuk admin")
+    )
+
+    const result = await setGuruAdmin("guru-2", true)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("hanya untuk admin")
+    expect(mockUserFindUnique).not.toHaveBeenCalled()
   })
 })

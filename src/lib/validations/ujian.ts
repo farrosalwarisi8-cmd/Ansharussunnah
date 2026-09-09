@@ -8,6 +8,7 @@ const ujianBaseSchema = z.object({
   deskripsi: z.string().optional(),
   mataPelajaran: z.string().min(2, "Mata pelajaran wajib diisi"),
   kelasId: z.string().min(1, "Kelas wajib dipilih"),
+  targetGender: z.enum(["LAKI_LAKI", "PEREMPUAN"]).optional().nullable(),
   periodeAjaranId: z.string().min(1, "Periode ajaran wajib dipilih"),
   waktuMulai: z.string().refine((val) => !isNaN(Date.parse(val)), {
     message: "Format waktu mulai tidak valid",

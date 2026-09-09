@@ -117,7 +117,7 @@ export async function inputAbsensiSingle(
       },
     })
 
-    revalidatePath(`/dashboard/guru/absensi`)
+    revalidatePath(`/dashboard/absensi`)
     return {
       success: true,
       message: `Absensi siswa berhasil disimpan (${status})`,
@@ -217,7 +217,7 @@ export async function inputAbsensiBulk(
       { timeout: 10000, maxWait: 3000 }
     )
 
-    revalidatePath(`/dashboard/guru/absensi`)
+    revalidatePath(`/dashboard/absensi`)
     return {
       success: true,
       message: `Absensi bulk berhasil: ${berhasil} siswa tercatat`,
@@ -267,7 +267,7 @@ export async function editAbsensi(
       },
     })
 
-    revalidatePath(`/dashboard/guru/absensi`)
+    revalidatePath(`/dashboard/absensi`)
     return {
       success: true,
       message: "Absensi berhasil diperbarui",
@@ -404,6 +404,18 @@ export async function getRiwayatKehadiranSiswa(
     const user = await requireRole([Role.SISWA])
     if (!user.siswa) {
       return { success: false, message: "Data siswa tidak ditemukan" }
+    }
+
+    if (payload !== undefined) {
+      const validated = riwayatKehadiranSiswaSchema.safeParse(payload)
+      if (!validated.success) {
+        return {
+          success: false,
+          message: "Parameter tidak valid",
+          errors: validated.error.flatten().fieldErrors,
+        }
+      }
+      payload = validated.data
     }
 
     const siswaId = user.siswa.id // ✅ Paksa pakai ID dari session, bukan dari input client

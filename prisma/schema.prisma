@@ -161,6 +161,7 @@ model MataPelajaran {
   createdAt  DateTime             @default(now()) @map("created_at")
   updatedAt  DateTime             @updatedAt @map("updated_at")
   jenjangId  String?              @map("jenjang_id")
+  jenisKelamin JenisKelamin?      @map("jenis_kelamin")
   guruKelas  GuruKelas[]
   mapelKelas MapelKelas[]
   jenjang    Jenjang?             @relation(fields: [jenjangId], references: [id])
@@ -378,6 +379,7 @@ model MateriPembelajaran {
   urlFile         String?       @map("url_file")
   urlLink         String?       @map("url_link")
   kelasId         String        @map("kelas_id")
+  targetGender    JenisKelamin? @map("target_gender")
   periodeAjaranId String        @map("periode_ajaran_id")
   diunggahOlehId  String        @map("diunggah_oleh_id")
   createdAt       DateTime      @default(now()) @map("created_at")
@@ -401,6 +403,7 @@ model Ujian {
   deskripsi       String?
   mataPelajaranId String            @map("mata_pelajaran_id")
   kelasId         String            @map("kelas_id")
+  targetGender    JenisKelamin?     @map("target_gender")
   periodeAjaranId String            @map("periode_ajaran_id")
   waktuMulai      DateTime          @map("waktu_mulai")
   waktuSelesai    DateTime          @map("waktu_selesai")
@@ -515,6 +518,7 @@ model Tugas {
   deskripsi       String
   mataPelajaranId String             @map("mata_pelajaran_id")
   kelasId         String             @map("kelas_id")
+  targetGender    JenisKelamin?      @map("target_gender")
   periodeAjaranId String             @map("periode_ajaran_id")
   deadline        DateTime
   lampiranUrl     String?            @map("lampiran_url")
@@ -968,4 +972,4 @@ enum StatusWali {
 enum Kewarganegaraan {
   WNI
   WNA
-}
+} 

@@ -62,7 +62,8 @@ export default function RekapHasilUjianPage() {
   const [rekapData, setRekapData] = React.useState<RekapData | null>(null)
 
   const [selectedStudent, setSelectedStudent] = React.useState<PesertaRekap | null>(null)
-  const [nilaiEsai, setNilaiEsai] = React.useState("")
+  // Skor per soal esai (key: soal.id)
+  const [nilaiEsai, setNilaiEsai] = React.useState<Record<string, string>>({})
   const [catatanEsai, setCatatanEsai] = React.useState("")
   const [savingEsai, setSavingEsai] = React.useState(false)
 
@@ -98,15 +99,31 @@ export default function RekapHasilUjianPage() {
     setSavingEsai(true)
 
     try {
+      const esaiBelumDinilai = selectedStudent.jawaban.filter(
+        (j) => j.soal.tipe === "ESAI" && j.soal.id && j.nilaiSoal === null
+      )
+
+      // Wajib isi skor untuk setiap soal esai yang belum dinilai
+      const kosong = esaiBelumDinilai.some(
+        (j) => nilaiEsai[j.soal.id] === undefined || nilaiEsai[j.soal.id] === ""
+      )
+      if (kosong) {
+        toast({
+          variant: "destructive",
+          title: "Skor Tidak Lengkap",
+          description: "Isi skor untuk setiap soal esai sebelum menyimpan.",
+        })
+        setSavingEsai(false)
+        return
+      }
+
       const result = await beriNilaiEsai({
         pengerjaanId: selectedStudent.id,
-        penilaian: selectedStudent.jawaban
-          .filter((j) => j.soal.tipe === "ESAI" && j.soal.id && j.nilaiSoal === null)
-          .map((j) => ({
-            soalId: j.soal.id,
-            nilaiSoal: parseFloat(nilaiEsai) || 0,
-            catatanGuru: catatanEsai || undefined,
-          })),
+        penilaian: esaiBelumDinilai.map((j) => ({
+          soalId: j.soal.id,
+          nilaiSoal: parseFloat(nilaiEsai[j.soal.id] || "0") || 0,
+          catatanGuru: catatanEsai || undefined,
+        })),
       })
 
       if (result.success) {
@@ -312,7 +329,7 @@ export default function RekapHasilUjianPage() {
                           variant="outline"
                           onClick={() => {
                             setSelectedStudent(p)
-                            setNilaiEsai("")
+                            setNilaiEsai({})
                             setCatatanEsai("")
                           }}
                           className="rounded-xl min-h-[36px] text-xs font-bold"
@@ -356,7 +373,7 @@ export default function RekapHasilUjianPage() {
                       size="sm"
                       onClick={() => {
                         setSelectedStudent(p)
-                        setNilaiEsai("")
+                        setNilaiEsai({})
                         setCatatanEsai("")
                       }}
                       className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl min-h-[40px] text-xs font-bold"
@@ -386,7 +403,7 @@ export default function RekapHasilUjianPage() {
             </DialogHeader>
 
             <div className="space-y-4 py-3">
-              {/* Show essay answer */}
+              {/* Show essay answer with per-question score input */}
               {selectedStudent.jawaban.filter(j => j.soal.tipe === "ESAI").map((jwb, idx) => (
                 <div key={idx} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                   <span className="text-xs font-bold text-slate-700 block">
@@ -395,21 +412,24 @@ export default function RekapHasilUjianPage() {
                   <p className="text-xs sm:text-sm text-slate-800 leading-relaxed italic">
                     &ldquo;{jwb.jawabanEsai || "(Tidak ada jawaban)"}&rdquo;
                   </p>
+                  <div className="pt-2 flex items-end gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-600">Skor Soal {jwb.soal.nomorSoal}:</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max={jwb.soal.bobot}
+                        value={nilaiEsai[jwb.soal.id] ?? ""}
+                        onChange={(e) =>
+                          setNilaiEsai((prev) => ({ ...prev, [jwb.soal.id]: e.target.value }))
+                        }
+                        placeholder={`0 - ${jwb.soal.bobot}`}
+                        className="h-10 rounded-xl font-bold text-base w-32"
+                      />
+                    </div>
+                  </div>
                 </div>
               ))}
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700">Skor Esai:</label>
-                <Input
-                  type="number"
-                  min="0"
-                  max={totalBobotEsai}
-                  value={nilaiEsai}
-                  onChange={(e) => setNilaiEsai(e.target.value)}
-                  placeholder={`0 - ${totalBobotEsai}`}
-                  className="h-11 rounded-xl font-bold text-base"
-                />
-              </div>
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-700">Catatan Feedback untuk Santri:</label>

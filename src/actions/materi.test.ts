@@ -25,6 +25,7 @@ const {
   mockPrisma: {
     mataPelajaran: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
     },
     periodeAjaran: {
       findUnique: vi.fn(),
@@ -60,6 +61,7 @@ vi.mock("@/lib/guru-auth", () => ({
   verifyGuruAksesKelas: mockVerifyGuruAksesKelas.mockResolvedValue({
     user: { id: "guru-user-1" },
   }),
+  getMapelIdYangDiajarDiKelas: vi.fn().mockResolvedValue("ALL"),
 }))
 
 // storage helpers dimock — isExternalUrl tetap implementasi ASLI agar
@@ -124,13 +126,6 @@ const materiInternal = {
   id: "materi-2",
   judul: "Modul Internal",
   urlFile: "materi/kelas-1/abc123.pdf",
-}
-
-const guruSession = {
-  id: "guru-user-1",
-  role: "GURU",
-  siswa: null,
-  orangTua: null,
 }
 
 const siswaSession = {

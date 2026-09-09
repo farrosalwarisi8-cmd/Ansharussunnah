@@ -164,10 +164,7 @@ export function SiswaOrangTuaRaporView({
 function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
   const studentName = raporData.identitas.nama || raporData.identitas.namaSiswa || "Santri"
 
-  const totalNilai = raporData.nilaiPerMapel.reduce((acc, curr) => acc + curr.nilaiGabungan, 0)
-  const rerata = raporData.nilaiPerMapel.length > 0
-    ? (totalNilai / raporData.nilaiPerMapel.length).toFixed(1)
-    : "0"
+  const rerata = Number(raporData.rataRataKeseluruhan).toFixed(2)
 
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white shadow-xl overflow-hidden print:border-none print:shadow-none">

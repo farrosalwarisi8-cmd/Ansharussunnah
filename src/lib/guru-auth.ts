@@ -133,3 +133,36 @@ export async function getMapelTersediaUntukKelas(
   })
   return mapels
 }
+
+/**
+ * Mengembalikan daftar mataPelajaranId yang boleh diakses guru di sebuah kelas.
+ * - Admin akademik / super admin: "ALL" (akses penuh).
+ * - Wali kelas: "ALL" (selaras dengan verifyGuruAksesKelas yang memberi hak penuh).
+ * - PENGAJAR: hanya mapel yang diajarkannya di kelas tersebut (dari GuruKelas).
+ * Dipakai untuk memfilter daftar konten (tugas/materi/ujian) agar konsisten
+ * dengan pengecekan akses pada detail/delete yang mensyaratkan mapel.
+ */
+export async function getMapelIdYangDiajarDiKelas(
+  kelasId: string
+): Promise<string[] | "ALL"> {
+  const user = await requireGuru()
+
+  if (isAcademicAdminRole(user.role) || user.isAdmin) return "ALL"
+  if (!user.guru) return []
+
+  const guruId = user.guru.id
+
+  const sebagaiWali = await prisma.kelas.findFirst({
+    where: { id: kelasId, waliKelasId: guruId },
+    select: { id: true },
+  })
+  if (sebagaiWali) return "ALL"
+
+  const penugasan = await prisma.guruKelas.findMany({
+    where: { guruId, kelasId },
+    select: { mataPelajaranId: true },
+  })
+  return penugasan
+    .map((p) => p.mataPelajaranId)
+    .filter((x): x is string => !!x)
+}

@@ -11,6 +11,7 @@ import {
   StatusPengumpulan,
   StatusTagihan,
   JenisTagihan,
+  type JenisKelamin,
 } from "@prisma/client"
 import type { ActionResponse } from "@/types"
 import { toUserFriendlyError } from "@/lib/prisma-error"
@@ -118,7 +119,8 @@ function infoUjianFrom(row: {
 
 async function hitungRangkumanSiswa(
   siswaId: string,
-  kelasId: string
+  kelasId: string,
+  jenisKelamin: JenisKelamin | null
 ): Promise<RangkumanSiswa> {
   const now = new Date()
   const tanggal = new Date(now)
@@ -130,6 +132,20 @@ async function hitungRangkumanSiswa(
     where: {
       kelasId,
       status: StatusUjian.PUBLISHED,
+      AND: [
+        {
+          OR: [
+            { targetGender: null },
+            { targetGender: jenisKelamin },
+          ],
+        },
+        {
+          OR: [
+            { mataPelajaran: { jenisKelamin: null } },
+            { mataPelajaran: { jenisKelamin } },
+          ],
+        },
+      ],
     },
     include: {
       kelas: { select: { nama: true } },
@@ -194,6 +210,20 @@ async function hitungRangkumanSiswa(
       deadline: { gte: now },
       // Belum ada record pengumpulan siswa sama sekali
       pengumpulan: { none: { siswaId } },
+      AND: [
+        {
+          OR: [
+            { targetGender: null },
+            { targetGender: jenisKelamin },
+          ],
+        },
+        {
+          OR: [
+            { mataPelajaran: { jenisKelamin: null } },
+            { mataPelajaran: { jenisKelamin } },
+          ],
+        },
+      ],
     },
     include: {
       kelas: { select: { nama: true } },
@@ -414,7 +444,11 @@ export async function getRangkumanSiswaHome(): Promise<
         message: "Anda belum terdaftar di kelas aktif. Hubungi admin sekolah.",
       }
     }
-    const data = await hitungRangkumanSiswa(user.siswa.id, user.siswa.kelasId)
+    const data = await hitungRangkumanSiswa(
+      user.siswa.id,
+      user.siswa.kelasId,
+      user.siswa.jenisKelamin
+    )
     return {
       success: true,
       message: "Rangkuman dashboard siswa berhasil dimuat",
@@ -452,7 +486,7 @@ export async function getRangkumanOrangTuaHome(
 
     const kelasSiswa = await prisma.siswa.findUnique({
       where: { id: siswaId, deleted_at: null },
-      select: { kelasId: true },
+      select: { kelasId: true, jenisKelamin: true },
     })
     if (!kelasSiswa?.kelasId) {
       return {
@@ -461,7 +495,11 @@ export async function getRangkumanOrangTuaHome(
       }
     }
 
-    const data = await hitungRangkumanSiswa(siswaId, kelasSiswa.kelasId)
+    const data = await hitungRangkumanSiswa(
+      siswaId,
+      kelasSiswa.kelasId,
+      kelasSiswa.jenisKelamin
+    )
     return {
       success: true,
       message: "Rangkuman dashboard orang tua berhasil dimuat",

@@ -251,6 +251,7 @@ describe("createMapel", () => {
         kelompok: "A",
         jenjangId: "jenjang-1",
         aktif: true,
+        jenisKelamin: null,
         mapelKelas: {
           create: [
             { kelasId: "kelas-1" },
@@ -281,6 +282,7 @@ describe("createMapel", () => {
         kelompok: "A",
         jenjangId: "jenjang-1",
         aktif: true,
+        jenisKelamin: null,
         mapelKelas: undefined,
       },
     })

@@ -34,6 +34,7 @@ interface MapelItem {
   nama: string
   kelompok: string | null
   jenjangId: string | null
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   jenjangNama: string | null
   aktif: boolean
   kelasList: Array<{ id: string; nama: string }>
@@ -59,6 +60,7 @@ export default function MapelPage() {
   const [kode, setKode] = React.useState("")
   const [kelompok, setKelompok] = React.useState("")
   const [jenjangId, setJenjangId] = React.useState<string | null>(null)
+  const [jenisKelamin, setJenisKelamin] = React.useState<"LAKI_LAKI" | "PEREMPUAN" | null>(null)
   const [selectedKelasIds, setSelectedKelasIds] = React.useState<string[]>([])
   const [loading, setLoading] = React.useState(false)
 
@@ -86,6 +88,7 @@ export default function MapelPage() {
           nama: string
           kelompok: string | null
           jenjangId: string | null
+          jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
           jenjangNama: string | null
           aktif: boolean
           kelasList: Array<{ id: string; nama: string }>
@@ -102,6 +105,7 @@ export default function MapelPage() {
           nama: m.nama,
           kelompok: m.kelompok,
           jenjangId: m.jenjangId,
+          jenisKelamin: m.jenisKelamin,
           jenjangNama: m.jenjangNama,
           aktif: m.aktif,
           kelasList: m.kelasList,
@@ -127,6 +131,7 @@ export default function MapelPage() {
           nama: string
           kelompok: string | null
           jenjangId: string | null
+          jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
           jenjangNama: string | null
           aktif: boolean
           kelasList: Array<{ id: string; nama: string }>
@@ -143,6 +148,7 @@ export default function MapelPage() {
           nama: m.nama,
           kelompok: m.kelompok,
           jenjangId: m.jenjangId,
+          jenisKelamin: m.jenisKelamin,
           jenjangNama: m.jenjangNama,
           aktif: m.aktif,
           kelasList: m.kelasList,
@@ -186,6 +192,7 @@ export default function MapelPage() {
     setKode("")
     setKelompok("")
     setJenjangId(null)
+    setJenisKelamin(null)
     setSelectedKelasIds([])
     setIsDialogOpen(true)
   }
@@ -196,6 +203,7 @@ export default function MapelPage() {
     setKode(m.kode)
     setKelompok(m.kelompok || "")
     setJenjangId(m.jenjangId || null)
+    setJenisKelamin(m.jenisKelamin ?? null)
     setSelectedKelasIds(m.kelasList.map((k) => k.id))
     setIsDialogOpen(true)
   }
@@ -213,6 +221,7 @@ export default function MapelPage() {
           kode: kode.trim().toUpperCase(),
           kelompok: kelompok.trim() || null,
           jenjangId,
+          jenisKelamin,
           kelasIds: selectedKelasIds,
         })
       } else {
@@ -221,6 +230,7 @@ export default function MapelPage() {
           kode: kode.trim().toUpperCase(),
           kelompok: kelompok.trim() || null,
           jenjangId: jenjangId || undefined,
+          jenisKelamin,
           kelasIds: selectedKelasIds,
         })
       }
@@ -237,6 +247,7 @@ export default function MapelPage() {
         setKode("")
         setKelompok("")
         setJenjangId(null)
+        setJenisKelamin(null)
         setSelectedKelasIds([])
       } else {
         toast({ title: "Gagal", description: result.message, variant: "destructive" })
@@ -437,6 +448,15 @@ export default function MapelPage() {
                     Kelompok: <strong className="text-slate-700">{m.kelompok}</strong>
                   </p>
                 )}
+                {m.jenisKelamin && (
+                  <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5 mb-1">
+                    <Tag className="h-3 w-3 text-violet-600" />
+                    Khusus:{" "}
+                    <strong className={m.jenisKelamin === "LAKI_LAKI" ? "text-sky-700" : "text-pink-700"}>
+                      {m.jenisKelamin === "LAKI_LAKI" ? "Ikhwan (Laki-laki)" : "Akhwat (Perempuan)"}
+                    </strong>
+                  </p>
+                )}
                 {m.kelasList.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2 mb-3">
                     {m.kelasList.map((k) => (
@@ -536,6 +556,28 @@ export default function MapelPage() {
               />
               <p className="text-[11px] text-slate-400">
                 Opsional. Kosongkan jika tidak termasuk kelompok tertentu.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                Target Gender
+              </label>
+              <select
+                value={jenisKelamin ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setJenisKelamin(v === "LAKI_LAKI" || v === "PEREMPUAN" ? v : null)
+                  if (v !== "") setSelectedKelasIds([])
+                }}
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white text-sm px-3 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500"
+              >
+                <option value="">Semua (Umum)</option>
+                <option value="LAKI_LAKI">Khusus Ikhwan (Laki-laki)</option>
+                <option value="PEREMPUAN">Khusus Akhwat (Perempuan)</option>
+              </select>
+              <p className="text-[11px] text-slate-400">
+                Jika dipilih, mapel hanya untuk gender tersebut. Kelas yang dipilih otomatis disesuaikan.
               </p>
             </div>
 

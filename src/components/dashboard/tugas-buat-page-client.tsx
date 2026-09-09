@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { KelasMapelSelector } from "@/components/dashboard/kelas-mapel-selector"
+import { TargetGenderSelector } from "@/components/dashboard/target-gender-selector"
 import { ArrowLeft, Save, Loader2, Link as LinkIcon } from "lucide-react"
 
 export default function BuatTugasPage() {
@@ -24,6 +25,7 @@ export default function BuatTugasPage() {
   const [deskripsi, setDeskripsi] = React.useState("")
   const [mapel, setMapel] = React.useState("")
   const [kelasId, setKelasId] = React.useState("")
+  const [targetGender, setTargetGender] = React.useState<"LAKI_LAKI" | "PEREMPUAN" | null>(null)
   const [periodeAjaranId, setPeriodeAjaranId] = React.useState("")
   const [deadline, setDeadline] = React.useState("")
   const [fileUrl, setFileUrl] = React.useState("")
@@ -58,6 +60,7 @@ export default function BuatTugasPage() {
         kelasId,
         periodeAjaranId,
         mataPelajaran: mapel,
+        targetGender,
         deadline: new Date(deadline).toISOString(),
         lampiranUrl: fileUrl || undefined,
       })
@@ -142,6 +145,8 @@ export default function BuatTugasPage() {
                 />
               </div>
             </div>
+
+            <TargetGenderSelector value={targetGender} onChange={setTargetGender} />
 
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">

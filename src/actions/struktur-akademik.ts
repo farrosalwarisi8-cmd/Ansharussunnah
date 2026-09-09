@@ -101,7 +101,7 @@ export async function getStrukturKelasSiswaAkademik(): Promise<
  */
 export async function getMapelTersedia(
   kelasId: string
-): Promise<ActionResponse<Array<{ id: string; nama: string }>>> {
+): Promise<ActionResponse<Array<{ id: string; nama: string; jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null }>>> {
   try {
     const user = await requireGuru()
     // Penting: GURU dengan flag isAdmin juga dianggap admin di sini, sama seperti
@@ -109,28 +109,53 @@ export async function getMapelTersedia(
     // terjebak filter GuruKelas dan dropdown mapel di ujian/tugas/materi menjadi kosong.
     const isAdmin = isAcademicAdminRole(user.role) || user.isAdmin
 
+    // Gender kelas tujuan — mapel khusus gender lain tidak boleh tampil.
+    const kelas = await prisma.kelas.findUnique({
+      where: { id: kelasId },
+      select: { jenisKelamin: true },
+    })
+    const genderKelas = kelas?.jenisKelamin ?? null
+
     // Mapel aktif yang ditetapkan untuk kelas ini via MapelKelas.
     // Jika belum ada penautan MapelKelas sama sekali, fallback ke semua mapel aktif.
-    const cariMapelKelas = async (): Promise<Array<{ id: string; nama: string }>> => {
+    const cariMapelKelas = async (): Promise<Array<{ id: string; nama: string; jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null }>> => {
       const mapelViaKelas = await prisma.mataPelajaran.findMany({
         where: {
           aktif: true,
           mapelKelas: { some: { kelasId } },
+          ...(genderKelas
+            ? {
+                OR: [
+                  { jenisKelamin: null },
+                  { jenisKelamin: genderKelas },
+                ],
+              }
+            : {}),
         },
-        select: { id: true, nama: true },
+        select: { id: true, nama: true, jenisKelamin: true },
         orderBy: { nama: "asc" },
       })
       if (mapelViaKelas.length > 0) return mapelViaKelas
 
       const mapels = await prisma.mataPelajaran.findMany({
-        where: { aktif: true },
-        select: { id: true, nama: true },
+        where: {
+          aktif: true,
+          ...(genderKelas
+            ? {
+                OR: [
+                  { jenisKelamin: null },
+                  { jenisKelamin: genderKelas },
+                ],
+              }
+            : {}),
+        },
+        select: { id: true, nama: true, jenisKelamin: true },
         orderBy: { nama: "asc" },
       })
       return mapels
     }
 
-    const balasanMapel = (data: Array<{ id: string; nama: string }>) => ({
+    const balasanMapel = (data: Array<{ id: string; nama: string; jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null }>) => ({
       success: true as const,
       message: "Daftar mata pelajaran tersedia untuk kelas ini",
       data,
@@ -167,8 +192,20 @@ export async function getMapelTersedia(
           { mapelKelas: { some: { kelasId } } },
           { mapelKelas: { none: {} } },
         ],
+        ...(genderKelas
+          ? {
+              AND: [
+                {
+                  OR: [
+                    { jenisKelamin: null },
+                    { jenisKelamin: genderKelas },
+                  ],
+                },
+              ],
+            }
+          : {}),
       },
-      select: { id: true, nama: true },
+      select: { id: true, nama: true, jenisKelamin: true },
       orderBy: { nama: "asc" },
     })
 

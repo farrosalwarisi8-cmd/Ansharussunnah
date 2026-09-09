@@ -22,6 +22,10 @@ export const mapelSchema = z.object({
     .min(1, "Jenjang wajib dipilih")
     .optional()
     .nullable(),
+  jenisKelamin: z
+    .enum(["LAKI_LAKI", "PEREMPUAN"])
+    .optional()
+    .nullable(),
   kelasIds: z
     .array(z.string())
     .optional()

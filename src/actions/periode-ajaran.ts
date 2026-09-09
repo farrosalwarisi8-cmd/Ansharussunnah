@@ -3,7 +3,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireGuru } from "@/lib/auth"
+import { requireGuru, requireGuruAdmin, requireRole } from "@/lib/auth"
 import {
   createPeriodeAjaranSchema,
   updatePeriodeAjaranSchema,
@@ -11,15 +11,22 @@ import {
   type UpdatePeriodeAjaranValues,
 } from "@/lib/validations/rapor"
 import type { ActionResponse } from "@/types"
+import { Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
 /**
- * Ambil semua periode ajaran (untuk dropdown di berbagai fitur).
- * Bisa dipanggil oleh role apapun yang sudah login.
+ * Ambil semua periode ajaran (untuk dropdown di berbagai fitur),
+ * termasuk dropdown rapor siswa/ortu.
  */
 export async function getDaftarPeriodeAjaran(): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireRole([
+      Role.GURU,
+      Role.SUPER_ADMIN,
+      Role.ADMIN_AKADEMIK,
+      Role.SISWA,
+      Role.ORANG_TUA,
+    ])
 
     const periodeList = await prisma.periodeAjaran.findMany({
       orderBy: [{ tahunAjaran: "desc" }, { semester: "desc" }],
@@ -75,7 +82,7 @@ export async function createPeriodeAjaran(
   payload: CreatePeriodeAjaranValues
 ): Promise<ActionResponse<{ periodeId: string }>> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const validated = createPeriodeAjaranSchema.safeParse(payload)
     if (!validated.success) {
@@ -100,19 +107,27 @@ export async function createPeriodeAjaran(
       }
     }
 
-    // Trigger DB otomatis menonaktifkan periode lama saat periode baru diaktifkan.
-    const periode = await prisma.periodeAjaran.create({
-      data: {
-        nama,
-        tahunAjaran,
-        semester,
-        tanggalMulai: new Date(tanggalMulai),
-        tanggalSelesai: new Date(tanggalSelesai),
-        aktif,
-      },
+    // Saat periode baru aktif, nonaktifkan periode lain yang sedang aktif.
+    const periode = await prisma.$transaction(async (tx) => {
+      if (aktif) {
+        await tx.periodeAjaran.updateMany({
+          where: { aktif: true },
+          data: { aktif: false },
+        })
+      }
+      return tx.periodeAjaran.create({
+        data: {
+          nama,
+          tahunAjaran,
+          semester,
+          tanggalMulai: new Date(tanggalMulai),
+          tanggalSelesai: new Date(tanggalSelesai),
+          aktif,
+        },
+      })
     })
 
-    revalidatePath("/dashboard/guru/periode")
+    revalidatePath("/dashboard/periode-ajaran")
     return {
       success: true,
       message: `Periode ajaran "${nama}" berhasil dibuat`,
@@ -134,7 +149,7 @@ export async function updatePeriodeAjaran(
   payload: UpdatePeriodeAjaranValues
 ): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const validated = updatePeriodeAjaranSchema.safeParse(payload)
     if (!validated.success) {
@@ -152,24 +167,46 @@ export async function updatePeriodeAjaran(
       return { success: false, message: "Periode ajaran tidak ditemukan" }
     }
 
-    // Trigger DB otomatis menonaktifkan periode lain saat periode ini diaktifkan.
-    await prisma.periodeAjaran.update({
-      where: { id: periodeId },
-      data: {
-        nama: payload.nama,
-        tahunAjaran: payload.tahunAjaran,
-        semester: payload.semester,
-        tanggalMulai: payload.tanggalMulai
-          ? new Date(payload.tanggalMulai)
-          : undefined,
-        tanggalSelesai: payload.tanggalSelesai
-          ? new Date(payload.tanggalSelesai)
-          : undefined,
-        aktif: payload.aktif,
-      },
+    // Cek duplikasi nama (kecuali nama milik periode ini sendiri)
+    if (validated.data.nama && validated.data.nama !== existing.nama) {
+      const duplicate = await prisma.periodeAjaran.findUnique({
+        where: { nama: validated.data.nama },
+        select: { id: true },
+      })
+      if (duplicate) {
+        return {
+          success: false,
+          message: "Nama periode ajaran sudah digunakan",
+        }
+      }
+    }
+
+    // Saat periode ini diaktifkan, nonaktifkan periode lain yang aktif.
+    await prisma.$transaction(async (tx) => {
+      if (validated.data.aktif) {
+        await tx.periodeAjaran.updateMany({
+          where: { id: { not: periodeId }, aktif: true },
+          data: { aktif: false },
+        })
+      }
+      await tx.periodeAjaran.update({
+        where: { id: periodeId },
+        data: {
+          nama: validated.data.nama,
+          tahunAjaran: validated.data.tahunAjaran,
+          semester: validated.data.semester,
+          tanggalMulai: validated.data.tanggalMulai
+            ? new Date(validated.data.tanggalMulai)
+            : undefined,
+          tanggalSelesai: validated.data.tanggalSelesai
+            ? new Date(validated.data.tanggalSelesai)
+            : undefined,
+          aktif: validated.data.aktif,
+        },
+      })
     })
 
-    revalidatePath("/dashboard/guru/periode")
+    revalidatePath("/dashboard/periode-ajaran")
     return { success: true, message: "Periode ajaran berhasil diperbarui" }
   } catch (error: unknown) {
     return {
@@ -186,7 +223,7 @@ export async function deletePeriodeAjaran(
   periodeId: string
 ): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const checkRelations = await prisma.periodeAjaran.findUnique({
       where: { id: periodeId },
@@ -197,6 +234,10 @@ export async function deletePeriodeAjaran(
             tugas: true,
             absensi: true,
             catatanRapor: true,
+            materi: true,
+            anggotaEkskul: true,
+            nilaiRapor: true,
+            riwayatKelas: true,
           },
         },
       },
@@ -210,19 +251,23 @@ export async function deletePeriodeAjaran(
       checkRelations._count.ujian +
       checkRelations._count.tugas +
       checkRelations._count.absensi +
-      checkRelations._count.catatanRapor
+      checkRelations._count.catatanRapor +
+      checkRelations._count.materi +
+      checkRelations._count.anggotaEkskul +
+      checkRelations._count.nilaiRapor +
+      checkRelations._count.riwayatKelas
 
     if (totalRelasi > 0) {
       return {
         success: false,
         message:
-          "Tidak dapat menghapus periode yang masih memiliki data ujian, tugas, absensi, atau rapor",
+          "Tidak dapat menghapus periode yang masih memiliki data terkait (ujian, tugas, absensi, rapor, materi, ekskul, atau riwayat kelas)",
       }
     }
 
     await prisma.periodeAjaran.delete({ where: { id: periodeId } })
 
-    revalidatePath("/dashboard/guru/periode")
+    revalidatePath("/dashboard/periode-ajaran")
     return { success: true, message: "Periode ajaran berhasil dihapus" }
   } catch (error: unknown) {
     return {

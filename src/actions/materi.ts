@@ -4,7 +4,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireRole } from "@/lib/auth"
-import { verifyGuruAksesKelas } from "@/lib/guru-auth"
+import { verifyGuruAksesKelas, getMapelIdYangDiajarDiKelas } from "@/lib/guru-auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getSignedUrls, isExternalUrl } from "@/lib/storage"
 import {
@@ -65,6 +65,7 @@ export async function createMateri(
       deskripsi,
       mataPelajaran,
       kelasId,
+      targetGender,
       periodeAjaranId,
       urlFile,
       urlLink,
@@ -77,6 +78,18 @@ export async function createMateri(
     if (!mapel) {
       return { success: false, message: `Mata pelajaran "${mataPelajaran}" tidak ditemukan` }
     }
+
+    // Validasi kecocokan gender mapel dengan target gender materi
+    if (mapel.jenisKelamin && targetGender && mapel.jenisKelamin !== targetGender) {
+      const labelMapel = mapel.jenisKelamin === "LAKI_LAKI" ? "khusus Ikhwan" : "khusus Akhwat"
+      return {
+        success: false,
+        message: `Mata pelajaran "${mataPelajaran}" adalah mapel ${labelMapel}. Target gender materi tidak sesuai.`,
+      }
+    }
+
+    // Bila mapel khusus gender & targetGender belum diisi, otomatis ikut gender mapel
+    const effectiveTargetGender = mapel.jenisKelamin ?? targetGender ?? null
 
     const periode = await prisma.periodeAjaran.findUnique({
       where: { id: periodeAjaranId },
@@ -128,6 +141,7 @@ export async function createMateri(
         deskripsi: deskripsi || null,
         mataPelajaranId: mapel.id,
         kelasId,
+        targetGender: effectiveTargetGender,
         periodeAjaranId,
         urlFile: urlFile || null,
         urlLink: urlLink || null,
@@ -135,7 +149,7 @@ export async function createMateri(
       },
     })
 
-    revalidatePath("/dashboard/guru/materi")
+    revalidatePath("/dashboard/materi")
     return {
       success: true,
       message: "Materi pembelajaran berhasil diunggah",
@@ -175,13 +189,42 @@ export async function updateMateri(
 
     // Jika mataPelajaran diubah, cari ID baru
     let mataPelajaranId: string | undefined
+    let mapelJenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null | undefined
     if (payload.mataPelajaran) {
       const mapel = await prisma.mataPelajaran.findFirst({ where: { nama: payload.mataPelajaran } })
       if (!mapel) {
         return { success: false, message: `Mata pelajaran "${payload.mataPelajaran}" tidak ditemukan` }
       }
       mataPelajaranId = mapel.id
+      mapelJenisKelamin = mapel.jenisKelamin
+    } else {
+      const mapelSaatIni = await prisma.mataPelajaran.findUnique({
+        where: { id: materi.mataPelajaranId },
+        select: { jenisKelamin: true },
+      })
+      mapelJenisKelamin = mapelSaatIni?.jenisKelamin
     }
+
+    // Validasi kecocokan gender mapel dengan target gender materi
+    if (
+      mapelJenisKelamin &&
+      payload.targetGender &&
+      mapelJenisKelamin !== payload.targetGender
+    ) {
+      const labelMapel = mapelJenisKelamin === "LAKI_LAKI" ? "khusus Ikhwan" : "khusus Akhwat"
+      return {
+        success: false,
+        message: `Mata pelajaran tersebut adalah mapel ${labelMapel}. Target gender materi tidak sesuai.`,
+      }
+    }
+    // Bila mapel khusus gender, target otomatis ikut gender mapel;
+    // jika tidak, gunakan target dari payload (null = semua, boleh menghapus pilihan).
+    const effectiveTargetGender =
+      mapelJenisKelamin !== undefined && mapelJenisKelamin !== null
+        ? mapelJenisKelamin
+        : payload.targetGender !== undefined
+          ? payload.targetGender
+          : undefined
 
     // Verifikasi akses terhadap KELAS & MAPEL TUJUAN (setelah perubahan),
     // bukan hanya yang lama — mencegah guru memindahkan materi ke kelas/mapel
@@ -229,13 +272,14 @@ export async function updateMateri(
         deskripsi: payload.deskripsi,
         mataPelajaranId,
         kelasId: payload.kelasId,
+        targetGender: effectiveTargetGender,
         periodeAjaranId: payload.periodeAjaranId,
         urlFile: payload.urlFile !== undefined ? payload.urlFile : undefined,
         urlLink: payload.urlLink !== undefined ? payload.urlLink : undefined,
       },
     })
 
-    revalidatePath("/dashboard/guru/materi")
+    revalidatePath("/dashboard/materi")
     return { success: true, message: "Materi berhasil diperbarui" }
   } catch (error: unknown) {
     return {
@@ -272,7 +316,7 @@ export async function deleteMateri(materiId: string): Promise<ActionResponse> {
       }
     }
 
-    revalidatePath("/dashboard/guru/materi")
+    revalidatePath("/dashboard/materi")
     return { success: true, message: "Materi berhasil dihapus" }
   } catch (error: unknown) {
     return {
@@ -295,12 +339,24 @@ export async function getDaftarMateriGuru(
   try {
     await verifyGuruAksesKelas(kelasId)
 
+    const aksesMapel = await getMapelIdYangDiajarDiKelas(kelasId)
+    if (aksesMapel !== "ALL" && aksesMapel.length === 0) {
+      return {
+        success: true,
+        message: "Daftar materi kosong",
+        data: [],
+      }
+    }
+
     const materiList = await prisma.materiPembelajaran.findMany({
-      where: { kelasId },
+      where: {
+        kelasId,
+        ...(aksesMapel !== "ALL" ? { mataPelajaranId: { in: aksesMapel } } : {}),
+      },
       include: {
         periodeAjaran: { select: { nama: true } },
         diunggahOleh: { select: { nama: true } },
-        mataPelajaran: { select: { nama: true } },
+        mataPelajaran: { select: { nama: true, jenisKelamin: true } },
       },
       orderBy: { createdAt: "desc" },
     })
@@ -320,6 +376,8 @@ export async function getDaftarMateriGuru(
         judul: m.judul,
         deskripsi: m.deskripsi,
         mataPelajaran: m.mataPelajaran.nama,
+        targetGender: m.targetGender,
+        mapelGender: m.mataPelajaran.jenisKelamin,
         urlFile: m.urlFile,
         urlLink: m.urlLink,
         signedUrl,
@@ -359,7 +417,23 @@ export async function getDaftarMateriSiswa(): Promise<ActionResponse> {
     }
 
     const materiList = await prisma.materiPembelajaran.findMany({
-      where: { kelasId: user.siswa.kelasId },
+      where: {
+        kelasId: user.siswa.kelasId,
+        AND: [
+          {
+            OR: [
+              { targetGender: null },
+              { targetGender: user.siswa.jenisKelamin },
+            ],
+          },
+          {
+            OR: [
+              { mataPelajaran: { jenisKelamin: null } },
+              { mataPelajaran: { jenisKelamin: user.siswa.jenisKelamin } },
+            ],
+          },
+        ],
+      },
       include: {
         periodeAjaran: { select: { nama: true } },
         diunggahOleh: { select: { nama: true } },
@@ -438,7 +512,23 @@ export async function getDaftarMateriAnak(
     }
 
     const materiList = await prisma.materiPembelajaran.findMany({
-      where: { kelasId: siswa.kelasId },
+      where: {
+        kelasId: siswa.kelasId,
+        AND: [
+          {
+            OR: [
+              { targetGender: null },
+              { targetGender: siswa.jenisKelamin },
+            ],
+          },
+          {
+            OR: [
+              { mataPelajaran: { jenisKelamin: null } },
+              { mataPelajaran: { jenisKelamin: siswa.jenisKelamin } },
+            ],
+          },
+        ],
+      },
       include: {
         periodeAjaran: { select: { nama: true } },
         diunggahOleh: { select: { nama: true } },

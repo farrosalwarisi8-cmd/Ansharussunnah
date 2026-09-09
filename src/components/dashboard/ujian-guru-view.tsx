@@ -28,6 +28,8 @@ type UjianItem = {
   judul: string
   deskripsi?: string | null
   mataPelajaran: string
+  targetGender?: "LAKI_LAKI" | "PEREMPUAN" | null
+  mapelGender?: "LAKI_LAKI" | "PEREMPUAN" | null
   durasiMenit: number
   waktuMulai: Date
   waktuSelesai: Date
@@ -199,7 +201,20 @@ export function GuruUjianView() {
                 <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2.5 py-1 rounded-lg border border-yellow-100">
                   {item.mataPelajaran}
                 </span>
-                <StatusBadge status={item.status as "DRAFT" | "AKTIF" | "SELESAI" | "PUBLISHED"} />
+                <div className="flex items-center gap-1">
+                  {(item.targetGender || item.mapelGender) && (
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${
+                        (item.targetGender ?? item.mapelGender) === "LAKI_LAKI"
+                          ? "bg-sky-50 text-sky-700 border-sky-200"
+                          : "bg-pink-50 text-pink-700 border-pink-200"
+                      }`}
+                    >
+                      Khusus {(item.targetGender ?? item.mapelGender) === "LAKI_LAKI" ? "Ikhwan" : "Akhwat"}
+                    </span>
+                  )}
+                  <StatusBadge status={item.status as "DRAFT" | "AKTIF" | "SELESAI" | "PUBLISHED"} />
+                </div>
               </div>
               <CardTitle className="text-base font-bold text-slate-800 leading-snug">
                 {item.judul}

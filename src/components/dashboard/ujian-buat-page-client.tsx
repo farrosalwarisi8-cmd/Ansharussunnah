@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { KelasMapelSelector } from "@/components/dashboard/kelas-mapel-selector"
+import { TargetGenderSelector } from "@/components/dashboard/target-gender-selector"
 import { Plus, Trash2, ArrowLeft, Loader2, Save } from "lucide-react"
 import Link from "next/link"
 
@@ -48,11 +49,11 @@ export default function BuatUjianPage() {
   const [deskripsi, setDeskripsi] = React.useState("")
   const [mapel, setMapel] = React.useState("")
   const [kelasId, setKelasId] = React.useState("")
+  const [targetGender, setTargetGender] = React.useState<"LAKI_LAKI" | "PEREMPUAN" | null>(null)
   const [periodeAjaranId, setPeriodeAjaranId] = React.useState("")
   const [durasi, setDurasi] = React.useState("60")
   const [waktuMulai, setWaktuMulai] = React.useState("")
   const [waktuSelesai, setWaktuSelesai] = React.useState("")
-  const [acakSoal, setAcakSoal] = React.useState(true)
 
   // Question List State
   const [soalList, setSoalList] = React.useState<SoalItem[]>([
@@ -186,6 +187,7 @@ export default function BuatUjianPage() {
           judul: string
           deskripsi?: string | null
           mataPelajaran: string
+          targetGender?: "LAKI_LAKI" | "PEREMPUAN" | null
           kelasId: string
           durasiMenit: number
           waktuMulai: string
@@ -203,6 +205,7 @@ export default function BuatUjianPage() {
         setDeskripsi(data.deskripsi || "")
         setMapel(data.mataPelajaran)
         setKelasId(data.kelasId)
+        setTargetGender(data.targetGender ?? null)
         setDurasi(String(data.durasiMenit))
         setWaktuMulai(data.waktuMulai ? new Date(data.waktuMulai).toISOString().slice(0, 16) : "")
         setWaktuSelesai(data.waktuSelesai ? new Date(data.waktuSelesai).toISOString().slice(0, 16) : "")
@@ -256,6 +259,7 @@ export default function BuatUjianPage() {
           kelasId,
           periodeAjaranId,
           mataPelajaran: mapel,
+          targetGender,
           durasiMenit: parseInt(durasi) || 60,
           waktuMulai: waktuMulai ? new Date(waktuMulai).toISOString() : undefined,
           waktuSelesai: waktuSelesai ? new Date(waktuSelesai).toISOString() : undefined,
@@ -279,6 +283,7 @@ export default function BuatUjianPage() {
           kelasId,
           periodeAjaranId,
           mataPelajaran: mapel,
+          targetGender,
           durasiMenit: parseInt(durasi) || 60,
           waktuMulai: waktuMulai ? new Date(waktuMulai).toISOString() : new Date().toISOString(),
           waktuSelesai: waktuSelesai ? new Date(waktuSelesai).toISOString() : new Date(Date.now() + 86400000).toISOString(),
@@ -455,6 +460,8 @@ export default function BuatUjianPage() {
               </div>
             </div>
 
+            <TargetGenderSelector value={targetGender} onChange={setTargetGender} />
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
@@ -503,19 +510,6 @@ export default function BuatUjianPage() {
                 onChange={(e) => setDeskripsi(e.target.value)}
                 className="rounded-xl min-h-[90px]"
               />
-            </div>
-
-            <div className="flex items-center gap-2 pt-2">
-              <input
-                type="checkbox"
-                id="acakSoal"
-                checked={acakSoal}
-                onChange={(e) => setAcakSoal(e.target.checked)}
-                className="h-4 w-4 rounded text-yellow-500 focus:ring-yellow-500"
-              />
-              <label htmlFor="acakSoal" className="text-sm font-medium text-slate-700">
-                Acak urutan soal untuk setiap santri
-              </label>
             </div>
 
             <div className="pt-4 flex justify-end">

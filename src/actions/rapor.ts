@@ -612,7 +612,7 @@ export async function createOrUpdateCatatanRapor(
       },
     })
 
-    revalidatePath(`/dashboard/guru/rapor`)
+    revalidatePath(`/dashboard/rapor`)
     return {
       success: true,
       message: "Catatan rapor berhasil disimpan",
@@ -654,19 +654,21 @@ export async function updateCatatanRapor(
       return { success: false, message: "Catatan rapor tidak ditemukan" }
     }
 
+    let pembuatId: string | undefined
     if (catatanRapor.siswa.kelas) {
-      const { roleInKelas } = await verifyGuruAksesKelas(catatanRapor.siswa.kelas.id)
+      const { user, roleInKelas } = await verifyGuruAksesKelas(catatanRapor.siswa.kelas.id)
       if (roleInKelas !== "WALI_KELAS" && roleInKelas !== "ADMIN") {
         return { success: false, message: "Akses ditolak: Hanya wali kelas yang dapat mengubah catatan rapor" }
       }
+      pembuatId = user.id
     }
 
     await prisma.catatanRapor.update({
       where: { id: catatanId },
-      data: { catatan, ranking },
+      data: { catatan, ranking, dibuatOlehId: pembuatId },
     })
 
-    revalidatePath(`/dashboard/guru/rapor`)
+    revalidatePath(`/dashboard/rapor`)
     return { success: true, message: "Catatan rapor berhasil diperbarui" }
   } catch (error: unknown) {
     return {

@@ -42,7 +42,7 @@ export function KelasMapelSelector({
 }: KelasMapelSelectorProps) {
   const [jenjang, setJenjang] = React.useState("")
   const [struktur, setStruktur] = React.useState<JenjangOption[]>([])
-  const [mapelList, setMapelList] = React.useState<Array<{ id: string; nama: string }>>([])
+  const [mapelList, setMapelList] = React.useState<Array<{ id: string; nama: string; jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null }>>([])
   const [loading, setLoading] = React.useState(true)
   const [loadingMapel, setLoadingMapel] = React.useState(false)
 
@@ -184,6 +184,11 @@ export function KelasMapelSelector({
               {mapelList.map((m) => (
                 <option key={m.id} value={m.nama}>
                   {m.nama}
+                  {m.jenisKelamin === "LAKI_LAKI"
+                    ? " (khusus Ikhwan)"
+                    : m.jenisKelamin === "PEREMPUAN"
+                      ? " (khusus Akhwat)"
+                      : ""}
                 </option>
               ))}
             </select>

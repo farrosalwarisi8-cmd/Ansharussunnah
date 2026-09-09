@@ -139,7 +139,10 @@ export async function createAkunGuru(
             username: await deriveUniqueUsername(tx, email),
             passwordPlain: encryptSecret(password),
             nama,
-            role: "GURU",
+            // Constraint DB (chk_admin_role_consistency): is_admin=true hanya sah
+            // untuk role admin. Role GURU + isAdmin → ditolak DB. Karena itu,
+            // "hak admin" pada akun guru dipetakan ke role ADMIN_AKADEMIK.
+            role: isAdmin ? "ADMIN_AKADEMIK" : "GURU",
             authId,
             mustChangePassword: true,
             aktif: true,
@@ -245,7 +248,7 @@ export async function updateAkunGuru(
       include: { guru: true },
     })
 
-    if (!user || user.role !== "GURU") {
+    if (!user || (user.role !== "GURU" && user.role !== "ADMIN_AKADEMIK")) {
       return { success: false, message: "Akun guru tidak ditemukan" }
     }
 
@@ -313,7 +316,7 @@ export async function nonaktifkanAkunGuru(
       include: { guru: true },
     })
 
-    if (!user || user.role !== "GURU") {
+    if (!user || (user.role !== "GURU" && user.role !== "ADMIN_AKADEMIK")) {
       return { success: false, message: "Akun guru tidak ditemukan" }
     }
 
@@ -364,7 +367,7 @@ export async function aktifkanKembaliAkunGuru(
       include: { guru: true },
     })
 
-    if (!user || user.role !== "GURU") {
+    if (!user || (user.role !== "GURU" && user.role !== "ADMIN_AKADEMIK")) {
       return { success: false, message: "Akun guru tidak ditemukan" }
     }
 
@@ -415,7 +418,7 @@ export async function setGuruAdmin(
       include: { guru: true },
     })
 
-    if (!user || user.role !== "GURU") {
+    if (!user || (user.role !== "GURU" && user.role !== "ADMIN_AKADEMIK")) {
       return { success: false, message: "Akun guru tidak ditemukan" }
     }
 
@@ -425,9 +428,15 @@ export async function setGuruAdmin(
       return { success: false, message: "Tidak dapat mengubah status admin diri sendiri" }
     }
 
+    // Constraint DB (chk_admin_role_consistency): is_admin=true hanya sah untuk
+    // role admin. Saat guru diangkat admin, ubah role-nya menjadi ADMIN_AKADEMIK;
+    // saat diturunkan, kembalikan ke GURU.
     await prisma.user.update({
       where: { id: userId },
-      data: { isAdmin },
+      data: {
+        isAdmin,
+        role: isAdmin ? "ADMIN_AKADEMIK" : "GURU",
+      },
     })
 
     const action = isAdmin ? "diangkat menjadi admin" : "diturunkan dari admin"
@@ -494,7 +503,7 @@ export async function hapusAkunGuruPermanent(
       },
     })
 
-    if (!user || user.role !== Role.GURU) {
+    if (!user || (user.role !== Role.GURU && user.role !== Role.ADMIN_AKADEMIK)) {
       return { success: false, message: "Akun guru tidak ditemukan" }
     }
 

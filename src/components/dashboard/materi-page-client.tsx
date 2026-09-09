@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
 import { KelasMapelSelector } from "@/components/dashboard/kelas-mapel-selector"
+import { TargetGenderSelector } from "@/components/dashboard/target-gender-selector"
 import dynamic from "next/dynamic"
 const Dialog = dynamic(() => import("@/components/ui/dialog").then(m => m.Dialog), { ssr: false })
 const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogContent), { ssr: false })
@@ -31,6 +32,7 @@ type MateriItem = {
   judul: string
   deskripsi?: string | null
   mataPelajaran: string
+  targetGender?: "LAKI_LAKI" | "PEREMPUAN" | null
   urlFile?: string | null
   urlLink?: string | null
   signedUrl?: string | null
@@ -69,6 +71,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
   const [deskripsi, setDeskripsi] = React.useState("")
   const [mapel, setMapel] = React.useState("")
   const [kelasId, setKelasId] = React.useState("")
+  const [targetGender, setTargetGender] = React.useState<"LAKI_LAKI" | "PEREMPUAN" | null>(null)
   const [periodeAjaranId, setPeriodeAjaranId] = React.useState("")
   const [fileUrl, setFileUrl] = React.useState("")
 
@@ -86,6 +89,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
   const [editJudul, setEditJudul] = React.useState("")
   const [editDeskripsi, setEditDeskripsi] = React.useState("")
   const [editMapel, setEditMapel] = React.useState("")
+  const [editGender, setEditGender] = React.useState<"LAKI_LAKI" | "PEREMPUAN" | null>(null)
   const [editFileUrl, setEditFileUrl] = React.useState("")
   const [editing, setEditing] = React.useState(false)
 
@@ -181,6 +185,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
         kelasId,
         periodeAjaranId,
         mataPelajaran: mapel,
+        targetGender,
         urlFile: fileUrl,
       })
 
@@ -221,6 +226,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
         judul: editJudul || undefined,
         deskripsi: editDeskripsi || undefined,
         mataPelajaran: editMapel || undefined,
+        targetGender: editGender ?? null,
         urlFile: editFileUrl || undefined,
       })
 
@@ -406,6 +412,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
                             setEditJudul(mat.judul)
                             setEditDeskripsi(mat.deskripsi || "")
                             setEditMapel(mat.mataPelajaran)
+                            setEditGender(mat.targetGender ?? null)
                             setEditFileUrl(mat.urlFile || mat.urlLink || "")
                             setIsEditModalOpen(true)
                           }}
@@ -482,6 +489,8 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
                 />
               </div>
             </div>
+
+            <TargetGenderSelector value={targetGender} onChange={setTargetGender} />
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
@@ -561,6 +570,8 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
                 ))}
               </select>
             </div>
+
+            <TargetGenderSelector value={editGender} onChange={setEditGender} />
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">URL File / Link</label>

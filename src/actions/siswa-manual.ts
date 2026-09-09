@@ -291,20 +291,8 @@ export async function createSiswaManual(
         })
 
         if (!userSiswa) {
-          userSiswa = await tx.user.findFirst({
-            where: { email: emailSiswa, role: Role.SISWA },
-          })
-          if (userSiswa) {
-            await tx.user.update({
-              where: { id: userSiswa.id },
-              data: { authId: authSiswaId },
-            })
-          }
-        }
-
-        if (!userSiswa) {
           const existingByEmail = await tx.user.findFirst({
-            where: { email: emailSiswa },
+            where: { email: emailSiswa, role: Role.SISWA },
           })
           if (existingByEmail) {
             userSiswa = existingByEmail

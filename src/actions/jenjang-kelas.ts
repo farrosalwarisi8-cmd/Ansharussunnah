@@ -3,7 +3,7 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireGuru, requireGuruAdmin } from "@/lib/auth"
+import { requireGuruAdmin } from "@/lib/auth"
 import {
   jenjangSchema,
   kelasSchema,
@@ -76,7 +76,7 @@ export async function getJenjangDenganKelas(): Promise<
  */
 export async function getAdminJenjangList(): Promise<ActionResponse<JenjangWithKelas[]>> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const jenjangs = await prisma.jenjang.findMany({
       orderBy: { urutan: "asc" },
@@ -150,7 +150,7 @@ export async function createJenjang(
       data: { nama, urutan, aktif: true, tarifSppBulanan: tarifSppBulanan ?? null },
     })
 
-    revalidatePath("/dashboard/jenjang")
+    revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 
     return {
@@ -191,7 +191,7 @@ export async function updateJenjang(
       },
     })
 
-    revalidatePath("/dashboard/jenjang")
+    revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 
     return {
@@ -245,7 +245,7 @@ export async function deleteJenjang(id: string): Promise<ActionResponse> {
 
     await prisma.jenjang.delete({ where: { id } })
 
-    revalidatePath("/dashboard/jenjang")
+    revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 
     return {
@@ -269,7 +269,7 @@ export async function deleteJenjang(id: string): Promise<ActionResponse> {
  */
 export async function getAdminKelasList(): Promise<ActionResponse<KelasWithRelations[]>> {
   try {
-    await requireGuru()
+    await requireGuruAdmin()
 
     const kelas = await prisma.kelas.findMany({
       orderBy: [{ jenjang: { urutan: "asc" } }, { nama: "asc" }],

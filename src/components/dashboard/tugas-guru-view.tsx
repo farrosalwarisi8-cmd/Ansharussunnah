@@ -18,12 +18,15 @@ const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.D
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 import { getDaftarTugasGuru, deleteTugas, updateTugas } from "@/actions/tugas"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
+import { TargetGenderSelector } from "@/components/dashboard/target-gender-selector"
 
 type GuruTugasItem = {
   id: string
   judul: string
   deskripsi: string
   mataPelajaran: string
+  targetGender: "LAKI_LAKI" | "PEREMPUAN" | null
+  mapelGender: "LAKI_LAKI" | "PEREMPUAN" | null
   deadline: string | Date
   periode: string
   guru: string
@@ -55,6 +58,7 @@ export function GuruTugasView() {
   const [editJudul, setEditJudul] = React.useState("")
   const [editDeskripsi, setEditDeskripsi] = React.useState("")
   const [editDeadline, setEditDeadline] = React.useState("")
+  const [editGender, setEditGender] = React.useState<"LAKI_LAKI" | "PEREMPUAN" | null>(null)
   const [editing, setEditing] = React.useState(false)
 
   const handleEditTugas = async (e: React.FormEvent) => {
@@ -66,6 +70,7 @@ export function GuruTugasView() {
         judul: editJudul || undefined,
         deskripsi: editDeskripsi || undefined,
         deadline: editDeadline ? new Date(editDeadline).toISOString() : undefined,
+        targetGender: editGender,
       })
       if (result.success) {
         toast({ title: "Tugas Diperbarui! ✅", description: result.message })
@@ -213,11 +218,24 @@ export function GuruTugasView() {
                   <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2.5 py-1 rounded-lg border border-yellow-100">
                     {item.mataPelajaran}
                   </span>
-                  {item.hasLampiran && (
-                    <span className="text-[10px] font-semibold text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
-                      Ada Lampiran
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {(item.targetGender || item.mapelGender) && (
+                      <span
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${
+                          (item.targetGender ?? item.mapelGender) === "LAKI_LAKI"
+                            ? "bg-sky-50 text-sky-700 border-sky-200"
+                            : "bg-pink-50 text-pink-700 border-pink-200"
+                        }`}
+                      >
+                        Khusus {(item.targetGender ?? item.mapelGender) === "LAKI_LAKI" ? "Ikhwan" : "Akhwat"}
+                      </span>
+                    )}
+                    {item.hasLampiran && (
+                      <span className="text-[10px] font-semibold text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                        Ada Lampiran
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <CardTitle className="text-base font-bold text-slate-800 leading-snug">
                   {item.judul}
@@ -251,6 +269,7 @@ export function GuruTugasView() {
                       setEditJudul(item.judul)
                       setEditDeskripsi(item.deskripsi || "")
                       setEditDeadline(new Date(item.deadline).toISOString().slice(0, 16))
+                      setEditGender(item.targetGender ?? null)
                       setIsEditOpen(true)
                     }}
                     className="rounded-xl min-h-[44px] text-xs font-bold border-slate-200 px-3"
@@ -291,6 +310,7 @@ export function GuruTugasView() {
                         <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Deadline Baru</label>
                         <Input type="datetime-local" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} className="h-11 rounded-xl text-sm" />
                       </div>
+                      <TargetGenderSelector value={editGender} onChange={setEditGender} />
                       <DialogFooter className="gap-2 sm:gap-0 pt-2">
                         <Button type="button" variant="outline" onClick={() => { setIsEditOpen(false); setEditTugas(null) }} className="rounded-xl min-h-[40px]">
                           Batal

@@ -9,6 +9,7 @@ import {
   type AssignGuruKeKelasValues,
 } from "@/lib/validations/guru"
 import { guruCocokKelas } from "@/lib/guru-kelas-gender"
+import { Prisma } from "@prisma/client"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
 
@@ -77,6 +78,26 @@ export async function assignGuruKeKelas(
       return { success: false, message: `Mata pelajaran "${mataPelajaran}" tidak ditemukan` }
     }
 
+    // Validasi gender mapel khusus gender terhadap guru & kelas
+    if (mapel.jenisKelamin) {
+      const labelMapel = mapel.jenisKelamin === "LAKI_LAKI" ? "khusus Ikhwan" : "khusus Akhwat"
+      if (!guruCocokKelas(guru.jenisKelamin, mapel.jenisKelamin)) {
+        const labelGuru = guru.jenisKelamin === "LAKI_LAKI" ? "ikhwan" : "akhwat"
+        return {
+          success: false,
+          message: `Mapel "${mataPelajaran}" adalah mapel ${labelMapel}, tidak dapat diampu oleh guru berjenis kelamin ${labelGuru}.`,
+        }
+      }
+      if (kelas.jenisKelamin !== null && kelas.jenisKelamin !== mapel.jenisKelamin) {
+        const labelKelas =
+          kelas.jenisKelamin === "LAKI_LAKI" ? "kelas Ikhwan" : "kelas Akhwat"
+        return {
+          success: false,
+          message: `Mapel "${mataPelajaran}" adalah mapel ${labelMapel}, tidak dapat diampu di ${labelKelas}.`,
+        }
+      }
+    }
+
     await prisma.guruKelas.create({
       data: { guruId, kelasId, mataPelajaranId: mapel.id },
     })
@@ -87,6 +108,15 @@ export async function assignGuruKeKelas(
       message: `Guru berhasil ditugaskan ke kelas untuk mapel "${mataPelajaran}"`,
     }
   } catch (error: unknown) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return {
+        success: false,
+        message: "Guru ini sudah ditugaskan untuk mapel di kelas ini",
+      }
+    }
     return {
       success: false,
       message: error instanceof Error ? error.message : "Gagal menugaskan guru ke kelas",
@@ -208,7 +238,7 @@ export async function getDaftarPengajarKelas(
  * di semua fitur akademik (absensi, rapor, ujian, tugas, materi, dll).
  */
 export async function getDaftarKelasYangDiajarGuru(
-  guruId?: string
+  _guruId?: string
 ): Promise<ActionResponse> {
   try {
     const user = await requireGuru()
@@ -243,8 +273,8 @@ export async function getDaftarKelasYangDiajarGuru(
       }
     }
 
-    // Jika tidak ada guruId, ambil milik sendiri
-    const targetGuruId = guruId || user.guru?.id
+    // Non-admin: paksa pakai ID guru sendiri, abaikan parameter guruId (cegah IDOR).
+    const targetGuruId = user.guru?.id
     if (!targetGuruId) {
       return { success: false, message: "Data guru tidak ditemukan" }
     }

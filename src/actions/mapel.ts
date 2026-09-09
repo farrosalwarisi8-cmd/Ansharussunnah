@@ -26,18 +26,44 @@ async function validateKelasIds(jenjangId: string | null | undefined, kelasIds: 
   return null
 }
 
+// Mapel khusus gender hanya boleh ditempatkan di kelas yang sesuai (campuran atau gender sama).
+async function validateKelasGender(
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null | undefined,
+  kelasIds: string[]
+): Promise<string | null> {
+  if (!jenisKelamin || kelasIds.length === 0) return null
+
+  const kelas = await prisma.kelas.findMany({
+    where: { id: { in: kelasIds } },
+    select: { id: true, nama: true, jenisKelamin: true },
+  })
+
+  const tidakCocok = kelas.filter(
+    (k) => k.jenisKelamin !== null && k.jenisKelamin !== jenisKelamin
+  )
+
+  if (tidakCocok.length > 0) {
+    const labelMapel = jenisKelamin === "LAKI_LAKI" ? "khusus Ikhwan" : "khusus Akhwat"
+    return `Mapel ${labelMapel} tidak dapat dipasang ke kelas ${tidakCocok
+      .map((k) => k.nama)
+      .join(", ")} (kelas tersebut khusus gender lain)`
+  }
+
+  return null
+}
+
 // ========================================================
 // 1. PUBLIC: DAFTAR MAPEL AKTIF
 // ========================================================
 
 export async function getMapelAktif(): Promise<
-  ActionResponse<Array<{ id: string; kode: string; nama: string; kelompok: string | null; jenjangId: string | null }>>
+  ActionResponse<Array<{ id: string; kode: string; nama: string; kelompok: string | null; jenjangId: string | null; jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null }>>
 > {
   try {
     const mapels = await prisma.mataPelajaran.findMany({
       where: { aktif: true },
       orderBy: { nama: "asc" },
-      select: { id: true, kode: true, nama: true, kelompok: true, jenjangId: true },
+      select: { id: true, kode: true, nama: true, kelompok: true, jenjangId: true, jenisKelamin: true },
     })
 
     return {
@@ -119,6 +145,7 @@ export async function getAdminMapelList(): Promise<
       nama: string
       kelompok: string | null
       jenjangId: string | null
+      jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
       jenjangNama: string | null
       aktif: boolean
       kelasList: Array<{ id: string; nama: string }>
@@ -144,6 +171,7 @@ export async function getAdminMapelList(): Promise<
         kelompok: true,
         jenjangId: true,
         jenjang: { select: { nama: true } },
+        jenisKelamin: true,
         aktif: true,
         mapelKelas: {
           select: {
@@ -168,6 +196,7 @@ export async function getAdminMapelList(): Promise<
       nama: m.nama,
       kelompok: m.kelompok,
       jenjangId: m.jenjangId,
+      jenisKelamin: m.jenisKelamin,
       jenjangNama: m.jenjang?.nama ?? null,
       aktif: m.aktif,
       kelasList: m.mapelKelas.map((mk) => mk.kelas),
@@ -200,10 +229,13 @@ export async function createMapel(payload: MapelFormValues): Promise<ActionRespo
       }
     }
 
-    const { kode, nama, kelompok, jenjangId, kelasIds } = validated.data
+    const { kode, nama, kelompok, jenjangId, jenisKelamin, kelasIds } = validated.data
 
     const kelasError = await validateKelasIds(jenjangId, kelasIds)
     if (kelasError) return { success: false, message: kelasError }
+
+    const genderError = await validateKelasGender(jenisKelamin, kelasIds)
+    if (genderError) return { success: false, message: genderError }
 
     const existing = await prisma.mataPelajaran.findFirst({
       where: { OR: [{ kode }, { nama }] },
@@ -225,6 +257,7 @@ export async function createMapel(payload: MapelFormValues): Promise<ActionRespo
         nama,
         kelompok: kelompok || null,
         jenjangId: jenjangId || null,
+        jenisKelamin: jenisKelamin ?? null,
         aktif: true,
         mapelKelas: kelasIds && kelasIds.length > 0
           ? {
@@ -298,6 +331,14 @@ export async function updateMapel(
       if (kelasError) return { success: false, message: kelasError }
     }
 
+    // Gender mapel efektif setelah perubahan
+    const targetJenisKelamin =
+      payload.jenisKelamin !== undefined ? payload.jenisKelamin : mapel.jenisKelamin
+    if (kelasIds !== undefined) {
+      const genderError = await validateKelasGender(targetJenisKelamin, kelasIds)
+      if (genderError) return { success: false, message: genderError }
+    }
+
     if (kelasIds !== undefined) {
       await prisma.$transaction(async (tx) => {
         await tx.mapelKelas.deleteMany({ where: { mapelId: id } })
@@ -313,6 +354,7 @@ export async function updateMapel(
             nama: payload.nama,
             kelompok: payload.kelompok !== undefined ? payload.kelompok ?? null : undefined,
             jenjangId: payload.jenjangId !== undefined ? payload.jenjangId ?? null : undefined,
+            jenisKelamin: payload.jenisKelamin !== undefined ? payload.jenisKelamin ?? null : undefined,
           },
         })
       })
@@ -324,6 +366,7 @@ export async function updateMapel(
           nama: payload.nama,
           kelompok: payload.kelompok !== undefined ? payload.kelompok ?? null : undefined,
           jenjangId: payload.jenjangId !== undefined ? payload.jenjangId ?? null : undefined,
+          jenisKelamin: payload.jenisKelamin !== undefined ? payload.jenisKelamin ?? null : undefined,
         },
       })
     }

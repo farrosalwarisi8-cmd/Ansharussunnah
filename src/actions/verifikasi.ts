@@ -481,24 +481,7 @@ export async function verifikasiPendaftaran(
             }
           }
 
-          if (!userSiswa) {
-            const existingByEmail = await tx.user.findFirst({
-              where: { email: emailSiswa },
-            })
-            if (existingByEmail) {
-              userSiswa = existingByEmail
-              await tx.user.update({
-                where: { id: userSiswa.id },
-                data: { authId: authSiswaId },
-              })
-            }
-          }
-
           // Re-check kapasitas + gender kelas DI DALAM transaction untuk
-          // meminimalkan race window (TOCTOU) — pengecekan pertama di atas
-          // bisa melewati jika dua approval berjalan bersamaan. Ditempatkan
-          // di luar blok !userSiswa agar juga melindungi jalur "anak kedua /
-          // re-registrasi" yang memakai record siswa lama.
           if (finalKelasId) {
             const kelasTx = await tx.kelas.findUnique({
               where: { id: finalKelasId },
@@ -525,7 +508,7 @@ export async function verifikasiPendaftaran(
 
           if (!userSiswa) {
             const existingByEmail = await tx.user.findFirst({
-              where: { email: emailSiswa },
+              where: { email: emailSiswa, role: Role.SISWA },
             })
             if (existingByEmail) {
               userSiswa = existingByEmail

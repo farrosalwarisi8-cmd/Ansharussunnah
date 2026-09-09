@@ -912,6 +912,7 @@ export async function getRekapTunggakanSpp(
         select: {
           id: true,
           nisn: true,
+          jenisKelamin: true,
           user: { select: { nama: true } },
           kelas: { select: { nama: true } },
         },
@@ -959,6 +960,7 @@ export async function getRekapTunggakanSpp(
         tagihanId: t.id,
         siswaId: t.siswa.id,
         namaSiswa: t.siswa.user.nama,
+        jenisKelamin: t.siswa.jenisKelamin,
         kelas: t.siswa.kelas?.nama || "Tanpa Kelas",
         periode: `${t.bulan}/${t.tahun}`,
         nominal: Number(t.nominal),
@@ -1008,6 +1010,7 @@ export async function getDaftarPembayaranPendingVerifikasi(): Promise<
       id: string
       tagihanId: string
       santriNama: string
+      jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
       kelas: string
       jenjang: string
       bulanTagihan: string
@@ -1049,6 +1052,7 @@ export async function getDaftarPembayaranPendingVerifikasi(): Promise<
       id: p.id,
       tagihanId: p.tagihanId,
       santriNama: p.tagihan.siswa.user.nama,
+      jenisKelamin: p.tagihan.siswa.jenisKelamin,
       kelas: p.tagihan.siswa.kelas?.nama || "Tanpa Kelas",
       jenjang: p.tagihan.siswa.kelas?.jenjang?.nama || "-",
       bulanTagihan: p.tagihan.bulan && p.tagihan.tahun

@@ -194,12 +194,21 @@ export default function DetailTugasPage() {
       })
       return
     }
+    const nilaiParsed = parseFloat(skorNilai)
+    if (!skorNilai || isNaN(nilaiParsed) || nilaiParsed < 0 || nilaiParsed > 100) {
+      toast({
+        variant: "destructive",
+        title: "Skor nilai tidak valid",
+        description: "Masukkan angka antara 0 - 100.",
+      })
+      return
+    }
     setSavingGrade(true)
 
     try {
       const result = await beriNilaiTugas({
         pengumpulanId: selectedSubmisi.pengumpulanId,
-        nilai: parseFloat(skorNilai) || 0,
+        nilai: nilaiParsed,
         feedback: feedbackGuru || undefined,
       })
 
@@ -503,6 +512,25 @@ export default function DetailTugasPage() {
                     <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs text-slate-700">
                       <strong className="text-slate-800">Catatan Ustadz:</strong>{" "}
                       {studentDetail.pengumpulan.feedback}
+                    </div>
+                  )}
+
+                  {/* Belum dinilai → santri boleh kirim ulang/perbaikan */}
+                  {studentDetail.pengumpulan.status !== "DINILAI" && (
+                    <div className="pt-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setAlreadySubmitted(false)
+                          setFileUrl("")
+                          setCatatanSiswa("")
+                        }}
+                        className="rounded-xl min-h-[40px] text-xs font-bold"
+                      >
+                        <Upload className="h-3.5 w-3.5 mr-1.5" />
+                        Kirim Ulang / Perbaikan
+                      </Button>
                     </div>
                   )}
                 </div>
