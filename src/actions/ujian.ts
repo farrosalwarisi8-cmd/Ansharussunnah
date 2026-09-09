@@ -382,7 +382,10 @@ export async function getRekapHasilUjian(ujianId: string): Promise<ActionRespons
     await tutupPengerjaanUjianKedaluwarsa(ujianId)
 
     const rekap = await prisma.pengerjaanUjian.findMany({
-      where: { ujianId },
+      where: {
+        ujianId,
+        siswa: { is: { deleted_at: null } },
+      },
       include: {
         siswa: {
           select: {
@@ -942,7 +945,8 @@ export async function submitPengerjaanUjian(
         nilaiTotal = nilaiPgDecimal
       }
 
-      // PENTEST FIX #2: Simpan submitTerlambat bersama data pengerjaan
+      // Trigger DB otomatis mengisi submit_terlambat berdasarkan waktu_submit
+      // vs ujians.waktu_selesai. Aplikasi hanya mengirim waktu_submit.
       const updatedPengerjaan = await tx.pengerjaanUjian.update({
         where: { id: pengerjaan.id },
         data: {
@@ -950,7 +954,6 @@ export async function submitPengerjaanUjian(
           status: statusAkhir,
           nilaiPg: nilaiPgDecimal,
           nilaiTotal,
-          submitTerlambat, // Field baru dari pentest fix
         },
       })
 
@@ -1101,8 +1104,7 @@ export async function tutupPengerjaanUjianKedaluwarsa(
           where: { id: sesi.id },
           data: {
             status: adaSoalEsai ? StatusPengerjaan.SELESAI : StatusPengerjaan.DINILAI,
-            waktuSubmit: deadlineFinal, // Waktu submit = tepat di deadline (bukan "now")
-            submitTerlambat: true,
+            waktuSubmit: now, // Waktu tutup sebenarnya; trigger DB mengisi submit_terlambat
             nilaiPg: nilaiPgDecimal,
             nilaiTotal: adaSoalEsai ? null : nilaiPgDecimal,
           },
@@ -1202,7 +1204,7 @@ export async function getDaftarUjianAnak(
     }
 
     const siswa = await prisma.siswa.findUnique({
-      where: { id: siswaId },
+      where: { id: siswaId, deleted_at: null },
       include: { kelas: { select: { id: true } } },
     })
     if (!siswa || !siswa.kelasId) {

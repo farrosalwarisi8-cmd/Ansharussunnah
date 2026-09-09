@@ -127,6 +127,7 @@ export async function createPendaftaran(
       where: {
         emailOrangTua: { equals: emailOrtu, mode: "insensitive" },
         jenjangTujuanId: data.jenjangTujuanId,
+        deleted_at: null,
         status: {
           in: [StatusPendaftaran.MENUNGGU_PEMBAYARAN, StatusPendaftaran.MENUNGGU_VERIFIKASI],
         },

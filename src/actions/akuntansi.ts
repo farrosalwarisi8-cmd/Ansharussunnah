@@ -93,6 +93,7 @@ export async function generateTagihanSppInternal(
     // 1. Ambil semua siswa aktif yang masuk filter kelasId (jika ada)
     const filterSiswa: Record<string, unknown> = {
       user: { aktif: true },
+      deleted_at: null,
     }
     if (kelasId) {
       filterSiswa.kelasId = kelasId
@@ -240,7 +241,7 @@ export async function submitBuktiPembayaranSpp(
     const sessionUser = await requireAuth()
 
     const tagihan = await prisma.tagihanSiswa.findUnique({
-      where: { id: tagihanId },
+      where: { id: tagihanId, deleted_at: null },
     })
     if (!tagihan) {
       return { success: false, message: "Data tagihan SPP tidak ditemukan" }
@@ -266,7 +267,7 @@ export async function submitBuktiPembayaranSpp(
     if (sessionUser.role === Role.SISWA) {
       return { success: false, message: "Akses ditolak: Siswa tidak memiliki akses ke data tagihan SPP" }
     } else if (sessionUser.role === Role.ORANG_TUA) {
-      const ortu = await prisma.orangTua.findUnique({ where: { userId: sessionUser.id } })
+      const ortu = await prisma.orangTua.findUnique({ where: { userId: sessionUser.id, deleted_at: null } })
       if (!ortu) return { success: false, message: "Profil orang tua tidak ditemukan" }
       const hasAkses = await verifyOrangTuaAksesSiswa(ortu.id, tagihan.siswaId)
       if (!hasAkses) {
@@ -438,39 +439,20 @@ export async function konfirmasiPembayaranSppOlehAdmin(
           throw new Error("Pembayaran ini sudah diproses sebelumnya")
         }
 
-        // Hitung total kumulatif secara FRESH di dalam transaction
-        // (termasuk pembayaran ini), menghindari lost update akibat
-        // konfirmasi bersamaan pada tagihan yang sama.
-        const pembayaranTerkonfirmasi = await tx.pembayaranSiswa.findMany({
-          where: { tagihanId: tagihan.id, statusPembayaran: StatusPembayaran.DIKONFIRMASI },
-          select: { nominalDibayar: true },
-        })
-        const totalDibayarSetelahIni = pembayaranTerkonfirmasi.reduce(
-          (acc, p) => acc + Number(p.nominalDibayar),
-          0
-        )
-
-        // Tentukan status tagihan berdasarkan total kumulatif
-        let statusTagihanBaru: StatusTagihan
-        if (totalDibayarSetelahIni >= nominalTagihan) {
-          statusTagihanBaru = StatusTagihan.SUDAH_BAYAR
-        } else {
-          statusTagihanBaru = StatusTagihan.DIBAYAR_SEBAGIAN
-        }
-
-        // Update tagihan dengan status baru dan cache totalTerbayar
-        await tx.tagihanSiswa.update({
+        // Trigger DB otomatis memperbarui tagihan_siswas.total_terbayar &
+        // status setiap pembayaran PENDING → DIKONFIRMASI. Baca ulang kondisi
+        // terbaru untuk respons (jangan hitung manual di aplikasi).
+        const tagihanTerbaru = await tx.tagihanSiswa.findUnique({
           where: { id: tagihan.id },
-          data: {
-            status: statusTagihanBaru,
-            totalTerbayar: new Prisma.Decimal(totalDibayarSetelahIni),
-          },
+          select: { status: true, totalTerbayar: true },
         })
+        if (!tagihanTerbaru) throw new Error("Tagihan tidak ditemukan")
 
+        const totalTerbayarSetelahIni = Number(tagihanTerbaru.totalTerbayar || 0)
         return {
-          statusTagihanBaru,
-          totalTerbayar: totalDibayarSetelahIni,
-          sisaTunggakan: Math.max(0, nominalTagihan - totalDibayarSetelahIni),
+          statusTagihanBaru: tagihanTerbaru.status,
+          totalTerbayar: totalTerbayarSetelahIni,
+          sisaTunggakan: Math.max(0, nominalTagihan - totalTerbayarSetelahIni),
         }
       } else {
         // FIX RACE: tandai pembayaran DITOLAK secara ATOMIK dengan kondisi PENDING.
@@ -488,43 +470,19 @@ export async function konfirmasiPembayaranSppOlehAdmin(
           throw new Error("Pembayaran ini sudah diproses sebelumnya")
         }
 
-        // Hitung ulang total yang sudah dikonfirmasi secara fresh di dalam
-        // transaction (sebelum penolakan pembayaran ini).
-        const pembayaranTerkonfirmasi = await tx.pembayaranSiswa.findMany({
-          where: { tagihanId: tagihan.id, statusPembayaran: StatusPembayaran.DIKONFIRMASI },
-          select: { nominalDibayar: true },
-        })
-        const totalSudahDikonfirmasi = pembayaranTerkonfirmasi.reduce(
-          (acc, p) => acc + Number(p.nominalDibayar),
-          0
-        )
-
-        // Pembayaran DITOLAK: kembalikan status tagihan sesuai kondisi aktual.
-        // BUG FIX: Jika sebelumnya sudah ada pembayaran yang dikonfirmasi (partial),
-        // status harus DIBAYAR_SEBAGIAN, bukan selalu BELUM_BAYAR/TERLAMBAT.
-        let statusTagihanDikembalikan: StatusTagihan
-        if (totalSudahDikonfirmasi >= nominalTagihan) {
-          statusTagihanDikembalikan = StatusTagihan.SUDAH_BAYAR
-        } else if (totalSudahDikonfirmasi > 0) {
-          statusTagihanDikembalikan = StatusTagihan.DIBAYAR_SEBAGIAN
-        } else {
-          const now = new Date()
-          statusTagihanDikembalikan =
-            tagihan.jatuhTempo < now ? StatusTagihan.TERLAMBAT : StatusTagihan.BELUM_BAYAR
-        }
-
-        // Kembalikan status tagihan ke kondisi aktual
-        await tx.tagihanSiswa.update({
+        // Trigger DB otomatis mengembalikan status tagihan sesuai total
+        // pembayaran DIKONFIRMASI yang tersisa. Baca ulang untuk respons.
+        const tagihanTerbaru = await tx.tagihanSiswa.findUnique({
           where: { id: tagihan.id },
-          data: {
-            status: statusTagihanDikembalikan,
-          },
+          select: { status: true, totalTerbayar: true },
         })
+        if (!tagihanTerbaru) throw new Error("Tagihan tidak ditemukan")
 
+        const totalTerbayarTersisa = Number(tagihanTerbaru.totalTerbayar || 0)
         return {
-          statusTagihanBaru: statusTagihanDikembalikan,
-          totalTerbayar: totalSudahDikonfirmasi,
-          sisaTunggakan: Math.max(0, nominalTagihan - totalSudahDikonfirmasi),
+          statusTagihanBaru: tagihanTerbaru.status,
+          totalTerbayar: totalTerbayarTersisa,
+          sisaTunggakan: Math.max(0, nominalTagihan - totalTerbayarTersisa),
         }
       }
       },
@@ -577,7 +535,7 @@ export async function konfirmasiPembayaranSppManual(
     const { tagihanId, nominalDibayar, metodeBayar, urlBukti, namaBukti, catatan } = validated.data
 
     const tagihan = await prisma.tagihanSiswa.findUnique({
-      where: { id: tagihanId },
+      where: { id: tagihanId, deleted_at: null },
     })
     if (!tagihan) return { success: false, message: "Tagihan tidak ditemukan" }
 
@@ -606,22 +564,6 @@ export async function konfirmasiPembayaranSppManual(
         throw new Error("Tagihan sudah dibatalkan")
       }
 
-      // Hitung total kumulatif secara FRESH di dalam transaction,
-      // menghindari lost update akibat konfirmasi bersamaan.
-      const pembayaranTerkonfirmasi = await tx.pembayaranSiswa.findMany({
-        where: { tagihanId, statusPembayaran: StatusPembayaran.DIKONFIRMASI },
-        select: { nominalDibayar: true },
-      })
-      const totalDibayarSetelahIni =
-        pembayaranTerkonfirmasi.reduce((acc, p) => acc + Number(p.nominalDibayar), 0) +
-        nominalDibayar
-
-      // Tentukan status berdasarkan total kumulatif, bukan nominal input saja
-      const statusTagihanBaru: StatusTagihan =
-        totalDibayarSetelahIni >= nominalTagihan
-          ? StatusTagihan.SUDAH_BAYAR
-          : StatusTagihan.DIBAYAR_SEBAGIAN
-
       await tx.pembayaranSiswa.create({
         data: {
           tagihanId,
@@ -638,15 +580,18 @@ export async function konfirmasiPembayaranSppManual(
         },
       })
 
-      await tx.tagihanSiswa.update({
+      // Trigger DB otomatis memperbarui tagihan_siswas.total_terbayar & status,
+      // dan menolak jika total pembayaran melebihi nominal. Baca ulang & serah.
+      const tagihanTerbaru = await tx.tagihanSiswa.findUnique({
         where: { id: tagihanId },
-        data: {
-          status: statusTagihanBaru,
-          totalTerbayar: new Prisma.Decimal(totalDibayarSetelahIni),
-        },
+        select: { status: true, totalTerbayar: true },
       })
+      if (!tagihanTerbaru) throw new Error("Tagihan tidak ditemukan")
 
-      return { statusTagihanBaru, totalDibayarSetelahIni }
+      return {
+        statusTagihanBaru: tagihanTerbaru.status,
+        totalDibayarSetelahIni: Number(tagihanTerbaru.totalTerbayar || 0),
+      }
       },
       { timeout: 10000, maxWait: 3000 }
     )
@@ -745,7 +690,7 @@ export async function batalkanTransaksiKeuangan(
     const { transaksiId, alasanPembatalan } = validated.data
 
     const transaksi = await prisma.transaksiKeuangan.findUnique({
-      where: { id: transaksiId },
+      where: { id: transaksiId, deleted_at: null },
     })
     if (!transaksi) return { success: false, message: "Transaksi tidak ditemukan" }
     if (transaksi.status === StatusTransaksi.DIBATALKAN) {
@@ -788,7 +733,7 @@ export async function batalkanTagihanSpp(
     const { tagihanId, alasanPembatalan } = validated.data
 
     const tagihan = await prisma.tagihanSiswa.findUnique({
-      where: { id: tagihanId },
+      where: { id: tagihanId, deleted_at: null },
     })
     if (!tagihan) return { success: false, message: "Tagihan tidak ditemukan" }
     if (tagihan.status === StatusTagihan.DIBATALKAN) {
@@ -867,7 +812,7 @@ export async function getLaporanKeuangan(
       where: {
         tanggalBayar: { gte: start, lte: end },
         statusPembayaran: StatusPembayaran.DIKONFIRMASI,
-        tagihan: { status: { not: StatusTagihan.DIBATALKAN } },
+        tagihan: { status: { not: StatusTagihan.DIBATALKAN }, deleted_at: null },
       },
       _sum: { nominalDibayar: true },
     })
@@ -877,6 +822,7 @@ export async function getLaporanKeuangan(
       where: {
         tanggalBayar: { gte: start, lte: end },
         statusPembayaran: StatusPembayaran.PENDING,
+        tagihan: { deleted_at: null },
       },
       _sum: { nominalDibayar: true },
     })
@@ -886,6 +832,7 @@ export async function getLaporanKeuangan(
       where: {
         tanggal: { gte: start, lte: end },
         status: StatusTransaksi.AKTIF,
+        deleted_at: null,
       },
       include: { kategori: { select: { nama: true } } },
     })
@@ -952,6 +899,7 @@ export async function getRekapTunggakanSpp(
     // bulan/tahun tidak ikut terhitung sebagai tunggakan SPP.
     const baseFilter: Record<string, unknown> = {
       jenisTagihan: "SPP",
+      deleted_at: null,
     }
     if (bulan) baseFilter.bulan = bulan
     if (tahun) baseFilter.tahun = tahun
@@ -1167,6 +1115,7 @@ export async function getRekapSppPerKelas(
     const siswaList = await prisma.siswa.findMany({
       where: {
         user: { aktif: true },
+        deleted_at: null,
       },
       include: {
         kelas: {
@@ -1188,6 +1137,7 @@ export async function getRekapSppPerKelas(
     // Ambil semua tagihan SPP yang relevan (1 query)
     const tagihanFilter: Record<string, unknown> = {
       jenisTagihan: "SPP",
+      deleted_at: null,
     }
     if (bulan) tagihanFilter.bulan = bulan
     if (tahun) tagihanFilter.tahun = tahun
@@ -1319,6 +1269,7 @@ export async function getRekapSppPerJenjang(
     const siswaList = await prisma.siswa.findMany({
       where: {
         user: { aktif: true },
+        deleted_at: null,
       },
       include: {
         kelas: {
@@ -1340,6 +1291,7 @@ export async function getRekapSppPerJenjang(
     // Ambil semua tagihan SPP (1 query)
     const tagihanFilter: Record<string, unknown> = {
       jenisTagihan: "SPP",
+      deleted_at: null,
     }
     if (bulan) tagihanFilter.bulan = bulan
     if (tahun) tagihanFilter.tahun = tahun
@@ -1445,7 +1397,7 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
     if (sessionUser.role === Role.SISWA) {
       return { success: false, message: "Akses ditolak: Siswa tidak memiliki akses ke data tagihan SPP" }
     } else if (sessionUser.role === Role.ORANG_TUA) {
-      const ortu = await prisma.orangTua.findUnique({ where: { userId: sessionUser.id } })
+      const ortu = await prisma.orangTua.findUnique({ where: { userId: sessionUser.id, deleted_at: null } })
       if (!ortu) return { success: false, message: "Profil orang tua tidak ditemukan" }
       const hasAkses = await verifyOrangTuaAksesSiswa(ortu.id, siswaId)
       if (!hasAkses) {
@@ -1453,7 +1405,7 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
       }
     } else if (sessionUser.role === Role.GURU) {
       // GURU hanya boleh melihat data SPP jika dia adalah wali kelas siswa tersebut
-      const siswaCheck = await prisma.siswa.findUnique({ where: { id: siswaId } })
+      const siswaCheck = await prisma.siswa.findUnique({ where: { id: siswaId, deleted_at: null } })
       if (!siswaCheck || !siswaCheck.kelasId) {
         return { success: false, message: "Data siswa tidak valid" }
       }
@@ -1473,7 +1425,7 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
     }
 
     const tagihanList = await prisma.tagihanSiswa.findMany({
-      where: { siswaId },
+      where: { siswaId, deleted_at: null },
       include: {
         pembayaran: {
           orderBy: { createdAt: "desc" },
@@ -1629,6 +1581,7 @@ export async function getDaftarTransaksiKeuangan(
     const safeLimit = Math.min(Math.max(1, limit), 100)
 
     const transaksi = await prisma.transaksiKeuangan.findMany({
+      where: { deleted_at: null },
       include: {
         kategori: { select: { nama: true } },
         dibuatOleh: { select: { nama: true } },

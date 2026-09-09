@@ -211,13 +211,14 @@ export async function generateRaporSiswa(
 
     // Ambil data siswa + kelas
     const siswa = await prisma.siswa.findUnique({
-      where: { id: siswaId },
+      where: { id: siswaId, deleted_at: null },
       include: {
         user: { select: { nama: true, email: true } },
         kelas: {
           include: {
             jenjang: { select: { nama: true } },
             waliKelas: {
+              where: { deleted_at: null },
               include: { user: { select: { nama: true } } },
             },
           },
@@ -338,7 +339,7 @@ export async function getRekapRaporKelas(
 
     // Ambil semua siswa di kelas
     const siswaList = await prisma.siswa.findMany({
-      where: { kelasId },
+      where: { kelasId, deleted_at: null },
       include: {
         user: { select: { nama: true } },
       },
@@ -576,7 +577,7 @@ export async function createOrUpdateCatatanRapor(
 
     // Ambil data siswa untuk validasi kelas
     const siswa = await prisma.siswa.findUnique({
-      where: { id: siswaId },
+      where: { id: siswaId, deleted_at: null },
       include: { kelas: true },
     })
 
@@ -695,13 +696,14 @@ export async function getRaporSiswa(
     const siswaId = user.siswa.id // ✅ Dari session
 
     const siswa = await prisma.siswa.findUnique({
-      where: { id: siswaId },
+      where: { id: siswaId, deleted_at: null },
       include: {
         user: { select: { nama: true } },
         kelas: {
           include: {
             jenjang: { select: { nama: true } },
             waliKelas: {
+              where: { deleted_at: null },
               include: { user: { select: { nama: true } } },
             },
           },
@@ -797,7 +799,7 @@ export async function getRaporAnak(
     }
 
     const siswa = await prisma.siswa.findUnique({
-      where: { id: siswaId },
+      where: { id: siswaId, deleted_at: null },
       include: {
         user: { select: { nama: true } },
         kelas: {

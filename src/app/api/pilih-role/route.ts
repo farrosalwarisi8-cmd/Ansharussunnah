@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
   // Find all user records with this authId
   const users = await prisma.user.findMany({
-    where: { authId: authUser.id },
+    where: { authId: authUser.id, deleted_at: null },
     select: {
       id: true,
       nama: true,
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
   // Verifikasi bahwa userId + role BENAR-BENAR milik pengguna yang sedang login.
   // Mencegah pemilihan role/user milik orang lain (privilege escalation).
   const ownedUser = await prisma.user.findFirst({
-    where: { id: userId, authId: authUser.id, role },
+    where: { id: userId, authId: authUser.id, role, deleted_at: null },
     select: { id: true, aktif: true },
   })
 

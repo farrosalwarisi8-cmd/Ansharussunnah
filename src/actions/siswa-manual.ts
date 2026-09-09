@@ -282,7 +282,7 @@ export async function createSiswaManual(
         }
 
         const orangTuaRecord = await tx.orangTua.findUnique({
-          where: { userId: userOrtu.id },
+          where: { userId: userOrtu.id, deleted_at: null },
         })
 
         // Buat User + Siswa (cek duplikasi by authId+role lalu by email)
@@ -355,7 +355,7 @@ export async function createSiswaManual(
         prismaSiswaUserId = userSiswa.id
 
         const siswaRecord = await tx.siswa.findUnique({
-          where: { userId: userSiswa.id },
+          where: { userId: userSiswa.id, deleted_at: null },
         })
 
         // Buat relasi ParentStudent
@@ -436,7 +436,7 @@ export async function resetPasswordSiswaManual(
     await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: siswaUserId },
+      where: { id: siswaUserId, deleted_at: null },
       include: { siswa: true },
     })
 
@@ -496,7 +496,7 @@ export async function resetPasswordOrangTuaManual(
     await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: orangTuaUserId },
+      where: { id: orangTuaUserId, deleted_at: null },
       include: { orangTua: true },
     })
 
@@ -576,6 +576,7 @@ export async function getDaftarSiswaManual(): Promise<ActionResponse<SiswaManual
     await requireGuruAdmin()
 
     const siswaList = await prisma.siswa.findMany({
+      where: { deleted_at: null, },
       include: {
         user: {
           select: {
@@ -666,7 +667,7 @@ export async function getPasswordSiswaSaatIni(
     }
 
     const siswaUser = await prisma.user.findUnique({
-      where: { id: siswaUserId },
+      where: { id: siswaUserId, deleted_at: null },
       include: { siswa: { select: { id: true } } },
     })
 
@@ -726,7 +727,7 @@ export async function updateAkunSiswa(
     const { username, email, password } = validated.data
 
     const user = await prisma.user.findUnique({
-      where: { id: siswaUserId },
+      where: { id: siswaUserId, deleted_at: null },
       include: { siswa: true },
     })
     if (!user || user.role !== Role.SISWA) {
@@ -927,7 +928,7 @@ export async function hapusSiswaPermanent(
     await requireGuruAdmin()
 
     const siswaUser = await prisma.user.findUnique({
-      where: { id: siswaUserId },
+      where: { id: siswaUserId, deleted_at: null },
       include: {
         siswa: {
           include: {

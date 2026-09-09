@@ -66,7 +66,7 @@ export async function promosiSiswaMassal(
     // Validasi semua siswaId exist
     const siswaIds = [...new Set(mapping.map((m) => m.siswaId))]
     const siswaList = await prisma.siswa.findMany({
-      where: { id: { in: siswaIds } },
+      where: { id: { in: siswaIds }, deleted_at: null },
     })
 
     if (siswaList.length !== siswaIds.length) {
@@ -282,7 +282,7 @@ export async function getSiswaUntukPromosi(
 
     // Ambil semua siswa di kelas ini
     const siswaList = await prisma.siswa.findMany({
-      where: { kelasId },
+      where: { kelasId, deleted_at: null },
       include: {
         user: { select: { nama: true, email: true } },
       },
@@ -376,7 +376,7 @@ export async function getRiwayatKelasSiswa(
     // Batasi akses: hanya guru yang mengajar/menjadi wali di kelas siswa
     // (atau admin akademik) yang boleh melihat riwayat kelas siswa tersebut.
     const siswa = await prisma.siswa.findUnique({
-      where: { id: siswaId },
+      where: { id: siswaId, deleted_at: null },
       include: { kelas: { select: { id: true } } },
     })
     if (!siswa) {

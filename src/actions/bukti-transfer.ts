@@ -80,7 +80,7 @@ export async function uploadBuktiTransferPendaftaran(
 
     // Cek apakah pendaftaran ada + valid untuk upload
     const pendaftaran = await prisma.pendaftaran.findUnique({
-      where: { nomorPendaftaran },
+      where: { nomorPendaftaran, deleted_at: null },
     })
 
     if (!pendaftaran) {

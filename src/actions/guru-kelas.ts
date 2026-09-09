@@ -38,7 +38,7 @@ export async function assignGuruKeKelas(
     const { guruId, kelasId, mataPelajaran } = validated.data
 
     // Validasi guru exists
-    const guru = await prisma.guru.findUnique({ where: { id: guruId } })
+    const guru = await prisma.guru.findUnique({ where: { id: guruId, deleted_at: null } })
     if (!guru) {
       return { success: false, message: "Guru tidak ditemukan" }
     }

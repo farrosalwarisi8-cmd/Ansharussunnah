@@ -72,7 +72,7 @@ export async function inputAbsensiSingle(
 
     // Validasi siswa benar-benar terdaftar di kelas ini
     const siswa = await prisma.siswa.findFirst({
-      where: { id: siswaId, kelasId },
+      where: { id: siswaId, kelasId, deleted_at: null },
     })
     if (!siswa) {
       return {
@@ -166,6 +166,7 @@ export async function inputAbsensiBulk(
       where: {
         id: { in: siswaIds },
         kelasId,
+        deleted_at: null,
       },
       select: { id: true },
     })
@@ -316,7 +317,7 @@ export async function getRekapKehadiranKelas(
 
     // Ambil semua siswa di kelas
     const siswaList = await prisma.siswa.findMany({
-      where: { kelasId },
+      where: { kelasId, deleted_at: null },
       include: {
         user: { select: { nama: true } },
       },
@@ -526,7 +527,7 @@ export async function getRiwayatKehadiranAnak(
 
     // Ambil nama siswa
     const siswa = await prisma.siswa.findUnique({
-      where: { id: siswaId },
+      where: { id: siswaId, deleted_at: null },
       include: { user: { select: { nama: true } } },
     })
 
@@ -576,7 +577,7 @@ export async function getSiswaByKelas(
     await verifyGuruAksesKelas(kelasId)
 
     const siswaList = await prisma.siswa.findMany({
-      where: { kelasId, user: { aktif: true } },
+      where: { kelasId, user: { aktif: true }, deleted_at: null },
       include: {
         user: { select: { nama: true, email: true } },
       },

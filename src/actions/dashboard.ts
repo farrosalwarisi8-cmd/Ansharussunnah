@@ -233,6 +233,7 @@ async function hitungRangkumanSiswa(
       bulan: now.getMonth() + 1,
       tahun: now.getFullYear(),
       status: { not: StatusTagihan.DIBATALKAN },
+      deleted_at: null,
     },
     select: {
       namaTagihan: true,
@@ -318,7 +319,7 @@ export async function getRangkumanGuruHome(): Promise<
 
     const [jumlahSantri, ujianAktif, ujianPerluDinilai, daftarUjian, daftarTugas] =
       await Promise.all([
-        prisma.siswa.count({ where: { kelasId: { in: kelasIds } } }),
+        prisma.siswa.count({ where: { kelasId: { in: kelasIds }, deleted_at: null } }),
         prisma.ujian.count({
           where: {
             kelasId: { in: kelasIds },
@@ -450,7 +451,7 @@ export async function getRangkumanOrangTuaHome(
     }
 
     const kelasSiswa = await prisma.siswa.findUnique({
-      where: { id: siswaId },
+      where: { id: siswaId, deleted_at: null },
       select: { kelasId: true },
     })
     if (!kelasSiswa?.kelasId) {
@@ -496,13 +497,14 @@ export async function getRangkumanAdminHome(): Promise<
       tagihanBelumBayar,
       daftarUjian,
     ] = await Promise.all([
-      prisma.siswa.count(),
-      prisma.guru.count(),
+      prisma.siswa.count({ where: { deleted_at: null } }),
+      prisma.guru.count({ where: { deleted_at: null } }),
       prisma.kelas.count({ where: { aktif: true } }),
       prisma.mataPelajaran.count({ where: { aktif: true } }),
       prisma.pendaftaran.count({
         where: {
           status: { in: ["MENUNGGU_PEMBAYARAN", "MENUNGGU_VERIFIKASI"] },
+          deleted_at: null,
         },
       }),
       prisma.pengerjaanUjian.count({
@@ -520,6 +522,7 @@ export async function getRangkumanAdminHome(): Promise<
           status: {
             in: [StatusTagihan.BELUM_BAYAR, StatusTagihan.TERLAMBAT],
           },
+          deleted_at: null,
         },
       }),
       prisma.ujian.findMany({

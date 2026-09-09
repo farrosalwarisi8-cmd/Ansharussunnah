@@ -241,7 +241,7 @@ export async function updateAkunGuru(
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: userId, deleted_at: null },
       include: { guru: true },
     })
 
@@ -309,7 +309,7 @@ export async function nonaktifkanAkunGuru(
     await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: userId, deleted_at: null },
       include: { guru: true },
     })
 
@@ -360,7 +360,7 @@ export async function aktifkanKembaliAkunGuru(
     await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: userId, deleted_at: null },
       include: { guru: true },
     })
 
@@ -411,7 +411,7 @@ export async function setGuruAdmin(
     await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: userId, deleted_at: null },
       include: { guru: true },
     })
 
@@ -464,7 +464,7 @@ export async function hapusAkunGuruPermanent(
     const currentUser = await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: userId, deleted_at: null },
       include: {
         guru: {
           include: {
@@ -595,6 +595,7 @@ export async function getDaftarGuru(): Promise<ActionResponse> {
     await requireGuru()
 
     const guruList = await prisma.guru.findMany({
+      where: { deleted_at: null },
       include: {
         user: {
           select: {

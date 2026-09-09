@@ -57,7 +57,7 @@ export async function authenticateApiRequest(
     // Resolusi role: jika satu authId terhubung ke beberapa akun (multi-role),
     // pilih akun dengan hak akses tertinggi yang masih aktif, bukan urutan alfabetis.
     const userRecords = await prisma.user.findMany({
-      where: { authId: authUser.id },
+      where: { authId: authUser.id, deleted_at: null },
       select: {
         id: true,
         role: true,

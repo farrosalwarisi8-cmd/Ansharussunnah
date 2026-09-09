@@ -371,6 +371,7 @@ describe("getRekapSppPerKelas", () => {
         jenisTagihan: "SPP",
         bulan: 3,
         tahun: 2024,
+        deleted_at: null,
       },
       select: expect.any(Object),
     })
@@ -615,6 +616,7 @@ describe("getRekapSppPerJenjang", () => {
         jenisTagihan: "SPP",
         bulan: 6,
         tahun: 2024,
+        deleted_at: null,
       },
       select: expect.any(Object),
     })

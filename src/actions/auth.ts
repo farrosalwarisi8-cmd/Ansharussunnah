@@ -91,7 +91,7 @@ export async function login(formData: FormData): Promise<ActionResponse<{ hasMul
     let loginEmail: string | null = isEmail ? input : null
     if (!loginEmail) {
       const userByUsername = await prisma.user.findFirst({
-        where: { username: input, aktif: true },
+        where: { username: input, aktif: true, deleted_at: null },
         select: { email: true },
       })
       if (userByUsername) {
@@ -160,7 +160,7 @@ export async function login(formData: FormData): Promise<ActionResponse<{ hasMul
     let hasMultipleRoles = false
     if (authUserId) {
       const userRecords = await prisma.user.findMany({
-        where: { authId: authUserId, aktif: true },
+        where: { authId: authUserId, aktif: true, deleted_at: null },
         select: { id: true },
       })
       hasMultipleRoles = userRecords.length > 1

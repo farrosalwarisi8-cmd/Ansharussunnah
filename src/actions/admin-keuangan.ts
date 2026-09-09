@@ -217,7 +217,7 @@ export async function updateAkunAdminKeuangan(
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: userId, deleted_at: null },
     })
 
     if (!user || user.role !== "ADMIN_KEUANGAN") {
@@ -254,7 +254,7 @@ export async function nonaktifkanAkunAdminKeuangan(
     await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: userId, deleted_at: null },
     })
 
     if (!user || user.role !== "ADMIN_KEUANGAN") {
@@ -304,7 +304,7 @@ export async function aktifkanKembaliAkunAdminKeuangan(
     await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: userId, deleted_at: null },
     })
 
     if (!user || user.role !== "ADMIN_KEUANGAN") {
@@ -350,7 +350,7 @@ export async function getDaftarAdminKeuangan(): Promise<ActionResponse> {
     await requireGuruAdmin()
 
     const adminList = await prisma.user.findMany({
-      where: { role: "ADMIN_KEUANGAN" },
+      where: { role: "ADMIN_KEUANGAN", deleted_at: null },
       select: {
         id: true,
         nama: true,

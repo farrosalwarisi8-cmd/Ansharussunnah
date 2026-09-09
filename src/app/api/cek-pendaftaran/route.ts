@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     }
 
     const pendaftaran = await prisma.pendaftaran.findUnique({
-      where: { nomorPendaftaran: nomor.trim().toUpperCase() },
+      where: { nomorPendaftaran: nomor.trim().toUpperCase(), deleted_at: null },
       include: {
         jenjangTujuan: { select: { nama: true } },
         kelasTujuan: { select: { nama: true } },

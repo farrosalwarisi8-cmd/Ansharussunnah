@@ -432,7 +432,7 @@ export async function getDaftarMateriAnak(
       }
     }
 
-    const siswa = await prisma.siswa.findUnique({ where: { id: siswaId } })
+    const siswa = await prisma.siswa.findUnique({ where: { id: siswaId, deleted_at: null } })
     if (!siswa || !siswa.kelasId) {
       return { success: false, message: "Data kelas siswa tidak valid" }
     }

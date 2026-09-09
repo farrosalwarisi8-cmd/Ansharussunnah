@@ -24,7 +24,7 @@ export default async function SuksesPage({ searchParams }: SuksesPageProps) {
   }
 
   const pendaftaran = await prisma.pendaftaran.findUnique({
-    where: { nomorPendaftaran: nomor },
+    where: { nomorPendaftaran: nomor, deleted_at: null },
   })
 
   if (!pendaftaran) {

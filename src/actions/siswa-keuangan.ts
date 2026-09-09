@@ -45,6 +45,7 @@ export async function getDaftarSiswaKeuangan(params?: {
           ? { kelas: { jenjangId } }
           : {}),
         user: { aktif: true },
+        deleted_at: null,
       },
       include: {
         user: { select: { id: true, nama: true, email: true, aktif: true } },

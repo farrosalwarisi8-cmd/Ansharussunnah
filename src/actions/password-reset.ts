@@ -28,7 +28,7 @@ export async function requestPasswordReset(
 
     // Find any user record with this email (multiple roles may share the same auth)
     const user = await prisma.user.findFirst({
-      where: { email: normalizedEmail },
+      where: { email: normalizedEmail, deleted_at: null },
     })
 
     // ✅ generic response untuk meminimalkan email enumeration vulnerability
@@ -110,7 +110,7 @@ export async function verifyResetOtp(
 
     // Find any user record with this email (multiple roles may share the same auth)
     const user = await prisma.user.findFirst({
-      where: { email: normalizedEmail },
+      where: { email: normalizedEmail, deleted_at: null },
     })
 
     if (!user) {
@@ -196,7 +196,7 @@ export async function resetPassword(
 
     // Find any user record with this email (multiple roles may share the same auth)
     const user = await prisma.user.findFirst({
-      where: { email: normalizedEmail },
+      where: { email: normalizedEmail, deleted_at: null },
     })
 
     if (!user) {

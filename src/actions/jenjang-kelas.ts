@@ -85,6 +85,7 @@ export async function getAdminJenjangList(): Promise<ActionResponse<JenjangWithK
           include: {
             jenjang: true,
             waliKelas: {
+              where: { deleted_at: null },
               include: { user: true },
             },
             _count: {
@@ -275,6 +276,7 @@ export async function getAdminKelasList(): Promise<ActionResponse<KelasWithRelat
       include: {
         jenjang: true,
         waliKelas: {
+          where: { deleted_at: null },
           include: { user: true },
         },
         _count: {
@@ -336,7 +338,7 @@ export async function createKelas(payload: KelasFormValues): Promise<ActionRespo
     // ✅ Validasi kecocokan gender guru wali kelas dengan gender kelas
     if (waliKelasId) {
       const wali = await prisma.guru.findUnique({
-        where: { id: waliKelasId },
+        where: { id: waliKelasId, deleted_at: null },
         select: {
           id: true,
           jenisKelamin: true,
@@ -404,7 +406,7 @@ export async function updateKelas(
     // ✅ Validasi kecocokan gender guru wali kelas dengan gender kelas (hasil update)
     if (waliKelasId) {
       const wali = await prisma.guru.findUnique({
-        where: { id: waliKelasId },
+        where: { id: waliKelasId, deleted_at: null },
         select: {
           id: true,
           jenisKelamin: true,

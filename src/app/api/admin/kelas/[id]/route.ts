@@ -43,7 +43,7 @@ async function validateWaliKelas(
   if (!waliKelasId) return { valid: true }
 
   const wali = await prisma.guru.findUnique({
-    where: { id: waliKelasId },
+    where: { id: waliKelasId, deleted_at: null },
     select: {
       id: true,
       jenisKelamin: true,

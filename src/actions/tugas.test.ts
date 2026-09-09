@@ -187,7 +187,9 @@ describe("submitTugas — URL eksternal (Google Drive)", () => {
     expect(result.success).toBe(true)
     expect(result.message).toContain("TERLAMBAT")
     const createArg = mockPrisma.pengumpulanTugas.create.mock.calls[0][0]
-    expect(createArg.data.status).toBe("TERLAMBAT")
+    // Status dihitung otomatis oleh trigger DB berdasarkan waktuKumpul vs deadline
+    expect(createArg.data.status).toBeUndefined()
+    expect(createArg.data.waktuKumpul).toBeInstanceOf(Date)
   })
 
   it("harus menolak path internal yang tidak sesuai prefix per-siswa", async () => {

@@ -110,6 +110,7 @@ async function loadUserRecord(authUserId: string): Promise<UserWithRelations | n
         id: selectedUserId,
         authId: authUserId,
         role: selectedRole as Role,
+        deleted_at: null,
       },
       include: buildUserInclude(selectedRole as Role),
     })) as UserWithRelations | null
@@ -119,7 +120,7 @@ async function loadUserRecord(authUserId: string): Promise<UserWithRelations | n
   // karena role belum diketahui pasti.
   if (!user) {
     user = (await prisma.user.findFirst({
-      where: { authId: authUserId },
+      where: { authId: authUserId, deleted_at: null },
       include: {
         guru: true,
         siswa: {

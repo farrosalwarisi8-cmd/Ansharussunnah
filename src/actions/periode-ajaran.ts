@@ -100,29 +100,17 @@ export async function createPeriodeAjaran(
       }
     }
 
-    const periode = await prisma.$transaction(
-      async (tx) => {
-      // Jika periode baru diset aktif, nonaktifkan semua periode lain
-      if (aktif) {
-        await tx.periodeAjaran.updateMany({
-          where: { aktif: true },
-          data: { aktif: false },
-        })
-      }
-
-      return tx.periodeAjaran.create({
-        data: {
-          nama,
-          tahunAjaran,
-          semester,
-          tanggalMulai: new Date(tanggalMulai),
-          tanggalSelesai: new Date(tanggalSelesai),
-          aktif,
-        },
-      })
+    // Trigger DB otomatis menonaktifkan periode lama saat periode baru diaktifkan.
+    const periode = await prisma.periodeAjaran.create({
+      data: {
+        nama,
+        tahunAjaran,
+        semester,
+        tanggalMulai: new Date(tanggalMulai),
+        tanggalSelesai: new Date(tanggalSelesai),
+        aktif,
       },
-      { timeout: 10000, maxWait: 3000 }
-    )
+    })
 
     revalidatePath("/dashboard/guru/periode")
     return {
@@ -164,34 +152,22 @@ export async function updatePeriodeAjaran(
       return { success: false, message: "Periode ajaran tidak ditemukan" }
     }
 
-    await prisma.$transaction(
-      async (tx) => {
-      // Jika mengaktifkan periode ini, nonaktifkan yang lain
-      if (payload.aktif === true && !existing.aktif) {
-        await tx.periodeAjaran.updateMany({
-          where: { aktif: true, id: { not: periodeId } },
-          data: { aktif: false },
-        })
-      }
-
-      await tx.periodeAjaran.update({
-        where: { id: periodeId },
-        data: {
-          nama: payload.nama,
-          tahunAjaran: payload.tahunAjaran,
-          semester: payload.semester,
-          tanggalMulai: payload.tanggalMulai
-            ? new Date(payload.tanggalMulai)
-            : undefined,
-          tanggalSelesai: payload.tanggalSelesai
-            ? new Date(payload.tanggalSelesai)
-            : undefined,
-          aktif: payload.aktif,
-        },
-      })
+    // Trigger DB otomatis menonaktifkan periode lain saat periode ini diaktifkan.
+    await prisma.periodeAjaran.update({
+      where: { id: periodeId },
+      data: {
+        nama: payload.nama,
+        tahunAjaran: payload.tahunAjaran,
+        semester: payload.semester,
+        tanggalMulai: payload.tanggalMulai
+          ? new Date(payload.tanggalMulai)
+          : undefined,
+        tanggalSelesai: payload.tanggalSelesai
+          ? new Date(payload.tanggalSelesai)
+          : undefined,
+        aktif: payload.aktif,
       },
-      { timeout: 10000, maxWait: 3000 }
-    )
+    })
 
     revalidatePath("/dashboard/guru/periode")
     return { success: true, message: "Periode ajaran berhasil diperbarui" }

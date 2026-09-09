@@ -369,7 +369,7 @@ export async function getRekapPengumpulanTugas(
 
     // Ambil semua siswa di kelas
     const siswaList = await prisma.siswa.findMany({
-      where: { kelasId: tugas.kelasId },
+      where: { kelasId: tugas.kelasId, deleted_at: null },
       include: {
         user: { select: { nama: true } },
       },
@@ -694,9 +694,7 @@ export async function submitTugas(
             namaFile,
             ukuranFile,
             waktuKumpul: now,
-            status: isTerlambat
-              ? StatusPengumpulan.TERLAMBAT
-              : StatusPengumpulan.TEPAT_WAKTU,
+            // status (TEPAT_WAKTU/TERLAMBAT) diisi otomatis oleh trigger DB
             jumlahRevisi: { increment: 1 },
             // Reset nilai & feedback karena siswa mengirim ulang
             nilai: null,
@@ -727,9 +725,7 @@ export async function submitTugas(
         namaFile,
         ukuranFile,
         waktuKumpul: now,
-        status: isTerlambat
-          ? StatusPengumpulan.TERLAMBAT
-          : StatusPengumpulan.TEPAT_WAKTU,
+        // status (TEPAT_WAKTU/TERLAMBAT) diisi otomatis oleh trigger DB
       },
     })
 
@@ -880,7 +876,7 @@ export async function getTugasAnak(
     }
 
     const siswa = await prisma.siswa.findUnique({
-      where: { id: siswaId },
+      where: { id: siswaId, deleted_at: null },
       include: {
         user: { select: { nama: true } },
       },

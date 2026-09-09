@@ -41,7 +41,7 @@ export async function getPendaftaranList(options?: {
     const limit = options?.limit || 10
     const skip = (page - 1) * limit
 
-    const whereCondition: Record<string, unknown> = {}
+    const whereCondition: Record<string, unknown> = { deleted_at: null }
 
     if (options?.status) {
       whereCondition.status = options.status
@@ -110,7 +110,7 @@ export async function getPendaftaranDetail(
     await requireGuruAdmin()
 
     const pendaftaran = await prisma.pendaftaran.findUnique({
-      where: { id: pendaftaranId },
+      where: { id: pendaftaranId, deleted_at: null },
       include: {
         jenjangTujuan: { include: { kelas: true } },
         kelasTujuan: true,
@@ -200,7 +200,7 @@ export async function verifikasiPendaftaran(
     const { pendaftaranId, status, catatanAdmin, alasanPenolakan, kelasTujuanId } = validated.data
 
     const pendaftaran = await prisma.pendaftaran.findUnique({
-      where: { id: pendaftaranId },
+      where: { id: pendaftaranId, deleted_at: null },
       include: {
         buktiTransfer: { orderBy: { waktuUpload: "desc" }, take: 1 },
       },
@@ -462,7 +462,7 @@ export async function verifikasiPendaftaran(
           }
 
           const orangTuaRecord = await tx.orangTua.findUnique({
-            where: { userId: userOrtu.id },
+            where: { userId: userOrtu.id, deleted_at: null },
           })
 
           let userSiswa = await tx.user.findFirst({
@@ -573,7 +573,7 @@ export async function verifikasiPendaftaran(
           }
 
           const siswaRecord = await tx.siswa.findUnique({
-            where: { userId: userSiswa.id },
+            where: { userId: userSiswa.id, deleted_at: null },
           })
 
           if (orangTuaRecord && siswaRecord) {
