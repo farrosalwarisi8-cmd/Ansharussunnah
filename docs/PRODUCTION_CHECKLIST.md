@@ -123,6 +123,10 @@ Gunakan sebagai panduan sebelum dan sesuai go-live.
 - [ ] X-Frame-Options: DENY
 - [ ] X-Content-Type-Options: nosniff
 - [ ] Referrer-Policy: strict-origin-when-cross-origin
+- [ ] Strict-Transport-Security (HSTS) aktif
+- [ ] Cross-Origin-Opener-Policy: same-origin
+- [ ] Cross-Origin-Resource-Policy: same-origin
+- [ ] Belum ada `dangerouslySetInnerHTML` / `innerHTML` di codebase (cek rutin)
 
 ---
 
