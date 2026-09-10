@@ -17,6 +17,15 @@
  *   - Script ini HANYA mendeteksi dan melaporkan. TIDAK mengubah data apapun.
  *   - SQL UPDATE yang dicetak harus dijalankan MANUAL oleh admin setelah verifikasi.
  *   - Pastikan environment variable DATABASE_URL sudah benar sebelum menjalankan.
+ *
+ * KOMPATIBILITAS SCHEMA MULTI-ROLE (2026-09-10):
+ *   - Setelah restore_multirole_authid_constraint, email TIDAK lagi unique global
+ *     dan authId boleh berulang selama role berbeda. Artinya duplikasi email
+ *     dengan authId SAMA adalah NORMAL (fitur multi-role), sedangkan email sama
+ *     dengan authId BERBEDA tetap jadi masalah identitas terpecah (yang script
+ *     ini deteksi). SQL UPDATE di bawah menyamakan authId ke acuan paling awal.
+ *   - Tabel Prisma "User" di-map ke "users" (lihat @@map di schema), jadi
+ *     SQL UPDATE memakai "users".
  */
 
 import { PrismaClient } from "@prisma/client"
@@ -115,7 +124,7 @@ async function main() {
     if (rowsToUpdate.length > 0) {
       console.log(`    📝 SQL UPDATE (untuk menyamakan authId):`)
       for (const u of rowsToUpdate) {
-        console.log(`       UPDATE "User" SET "auth_id" = '${correctAuthId}' WHERE id = '${u.id}';`)
+        console.log(`       UPDATE "users" SET "auth_id" = '${correctAuthId}' WHERE id = '${u.id}';`)
       }
       console.log("")
     }
