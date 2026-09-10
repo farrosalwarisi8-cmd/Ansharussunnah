@@ -24,6 +24,7 @@ const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.D
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
 import { Plus, Calendar, Loader2, Pencil, Trash2, CheckCircle2 } from "lucide-react"
+import { toDateLocalValue } from "@/lib/datetime-local"
 
 interface PeriodeEntry {
   id: string
@@ -330,16 +331,8 @@ export default function PeriodeAjaranPage() {
     setEditNama(periode.nama)
     setEditTahunAjaran(periode.tahunAjaran)
     setEditSemester(periode.semester)
-    setEditTanggalMulai(
-      periode.tanggalMulai
-        ? new Date(periode.tanggalMulai).toISOString().split("T")[0]
-        : ""
-    )
-    setEditTanggalSelesai(
-      periode.tanggalSelesai
-        ? new Date(periode.tanggalSelesai).toISOString().split("T")[0]
-        : ""
-    )
+    setEditTanggalMulai(toDateLocalValue(periode.tanggalMulai))
+    setEditTanggalSelesai(toDateLocalValue(periode.tanggalSelesai))
     setEditAktif(periode.aktif)
     setIsEditOpen(true)
   }

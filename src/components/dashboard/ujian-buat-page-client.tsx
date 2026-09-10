@@ -15,6 +15,7 @@ import { KelasMapelSelector } from "@/components/dashboard/kelas-mapel-selector"
 import { TargetGenderSelector } from "@/components/dashboard/target-gender-selector"
 import { Plus, Trash2, ArrowLeft, Loader2, Save } from "lucide-react"
 import Link from "next/link"
+import { toDatetimeLocalValue } from "@/lib/datetime-local"
 
 interface OpsiItem {
   id?: string
@@ -207,8 +208,8 @@ export default function BuatUjianPage() {
         setKelasId(data.kelasId)
         setTargetGender(data.targetGender ?? null)
         setDurasi(String(data.durasiMenit))
-        setWaktuMulai(data.waktuMulai ? new Date(data.waktuMulai).toISOString().slice(0, 16) : "")
-        setWaktuSelesai(data.waktuSelesai ? new Date(data.waktuSelesai).toISOString().slice(0, 16) : "")
+        setWaktuMulai(toDatetimeLocalValue(data.waktuMulai))
+        setWaktuSelesai(toDatetimeLocalValue(data.waktuSelesai))
         if (data.soal.length > 0) {
           setSoalList(data.soal)
         }

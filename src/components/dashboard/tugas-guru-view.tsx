@@ -19,6 +19,7 @@ const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.
 import { getDaftarTugasGuru, deleteTugas, updateTugas } from "@/actions/tugas"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
 import { TargetGenderSelector } from "@/components/dashboard/target-gender-selector"
+import { toDatetimeLocalValue } from "@/lib/datetime-local"
 
 type GuruTugasItem = {
   id: string
@@ -268,7 +269,7 @@ export function GuruTugasView() {
                       setEditTugas(item)
                       setEditJudul(item.judul)
                       setEditDeskripsi(item.deskripsi || "")
-                      setEditDeadline(new Date(item.deadline).toISOString().slice(0, 16))
+                      setEditDeadline(toDatetimeLocalValue(item.deadline))
                       setEditGender(item.targetGender ?? null)
                       setIsEditOpen(true)
                     }}

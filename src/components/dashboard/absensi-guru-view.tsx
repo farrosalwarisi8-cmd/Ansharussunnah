@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Check, UserCheck, Save, Loader2 } from "lucide-react"
+import { toDateLocalValue } from "@/lib/datetime-local"
 
 type StatusAbsensiType = "HADIR" | "IZIN" | "SAKIT" | "ALPHA"
 type SiswaItem = {
@@ -40,7 +41,7 @@ export function GuruAbsensiView() {
   // Attendance state
   const [attendance, setAttendance] = React.useState<Record<string, StatusAbsensiType>>({})
   const [selectedTanggal, setSelectedTanggal] = React.useState(
-    new Date().toISOString().split("T")[0]
+    toDateLocalValue(new Date())
   )
   const [saving, setSaving] = React.useState(false)
 
