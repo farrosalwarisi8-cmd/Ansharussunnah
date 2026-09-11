@@ -10,6 +10,7 @@ import { siswaManualSchema, type SiswaManualFormValues, updateAkunSiswaSchema, t
 import { siswaCocokKelas } from "@/lib/guru-kelas-gender"
 import { deriveUniqueUsername } from "@/lib/username"
 import { toUserFriendlyError } from "@/lib/prisma-error"
+import { sendEmail, buildPemberitahuanRoleBaruEmail } from "@/lib/email"
 import type { ActionResponse } from "@/types"
 import { Role, StatusPendaftaran } from "@prisma/client"
 import { revalidatePath } from "next/cache"
@@ -20,7 +21,7 @@ import { revalidatePath } from "next/cache"
 
 type CreateSiswaManualResult = {
   siswaUserId: string
-  passwordSiswa: string
+  passwordSiswa?: string
   passwordOrangTua?: string
   orangTuaBaruDibuat?: boolean
 }
@@ -134,13 +135,17 @@ export async function createSiswaManual(
 
     // Generate atau pakai password manual
     const passwordSiswa = data.passwordManual || generateSecurePassword(14)
-    const passwordOrangTua = generateSecurePassword(14)
+    // Password ortu hanya digenerate bila akun ortu benar-benar BARU dibuat.
+    // Jika email ortu sudah punya akun (reuse authId), password lama tetap
+    // dipakai — tidak ada password ortu baru.
+    let passwordOrangTua: string | undefined
 
     const newlyCreatedAuthIds: string[] = []
 
     // --- Buat Supabase Auth Orang Tua (jika belum ada) ---
     let authOrtuId: string
     let ortuAlreadyExisted = false
+    let ortuRecordBaruDibuat = false
 
     if (existingOrtu) {
       // Orang tua sudah punya akun, gunakan authId yang ada
@@ -148,6 +153,7 @@ export async function createSiswaManual(
       ortuAlreadyExisted = true
     } else {
       // Buat akun auth orang tua baru
+      passwordOrangTua = generateSecurePassword(14)
       const { data: authOrtuData, error: authOrtuError } =
         await supabaseAdmin.auth.admin.createUser({
           email: emailOrtu,
@@ -171,6 +177,9 @@ export async function createSiswaManual(
           }
           authOrtuId = matched.id
           ortuAlreadyExisted = true
+          // Akun reuse: password ortu "baru" yang digenerate tidak dipakai
+          // kemana-mana (createUser gagal, akun lama tidak diubah).
+          passwordOrangTua = undefined
         } else {
           console.error("Supabase auth error (orang tua):", authOrtuError)
           return { success: false, message: `Gagal membuat akun auth orang tua: ${authOrtuError.message}` }
@@ -183,6 +192,7 @@ export async function createSiswaManual(
 
     // --- Buat Supabase Auth Siswa ---
     let authSiswaId: string
+    let siswaAkunSudahAda = false
     const { data: authSiswaData, error: authSiswaError } =
       await supabaseAdmin.auth.admin.createUser({
         email: emailSiswa,
@@ -198,6 +208,8 @@ export async function createSiswaManual(
       if (authSiswaError.message.includes("already been registered")) {
         // Email ini sudah punya akun Supabase Auth (dari role lain).
         // REUSE authId supaya identitas login tetap sama.
+        // Password TIDAK diubah/digenerate ulang — akun lama tetap dipakai,
+        // jadi tidak ada password baru yang perlu ditampilkan/dikirim.
         const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
           perPage: 1000,
         })
@@ -210,6 +222,7 @@ export async function createSiswaManual(
           return { success: false, message: "Gagal memetakan akun auth siswa yang sudah ada" }
         }
         authSiswaId = matched.id
+        siswaAkunSudahAda = true
       } else {
         // Cleanup auth yang baru dibuat
         for (const authId of newlyCreatedAuthIds) {
@@ -267,7 +280,11 @@ export async function createSiswaManual(
                 nama: data.namaOrangTua,
                 role: Role.ORANG_TUA,
                 authId: authOrtuId,
-                mustChangePassword: true,
+                // Akun reuse (email sudah punya akun di role lain): tidak ada
+                // password baru → jangan paksa ganti password.
+                ...(ortuAlreadyExisted
+                  ? { mustChangePassword: false }
+                  : { mustChangePassword: true }),
                 orangTua: {
                   create: {
                     noHp: data.noHpOrangTua,
@@ -276,6 +293,11 @@ export async function createSiswaManual(
                 },
               },
             })
+            if (ortuAlreadyExisted) {
+              // Record ORANG_TUA ini BARU dibuat dari akun yang email-nya sudah
+              // punya akun lain (reuse authId) → peran ORANG_TUA baru ditambahkan.
+              ortuRecordBaruDibuat = true
+            }
           }
         }
 
@@ -306,7 +328,11 @@ export async function createSiswaManual(
                 nama: data.namaLengkap,
                 role: Role.SISWA,
                 authId: authSiswaId,
-                mustChangePassword: true,
+                // Akun reuse (ada user lain email-nya sama): tidak ada password
+                // baru → jangan paksa ganti password.
+                ...(siswaAkunSudahAda
+                  ? { mustChangePassword: false }
+                  : { mustChangePassword: true }),
                 siswa: {
                   create: {
                     nisn: data.nisn || null,
@@ -384,12 +410,41 @@ export async function createSiswaManual(
         message: "Gagal membuat akun siswa: ID siswa tidak ditemukan setelah transaksi selesai.",
       }
     }
+
+    // Kirim pemberitahuan role baru (TANPA password) jika peran dibuat dari email
+    // yang SUDAH punya akun lain (reuse authId). Password tidak pernah dikirim
+    // untuk skenario reuse — user memakai password lama.
+    if (ortuAlreadyExisted && ortuRecordBaruDibuat) {
+      sendEmail({
+        to: emailOrtu,
+        subject: "Akun Orang Tua Baru Ditambahkan — Ansharussunnah",
+        html: buildPemberitahuanRoleBaruEmail({
+          nama: data.namaOrangTua,
+          email: emailOrtu,
+          roleBaru: "Orang Tua",
+        }),
+      }).catch((err) => console.error("Gagal mengirim email pemberitahuan role orang tua:", err))
+    }
+
+    if (siswaAkunSudahAda) {
+      sendEmail({
+        to: emailSiswa,
+        subject: "Akun Siswa Baru Ditambahkan — Ansharussunnah",
+        html: buildPemberitahuanRoleBaruEmail({
+          nama: data.namaLengkap,
+          email: emailSiswa,
+          roleBaru: "Siswa",
+        }),
+      }).catch((err) => console.error("Gagal mengirim email pemberitahuan role siswa:", err))
+    }
+
     return {
       success: true,
       message: `Akun siswa "${data.namaLengkap}" berhasil dibuat.`,
       data: {
         siswaUserId: prismaSiswaUserId,
-        passwordSiswa,
+        // Jangan tampilkan password yang TIDAK pernah diterapkan ke auth (reuse).
+        passwordSiswa: siswaAkunSudahAda ? undefined : passwordSiswa,
         passwordOrangTua: ortuAlreadyExisted ? undefined : passwordOrangTua,
         orangTuaBaruDibuat: !ortuAlreadyExisted,
       },

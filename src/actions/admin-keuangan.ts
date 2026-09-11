@@ -7,7 +7,7 @@ import { deriveUniqueUsername } from "@/lib/username"
 import { requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
-import { sendEmail } from "@/lib/email"
+import { sendEmail, buildPemberitahuanRoleBaruEmail } from "@/lib/email"
 import {
   createAkunAdminKeuanganSchema,
   updateAkunAdminKeuanganSchema,
@@ -101,6 +101,7 @@ export async function createAkunAdminKeuangan(
     const supabaseAdmin = createSupabaseAdmin()
     let authId: string
     let authUserBaruDibuat = false
+    let akunSudahAda = false
 
     const { data: authData, error: authError } =
       await supabaseAdmin.auth.admin.createUser({
@@ -117,12 +118,15 @@ export async function createAkunAdminKeuangan(
       if (authError.message.includes("already been registered")) {
         // Email ini sudah punya akun Supabase Auth (dari role lain).
         // REUSE authId supaya identitas login tetap sama.
+        // Password TIDAK diubah/digenerate ulang — akun lama tetap dipakai,
+        // jadi tidak ada password baru yang perlu dikirim.
         const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
           perPage: 1000,
         })
         const matched = existingUsers.users.find((u) => u.email === email)
         if (!matched) throw new Error("Gagal memetakan akun auth admin keuangan yang sudah ada")
         authId = matched.id
+        akunSudahAda = true
       } else {
         console.error("Supabase auth error:", authError)
         return { success: false, message: `Gagal membuat akun auth: ${authError.message}` }
@@ -142,7 +146,11 @@ export async function createAkunAdminKeuangan(
           nama,
           role: "ADMIN_KEUANGAN",
           authId,
-          mustChangePassword: true,
+          // Akun reuse (email sudah punya akun di role lain): tidak ada password
+          // baru yang digenerate → tidak perlu memaksa ganti password.
+          ...(akunSudahAda
+            ? { mustChangePassword: false }
+            : { mustChangePassword: true }),
           aktif: true,
         },
       })
@@ -156,21 +164,33 @@ export async function createAkunAdminKeuangan(
       throw createError
     }
 
-    // Kirim kredensial via email (fire-and-forget, jangan block response)
+    // Kirim kredensial (akun baru) atau pemberitahuan role baru (reuse akun lama)
+    // via email (fire-and-forget, jangan block response)
     sendEmail({
       to: email,
-      subject: "Akun Admin Keuangan Baru — Ansharussunnah",
-      html: buildKredensialAdminKeuanganEmail({
-        nama,
-        email,
-        password,
-      }),
+      subject: akunSudahAda
+        ? "Akun Admin Keuangan Baru Ditambahkan — Ansharussunnah"
+        : "Akun Admin Keuangan Baru — Ansharussunnah",
+      html: akunSudahAda
+        ? buildPemberitahuanRoleBaruEmail({
+            nama,
+            email,
+            roleBaru: "Admin Keuangan",
+          })
+        : buildKredensialAdminKeuanganEmail({
+            nama,
+            email,
+            password,
+          }),
     }).catch((err) => console.error("Gagal mengirim email kredensial admin keuangan:", err))
 
     revalidatePath("/dashboard/kelola-akun-keuangan")
+    const infoEmail = akunSudahAda
+      ? "Pemberitahuan role baru telah dikirim"
+      : "Kredensial telah dikirim"
     return {
       success: true,
-      message: `Akun admin keuangan "${nama}" berhasil dibuat. Kredensial telah dikirim ke ${email}.`,
+      message: `Akun admin keuangan "${nama}" berhasil dibuat. ${infoEmail} ke ${email}.`,
       data: { userId: user.id },
     }
   } catch (error: unknown) {

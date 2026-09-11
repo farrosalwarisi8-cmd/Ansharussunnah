@@ -100,6 +100,7 @@ vi.mock("@/lib/password", () => ({
 vi.mock("@/lib/email", () => ({
   sendEmail: mockSendEmail,
   buildKredensialGuruEmail: vi.fn(() => "<p>kredensial</p>"),
+  buildPemberitahuanRoleBaruEmail: vi.fn(() => "<p>pemberitahuan</p>"),
 }))
 
 vi.mock("next/cache", () => ({

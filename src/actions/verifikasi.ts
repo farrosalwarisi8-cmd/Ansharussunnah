@@ -9,7 +9,12 @@ import { requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getSignedUrl } from "@/lib/storage"
 import { generateSecurePassword } from "@/lib/password"
-import { sendEmail, buildKredensialEmail, buildKredensialEmailAnakKedua } from "@/lib/email"
+import {
+  sendEmail,
+  buildKredensialEmail,
+  buildKredensialEmailAnakKedua,
+  buildPemberitahuanRoleBaruEmail,
+} from "@/lib/email"
 import {
   verifikasiPendaftaranSchema,
   type VerifikasiPendaftaranValues,
@@ -302,8 +307,10 @@ export async function verifikasiPendaftaran(
         }
       }
 
-      // Amankan credentials secara random
-      const passwordOrangTua = generateSecurePassword(14)
+      // Amankan credentials secara random. Password ortu hanya digenerate bila
+      // akun ortu benar-benar BARU akan dibuat. Jika email ortu sudah punya akun
+      // (reuse authId), password lama tetap dipakai — TIDAK ada password ortu baru.
+      let passwordOrangTua: string | undefined
       const passwordSiswa = generateSecurePassword(14)
 
       const emailOrtu = pendaftaran.emailOrangTua.toLowerCase().trim()
@@ -313,8 +320,10 @@ export async function verifikasiPendaftaran(
       const newlyCreatedAuthIds: string[] = []
       let authOrtuId: string
       let ortuAlreadyExisted = false
+      let ortuRecordBaruDibuat = false
 
       // Create Supabase Auth Orang Tua
+      passwordOrangTua = generateSecurePassword(14)
       const { data: authOrtuData, error: authOrtuError } =
         await supabaseAdmin.auth.admin.createUser({
           email: emailOrtu,
@@ -337,6 +346,9 @@ export async function verifikasiPendaftaran(
           if (!matched) throw new Error("Gagal memetakan akun auth orang tua")
           authOrtuId = matched.id
           ortuAlreadyExisted = true
+          // Akun reuse: password ortu "baru" yang digenerate tidak dipakai
+          // kemana-mana (createUser gagal, akun lama tidak diubah).
+          passwordOrangTua = undefined
         } else {
           throw new Error(`Gagal membuat akun auth orang tua: ${authOrtuError.message}`)
         }
@@ -440,7 +452,11 @@ export async function verifikasiPendaftaran(
                 nama: pendaftaran.namaOrangTua,
                 role: Role.ORANG_TUA,
                 authId: authOrtuId,
-                mustChangePassword: true,
+                // Akun reuse (email sudah punya akun di role lain): tidak ada
+                // password baru → jangan paksa ganti password.
+                ...(ortuAlreadyExisted
+                  ? { mustChangePassword: false }
+                  : { mustChangePassword: true }),
                 aktif: true,
                 orangTua: {
                   create: {
@@ -450,6 +466,11 @@ export async function verifikasiPendaftaran(
                 },
               },
             })
+            if (ortuAlreadyExisted) {
+              // Record ORANG_TUA ini BARU dibuat dari akun yang email-nya sudah
+              // punya akun lain (reuse authId) → peran ORANG_TUA baru ditambahkan.
+              ortuRecordBaruDibuat = true
+            }
           } else if (userOrtu.aktif === false) {
             // Reaktivasi akun orang tua yang pernah dinonaktifkan (orang tua dengan
             // anak kedua+ yang sebelumnya dia nonaktifkan / record lama).
@@ -607,7 +628,15 @@ export async function verifikasiPendaftaran(
         throw txError
       }
 
-      // Kirim Credentials email secure
+      // Kirim email kredensial / pemberitahuan.
+      // - Akun ortu BARU (authId benar-benar baru): kirim kredensial lengkap
+      //   (ortu + siswa) via buildKredensialEmail.
+      // - Akun ortu SUDAH ADA (reuse authId): kirim kredensial SISWA via
+      //   buildKredensialEmailAnakKedua — tanpa password ortu baru (tidak ada
+      //   password ortu baru yang digenerate). Alur ini TIDAK diubah.
+      // Jika peran ORANG_TUA benar-benar BARU ditambahkan ke akun yang sudah ada
+      // (sebelumnya email ini hanya punya role lain, dan record ORANG_TUA baru
+      // diciptakan), kirim juga pemberitahuan role baru — TANPA password.
       await sendEmail({
         to: emailOrtu,
         subject: ortuAlreadyExisted
@@ -632,6 +661,18 @@ export async function verifikasiPendaftaran(
               nomorPendaftaran: pendaftaran.nomorPendaftaran,
             }),
       })
+
+      if (ortuAlreadyExisted && ortuRecordBaruDibuat) {
+        await sendEmail({
+          to: emailOrtu,
+          subject: "Akun Orang Tua Baru Ditambahkan — Ansharussunnah",
+          html: buildPemberitahuanRoleBaruEmail({
+            nama: pendaftaran.namaOrangTua,
+            email: emailOrtu,
+            roleBaru: "Orang Tua",
+          }),
+        })
+      }
 
       revalidatePath("/dashboard/pendaftaran")
       revalidatePath("/dashboard/siswa")

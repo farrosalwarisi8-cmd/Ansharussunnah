@@ -101,6 +101,7 @@ vi.mock("@/lib/email", () => ({
   sendEmail: vi.fn().mockResolvedValue({ success: true }),
   buildKredensialEmail: vi.fn().mockReturnValue("<html>Email</html>"),
   buildKredensialEmailAnakKedua: vi.fn().mockReturnValue("<html>Email Anak Kedua</html>"),
+  buildPemberitahuanRoleBaruEmail: vi.fn().mockReturnValue("<html>Pemberitahuan Role</html>"),
 }))
 
 vi.mock("next/cache", () => ({
