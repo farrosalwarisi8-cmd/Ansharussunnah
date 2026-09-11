@@ -21,9 +21,7 @@ model User {
   createdAt               DateTime @db.Timestamptz(3)                   @default(now()) @map("created_at")
   updatedAt               DateTime @db.Timestamptz(3)                   @updatedAt @map("updated_at")
   isAdmin                 Boolean                    @default(false) @map("is_admin")
-  passwordPlain           String?                    @map("password_plain")
   username                String?                    @unique
-  password_encrypted      String?
   deleted_at              DateTime?                  @db.Timestamptz(6)
   absensiDiinput          Absensi[]                  @relation("AbsensiDiinputOleh")
   verifikasiBuktiTransfer BuktiTransferPendaftaran[] @relation("VerifiedBy")

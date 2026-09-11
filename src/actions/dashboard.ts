@@ -10,6 +10,9 @@ import {
   StatusPengerjaan,
   StatusPengumpulan,
   StatusTagihan,
+  StatusPembayaran,
+  StatusTransaksi,
+  TipeTransaksi,
   JenisTagihan,
   type JenisKelamin,
 } from "@prisma/client"
@@ -85,6 +88,16 @@ export interface RangkumanAdmin {
   tugasPerluDinilai: number
   tagihanBelumBayar: number
   daftarUjian: InfoUjianHome[]
+}
+
+export interface RangkumanKeuangan {
+  penerimaanBulanIni: number
+  santriSudahBayar: number
+  santriDitagihBulanIni: number
+  totalTunggakan: number
+  santriMenunggak: number
+  pembayaranPending: number
+  saldoKas: number
 }
 
 // ========================================================
@@ -594,6 +607,121 @@ export async function getRangkumanAdminHome(): Promise<
     return {
       success: false,
       message: toUserFriendlyError(error, "Gagal memuat rangkuman dashboard admin. Silakan coba lagi atau hubungi admin."),
+    }
+  }
+}
+
+// ========================================================
+// 5. RANGKUMAN HOME KEUANGAN
+// ========================================================
+
+export async function getRangkumanKeuanganHome(): Promise<
+  ActionResponse<RangkumanKeuangan>
+> {
+  try {
+    await requireRole([Role.ADMIN_KEUANGAN, Role.SUPER_ADMIN])
+
+    const now = new Date()
+    const bulan = now.getMonth() + 1
+    const tahun = now.getFullYear()
+
+    const [
+      pembayaranSppBulanIni,
+      tagihanSppBulanIni,
+      tagihanMenunggak,
+      pembayaranPending,
+      rekapTransaksi,
+    ] = await Promise.all([
+      prisma.pembayaranSiswa.findMany({
+        where: {
+          statusPembayaran: StatusPembayaran.DIKONFIRMASI,
+          tagihan: {
+            jenisTagihan: JenisTagihan.SPP,
+            bulan,
+            tahun,
+            deleted_at: null,
+          },
+        },
+        select: {
+          nominalDibayar: true,
+          tagihan: { select: { siswaId: true } },
+        },
+      }),
+      prisma.tagihanSiswa.findMany({
+        where: {
+          jenisTagihan: JenisTagihan.SPP,
+          bulan,
+          tahun,
+          status: { not: StatusTagihan.DIBATALKAN },
+          deleted_at: null,
+        },
+        select: { siswaId: true },
+      }),
+      prisma.tagihanSiswa.findMany({
+        where: {
+          jenisTagihan: JenisTagihan.SPP,
+          status: {
+            in: [
+              StatusTagihan.BELUM_BAYAR,
+              StatusTagihan.TERLAMBAT,
+              StatusTagihan.DIBAYAR_SEBAGIAN,
+            ],
+          },
+          deleted_at: null,
+        },
+        select: { nominal: true, totalTerbayar: true, siswaId: true },
+      }),
+      prisma.pembayaranSiswa.count({
+        where: { statusPembayaran: StatusPembayaran.PENDING },
+      }),
+      prisma.transaksiKeuangan.groupBy({
+        by: ["tipe"],
+        where: { status: StatusTransaksi.AKTIF },
+        _sum: { nominal: true },
+      }),
+    ])
+
+    const santriSudahBayar = new Set(
+      pembayaranSppBulanIni.map((p) => p.tagihan.siswaId)
+    ).size
+    const santriDitagihBulanIni = new Set(
+      tagihanSppBulanIni.map((t) => t.siswaId)
+    ).size
+
+    const totalTunggakan = tagihanMenunggak.reduce(
+      (acc, t) => acc + Math.max(0, Number(t.nominal) - Number(t.totalTerbayar || 0)),
+      0
+    )
+    const santriMenunggak = new Set(
+      tagihanMenunggak.map((t) => t.siswaId)
+    ).size
+
+    const saldoKas = rekapTransaksi.reduce((acc, r) => {
+      const nominal = Number(r._sum.nominal || 0)
+      return r.tipe === TipeTransaksi.PEMASUKAN ? acc + nominal : acc - nominal
+    }, 0)
+
+    return {
+      success: true,
+      message: "Rangkuman dashboard keuangan berhasil dimuat",
+      data: {
+        penerimaanBulanIni: pembayaranSppBulanIni.reduce(
+          (acc, p) => acc + Number(p.nominalDibayar),
+          0
+        ),
+        santriSudahBayar,
+        santriDitagihBulanIni,
+        totalTunggakan,
+        santriMenunggak,
+        pembayaranPending,
+        saldoKas,
+      },
+    }
+  } catch (error: unknown) {
+    console.error("Error getRangkumanKeuanganHome:", error)
+    return {
+      success: false,
+      message: toUserFriendlyError(error, "Gagal memuat rangkuman dashboard keuangan. Silakan coba lagi atau hubungi admin."),
     }
   }
 }

@@ -7,8 +7,10 @@ import { requireGuruAdmin } from "@/lib/auth"
 import {
   jenjangSchema,
   kelasSchema,
+  updateKelasSchema,
   type JenjangFormValues,
   type KelasFormValues,
+  type UpdateKelasFormValues,
 } from "@/lib/validations/jenjang-kelas"
 import type { ActionResponse, JenjangWithKelas, KelasWithRelations } from "@/types"
 import { guruCocokKelas } from "@/lib/guru-kelas-gender"
@@ -384,24 +386,47 @@ export async function createKelas(payload: KelasFormValues): Promise<ActionRespo
 }
 
 /**
- * Update kelas (ganti nama, kapasitas, atau wali kelas)
+ * Update kelas (ganti nama, jenjang, kapasitas, atau wali kelas)
  */
 export async function updateKelas(
   id: string,
-  payload: Partial<KelasFormValues> & { aktif?: boolean }
+  payload: UpdateKelasFormValues
 ): Promise<ActionResponse> {
   try {
     await requireGuruAdmin()
+
+    const validated = updateKelasSchema.safeParse(payload)
+    if (!validated.success) {
+      return {
+        success: false,
+        message: "Data kelas tidak valid",
+        errors: validated.error.flatten().fieldErrors,
+      }
+    }
 
     const kelas = await prisma.kelas.findUnique({ where: { id } })
     if (!kelas) {
       return { success: false, message: "Kelas tidak ditemukan" }
     }
 
+    const data = validated.data
     const kelasJenisKelamin =
-      payload.jenisKelamin !== undefined ? payload.jenisKelamin ?? null : kelas.jenisKelamin
+      data.jenisKelamin !== undefined ? data.jenisKelamin : kelas.jenisKelamin
     const waliKelasId =
-      payload.waliKelasId !== undefined ? payload.waliKelasId : kelas.waliKelasId
+      data.waliKelasId !== undefined ? data.waliKelasId : kelas.waliKelasId
+
+    // ✅ Duplikasi nama kelas di dalam jenjang yang sama
+    const namaBaru = data.nama ?? kelas.nama
+    const jenjangBaru = data.jenjangId ?? kelas.jenjangId
+    const duplicate = await prisma.kelas.findUnique({
+      where: { nama_jenjangId: { nama: namaBaru, jenjangId: jenjangBaru } },
+    })
+    if (duplicate && duplicate.id !== id) {
+      return {
+        success: false,
+        message: `Kelas "${namaBaru}" sudah ada di jenjang yang dipilih`,
+      }
+    }
 
     // ✅ Validasi kecocokan gender guru wali kelas dengan gender kelas (hasil update)
     if (waliKelasId) {
@@ -428,13 +453,13 @@ export async function updateKelas(
     await prisma.kelas.update({
       where: { id },
       data: {
-        nama: payload.nama,
-        jenjangId: payload.jenjangId,
-        waliKelasId: payload.waliKelasId !== undefined ? payload.waliKelasId : undefined,
-        kapasitas: payload.kapasitas,
+        nama: data.nama,
+        jenjangId: data.jenjangId,
+        waliKelasId: data.waliKelasId !== undefined ? data.waliKelasId : undefined,
+        kapasitas: data.kapasitas,
         jenisKelamin:
-          payload.jenisKelamin !== undefined ? payload.jenisKelamin ?? null : undefined,
-        aktif: payload.aktif,
+          data.jenisKelamin !== undefined ? data.jenisKelamin ?? null : undefined,
+        aktif: data.aktif,
       },
     })
 

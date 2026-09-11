@@ -7,7 +7,6 @@ import { deriveUniqueUsername } from "@/lib/username"
 import { requireGuru, requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
-import { encryptSecret } from "@/lib/crypto"
 import { sendEmail, buildKredensialGuruEmail } from "@/lib/email"
 import { guruCocokKelas } from "@/lib/guru-kelas-gender"
 import { toUserFriendlyError } from "@/lib/prisma-error"
@@ -137,7 +136,6 @@ export async function createAkunGuru(
           data: {
             email,
             username: await deriveUniqueUsername(tx, email),
-            passwordPlain: encryptSecret(password),
             nama,
             // Constraint DB (chk_admin_role_consistency): is_admin=true hanya sah
             // untuk role admin. Role GURU + isAdmin → ditolak DB. Karena itu,

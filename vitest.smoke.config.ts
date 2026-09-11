@@ -19,10 +19,6 @@ export default defineConfig({
     testTimeout: 120_000,
     hookTimeout: 180_000,
     fileParallelism: false,
-    env: {
-      // Fallback agar lib crypto tidak gagal bila env lokal tidak mengisi key
-      PASSWORD_ENCRYPTION_KEY: "test-only-encryption-key-0123456789abcdef",
-    },
   },
   resolve: {
     alias: {

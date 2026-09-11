@@ -5,7 +5,6 @@
 import prisma from "@/lib/prisma"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { createOtpWithHash, verifyOtp } from "@/lib/otp"
-import { encryptSecret } from "@/lib/crypto"
 import { sendEmail, buildOtpEmail } from "@/lib/email"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
@@ -256,7 +255,6 @@ export async function resetPassword(
         data: {
           mustChangePassword: false,
           lastPasswordChange: new Date(),
-          passwordPlain: encryptSecret(newPassword),
         },
       })
       },

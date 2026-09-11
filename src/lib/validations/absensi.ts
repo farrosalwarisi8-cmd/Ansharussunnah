@@ -36,14 +36,6 @@ export const inputAbsensiBulkSchema = z.object({
 
 export type InputAbsensiBulkValues = z.infer<typeof inputAbsensiBulkSchema>
 
-export const editAbsensiSchema = z.object({
-  absensiId: z.string().min(1),
-  status: statusAbsensiEnum,
-  keterangan: z.string().max(255).optional(),
-})
-
-export type EditAbsensiValues = z.infer<typeof editAbsensiSchema>
-
 export const rekapKehadiranSchema = z.object({
   kelasId: z.string().min(1),
   periodeAjaranId: z.string().min(1),

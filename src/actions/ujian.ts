@@ -20,6 +20,7 @@ import {
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
 import { Role, StatusUjian, StatusPengerjaan, Prisma } from "@prisma/client"
+import { toUserFriendlyError } from "@/lib/prisma-error"
 import { revalidatePath } from "next/cache"
 
 // ========================================================
@@ -1083,7 +1084,11 @@ export async function submitPengerjaanUjian(
       },
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal mengumpulkan jawaban ujian" }
+    console.error("Error submitPengerjaanUjian:", error)
+    return {
+      success: false,
+      message: toUserFriendlyError(error, "Gagal mengumpulkan jawaban ujian. Silakan coba lagi."),
+    }
   }
 }
 

@@ -17,7 +17,6 @@ import {
   getDaftarSiswaManual,
   getKelasList,
   hapusSiswaPermanent,
-  getPasswordSiswaSaatIni,
 } from "@/actions/siswa-manual"
 import { useToast } from "@/hooks/use-toast"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
@@ -323,9 +322,7 @@ export default function KelolaSiswaPage() {
     nama: string
     username: string
     email: string
-    passwordPlain: string | null
-    loadingPassword: boolean
-  }>({ open: false, userId: "", nama: "", username: "", email: "", passwordPlain: null, loadingPassword: false })
+  }>({ open: false, userId: "", nama: "", username: "", email: "" })
   const [editUsername, setEditUsername] = React.useState("")
   const [editEmail, setEditEmail] = React.useState("")
   const [editPassword, setEditPassword] = React.useState("")
@@ -539,28 +536,10 @@ export default function KelolaSiswaPage() {
       nama: s.nama,
       username: s.username || "",
       email: s.email,
-      passwordPlain: null,
-      loadingPassword: true,
     })
     setEditUsername(s.username || "")
     setEditEmail(s.email || "")
     setEditPassword("")
-
-    // Ambil password hanya untuk siswa ini (on-demand, bukan massal)
-    try {
-      const res = await getPasswordSiswaSaatIni(s.userId)
-      if (res.success) {
-        setEditAkun((prev) => ({
-          ...prev,
-          passwordPlain: res.data?.password ?? null,
-          loadingPassword: false,
-        }))
-      } else {
-        setEditAkun((prev) => ({ ...prev, loadingPassword: false }))
-      }
-    } catch {
-      setEditAkun((prev) => ({ ...prev, loadingPassword: false }))
-    }
   }
 
   const handleUpdateAkun = async () => {
@@ -1780,17 +1759,6 @@ export default function KelolaSiswaPage() {
                 value={editEmail}
                 onChange={(e) => setEditEmail(e.target.value)}
                 className="h-11 rounded-xl text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 block mb-1.5">
-                Password Saat Ini (untuk dilihat bila siswa lupa)
-              </label>
-              <Input
-                readOnly
-                value={editAkun.loadingPassword ? "Memuat..." : editAkun.passwordPlain || "Tidak tercatat"}
-                className="h-11 rounded-xl text-sm font-mono bg-slate-50"
               />
             </div>
 

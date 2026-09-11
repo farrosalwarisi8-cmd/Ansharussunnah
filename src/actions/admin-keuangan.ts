@@ -7,7 +7,6 @@ import { deriveUniqueUsername } from "@/lib/username"
 import { requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
-import { encryptSecret } from "@/lib/crypto"
 import { sendEmail } from "@/lib/email"
 import {
   createAkunAdminKeuanganSchema,
@@ -140,7 +139,6 @@ export async function createAkunAdminKeuangan(
         data: {
           email,
           username: await deriveUniqueUsername(prisma, email),
-          passwordPlain: encryptSecret(password),
           nama,
           role: "ADMIN_KEUANGAN",
           authId,

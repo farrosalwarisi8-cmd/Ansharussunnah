@@ -53,6 +53,68 @@ async function verifyOrangTuaAksesSiswa(orangTuaId: string, siswaId: string): Pr
 }
 
 // ========================================================
+// HELPER: Sinkronkan status & total terbayar tagihan SPP
+//    Menggantikan trigger DB yang tidak pernah dibuat — hitung
+//    eksplisit dari pembayaran DIKONFIRMASI di dalam transaction.
+// ========================================================
+
+type PrismaTx = Prisma.TransactionClient
+
+async function sinkronkanStatusTagihan(
+  tx: PrismaTx,
+  tagihanId: string,
+  nominalTagihan: number
+): Promise<{ status: StatusTagihan; totalTerbayar: number }> {
+  const tagihan = await tx.tagihanSiswa.findUnique({
+    where: { id: tagihanId },
+    select: { jatuhTempo: true },
+  })
+  if (!tagihan) throw new Error("Tagihan tidak ditemukan")
+
+  const pembayaran = await tx.pembayaranSiswa.findMany({
+    where: { tagihanId },
+    select: { nominalDibayar: true, statusPembayaran: true },
+  })
+
+  let totalTerbayar = 0
+  let adaPending = false
+  for (const p of pembayaran) {
+    if (p.statusPembayaran === StatusPembayaran.DIKONFIRMASI) {
+      totalTerbayar += Number(p.nominalDibayar)
+    } else if (p.statusPembayaran === StatusPembayaran.PENDING) {
+      adaPending = true
+    }
+  }
+
+  // Overpayment tidak dihitung melebihi nominal — sisa tunggakan tidak negatif
+  const totalTerbayarAman = Math.min(totalTerbayar, nominalTagihan)
+
+  let status: StatusTagihan
+  if (totalTerbayarAman >= nominalTagihan) {
+    status = StatusTagihan.SUDAH_BAYAR
+  } else if (adaPending) {
+    status = StatusTagihan.MENUNGGU_VERIFIKASI
+  } else if (totalTerbayarAman > 0) {
+    status = StatusTagihan.DIBAYAR_SEBAGIAN
+  } else if (tagihan.jatuhTempo.getTime() < Date.now()) {
+    status = StatusTagihan.TERLAMBAT
+  } else {
+    status = StatusTagihan.BELUM_BAYAR
+  }
+
+  await tx.tagihanSiswa.update({
+    where: { id: tagihanId },
+    data: {
+      status,
+      totalTerbayar:
+        totalTerbayarAman > 0 ? new Prisma.Decimal(totalTerbayarAman) : null,
+    },
+  })
+
+  return { status, totalTerbayar: totalTerbayarAman }
+}
+
+// ========================================================
 // 1. GENERATE TAGIHAN SPP BULANAN (IDEMPOTENT BULK)
 // ========================================================
 
@@ -120,79 +182,55 @@ export async function generateTagihanSppInternal(
     // Jatuh tempo diset otomatis tanggal 10 bulan tersebut
     const jatuhTempo = new Date(tahun, bulan - 1, 10, 23, 59, 59)
 
-    let totalSiswaTerproses = 0
-    let totalDilewati = 0
+    // Bangun data tagihan untuk SEMUA siswa sekaligus, lalu tulis dalam SATU
+    // query createMany (skipDuplicates). Menggantikan ~2N query berurutan
+    // (findFirst + create per siswa) yang memakan banyak slot koneksi
+    // (connection_limit=1 pada Supabase pooler).
+    const dataTagihan: Prisma.TagihanSiswaCreateManyInput[] = []
 
-    await prisma.$transaction(
-      async (tx) => {
-      for (const siswa of siswaList) {
-        // Cek apakah tagihan bulan+tahun ini sudah ada untuk siswa terkait (Idempotency)
-        const existing = await tx.tagihanSiswa.findFirst({
-          where: {
-            siswaId: siswa.id,
-            bulan,
-            tahun,
-          },
-        })
+    for (const siswa of siswaList) {
+      // Tentukan nominal tagihan SPP:
+      // Prioritas 1: sppKhusus di level Siswa (beasiswa/keringanan)
+      // Prioritas 2: tarifSppBulanan di level Jenjang Kelas
+      // Prioritas 3: nominalDefault dari input admin (fallback universal)
+      let nominalSpp: Prisma.Decimal | null = null
 
-        if (existing) {
-          totalDilewati++
-          continue
-        }
-
-        // Tentukan nominal tagihan SPP:
-        // Prioritas 1: sppKhusus di level Siswa (beasiswa/keringanan)
-        // Prioritas 2: tarifSppBulanan di level Jenjang Kelas
-        // Prioritas 3: nominalDefault dari input admin (fallback universal)
-        let nominalSpp: Prisma.Decimal | null = null
-
-        if (siswa.sppKhusus) {
-          nominalSpp = siswa.sppKhusus
-        } else if (siswa.kelas?.jenjang?.tarifSppBulanan) {
-          nominalSpp = siswa.kelas.jenjang.tarifSppBulanan
-        } else if (nominalDefault) {
-          nominalSpp = new Prisma.Decimal(nominalDefault)
-        }
-
-        // Jika tidak ada tarif SPP terkonfigurasi, skip siswa ini
-        if (!nominalSpp || Number(nominalSpp) <= 0) {
-          totalDilewati++
-          continue
-        }
-
-        await tx.tagihanSiswa
-          .create({
-            data: {
-              siswaId: siswa.id,
-              namaTagihan: `SPP ${BULAN_NAMES[bulan]} ${tahun}`,
-              bulan,
-              tahun,
-              nominal: nominalSpp,
-              jatuhTempo,
-              status: StatusTagihan.BELUM_BAYAR,
-            },
-          })
-          .catch((err: unknown) => {
-            // Unique constraint (siswa_id, bulan, tahun): bila request lain sudah
-            // membuat tagihan yang sama lebih dulu dalam window yang sama,
-            // lewati saja daripada menggagalkan seluruh batch.
-            if (
-              typeof err === "object" &&
-              err !== null &&
-              "code" in err &&
-              (err as { code: string }).code === "P2002"
-            ) {
-              totalDilewati++
-              return undefined
-            }
-            throw err
-          })
-
-        totalSiswaTerproses++
+      if (siswa.sppKhusus) {
+        nominalSpp = siswa.sppKhusus
+      } else if (siswa.kelas?.jenjang?.tarifSppBulanan) {
+        nominalSpp = siswa.kelas.jenjang.tarifSppBulanan
+      } else if (nominalDefault) {
+        nominalSpp = new Prisma.Decimal(nominalDefault)
       }
-      },
-      { timeout: 20000, maxWait: 5000 }
-    )
+
+      // Jika tidak ada tarif SPP terkonfigurasi, skip siswa ini
+      if (!nominalSpp || Number(nominalSpp) <= 0) {
+        continue
+      }
+
+      dataTagihan.push({
+        siswaId: siswa.id,
+        namaTagihan: `SPP ${BULAN_NAMES[bulan]} ${tahun}`,
+        bulan,
+        tahun,
+        nominal: nominalSpp,
+        jatuhTempo,
+        status: StatusTagihan.BELUM_BAYAR,
+      })
+    }
+
+    // skipDuplicates memakai unique (siswa_id, bulan, tahun) — tagihan yang
+    // sudah ada (idempotency) atau yang dibuat request lain secara bersamaan
+    // dilewati otomatis oleh database (setara ON CONFLICT DO NOTHING).
+    const hasil = dataTagihan.length
+      ? await prisma.tagihanSiswa.createMany({
+          data: dataTagihan,
+          skipDuplicates: true,
+        })
+      : { count: 0 }
+
+    const totalSiswaTerproses = hasil.count
+    const totalDilewati = siswaList.length - hasil.count
 
     revalidatePath("/dashboard/keuangan")
     return {
@@ -201,9 +239,10 @@ export async function generateTagihanSppInternal(
       data: { totalSiswaTerproses, totalDilewati },
     }
   } catch (error: unknown) {
+    console.error("Error generateTagihanSppInternal:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal meng-generate tagihan SPP bulanan",
+      message: toUserFriendlyError(error, "Gagal meng-generate tagihan SPP bulanan. Silakan coba lagi atau hubungi admin."),
     }
   }
 }
@@ -439,20 +478,17 @@ export async function konfirmasiPembayaranSppOlehAdmin(
           throw new Error("Pembayaran ini sudah diproses sebelumnya")
         }
 
-        // Trigger DB otomatis memperbarui tagihan_siswas.total_terbayar &
-        // status setiap pembayaran PENDING → DIKONFIRMASI. Baca ulang kondisi
-        // terbaru untuk respons (jangan hitung manual di aplikasi).
-        const tagihanTerbaru = await tx.tagihanSiswa.findUnique({
-          where: { id: tagihan.id },
-          select: { status: true, totalTerbayar: true },
-        })
-        if (!tagihanTerbaru) throw new Error("Tagihan tidak ditemukan")
-
-        const totalTerbayarSetelahIni = Number(tagihanTerbaru.totalTerbayar || 0)
+        // Hitung eksplisit total_terbayar & status tagihan dari pembayaran
+        // DIKONFIRMASI (menggantikan trigger DB yang tidak pernah ada).
+        const hasilSinkron = await sinkronkanStatusTagihan(
+          tx,
+          tagihan.id,
+          nominalTagihan
+        )
         return {
-          statusTagihanBaru: tagihanTerbaru.status,
-          totalTerbayar: totalTerbayarSetelahIni,
-          sisaTunggakan: Math.max(0, nominalTagihan - totalTerbayarSetelahIni),
+          statusTagihanBaru: hasilSinkron.status,
+          totalTerbayar: hasilSinkron.totalTerbayar,
+          sisaTunggakan: Math.max(0, nominalTagihan - hasilSinkron.totalTerbayar),
         }
       } else {
         // FIX RACE: tandai pembayaran DITOLAK secara ATOMIK dengan kondisi PENDING.
@@ -470,19 +506,17 @@ export async function konfirmasiPembayaranSppOlehAdmin(
           throw new Error("Pembayaran ini sudah diproses sebelumnya")
         }
 
-        // Trigger DB otomatis mengembalikan status tagihan sesuai total
-        // pembayaran DIKONFIRMASI yang tersisa. Baca ulang untuk respons.
-        const tagihanTerbaru = await tx.tagihanSiswa.findUnique({
-          where: { id: tagihan.id },
-          select: { status: true, totalTerbayar: true },
-        })
-        if (!tagihanTerbaru) throw new Error("Tagihan tidak ditemukan")
-
-        const totalTerbayarTersisa = Number(tagihanTerbaru.totalTerbayar || 0)
+        // Hitung eksplisit status tagihan dari pembayaran DIKONFIRMASI yang
+        // tersisa (menggantikan trigger DB yang tidak pernah ada).
+        const hasilSinkron = await sinkronkanStatusTagihan(
+          tx,
+          tagihan.id,
+          nominalTagihan
+        )
         return {
-          statusTagihanBaru: tagihanTerbaru.status,
-          totalTerbayar: totalTerbayarTersisa,
-          sisaTunggakan: Math.max(0, nominalTagihan - totalTerbayarTersisa),
+          statusTagihanBaru: hasilSinkron.status,
+          totalTerbayar: hasilSinkron.totalTerbayar,
+          sisaTunggakan: Math.max(0, nominalTagihan - hasilSinkron.totalTerbayar),
         }
       }
       },
@@ -580,17 +614,13 @@ export async function konfirmasiPembayaranSppManual(
         },
       })
 
-      // Trigger DB otomatis memperbarui tagihan_siswas.total_terbayar & status,
-      // dan menolak jika total pembayaran melebihi nominal. Baca ulang & serah.
-      const tagihanTerbaru = await tx.tagihanSiswa.findUnique({
-        where: { id: tagihanId },
-        select: { status: true, totalTerbayar: true },
-      })
-      if (!tagihanTerbaru) throw new Error("Tagihan tidak ditemukan")
+      // Hitung eksplisit total_terbayar & status tagihan setelah pembayaran
+      // manual masuk (menggantikan trigger DB yang tidak pernah ada).
+      const hasilSinkron = await sinkronkanStatusTagihan(tx, tagihanId, nominalTagihan)
 
       return {
-        statusTagihanBaru: tagihanTerbaru.status,
-        totalDibayarSetelahIni: Number(tagihanTerbaru.totalTerbayar || 0),
+        statusTagihanBaru: hasilSinkron.status,
+        totalDibayarSetelahIni: hasilSinkron.totalTerbayar,
       }
       },
       { timeout: 10000, maxWait: 3000 }

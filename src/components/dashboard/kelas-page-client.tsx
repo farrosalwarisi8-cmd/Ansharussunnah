@@ -10,6 +10,7 @@ import {
   createKelas,
   createJenjang,
   updateJenjang,
+  updateKelas,
   deleteJenjang,
   deleteKelas,
 } from "@/actions/jenjang-kelas"
@@ -42,6 +43,8 @@ interface GuruOption {
 interface KelasItem {
   id: string
   nama: string
+  jenjangId: string
+  waliKelasId: string | null
   jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   kapasitas: number
   aktif: boolean
@@ -64,8 +67,9 @@ export default function KelolaKelasPage() {
   const [guruList, setGuruList] = React.useState<GuruOption[]>([])
   const [pageLoading, setPageLoading] = React.useState(true)
 
-  // Modal Tambah Kelas
+  // Modal Tambah/Edit Kelas
   const [isAddKelasOpen, setIsAddKelasOpen] = React.useState(false)
+  const [editKelas, setEditKelas] = React.useState<KelasItem | null>(null)
   const [namaKelas, setNamaKelas] = React.useState("")
   const [selectedJenjangId, setSelectedJenjangId] = React.useState("")
   const [kapasitas, setKapasitas] = React.useState("30")
@@ -104,6 +108,8 @@ export default function KelolaKelasPage() {
           kelas: Array<{
             id: string
             nama: string
+            jenjangId: string
+            waliKelasId: string | null
             jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
             kapasitas: number
             aktif: boolean
@@ -118,6 +124,8 @@ export default function KelolaKelasPage() {
           kelasList: j.kelas.map((k) => ({
             id: k.id,
             nama: k.nama,
+            jenjangId: k.jenjangId,
+            waliKelasId: k.waliKelasId,
             jenisKelamin: k.jenisKelamin,
             kapasitas: k.kapasitas,
             aktif: k.aktif,
@@ -155,34 +163,50 @@ export default function KelolaKelasPage() {
     init()
   }, [fetchData])
 
-  // Handle Add Kelas
-  const handleAddKelas = async (e: React.FormEvent) => {
+  // Handle Add / Edit Kelas
+  const handleSaveKelas = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!namaKelas.trim() || !selectedJenjangId) return
 
     setLoading(true)
     try {
-      const result = await createKelas({
+      const payload = {
         nama: namaKelas,
         jenjangId: selectedJenjangId,
         kapasitas: parseInt(kapasitas) || 30,
         waliKelasId: selectedWaliKelasId || undefined,
         jenisKelamin: (jenisKelaminKelas || null) as "LAKI_LAKI" | "PEREMPUAN" | null,
-      })
+      }
+
+      const result = editKelas
+        ? await updateKelas(editKelas.id, payload)
+        : await createKelas(payload)
 
       if (result.success) {
-        toast({ title: "Kelas Baru Berhasil Dibuat! 🏫", description: result.message })
+        toast({
+          title: editKelas ? "Kelas Diperbarui! ✅" : "Kelas Baru Berhasil Dibuat! 🏫",
+          description: result.message,
+        })
         await fetchData()
         setIsAddKelasOpen(false)
+        setEditKelas(null)
         setNamaKelas("")
         setKapasitas("30")
         setSelectedWaliKelasId("")
         setJenisKelaminKelas("")
       } else {
-        toast({ title: "Gagal Membuat Kelas ❌", description: result.message, variant: "destructive" })
+        toast({
+          title: editKelas ? "Gagal Memperbarui Kelas ❌" : "Gagal Membuat Kelas ❌",
+          description: result.message,
+          variant: "destructive",
+        })
       }
     } catch {
-      toast({ title: "Gagal Membuat Kelas", description: "Terjadi kesalahan server.", variant: "destructive" })
+      toast({
+        title: editKelas ? "Gagal Memperbarui Kelas" : "Gagal Membuat Kelas",
+        description: "Terjadi kesalahan server.",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -326,7 +350,15 @@ export default function KelolaKelasPage() {
               Tambah Jenjang
             </Button>
             <Button
-              onClick={() => setIsAddKelasOpen(true)}
+              onClick={() => {
+                setEditKelas(null)
+                setNamaKelas("")
+                setSelectedJenjangId(jenjangList[0]?.id ?? "")
+                setKapasitas("30")
+                setSelectedWaliKelasId("")
+                setJenisKelaminKelas("")
+                setIsAddKelasOpen(true)
+              }}
               className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl shadow-md min-h-[44px]"
             >
               <Plus className="h-4 w-4 mr-1.5" />
@@ -468,19 +500,39 @@ export default function KelolaKelasPage() {
                             <Users className="h-3.5 w-3.5" />
                             Kelola Pengajar
                           </Link>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setDeleteType("kelas")
-                              setDeleteTarget({ id: k.id, nama: k.nama })
-                              setDeleteDialogOpen(true)
-                            }}
-                            className="rounded-xl min-h-[32px] text-xs text-rose-600 border-rose-200 hover:bg-rose-50"
-                            aria-label="Hapus kelas"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditKelas(k)
+                                setNamaKelas(k.nama)
+                                setSelectedJenjangId(k.jenjangId)
+                                setKapasitas(String(k.kapasitas))
+                                setSelectedWaliKelasId(k.waliKelasId || "")
+                                setJenisKelaminKelas(k.jenisKelamin || "")
+                                setIsAddKelasOpen(true)
+                              }}
+                              className="rounded-xl min-h-[32px] text-xs"
+                              aria-label="Edit kelas"
+                            >
+                              <Pencil className="h-3 w-3 mr-1" />
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setDeleteType("kelas")
+                                setDeleteTarget({ id: k.id, nama: k.nama })
+                                setDeleteDialogOpen(true)
+                              }}
+                              className="rounded-xl min-h-[32px] text-xs text-rose-600 border-rose-200 hover:bg-rose-50"
+                              aria-label="Hapus kelas"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -492,19 +544,29 @@ export default function KelolaKelasPage() {
         </div>
       )}
 
-      {/* Modal Tambah Kelas */}
-      <Dialog open={isAddKelasOpen} onOpenChange={setIsAddKelasOpen}>
+      {/* Modal Tambah/Edit Kelas */}
+      <Dialog
+        open={isAddKelasOpen}
+        onOpenChange={(open) => {
+          setIsAddKelasOpen(open)
+          if (!open) setEditKelas(null)
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-slate-800">
-              Tambah Rombongan Belajar (Kelas) Baru
+              {editKelas
+                ? "Edit Rombongan Belajar (Kelas)"
+                : "Tambah Rombongan Belajar (Kelas) Baru"}
             </DialogTitle>
             <p className="text-xs text-slate-500">
-              Buat kelas baru dan tentukan jenjang serta kuota kapasitas santri
+              {editKelas
+                ? "Perbarui nama, jenjang, kapasitas, atau wali kelas rombongan ini"
+                : "Buat kelas baru dan tentukan jenjang serta kuota kapasitas santri"}
             </p>
           </DialogHeader>
 
-          <form onSubmit={handleAddKelas} className="space-y-4 py-2">
+          <form onSubmit={handleSaveKelas} className="space-y-4 py-2">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
                 Jenjang Pendidikan *
@@ -618,7 +680,7 @@ export default function KelolaKelasPage() {
                 ) : (
                   <Plus className="h-4 w-4 mr-1.5" />
                 )}
-                Simpan Kelas
+                {editKelas ? "Simpan Perubahan" : "Simpan Kelas"}
               </Button>
             </DialogFooter>
           </form>

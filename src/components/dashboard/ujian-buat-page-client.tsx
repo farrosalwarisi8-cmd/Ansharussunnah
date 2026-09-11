@@ -56,28 +56,8 @@ export default function BuatUjianPage() {
   const [waktuMulai, setWaktuMulai] = React.useState("")
   const [waktuSelesai, setWaktuSelesai] = React.useState("")
 
-  // Question List State
-  const [soalList, setSoalList] = React.useState<SoalItem[]>([
-    {
-      nomor: 1,
-      tipe: "PILIHAN_GANDA",
-      pertanyaan: "Berapakah jumlah rukun wudhu yang wajib menurut madzhab Syafi'i?",
-      bobotNilai: 5,
-      opsi: [
-        { teks: "4 Rukun", benar: false },
-        { teks: "6 Rukun", benar: true },
-        { teks: "8 Rukun", benar: false },
-        { teks: "10 Rukun", benar: false },
-      ],
-    },
-    {
-      nomor: 2,
-      tipe: "ESAI",
-      pertanyaan: "Jelaskan perbedaan antara najis Mukhaffafah, Mutawassithah, dan Mughaladhah beserta contohnya masing-masing!",
-      bobotNilai: 20,
-      opsi: [],
-    },
-  ])
+  // Question List State — dimulai kosong, guru menambah soal sendiri
+  const [soalList, setSoalList] = React.useState<SoalItem[]>([])
 
   const addPilihanGanda = () => {
     setSoalList((prev) => [

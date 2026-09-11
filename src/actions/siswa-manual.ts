@@ -6,7 +6,6 @@ import prisma from "@/lib/prisma"
 import { requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
-import { encryptSecret, decryptSecret } from "@/lib/crypto"
 import { siswaManualSchema, type SiswaManualFormValues, updateAkunSiswaSchema, type UpdateAkunSiswaValues } from "@/lib/validations/siswa-manual"
 import { siswaCocokKelas } from "@/lib/guru-kelas-gender"
 import { deriveUniqueUsername } from "@/lib/username"
@@ -265,7 +264,6 @@ export async function createSiswaManual(
               data: {
                 email: emailOrtu,
                 username: await deriveUniqueUsername(tx, emailOrtu),
-                passwordPlain: encryptSecret(passwordOrangTua),
                 nama: data.namaOrangTua,
                 role: Role.ORANG_TUA,
                 authId: authOrtuId,
@@ -305,7 +303,6 @@ export async function createSiswaManual(
               data: {
                 email: emailSiswa,
                 username: await deriveUniqueUsername(tx, emailSiswa),
-                passwordPlain: encryptSecret(passwordSiswa),
                 nama: data.namaLengkap,
                 role: Role.SISWA,
                 authId: authSiswaId,
@@ -453,7 +450,7 @@ export async function resetPasswordSiswaManual(
     // Set mustChangePassword: true
     await prisma.user.update({
       where: { id: siswaUserId },
-      data: { mustChangePassword: true, passwordPlain: encryptSecret(newPassword) },
+      data: { mustChangePassword: true },
     })
 
     revalidatePath("/dashboard/siswa")
@@ -513,7 +510,7 @@ export async function resetPasswordOrangTuaManual(
     // Set mustChangePassword: true
     await prisma.user.update({
       where: { id: orangTuaUserId },
-      data: { mustChangePassword: true, passwordPlain: encryptSecret(newPassword) },
+      data: { mustChangePassword: true },
     })
 
     revalidatePath("/dashboard/siswa")
@@ -638,44 +635,6 @@ export async function getDaftarSiswaManual(): Promise<ActionResponse<SiswaManual
   }
 }
 
-/**
- * Mengambil password siswa SAAT INI secara on-demand (per-siswa).
- * Dipisah dari getDaftarSiswaManual agar password tidak dikirim massal
- * ke klien di setiap pemuatan daftar. Hanya dipanggil saat admin/ guru
- * membuka dialog ubah akun dan membutuhkan password untuk dilihat.
- */
-export async function getPasswordSiswaSaatIni(
-  siswaUserId: string
-): Promise<ActionResponse<{ password: string | null }>> {
-  try {
-    await requireGuruAdmin()
-
-    if (!siswaUserId) {
-      return { success: false, message: "ID siswa tidak valid" }
-    }
-
-    const siswaUser = await prisma.user.findUnique({
-      where: { id: siswaUserId, deleted_at: null },
-      include: { siswa: { select: { id: true } } },
-    })
-
-    if (!siswaUser || !siswaUser.siswa) {
-      return { success: false, message: "Akun siswa tidak ditemukan" }
-    }
-
-    const password = siswaUser.passwordPlain
-      ? decryptSecret(siswaUser.passwordPlain)
-      : null
-
-    return { success: true, message: "Password berhasil diambil", data: { password } }
-  } catch (error: unknown) {
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : "Gagal mengambil password siswa",
-    }
-  }
-}
-
 // ========================================================
 // 5. UPDATE AKUN SISWA (username, email, password)
 // ========================================================
@@ -684,7 +643,7 @@ export async function getPasswordSiswaSaatIni(
  * Admin/guru mengubah data akun siswa:
  * - username: disimpan ke DB, dipakai sebagai alias login
  * - email: disinkronkan ke Supabase Auth (email_confirm otomatis)
- * - password: disinkronkan ke Supabase Auth + disimpan plaintext di DB
+ * - password: disinkronkan ke Supabase Auth
  */
 export async function updateAkunSiswa(
   siswaUserId: string,
@@ -806,14 +765,12 @@ export async function updateAkunSiswa(
     // Catatan: email sudah disinkronkan via updateMany di atas.
     const updateData: {
       username?: string
-      passwordPlain?: string
       mustChangePassword?: boolean
       lastPasswordChange?: Date
     } = {}
 
     if (newUsername) updateData.username = newUsername
     if (password) {
-      updateData.passwordPlain = encryptSecret(password)
       updateData.mustChangePassword = true
       updateData.lastPasswordChange = new Date()
     }

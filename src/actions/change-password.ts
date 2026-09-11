@@ -5,7 +5,6 @@
 import prisma from "@/lib/prisma"
 import { requireAuth } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { encryptSecret } from "@/lib/crypto"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
@@ -98,7 +97,6 @@ export async function changePassword(
       data: {
         mustChangePassword: false,
         lastPasswordChange: new Date(),
-        passwordPlain: encryptSecret(newPassword),
       },
     })
 

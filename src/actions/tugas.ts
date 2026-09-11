@@ -792,7 +792,10 @@ export async function submitTugas(
             namaFile,
             ukuranFile,
             waktuKumpul: now,
-            // status (TEPAT_WAKTU/TERLAMBAT) diisi otomatis oleh trigger DB
+            // Hitung eksplisit — tidak ada trigger DB yang mengisi status
+            status: isTerlambat
+              ? StatusPengumpulan.TERLAMBAT
+              : StatusPengumpulan.TEPAT_WAKTU,
             jumlahRevisi: { increment: 1 },
             // Reset nilai & feedback karena siswa mengirim ulang
             nilai: null,
@@ -823,7 +826,10 @@ export async function submitTugas(
         namaFile,
         ukuranFile,
         waktuKumpul: now,
-        // status (TEPAT_WAKTU/TERLAMBAT) diisi otomatis oleh trigger DB
+        // Hitung eksplisit — tidak ada trigger DB yang mengisi status
+        status: isTerlambat
+          ? StatusPengumpulan.TERLAMBAT
+          : StatusPengumpulan.TEPAT_WAKTU,
       },
     })
 

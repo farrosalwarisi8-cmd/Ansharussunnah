@@ -8,12 +8,10 @@ import { verifyGuruAksesKelas } from "@/lib/guru-auth"
 import {
   inputAbsensiSingleSchema,
   inputAbsensiBulkSchema,
-  editAbsensiSchema,
   rekapKehadiranSchema,
   riwayatKehadiranSiswaSchema,
   type InputAbsensiSingleValues,
   type InputAbsensiBulkValues,
-  type EditAbsensiValues,
   type RekapKehadiranValues,
   type RiwayatKehadiranSiswaValues,
 } from "@/lib/validations/absensi"
@@ -227,55 +225,6 @@ export async function inputAbsensiBulk(
     return {
       success: false,
       message: error instanceof Error ? error.message : "Gagal menyimpan absensi bulk",
-    }
-  }
-}
-
-/**
- * Edit absensi yang sudah diinput sebelumnya.
- */
-export async function editAbsensi(
-  payload: EditAbsensiValues
-): Promise<ActionResponse> {
-  try {
-    const validated = editAbsensiSchema.safeParse(payload)
-    if (!validated.success) {
-      return {
-        success: false,
-        message: "Data edit absensi tidak valid",
-        errors: validated.error.flatten().fieldErrors,
-      }
-    }
-
-    const { absensiId, status, keterangan } = validated.data
-
-    const absensi = await prisma.absensi.findUnique({
-      where: { id: absensiId },
-    })
-    if (!absensi) {
-      return { success: false, message: "Record absensi tidak ditemukan" }
-    }
-
-    // Otorisasi: guru harus punya akses ke kelas absensi ini
-    await verifyGuruAksesKelas(absensi.kelasId)
-
-    await prisma.absensi.update({
-      where: { id: absensiId },
-      data: {
-        status: status as StatusAbsensi,
-        keterangan,
-      },
-    })
-
-    revalidatePath(`/dashboard/absensi`)
-    return {
-      success: true,
-      message: "Absensi berhasil diperbarui",
-    }
-  } catch (error: unknown) {
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : "Gagal memperbarui absensi",
     }
   }
 }

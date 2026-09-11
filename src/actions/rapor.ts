@@ -6,11 +6,9 @@ import prisma from "@/lib/prisma"
 import { requireRole } from "@/lib/auth"
 import { verifyGuruAksesKelas } from "@/lib/guru-auth"
 import {
-  generateRaporSchema,
   rekapKelasSchema,
   createCatatanRaporSchema,
   updateCatatanRaporSchema,
-  type GenerateRaporValues,
   type RekapKelasValues,
   type CreateCatatanRaporValues,
   type UpdateCatatanRaporValues,
@@ -187,126 +185,7 @@ async function hitungKehadiran(
 }
 
 // ========================================================
-// 1. ACTIONS GURU: GENERATE RAPOR PER SISWA
-// ========================================================
-
-/**
- * Generate data rapor lengkap untuk 1 siswa di 1 periode.
- * Mengagregasi: nilai per mapel (ujian+tugas), kehadiran, catatan wali kelas.
- */
-export async function generateRaporSiswa(
-  payload: GenerateRaporValues
-): Promise<ActionResponse> {
-  try {
-    const validated = generateRaporSchema.safeParse(payload)
-    if (!validated.success) {
-      return {
-        success: false,
-        message: "Parameter rapor tidak valid",
-        errors: validated.error.flatten().fieldErrors,
-      }
-    }
-
-    const { siswaId, periodeAjaranId } = validated.data
-
-    // Ambil data siswa + kelas
-    const siswa = await prisma.siswa.findUnique({
-      where: { id: siswaId, deleted_at: null },
-      include: {
-        user: { select: { nama: true, email: true } },
-        kelas: {
-          include: {
-            jenjang: { select: { nama: true } },
-            waliKelas: {
-              where: { deleted_at: null },
-              include: { user: { select: { nama: true } } },
-            },
-          },
-        },
-      },
-    })
-
-    if (!siswa || !siswa.kelas) {
-      return { success: false, message: "Data siswa atau kelas tidak ditemukan" }
-    }
-
-    // Otorisasi guru terhadap kelas siswa
-    await verifyGuruAksesKelas(siswa.kelas.id)
-
-    // Validasi periode
-    const periode = await prisma.periodeAjaran.findUnique({
-      where: { id: periodeAjaranId },
-    })
-    if (!periode) {
-      return { success: false, message: "Periode ajaran tidak ditemukan" }
-    }
-
-    // Hitung agregasi nilai per mapel
-    const nilaiPerMapel = await hitungNilaiPerMapel(siswaId, periodeAjaranId)
-
-    // Hitung kehadiran
-    const kehadiran = await hitungKehadiran(siswaId, periodeAjaranId)
-
-    // Ambil catatan rapor jika ada
-    const catatanRapor = await prisma.catatanRapor.findUnique({
-      where: {
-        siswaId_periodeAjaranId: { siswaId, periodeAjaranId },
-      },
-      include: {
-        waliKelas: {
-          include: { user: { select: { nama: true } } },
-        },
-      },
-    })
-
-    // Hitung rata-rata keseluruhan
-    const rataKeseluruhan =
-      nilaiPerMapel.length > 0
-        ? nilaiPerMapel.reduce((acc, m) => acc + m.nilaiGabungan, 0) /
-          nilaiPerMapel.length
-        : 0
-
-    return {
-      success: true,
-      message: "Rapor berhasil di-generate",
-      data: {
-        identitas: {
-          siswaId: siswa.id,
-          nama: siswa.user.nama,
-          nisn: siswa.nisn,
-          kelas: siswa.kelas.nama,
-          jenjang: siswa.kelas.jenjang.nama,
-          waliKelas: siswa.kelas.waliKelas?.user.nama || "Belum ditentukan",
-        },
-        periode: {
-          id: periode.id,
-          nama: periode.nama,
-          tahunAjaran: periode.tahunAjaran,
-          semester: periode.semester,
-        },
-        nilaiPerMapel,
-        rataRataKeseluruhan: Math.round(rataKeseluruhan * 100) / 100,
-        kehadiran,
-        catatanRapor: catatanRapor
-          ? {
-              catatan: catatanRapor.catatan,
-              ranking: catatanRapor.ranking,
-              waliKelas: catatanRapor.waliKelas.user.nama,
-              tanggalDibuat: catatanRapor.createdAt,
-            }
-          : null,
-      },
-    }
-  } catch (error: unknown) {
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : "Gagal men-generate rapor",
-    }
-  }
-}
-
-// ========================================================
-// 2. ACTIONS GURU: REKAP RAPOR SELURUH KELAS
+// 1. ACTIONS GURU: REKAP RAPOR SELURUH KELAS
 // ========================================================
 
 /**

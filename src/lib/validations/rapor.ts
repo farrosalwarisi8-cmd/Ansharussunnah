@@ -41,13 +41,6 @@ export type UpdatePeriodeAjaranValues = z.infer<typeof updatePeriodeAjaranSchema
 // RAPOR & CATATAN
 // ============================================
 
-export const generateRaporSchema = z.object({
-  siswaId: z.string().min(1, "Siswa wajib dipilih"),
-  periodeAjaranId: z.string().min(1, "Periode ajaran wajib dipilih"),
-})
-
-export type GenerateRaporValues = z.infer<typeof generateRaporSchema>
-
 export const rekapKelasSchema = z.object({
   kelasId: z.string().min(1, "Kelas wajib dipilih"),
   periodeAjaranId: z.string().min(1, "Periode ajaran wajib dipilih"),

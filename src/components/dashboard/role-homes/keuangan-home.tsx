@@ -1,34 +1,97 @@
 "use client"
 
+import * as React from "react"
 import Link from "next/link"
-import { DollarSign, Eye } from "lucide-react"
+import { DollarSign, Eye, Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { EmptyState } from "@/components/ui/empty-state"
+import { getRangkumanKeuanganHome, type RangkumanKeuangan } from "@/actions/dashboard"
+
+function formatRupiah(nilai: number): string {
+  return `Rp ${nilai.toLocaleString("id-ID")}`
+}
 
 export function KeuanganDashboardHome() {
+  const [data, setData] = React.useState<RangkumanKeuangan | null>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    let mounted = true
+    async function fetchData() {
+      try {
+        const result = await getRangkumanKeuanganHome()
+        if (!mounted) return
+        if (result.success && result.data) {
+          setData(result.data)
+        } else {
+          setError(result.message || "Gagal memuat rangkuman keuangan")
+        }
+      } catch {
+        if (mounted) setError("Gagal memuat rangkuman keuangan")
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    fetchData()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
+        <span className="ml-3 text-sm text-slate-500">Memuat rangkuman keuangan...</span>
+      </div>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <EmptyState
+        icon={AlertCircle}
+        title="Gagal Memuat Rangkuman"
+        description={error || "Data tidak tersedia."}
+      />
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
           <CardContent className="p-4 sm:p-5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Penerimaan SPP Bulan Ini</span>
-            <div className="text-xl sm:text-2xl font-extrabold text-yellow-600 mt-2">Rp 48.500.000</div>
-            <span className="text-xs text-slate-500 mt-1 block">97 dari 120 Santri</span>
+            <div className="text-xl sm:text-2xl font-extrabold text-yellow-600 mt-2">
+              {formatRupiah(data.penerimaanBulanIni)}
+            </div>
+            <span className="text-xs text-slate-500 mt-1 block">
+              {data.santriSudahBayar} dari {data.santriDitagihBulanIni} Santri
+            </span>
           </CardContent>
         </Card>
 
         <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
           <CardContent className="p-4 sm:p-5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Tunggakan</span>
-            <div className="text-xl sm:text-2xl font-extrabold text-rose-600 mt-2">Rp 11.500.000</div>
-            <span className="text-xs text-slate-500 mt-1 block">23 Santri tertunda</span>
+            <div className="text-xl sm:text-2xl font-extrabold text-rose-600 mt-2">
+              {formatRupiah(data.totalTunggakan)}
+            </div>
+            <span className="text-xs text-slate-500 mt-1 block">
+              {data.santriMenunggak} Santri tertunda
+            </span>
           </CardContent>
         </Card>
 
         <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
           <CardContent className="p-4 sm:p-5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Verifikasi Bukti</span>
-            <div className="text-xl sm:text-2xl font-extrabold text-amber-600 mt-2">5 Pembayaran</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-amber-600 mt-2">
+              {data.pembayaranPending} Pembayaran
+            </div>
             <span className="text-xs text-slate-500 mt-1 block">Menunggu review kasir</span>
           </CardContent>
         </Card>
@@ -36,8 +99,10 @@ export function KeuanganDashboardHome() {
         <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
           <CardContent className="p-4 sm:p-5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Saldo Kas Operasional</span>
-            <div className="text-xl sm:text-2xl font-extrabold text-slate-800 mt-2">Rp 142.800.000</div>
-            <span className="text-xs text-yellow-500 mt-1 block font-medium">+8.2% bulan lalu</span>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-800 mt-2">
+              {formatRupiah(data.saldoKas)}
+            </div>
+            <span className="text-xs text-yellow-500 mt-1 block font-medium">Aktif per hari ini</span>
           </CardContent>
         </Card>
       </div>
