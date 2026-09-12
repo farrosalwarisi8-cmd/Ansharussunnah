@@ -189,7 +189,7 @@ export async function requireGuruAdmin() {
     return user
   }
   if (!user.isAdmin) {
-    throw new Error("Akses ditolak: Fitur ini hanya untuk admin")
+    throw new AppError("Akses ditolak: Fitur ini hanya untuk admin")
   }
   return user
 }

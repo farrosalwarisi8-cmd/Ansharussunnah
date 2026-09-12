@@ -31,7 +31,7 @@ import {
 import type { ActionResponse } from "@/types"
 import { Role, StatusTagihan, StatusPembayaran, StatusTransaksi, TipeTransaksi } from "@prisma/client"
 import { Prisma } from "@prisma/client"
-import { toUserFriendlyError } from "@/lib/prisma-error"
+import { toUserFriendlyError, AppError } from "@/lib/prisma-error"
 import { revalidatePath } from "next/cache"
 
 const BULAN_NAMES = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
@@ -69,7 +69,7 @@ async function sinkronkanStatusTagihan(
     where: { id: tagihanId },
     select: { jatuhTempo: true },
   })
-  if (!tagihan) throw new Error("Tagihan tidak ditemukan")
+  if (!tagihan) throw new AppError("Tagihan tidak ditemukan")
 
   const pembayaran = await tx.pembayaranSiswa.findMany({
     where: { tagihanId },
@@ -126,7 +126,7 @@ export async function generateBulkSpp(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Unauthorized",
+      message: toUserFriendlyError(error, "Unauthorized"),
     }
   }
   return generateTagihanSppInternal(payload)
@@ -394,7 +394,7 @@ export async function submitBuktiPembayaranSpp(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal mencatatkan pembayaran SPP",
+      message: toUserFriendlyError(error, "Gagal mencatatkan pembayaran SPP"),
     }
   }
 }
@@ -475,7 +475,7 @@ export async function konfirmasiPembayaranSppOlehAdmin(
           },
         })
         if (hasilTripper.count === 0) {
-          throw new Error("Pembayaran ini sudah diproses sebelumnya")
+          throw new AppError("Pembayaran ini sudah diproses sebelumnya")
         }
 
         // Hitung eksplisit total_terbayar & status tagihan dari pembayaran
@@ -503,7 +503,7 @@ export async function konfirmasiPembayaranSppOlehAdmin(
           },
         })
         if (hasilTripper.count === 0) {
-          throw new Error("Pembayaran ini sudah diproses sebelumnya")
+          throw new AppError("Pembayaran ini sudah diproses sebelumnya")
         }
 
         // Hitung eksplisit status tagihan dari pembayaran DIKONFIRMASI yang
@@ -541,7 +541,7 @@ export async function konfirmasiPembayaranSppOlehAdmin(
       },
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal memproses konfirmasi pembayaran" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal memproses konfirmasi pembayaran") }
   }
 }
 
@@ -590,12 +590,12 @@ export async function konfirmasiPembayaranSppManual(
         where: { id: tagihanId },
         select: { status: true },
       })
-      if (!tagihanSaatIni) throw new Error("Tagihan tidak ditemukan")
+      if (!tagihanSaatIni) throw new AppError("Tagihan tidak ditemukan")
       if (tagihanSaatIni.status === StatusTagihan.SUDAH_BAYAR) {
-        throw new Error("Tagihan sudah lunas")
+        throw new AppError("Tagihan sudah lunas")
       }
       if (tagihanSaatIni.status === StatusTagihan.DIBATALKAN) {
-        throw new Error("Tagihan sudah dibatalkan")
+        throw new AppError("Tagihan sudah dibatalkan")
       }
 
       await tx.pembayaranSiswa.create({
@@ -636,7 +636,7 @@ export async function konfirmasiPembayaranSppManual(
           : `Konfirmasi pembayaran sebagian berhasil. Sisa tunggakan: Rp ${sisaTunggakan.toLocaleString("id-ID")}`,
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal memproses konfirmasi" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal memproses konfirmasi") }
   }
 }
 
@@ -694,7 +694,7 @@ export async function createTransaksiKeuangan(
       data: transaksi,
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal menyimpan transaksi keuangan" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal menyimpan transaksi keuangan") }
   }
 }
 
@@ -741,7 +741,7 @@ export async function batalkanTransaksiKeuangan(
     revalidatePath("/dashboard/keuangan")
     return { success: true, message: "Transaksi berhasil dibatalkan (soft-delete)" }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal membatalkan transaksi" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal membatalkan transaksi") }
   }
 }
 
@@ -807,7 +807,7 @@ export async function batalkanTagihanSpp(
     revalidatePath("/dashboard/keuangan")
     return { success: true, message: "Tagihan SPP berhasil dibatalkan" }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal membatalkan tagihan SPP" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal membatalkan tagihan SPP") }
   }
 }
 
@@ -911,7 +911,7 @@ export async function getLaporanKeuangan(
       },
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal menyusun laporan keuangan" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal menyusun laporan keuangan") }
   }
 }
 
@@ -1023,7 +1023,7 @@ export async function getRekapTunggakanSpp(
       },
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal menyusun rekap tunggakan" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal menyusun rekap tunggakan") }
   }
 }
 
@@ -1105,7 +1105,7 @@ export async function getDaftarPembayaranPendingVerifikasi(): Promise<
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal mengambil daftar pembayaran pending",
+      message: toUserFriendlyError(error, "Gagal mengambil daftar pembayaran pending"),
     }
   }
 }
@@ -1549,7 +1549,7 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
       data: formatted,
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal memuat rincian tagihan" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal memuat rincian tagihan") }
   }
 }
 
@@ -1583,7 +1583,7 @@ export async function getKategoriTransaksiList(): Promise<
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar kategori",
+      message: toUserFriendlyError(error, "Gagal memuat daftar kategori"),
     }
   }
 }
@@ -1642,7 +1642,7 @@ export async function getDaftarTransaksiKeuangan(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat riwayat transaksi",
+      message: toUserFriendlyError(error, "Gagal memuat riwayat transaksi"),
     }
   }
 }

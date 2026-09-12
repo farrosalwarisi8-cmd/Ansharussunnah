@@ -259,14 +259,15 @@ describe("getDaftarPembayaranPendingVerifikasi", () => {
     expect(item.bulanTagihan).toBe("SPP Custom")
   })
 
-  it("harus mengembalikan error message saat database error", async () => {
+  it("harus mengembalikan pesan ramah saat database error", async () => {
     setupAdminAuth()
     mockPembayaranSiswaFindMany.mockRejectedValue(new Error("Database connection timeout"))
 
     const result = await getDaftarPembayaranPendingVerifikasi()
 
     expect(result.success).toBe(false)
-    expect(result.message).toContain("Database connection timeout")
+    expect(result.message).toContain("Gagal mengambil daftar pembayaran pending")
+    expect(result.message).not.toContain("Database connection timeout")
   })
 })
 

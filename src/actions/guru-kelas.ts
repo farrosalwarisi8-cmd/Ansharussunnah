@@ -10,6 +10,7 @@ import {
 } from "@/lib/validations/guru"
 import { guruCocokKelas } from "@/lib/guru-kelas-gender"
 import { Prisma } from "@prisma/client"
+import { toUserFriendlyError } from "@/lib/prisma-error"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
 
@@ -119,7 +120,7 @@ export async function assignGuruKeKelas(
     }
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menugaskan guru ke kelas",
+      message: toUserFriendlyError(error, "Gagal menugaskan guru ke kelas"),
     }
   }
 }
@@ -159,7 +160,7 @@ export async function removeGuruDariKelas(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menghapus penugasan guru",
+      message: toUserFriendlyError(error, "Gagal menghapus penugasan guru"),
     }
   }
 }
@@ -220,7 +221,7 @@ export async function getDaftarPengajarKelas(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar pengajar",
+      message: toUserFriendlyError(error, "Gagal memuat daftar pengajar"),
     }
   }
 }
@@ -332,7 +333,7 @@ export async function getDaftarKelasYangDiajarGuru(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar kelas",
+      message: toUserFriendlyError(error, "Gagal memuat daftar kelas"),
     }
   }
 }

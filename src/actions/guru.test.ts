@@ -1,6 +1,7 @@
 // src/actions/guru.test.ts
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { AppError } from "@/lib/prisma-error"
 
 // ========================================================
 // Mocks — di-hoist agar tersedia sebelum import modul
@@ -239,7 +240,7 @@ describe("updateAkunGuru - Otorisasi", () => {
   // --------------------------------------------------------
   it("harus gagal jika requireGuru melempar error (bukan role GURU)", async () => {
     mockRequireGuru.mockRejectedValue(
-      new Error("Forbidden: Anda tidak memiliki akses")
+      new AppError("Forbidden: Anda tidak memiliki akses")
     )
 
     const result = await updateAkunGuru("guru-2", validPayload)
@@ -386,7 +387,7 @@ describe("updateAkunGuru - Otorisasi", () => {
     const result = await updateAkunGuru("guru-1", validPayload)
 
     expect(result.success).toBe(false)
-    expect(result.message).toContain("Database connection timeout")
+    expect(result.message).toContain("Gagal memperbarui data guru")
   })
 
   // --------------------------------------------------------
@@ -780,7 +781,7 @@ describe("hapusAkunGuruPermanent - Hard Delete", () => {
   // --------------------------------------------------------
   it("harus gagal jika bukan guru admin", async () => {
     mockRequireGuruAdmin.mockRejectedValue(
-      new Error("Akses ditolak: Fitur ini hanya untuk admin")
+      new AppError("Akses ditolak: Fitur ini hanya untuk admin")
     )
 
     const result = await hapusAkunGuruPermanent("guru-2")
@@ -883,7 +884,7 @@ describe("setGuruAdmin - Role Consistency", () => {
 
   it("harus gagal jika dipanggil oleh non-admin", async () => {
     mockRequireGuruAdmin.mockRejectedValue(
-      new Error("Akses ditolak: Fitur ini hanya untuk admin")
+      new AppError("Akses ditolak: Fitur ini hanya untuk admin")
     )
 
     const result = await setGuruAdmin("guru-2", true)

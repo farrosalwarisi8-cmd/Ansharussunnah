@@ -14,6 +14,7 @@ import {
   type CreateAkunAdminKeuanganValues,
   type UpdateAkunAdminKeuanganValues,
 } from "@/lib/validations/admin-keuangan"
+import { toUserFriendlyError, AppError } from "@/lib/prisma-error"
 import type { ActionResponse } from "@/types"
 import { Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
@@ -124,7 +125,7 @@ export async function createAkunAdminKeuangan(
           perPage: 1000,
         })
         const matched = existingUsers.users.find((u) => u.email === email)
-        if (!matched) throw new Error("Gagal memetakan akun auth admin keuangan yang sudah ada")
+        if (!matched) throw new AppError("Gagal memetakan akun auth admin keuangan yang sudah ada")
         authId = matched.id
         akunSudahAda = true
       } else {
@@ -196,7 +197,7 @@ export async function createAkunAdminKeuangan(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal membuat akun admin keuangan",
+      message: toUserFriendlyError(error, "Gagal membuat akun admin keuangan"),
     }
   }
 }
@@ -255,7 +256,7 @@ export async function updateAkunAdminKeuangan(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memperbarui data admin keuangan",
+      message: toUserFriendlyError(error, "Gagal memperbarui data admin keuangan"),
     }
   }
 }
@@ -306,7 +307,7 @@ export async function nonaktifkanAkunAdminKeuangan(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menonaktifkan akun admin keuangan",
+      message: toUserFriendlyError(error, "Gagal menonaktifkan akun admin keuangan"),
     }
   }
 }
@@ -355,7 +356,7 @@ export async function aktifkanKembaliAkunAdminKeuangan(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal mengaktifkan kembali akun admin keuangan",
+      message: toUserFriendlyError(error, "Gagal mengaktifkan kembali akun admin keuangan"),
     }
   }
 }
@@ -388,7 +389,7 @@ export async function getDaftarAdminKeuangan(): Promise<ActionResponse> {
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar admin keuangan",
+      message: toUserFriendlyError(error, "Gagal memuat daftar admin keuangan"),
     }
   }
 }

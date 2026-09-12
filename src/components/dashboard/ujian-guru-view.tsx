@@ -13,6 +13,7 @@ const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").the
 import { getDaftarUjianGuru, deleteUjian } from "@/actions/ujian"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
 import { useToast } from "@/hooks/use-toast"
+import { formatDateTimeWIB } from "@/lib/utils"
 
 type KelasItem = {
   kelasId: string
@@ -233,7 +234,10 @@ export function GuruUjianView() {
                 </div>
                 <div className="flex items-center gap-1.5 col-span-2">
                   <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                  <span>Mulai: {new Date(item.waktuMulai).toLocaleDateString("id-ID")} WIB</span>
+                  <span>
+                    Mulai: {formatDateTimeWIB(item.waktuMulai)} — Selesai:{" "}
+                    {formatDateTimeWIB(item.waktuSelesai)}
+                  </span>
                 </div>
               </div>
 

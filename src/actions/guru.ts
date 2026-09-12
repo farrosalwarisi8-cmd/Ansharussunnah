@@ -13,7 +13,7 @@ import {
   buildPemberitahuanRoleBaruEmail,
 } from "@/lib/email"
 import { guruCocokKelas } from "@/lib/guru-kelas-gender"
-import { toUserFriendlyError } from "@/lib/prisma-error"
+import { toUserFriendlyError, AppError } from "@/lib/prisma-error"
 import {
   createAkunGuruSchema,
   updateAkunGuruSchema,
@@ -123,7 +123,7 @@ export async function createAkunGuru(
           perPage: 1000,
         })
         const matched = existingUsers.users.find((u) => u.email === email)
-        if (!matched) throw new Error("Gagal memetakan akun auth guru yang sudah ada")
+        if (!matched) throw new AppError("Gagal memetakan akun auth guru yang sudah ada")
         authId = matched.id
         akunSudahAda = true
       } else {
@@ -317,7 +317,7 @@ export async function updateAkunGuru(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memperbarui data guru",
+      message: toUserFriendlyError(error, "Gagal memperbarui data guru"),
     }
   }
 }
@@ -369,7 +369,7 @@ export async function nonaktifkanAkunGuru(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menonaktifkan akun guru",
+      message: toUserFriendlyError(error, "Gagal menonaktifkan akun guru"),
     }
   }
 }
@@ -419,7 +419,7 @@ export async function aktifkanKembaliAkunGuru(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal mengaktifkan kembali akun guru",
+      message: toUserFriendlyError(error, "Gagal mengaktifkan kembali akun guru"),
     }
   }
 }
@@ -470,7 +470,7 @@ export async function setGuruAdmin(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal mengubah status admin guru",
+      message: toUserFriendlyError(error, "Gagal mengubah status admin guru"),
     }
   }
 }
@@ -613,7 +613,7 @@ export async function hapusAkunGuruPermanent(
     console.error("Error hapus guru:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menghapus akun guru",
+      message: toUserFriendlyError(error, "Gagal menghapus akun guru"),
     }
   }
 }
@@ -677,7 +677,7 @@ export async function getDaftarGuru(): Promise<ActionResponse> {
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar guru",
+      message: toUserFriendlyError(error, "Gagal memuat daftar guru"),
     }
   }
 }

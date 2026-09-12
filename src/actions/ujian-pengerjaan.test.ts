@@ -9,6 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { Prisma, StatusPengerjaan, StatusUjian } from "@prisma/client"
+import { AppError } from "@/lib/prisma-error"
 
 // ========================================================
 // Mocks — di-hoist agar tersedia sebelum import modul
@@ -466,7 +467,7 @@ describe("tutupPengerjaanUjianKedaluwarsa — auto-close", () => {
 
   it("membatalkan ketika guru tidak punya akses kelas (mode per-ujian)", async () => {
     mockUjianFindUnique.mockResolvedValue({ id: "uj-1", kelasId: "kelas-X", mataPelajaranId: "mapel-Y" })
-    mockVerifyGuruAksesKelas.mockRejectedValue(new Error("Akses ditolak"))
+    mockVerifyGuruAksesKelas.mockRejectedValue(new AppError("Akses ditolak"))
 
     const result = await tutupPengerjaanUjianKedaluwarsa("uj-1")
 
@@ -540,7 +541,7 @@ describe("getDaftarUjianGuru — filter akses mapel", () => {
   })
 
   it("menolak guru tanpa akses ke kelas", async () => {
-    mockVerifyGuruAksesKelas.mockRejectedValue(new Error("Akses ditolak"))
+    mockVerifyGuruAksesKelas.mockRejectedValue(new AppError("Akses ditolak"))
     mockRequireRole.mockResolvedValue({ id: "guru-1" })
 
     const result = await getDaftarUjianGuru("kelas-X")

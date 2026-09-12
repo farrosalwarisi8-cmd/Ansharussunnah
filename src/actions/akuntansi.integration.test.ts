@@ -498,7 +498,7 @@ describe("Cross-Cutting — Auth & Error Handling", () => {
 
     // Semua mengembalikan success:false dengan pesan error
     expect(r1.success).toBe(false)
-    expect(r1.message).toContain("Connection pool exhausted")
+    expect(r1.message).toContain("Gagal mengambil daftar pembayaran pending")
     expect(r2.success).toBe(false)
     expect(r2.message).toContain("Gagal menghitung rekap SPP per kelas")
     expect(r3.success).toBe(false)

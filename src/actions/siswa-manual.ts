@@ -517,7 +517,7 @@ export async function resetPasswordSiswaManual(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal mereset password siswa",
+      message: toUserFriendlyError(error, "Gagal mereset password siswa"),
     }
   }
 }
@@ -577,7 +577,7 @@ export async function resetPasswordOrangTuaManual(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal mereset password orang tua",
+      message: toUserFriendlyError(error, "Gagal mereset password orang tua"),
     }
   }
 }
@@ -685,7 +685,7 @@ export async function getDaftarSiswaManual(): Promise<ActionResponse<SiswaManual
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar siswa",
+      message: toUserFriendlyError(error, "Gagal memuat daftar siswa"),
     }
   }
 }
@@ -849,7 +849,7 @@ export async function updateAkunSiswa(
     console.error("Error updateAkunSiswa:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memperbarui akun siswa",
+      message: toUserFriendlyError(error, "Gagal memperbarui akun siswa"),
     }
   }
 }
@@ -900,7 +900,7 @@ export async function getKelasList(): Promise<ActionResponse<KelasListItem[]>> {
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar kelas",
+      message: toUserFriendlyError(error, "Gagal memuat daftar kelas"),
     }
   }
 }
@@ -1024,7 +1024,7 @@ export async function hapusSiswaPermanent(
     console.error("Error hapus siswa:", error)
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menghapus siswa",
+      message: toUserFriendlyError(error, "Gagal menghapus siswa"),
     }
   }
 }

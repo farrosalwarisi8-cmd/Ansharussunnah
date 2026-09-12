@@ -9,6 +9,7 @@ import {
   promosiSiswaMassalSchema,
   type PromosiSiswaMassalValues,
 } from "@/lib/validations/kenaikan-kelas"
+import { toUserFriendlyError, AppError } from "@/lib/prisma-error"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
 
@@ -195,7 +196,7 @@ export async function promosiSiswaMassal(
               kelasTx.kapasitas > 0 &&
               kelasTx._count.siswa + siswaIds.length > kelasTx.kapasitas
             ) {
-              throw new Error(
+              throw new AppError(
                 `Kelas "${kelasTx.nama}" sudah penuh (${kelasTx._count.siswa}/${kelasTx.kapasitas}). Tidak dapat menempatkan ${siswaIds.length} siswa.`
               )
             }
@@ -229,7 +230,7 @@ export async function promosiSiswaMassal(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal melakukan promosi kelas",
+      message: toUserFriendlyError(error, "Gagal melakukan promosi kelas"),
     }
   }
 }
@@ -356,7 +357,7 @@ export async function getSiswaUntukPromosi(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat data siswa untuk promosi",
+      message: toUserFriendlyError(error, "Gagal memuat data siswa untuk promosi"),
     }
   }
 }
@@ -428,7 +429,7 @@ export async function getRiwayatKelasSiswa(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat riwayat kelas siswa",
+      message: toUserFriendlyError(error, "Gagal memuat riwayat kelas siswa"),
     }
   }
 }

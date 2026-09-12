@@ -105,7 +105,7 @@ export async function createUjian(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal membuat ujian",
+      message: toUserFriendlyError(error, "Gagal membuat ujian"),
     }
   }
 }
@@ -253,7 +253,7 @@ export async function updateUjian(
     revalidatePath("/dashboard/ujian")
     return { success: true, message: "Data ujian berhasil diperbarui" }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal memperbarui ujian" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal memperbarui ujian") }
   }
 }
 
@@ -283,7 +283,7 @@ export async function deleteUjian(ujianId: string): Promise<ActionResponse> {
     revalidatePath("/dashboard/ujian")
     return { success: true, message: "Ujian berhasil dihapus" }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal menghapus ujian" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal menghapus ujian") }
   }
 }
 
@@ -365,7 +365,7 @@ export async function addOrUpdateSoalUjian(
     revalidatePath(`/dashboard/ujian/buat`)
     return { success: true, message: `Soal nomor ${nomorSoal} berhasil disimpan` }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal menyimpan soal ujian" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal menyimpan soal ujian") }
   }
 }
 
@@ -401,7 +401,7 @@ export async function deleteSoalUjian(
     revalidatePath(`/dashboard/ujian/buat`)
     return { success: true, message: "Soal berhasil dihapus" }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal menghapus soal" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal menghapus soal") }
   }
 }
 
@@ -469,7 +469,7 @@ export async function getRekapHasilUjian(ujianId: string): Promise<ActionRespons
       },
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal memuat rekap ujian" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal memuat rekap ujian") }
   }
 }
 
@@ -593,7 +593,7 @@ export async function beriNilaiEsai(
       message: "Penilaian esai berhasil disimpan dan nilai total telah diperbarui",
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal menyimpan nilai esai" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal menyimpan nilai esai") }
   }
 }
 
@@ -662,7 +662,7 @@ export async function getUjianDetail(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat detail ujian",
+      message: toUserFriendlyError(error, "Gagal memuat detail ujian"),
     }
   }
 }
@@ -750,7 +750,7 @@ export async function getDaftarUjianSiswa(): Promise<ActionResponse> {
       data: formatted,
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal memuat ujian siswa" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal memuat ujian siswa") }
   }
 }
 
@@ -898,7 +898,7 @@ mataPelajaran: { select: { nama: true, jenisKelamin: true } },
       },
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal memulai ujian" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal memulai ujian") }
   }
 }
 
@@ -1231,7 +1231,7 @@ export async function tutupPengerjaanUjianKedaluwarsa(
       data: { totalDitutup, detail },
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal menutup sesi ujian kedaluwarsa" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal menutup sesi ujian kedaluwarsa") }
   }
 }
 
@@ -1292,7 +1292,7 @@ export async function getDaftarUjianGuru(
       data: formatted,
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal memuat daftar ujian guru" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal memuat daftar ujian guru") }
   }
 }
 
@@ -1399,6 +1399,6 @@ export async function getDaftarUjianAnak(
       data: formatted,
     }
   } catch (error: unknown) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal memuat daftar ujian anak" }
+    return { success: false, message: toUserFriendlyError(error, "Gagal memuat daftar ujian anak") }
   }
 }

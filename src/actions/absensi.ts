@@ -15,6 +15,7 @@ import {
   type RekapKehadiranValues,
   type RiwayatKehadiranSiswaValues,
 } from "@/lib/validations/absensi"
+import { toUserFriendlyError } from "@/lib/prisma-error"
 import type { ActionResponse } from "@/types"
 import { Role, StatusAbsensi } from "@prisma/client"
 import { revalidatePath } from "next/cache"
@@ -123,7 +124,7 @@ export async function inputAbsensiSingle(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menyimpan absensi",
+      message: toUserFriendlyError(error, "Gagal menyimpan absensi"),
     }
   }
 }
@@ -224,7 +225,7 @@ export async function inputAbsensiBulk(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menyimpan absensi bulk",
+      message: toUserFriendlyError(error, "Gagal menyimpan absensi bulk"),
     }
   }
 }
@@ -333,7 +334,7 @@ export async function getRekapKehadiranKelas(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat rekap kehadiran",
+      message: toUserFriendlyError(error, "Gagal memuat rekap kehadiran"),
     }
   }
 }
@@ -418,7 +419,7 @@ export async function getRiwayatKehadiranSiswa(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat riwayat kehadiran",
+      message: toUserFriendlyError(error, "Gagal memuat riwayat kehadiran"),
     }
   }
 }
@@ -518,7 +519,7 @@ export async function getRiwayatKehadiranAnak(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat riwayat kehadiran anak",
+      message: toUserFriendlyError(error, "Gagal memuat riwayat kehadiran anak"),
     }
   }
 }
@@ -560,7 +561,7 @@ export async function getSiswaByKelas(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar siswa",
+      message: toUserFriendlyError(error, "Gagal memuat daftar siswa"),
     }
   }
 }

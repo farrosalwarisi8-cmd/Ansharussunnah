@@ -45,26 +45,39 @@ export function KelasMapelSelector({
   const [mapelList, setMapelList] = React.useState<Array<{ id: string; nama: string; jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null }>>([])
   const [loading, setLoading] = React.useState(true)
   const [loadingMapel, setLoadingMapel] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [errorMapel, setErrorMapel] = React.useState<string | null>(null)
 
   // Muat struktur jenjang → kelas sekali
   React.useEffect(() => {
     let mounted = true
     async function load() {
       setLoading(true)
-      const res = await getStrukturKelasSiswaAkademik()
-      if (!mounted) return
-      if (res.success && res.data) {
-        const list = res.data.jenjangList
-        setStruktur(list)
-        // Set jenjang berdasarkan kelasId yang sudah terpilih (edit mode)
-        if (kelasId) {
-          const jn = list.find((j) => j.kelas.some((k) => k.id === kelasId))
-          if (jn) setJenjang(jn.id)
-        } else if (list.length > 0) {
-          setJenjang("")
+      setError(null)
+      try {
+        const res = await getStrukturKelasSiswaAkademik()
+        if (!mounted) return
+        if (res.success && res.data) {
+          const list = res.data.jenjangList
+          setStruktur(list)
+          // Set jenjang berdasarkan kelasId yang sudah terpilih (edit mode)
+          if (kelasId) {
+            const jn = list.find((j) => j.kelas.some((k) => k.id === kelasId))
+            if (jn) setJenjang(jn.id)
+          } else if (list.length > 0) {
+            setJenjang("")
+          }
+        } else {
+          // Gagal memuat struktur — tampilkan pesan jelas alih-alih dropdown kosong
+          setError(res.message || "Gagal memuat daftar jenjang/kelas. Silakan muat ulang halaman.")
         }
+      } catch {
+        if (mounted) {
+          setError("Gagal memuat daftar jenjang/kelas. Silakan muat ulang halaman.")
+        }
+      } finally {
+        if (mounted) setLoading(false)
       }
-      setLoading(false)
     }
     load()
     return () => {
@@ -100,10 +113,26 @@ export function KelasMapelSelector({
     let mounted = true
     async function loadMapel() {
       setLoadingMapel(true)
-      const res = await getMapelTersedia(kelasId)
-      if (mounted) {
-        setMapelList(res.success && res.data ? res.data : [])
-        setLoadingMapel(false)
+      setErrorMapel(null)
+      try {
+        const res = await getMapelTersedia(kelasId)
+        if (mounted) {
+          if (res.success && res.data) {
+            setMapelList(res.data)
+          } else {
+            setMapelList([])
+            setErrorMapel(
+              res.message || "Gagal memuat daftar mata pelajaran. Silakan muat ulang."
+            )
+          }
+        }
+      } catch {
+        if (mounted) {
+          setMapelList([])
+          setErrorMapel("Gagal memuat daftar mata pelajaran. Silakan muat ulang.")
+        }
+      } finally {
+        if (mounted) setLoadingMapel(false)
       }
     }
     loadMapel()
@@ -119,6 +148,13 @@ export function KelasMapelSelector({
 
   return (
     <div className={`space-y-4 ${className}`}>
+      {/* Pesan error struktur jenjang/kelas — jangan biarkan dropdown kosong tanpa penjelasan */}
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
+          {error}
+        </div>
+      )}
+
       {/* Pilih Jenjang */}
       <div className="space-y-2">
         <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
@@ -128,7 +164,7 @@ export function KelasMapelSelector({
           value={jenjang}
           onChange={(e) => handleJenjangChange(e.target.value)}
           className={selectClass}
-          disabled={loading}
+          disabled={loading || !!error}
         >
           <option value="">{loading ? "Memuat jenjang..." : "— Pilih Jenjang —"}</option>
           {struktur.map((j) => (
@@ -158,7 +194,7 @@ export function KelasMapelSelector({
             </option>
           ))}
         </select>
-        {!jenjang && !loading && (
+        {!jenjang && !loading && !error && (
           <p className="text-xs text-slate-400">Pilih jenjang terlebih dahulu.</p>
         )}
       </div>
@@ -169,6 +205,11 @@ export function KelasMapelSelector({
           <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
             Mata Pelajaran <span className="text-rose-500">*</span>
           </label>
+          {errorMapel && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
+              {errorMapel}
+            </div>
+          )}
           {loadingMapel ? (
             <div className="flex items-center gap-2 h-12 rounded-xl border border-slate-200 px-3 text-sm text-slate-400">
               <Loader2 className="h-4 w-4 animate-spin" /> Memuat daftar mapel...
@@ -178,7 +219,7 @@ export function KelasMapelSelector({
               value={mapel}
               onChange={(e) => onChangeMapel?.(e.target.value)}
               className={selectClass}
-              disabled={!kelasId || mapelList.length === 0}
+              disabled={!kelasId || mapelList.length === 0 || !!errorMapel}
             >
               <option value="">— Pilih Mata Pelajaran —</option>
               {mapelList.map((m) => (
@@ -193,7 +234,7 @@ export function KelasMapelSelector({
               ))}
             </select>
           )}
-          {!loadingMapel && kelasId && mapelList.length === 0 && (
+          {!loadingMapel && !errorMapel && kelasId && mapelList.length === 0 && (
             <p className="text-xs text-slate-400">
               Belum ada mata pelajaran tersedia untuk kelas ini.
             </p>

@@ -429,7 +429,7 @@ describe("promosiSiswaMassal - Batch Optimization", () => {
     })
 
     expect(result.success).toBe(false)
-    expect(result.message).toContain("Transaction timeout")
+    expect(result.message).toContain("Gagal melakukan promosi kelas")
   })
 
   // --------------------------------------------------------

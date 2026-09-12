@@ -4,6 +4,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireGuru, isAcademicAdminRole } from "@/lib/auth"
+import { toUserFriendlyError } from "@/lib/prisma-error"
 import type { ActionResponse } from "@/types"
 
 /**
@@ -83,7 +84,10 @@ export async function getStrukturKelasSiswaAkademik(): Promise<
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat struktur jenjang/kelas",
+      message: toUserFriendlyError(
+        error,
+        "Gagal memuat struktur jenjang/kelas. Silakan hubungi admin sekolah."
+      ),
     }
   }
 }
@@ -213,7 +217,10 @@ export async function getMapelTersedia(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar mata pelajaran",
+      message: toUserFriendlyError(
+        error,
+        "Gagal memuat daftar mata pelajaran. Silakan hubungi admin sekolah."
+      ),
     }
   }
 }

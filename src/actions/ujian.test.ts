@@ -1,6 +1,7 @@
 // src/actions/ujian.test.ts
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { AppError } from "@/lib/prisma-error"
 
 // ========================================================
 // Mocks — di-hoist agar tersedia sebelum import modul
@@ -170,7 +171,7 @@ describe("getUjianDetail", () => {
 
   it("harus gagal jika guru tidak punya akses ke kelas", async () => {
     mockVerifyGuruAksesKelas.mockRejectedValue(
-      new Error("Anda tidak memiliki akses ke kelas ini")
+      new AppError("Anda tidak memiliki akses ke kelas ini")
     )
     mockUjianFindUnique.mockResolvedValue(mockUjian)
 
@@ -180,13 +181,14 @@ describe("getUjianDetail", () => {
     expect(result.message).toContain("Anda tidak memiliki akses ke kelas ini")
   })
 
-  it("harus mengembalikan error message saat database error", async () => {
+  it("harus tidak membocorkan detail teknis saat database error", async () => {
     mockUjianFindUnique.mockRejectedValue(new Error("Database connection timeout"))
 
     const result = await getUjianDetail("ujian-001")
 
     expect(result.success).toBe(false)
-    expect(result.message).toContain("Database connection timeout")
+    expect(result.message).toContain("Gagal memuat detail ujian")
+    expect(result.message).not.toContain("Database connection timeout")
   })
 
   it("harus handle ujian tanpa soal", async () => {
