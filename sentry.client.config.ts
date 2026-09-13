@@ -11,6 +11,13 @@ if (dsn) {
     tracesSampleRate: 0.1,
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 1,
+    integrations: [
+      // Nonaktifkan pengukuran LCP & CLS: internal web-vitals bundled Sentry
+      // (onLCP/onCLS dengan reportAllChanges=true) melempar
+      // "Cannot read properties of undefined (reading 'startTime')"
+      // sesekali di Chrome. INP/TTFB/FCP tetap diukur.
+      Sentry.webVitalsIntegration({ ignore: ["cls", "lcp"] }),
+    ],
   })
 }
 
