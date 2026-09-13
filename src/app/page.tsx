@@ -11,7 +11,6 @@ import {
   Users,
   CheckCircle,
   ArrowRight,
-  Sparkles,
   HeartHandshake,
   Building,
 } from "lucide-react"
@@ -27,11 +26,11 @@ export default function HomePage() {
         <div className="container mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl relative">
-              <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="(max-width: 640px) 48px, 56px" className="object-contain" priority />
+              <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="(max-width: 640px) 48px, 56px" className="object-contain" priority />
             </div>
             <div>
               <div className="font-extrabold text-base sm:text-lg text-slate-800 tracking-tight flex items-center gap-1.5">
-                <span>Ansharussunnah</span>
+                <span>Anshorussunnah</span>
                 <span className="hidden sm:inline-block text-xs bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
                   Pesantren & Sekolah
                 </span>
@@ -70,11 +69,6 @@ export default function HomePage() {
       <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28 bg-gradient-to-b from-yellow-900 via-slate-800 to-slate-800 text-white">
         <div className="absolute inset-0 bg-[radial-gradient(#22c55e_1px,transparent_1px)] [background-size:24px_24px] opacity-10" />
         <div className="container mx-auto px-4 sm:px-6 relative z-10 text-center max-w-4xl">
-          <div className="inline-flex items-center gap-2 bg-amber-500/20 border border-amber-500/30 text-amber-200 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold mb-8">
-            <Sparkles className="h-4 w-4 text-amber-400" />
-            <span>Penerimaan Santri Baru (PSB) Tahun Ajaran 2024/2025 Dibuka</span>
-          </div>
-
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
             Membina Generasi Qurani Berakhlak Mulia &amp;{" "}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-yellow-300">
@@ -83,7 +77,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-base sm:text-lg text-slate-300 mb-10 max-w-2xl mx-auto leading-relaxed">
-            Platform pembelajaran terpadu pesantren Ansharussunnah. Pantau perkembangan hafalan, nilai akademik, tugas, ujian, dan pembayaran SPP dalam satu portal modern.
+            Platform pembelajaran terpadu pesantren Anshorussunnah. Pantau perkembangan hafalan, nilai akademik, tugas, ujian, dan pembayaran SPP dalam satu portal modern.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
@@ -225,7 +219,7 @@ export default function HomePage() {
 
             <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
               <div className="w-12 h-12 rounded-2xl overflow-hidden relative">
-                <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="48px" className="object-contain" />
+                <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="48px" className="object-contain" />
               </div>
               <h3 className="font-bold text-lg text-slate-800">Untuk Santri / Siswa</h3>
               <ul className="text-xs sm:text-sm text-slate-600 space-y-2.5">
@@ -273,10 +267,10 @@ export default function HomePage() {
         <div className="container mx-auto px-4 sm:px-6 max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl overflow-hidden relative">
-              <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="36px" className="object-contain" />
+              <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="36px" className="object-contain" />
             </div>
             <div>
-              <div className="font-bold text-white text-sm">Pesantren Ansharussunnah</div>
+              <div className="font-bold text-white text-sm">Pesantren Anshorussunnah</div>
               <div className="text-xs text-slate-500">Mencetak Generasi Berakhlak &amp; Berilmu</div>
             </div>
           </div>
@@ -294,7 +288,7 @@ export default function HomePage() {
           </div>
 
           <p className="text-xs text-slate-600">
-            &copy; {new Date().getFullYear()} Ansharussunnah. Hak cipta dilindungi.
+            &copy; {new Date().getFullYear()} Anshorussunnah. Hak cipta dilindungi.
           </p>
         </div>
       </footer>

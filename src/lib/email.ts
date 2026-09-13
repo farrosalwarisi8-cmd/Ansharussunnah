@@ -207,9 +207,9 @@ export function buildKredensialGuruEmail(params: {
     <head><meta charset="UTF-8"></head>
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
       <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <h2 style="color: #1e40af; margin-top: 0;">👩‍🏫 Akun Guru Baru — Ansharussunnah</h2>
+        <h2 style="color: #1e40af; margin-top: 0;">👩‍🏫 Akun Guru Baru — Anshorussunnah</h2>
         <p>Halo <strong>${nama}</strong>,</p>
-        <p>Anda telah terdaftar sebagai guru di sistem LMS Ansharussunnah. Berikut adalah informasi akun Anda:</p>
+        <p>Anda telah terdaftar sebagai guru di sistem LMS Anshorussunnah. Berikut adalah informasi akun Anda:</p>
         
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
         

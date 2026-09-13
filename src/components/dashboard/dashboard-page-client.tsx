@@ -32,7 +32,7 @@ export function DashboardPageClient() {
     <div className="space-y-6">
       <DashboardHeader
         title={`Assalamu'alaikum, ${user.nama}`}
-        subtitle="Selamat datang di Portal Akademik & LMS Terpadu Ansharussunnah."
+        subtitle="Selamat datang di Portal Akademik & LMS Terpadu Anshorussunnah."
       />
 
       {user.role === Role.ORANG_TUA && <ChildSelector />}

@@ -452,13 +452,13 @@ function TagihanContent() {
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-yellow-300">
               <Building2 className="h-4 w-4" />
-              <span>Rekening Resmi Pesantren Ansharussunnah</span>
+              <span>Rekening Resmi Pesantren Anshorussunnah</span>
             </div>
             <div className="text-xl sm:text-2xl font-black font-mono tracking-wider text-white">
               7700 8899 0011
             </div>
             <p className="text-xs text-yellow-200/80">
-              Bank Syariah Indonesia (BSI) • a.n Yayasan Ansharussunnah
+              Bank Syariah Indonesia (BSI) • a.n Yayasan Anshorussunnah
             </p>
           </div>
 

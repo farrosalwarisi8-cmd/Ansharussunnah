@@ -58,9 +58,9 @@ export default function CekPendaftaranPage() {
         <div className="container mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl overflow-hidden relative">
-              <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="36px" className="object-contain" priority />
+              <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="36px" className="object-contain" priority />
             </div>
-            <span className="font-extrabold text-base text-slate-800">Ansharussunnah</span>
+            <span className="font-extrabold text-base text-slate-800">Anshorussunnah</span>
           </Link>
           <Link
             href="/"
@@ -178,7 +178,7 @@ export default function CekPendaftaranPage() {
       </main>
 
       <footer className="py-6 text-center text-xs text-slate-400">
-        &copy; {new Date().getFullYear()} Ansharussunnah
+        &copy; {new Date().getFullYear()} Anshorussunnah
       </footer>
     </div>
   )

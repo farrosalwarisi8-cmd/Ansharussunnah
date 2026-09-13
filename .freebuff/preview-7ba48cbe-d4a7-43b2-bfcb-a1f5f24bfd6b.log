@@ -1,0 +1,29 @@
+
+> sistem-pendaftaran-siswa@0.1.0 dev
+> next dev -p 4000
+
+   ▲ Next.js 15.5.24
+   - Local:        http://localhost:4000
+   - Network:      http://10.90.200.240:4000
+   - Environments: .env.local
+   - Experiments (use with caution):
+     · serverActions
+
+ ✓ Starting...
+ ✓ Compiled /instrumentation in 331ms (21 modules)
+✅ Initialization: Environment variables successfully validated
+ ✓ Ready in 1834ms
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 823ms (171 modules)
+ ○ Compiling / ...
+ ✓ Compiled / in 4.1s (790 modules)
+ GET / 200 in 4643ms
+ ✓ Compiled in 603ms (310 modules)
+ GET / 200 in 172ms
+ GET / 200 in 201ms
+ GET / 200 in 133ms
+ ○ Compiling /login ...
+ ✓ Compiled /login in 1386ms (924 modules)
+ GET /login 200 in 1892ms
+ GET / 200 in 71ms
+[?25h

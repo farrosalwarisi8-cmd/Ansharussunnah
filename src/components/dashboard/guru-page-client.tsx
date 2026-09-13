@@ -521,7 +521,7 @@ export default function KelolaGuruPage() {
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Alamat Email Resmi *</label>
               <Input
                 type="email"
-                placeholder="yusuf@ansharussunnah.sch.id"
+                placeholder="yusuf@anshorussunnah.sch.id"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="h-11 rounded-xl text-sm"

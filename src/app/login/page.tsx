@@ -28,14 +28,14 @@ export default function LoginPage() {
         <Card className="border-slate-700 bg-slate-800/90 backdrop-blur-xl shadow-2xl text-white rounded-3xl overflow-hidden">
           <CardHeader className="text-center pt-8 pb-6 px-6">
             <div className="mx-auto w-14 h-14 rounded-2xl relative shadow-lg shadow-yellow-800/50 mb-4">
-              <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="56px" className="object-contain" priority />
+              <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="56px" className="object-contain" priority />
             </div>
             <CardTitle className="text-2xl font-extrabold text-white tracking-tight flex items-center justify-center gap-2">
               <span>Masuk Portal LMS</span>
               <span className="text-amber-400">✦</span>
             </CardTitle>
             <CardDescription className="text-slate-400 text-sm mt-1">
-              Portal Akademik & Pembelajaran Pesantren Ansharussunnah
+              Portal Akademik & Pembelajaran Pesantren Anshorussunnah
             </CardDescription>
           </CardHeader>
 
@@ -49,7 +49,7 @@ export default function LoginPage() {
         {/* Security Trust Note */}
         <div className="mt-6 text-center flex items-center justify-center gap-1.5 text-xs text-slate-500">
           <ShieldCheck className="h-4 w-4 text-yellow-500" />
-          <span>Sistem Terenkripsi & Terintegrasi Ansharussunnah</span>
+          <span>Sistem Terenkripsi & Terintegrasi Anshorussunnah</span>
         </div>
       </div>
     </div>

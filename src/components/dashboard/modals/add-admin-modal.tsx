@@ -104,7 +104,7 @@ export function AddAdminModal({ open, onOpenChange, onCreated }: Props) {
             </label>
             <Input
               type="email"
-              placeholder="khadijah@ansharussunnah.sch.id"
+              placeholder="khadijah@anshorussunnah.sch.id"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="h-11 rounded-xl text-sm"

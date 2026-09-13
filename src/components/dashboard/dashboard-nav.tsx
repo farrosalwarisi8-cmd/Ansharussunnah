@@ -162,11 +162,11 @@ function DashboardNavInner() {
         <div className="h-20 flex items-center px-6 border-b border-slate-700/80 bg-slate-800/40">
           <Link href="/dashboard" className="flex items-center gap-3 group">
             <div className="w-10 h-10 rounded-xl relative shadow-md shadow-yellow-800/30 group-hover:scale-105 transition-transform">
-              <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="40px" className="object-contain" />
+              <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="40px" className="object-contain" />
             </div>
             <div>
               <div className="font-extrabold text-base tracking-tight text-white flex items-center gap-1.5">
-                <span>Ansharussunnah</span>
+                <span>Anshorussunnah</span>
                 <Sparkles className="h-3.5 w-3.5 text-amber-400" />
               </div>
               <span className="text-[11px] font-medium text-amber-400/90 tracking-wide uppercase">
@@ -271,10 +271,10 @@ function DashboardNavInner() {
       <header className="lg:hidden sticky top-0 z-40 bg-slate-800/95 backdrop-blur-md text-white border-b border-slate-700 px-4 py-3 flex items-center justify-between shadow-sm">
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg overflow-hidden relative shadow-sm">
-            <Image src="/ansharussunnah-logo.webp" alt="Logo Ansharussunnah" fill sizes="32px" className="object-contain" />
+            <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="32px" className="object-contain" />
           </div>
           <div>
-            <div className="font-bold text-sm text-white leading-tight">Ansharussunnah</div>
+            <div className="font-bold text-sm text-white leading-tight">Anshorussunnah</div>
             <div className="text-[10px] text-amber-400 font-medium">{roleLabel}</div>
           </div>
         </Link>
