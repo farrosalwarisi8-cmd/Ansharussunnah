@@ -20,6 +20,8 @@ import { getDaftarTugasGuru, deleteTugas, updateTugas } from "@/actions/tugas"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
 import { TargetGenderSelector } from "@/components/dashboard/target-gender-selector"
 import { toDatetimeLocalValue } from "@/lib/datetime-local"
+import { peranOptionSuffix, type PeranKelas } from "@/lib/kelas-peran"
+import { PeranKelasBadge, PeranKelasLegend } from "@/components/ui/peran-kelas-badge"
 
 type GuruTugasItem = {
   id: string
@@ -42,6 +44,7 @@ type KelasItem = {
   jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   mataPelajaranId: string
   jumlahSiswa: number
+  peran?: PeranKelas
 }
 
 export function GuruTugasView() {
@@ -177,8 +180,11 @@ export function GuruTugasView() {
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
         <CardContent className="p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
               Pilih Kelas:
+              <PeranKelasBadge
+                peran={kelasList.find((k) => k.kelasId === selectedKelasId)?.peran}
+              />
             </label>
             <select
               value={selectedKelasId}
@@ -189,9 +195,11 @@ export function GuruTugasView() {
                 <option key={k.kelasId} value={k.kelasId}>
                   {k.jenjang} - {k.namaKelas}
                   {k.jenisKelamin === "LAKI_LAKI" ? " (Ikhwan)" : k.jenisKelamin === "PEREMPUAN" ? " (Akhwat)" : ""} — {k.jumlahSiswa} siswa
+                  {peranOptionSuffix(k.peran)}
                 </option>
               ))}
             </select>
+            <PeranKelasLegend />
           </div>
         </CardContent>
       </Card>
@@ -248,6 +256,13 @@ export function GuruTugasView() {
                   <Clock className="h-4 w-4 text-amber-500 shrink-0" />
                   <span>Deadline: <strong>{new Date(item.deadline).toLocaleDateString("id-ID")}</strong></span>
                 </div>
+
+                {item.guru && (
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>Dibuat oleh:</span>
+                    <span className="font-semibold text-slate-700">{item.guru}</span>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>Pengumpulan:</span>

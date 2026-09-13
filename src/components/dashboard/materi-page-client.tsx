@@ -26,6 +26,9 @@ const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
 import { Plus, ExternalLink, Loader2, Pencil, Trash2 } from "lucide-react"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
+import { peranOptionSuffix, type PeranKelas } from "@/lib/kelas-peran"
+import { PeranKelasBadge, PeranKelasLegend } from "@/components/ui/peran-kelas-badge"
+import { DibuatOlehInfo } from "@/components/ui/dibuat-oleh-info"
 
 type MateriItem = {
   id: string
@@ -48,6 +51,7 @@ type KelasItem = {
   jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   mataPelajaranId: string
   jumlahSiswa: number
+  peran?: PeranKelas
 }
 
 export default function MateriPage() {
@@ -60,7 +64,7 @@ export default function MateriPage() {
 }
 
 function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isParent: boolean }) {
-  const { selectedChild } = useDashboard()
+  const { selectedChild, user } = useDashboard()
   const { toast } = useToast()
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
@@ -296,8 +300,11 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
         <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
           <CardContent className="p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
                 Pilih Kelas:
+                <PeranKelasBadge
+                  peran={kelasList.find((k) => k.kelasId === kelasId)?.peran}
+                />
               </label>
               <select
                 value={kelasId}
@@ -308,9 +315,11 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
                   <option key={k.kelasId} value={k.kelasId}>
                     {k.jenjang} - {k.namaKelas}
                     {k.jenisKelamin === "LAKI_LAKI" ? " (Ikhwan)" : k.jenisKelamin === "PEREMPUAN" ? " (Akhwat)" : ""} — {k.jumlahSiswa} siswa
+                    {peranOptionSuffix(k.peran)}
                   </option>
                 ))}
               </select>
+              <PeranKelasLegend />
             </div>
           </CardContent>
         </Card>
@@ -456,6 +465,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
           </DialogHeader>
 
           <form onSubmit={handleUploadMateri} className="space-y-4 py-2">
+            <DibuatOlehInfo nama={user.nama} />
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
                 Judul Materi *

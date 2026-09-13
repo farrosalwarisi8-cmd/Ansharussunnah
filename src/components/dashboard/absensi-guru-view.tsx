@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { EmptyState } from "@/components/ui/empty-state"
 import { Check, UserCheck, Save, Loader2 } from "lucide-react"
 import { toDateLocalValue } from "@/lib/datetime-local"
+import { peranOptionSuffix, type PeranKelas } from "@/lib/kelas-peran"
+import { PeranKelasBadge, PeranKelasLegend } from "@/components/ui/peran-kelas-badge"
 
 type StatusAbsensiType = "HADIR" | "IZIN" | "SAKIT" | "ALPHA"
 type SiswaItem = {
@@ -24,6 +26,7 @@ type KelasItem = {
   jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   mataPelajaranId: string
   jumlahSiswa: number
+  peran?: PeranKelas
 }
 
 export function GuruAbsensiView() {
@@ -228,8 +231,11 @@ export function GuruAbsensiView() {
         <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full sm:w-auto">
             <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5 flex items-center gap-2">
                 Pilih Kelas
+                <PeranKelasBadge
+                  peran={kelasList.find((k) => k.kelasId === selectedKelasId)?.peran}
+                />
               </label>
               <select
                 value={selectedKelasId}
@@ -240,9 +246,11 @@ export function GuruAbsensiView() {
                   <option key={k.kelasId} value={k.kelasId}>
                     {k.jenjang} - {k.namaKelas}
                     {k.jenisKelamin === "LAKI_LAKI" ? " (Ikhwan)" : k.jenisKelamin === "PEREMPUAN" ? " (Akhwat)" : ""} ({k.jumlahSiswa} siswa)
+                    {peranOptionSuffix(k.peran)}
                   </option>
                 ))}
               </select>
+              <PeranKelasLegend />
             </div>
 
             <div>

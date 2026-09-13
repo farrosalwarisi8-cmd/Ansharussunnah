@@ -3,6 +3,7 @@
 import * as React from "react"
 import { getRaporSiswa, getRaporAnak } from "@/actions/rapor"
 import { getDaftarPeriodeAjaran } from "@/actions/periode-ajaran"
+import { namaBulan } from "@/lib/bulan"
 import { Card, CardContent } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
 import Image from "next/image"
@@ -12,6 +13,8 @@ type PeriodeItem = { id: string; nama: string; tahunAjaran: string; semester: st
 type RaporData = {
   identitas: { nama?: string; namaSiswa?: string; nisn: string; kelas: string; jenjang: string }
   periode: { nama: string; tahunAjaran: string; semester: string }
+  bulan?: number
+  jenisRapor?: string
   nilaiPerMapel: Array<{
     mataPelajaran: string
     rataRataUjian: number
@@ -24,6 +27,12 @@ type RaporData = {
   kehadiran: { total: number; hadir: number; sakit: number; izin: number; alpha: number; persentase: string }
   catatan?: string | null
   ranking?: number | null
+  sikap?: {
+    kedisiplinan: number | null
+    kemandirian: number | null
+    tingkahLaku: string | null
+    prestasi: string | null
+  }
 }
 
 export function SiswaOrangTuaRaporView({
@@ -35,6 +44,7 @@ export function SiswaOrangTuaRaporView({
 }) {
   const [periodes, setPeriodes] = React.useState<PeriodeItem[]>([])
   const [selectedPeriodeId, setSelectedPeriodeId] = React.useState<string>("")
+  const [raporBulan, setRaporBulan] = React.useState(0)
   const [raporData, setRaporData] = React.useState<RaporData | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [fetchingRapor, setFetchingRapor] = React.useState(false)
@@ -75,9 +85,9 @@ export function SiswaOrangTuaRaporView({
       try {
         let result
         if (isParent && selectedChild) {
-          result = await getRaporAnak(selectedChild.id, selectedPeriodeId)
+          result = await getRaporAnak(selectedChild.id, selectedPeriodeId, raporBulan)
         } else {
-          result = await getRaporSiswa(selectedPeriodeId)
+          result = await getRaporSiswa(selectedPeriodeId, raporBulan)
         }
 
         if (result.success && result.data) {
@@ -94,7 +104,7 @@ export function SiswaOrangTuaRaporView({
       }
     }
     fetchRapor()
-  }, [selectedPeriodeId, isParent, selectedChild])
+  }, [selectedPeriodeId, isParent, selectedChild, raporBulan])
 
   if (isParent && !selectedChild) {
     return (
@@ -134,6 +144,22 @@ export function SiswaOrangTuaRaporView({
             {periodes.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nama} ({p.tahunAjaran})
+              </option>
+            ))}
+          </select>
+
+          <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 ml-0 sm:ml-3">
+            Jenis Rapor:
+          </label>
+          <select
+            value={raporBulan}
+            onChange={(e) => setRaporBulan(Number(e.target.value))}
+            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-yellow-500"
+          >
+            <option value={0}>Rapor Akhir Semester</option>
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+              <option key={m} value={m}>
+                Rapor Bulanan - {namaBulan(m)}
               </option>
             ))}
           </select>
@@ -179,6 +205,11 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
         <p className="text-xs sm:text-sm text-yellow-300/90 font-medium mt-1">
           Pondok Pesantren &amp; Sekolah Islam Terpadu Ansharussunnah
         </p>
+        {raporData.jenisRapor && (
+          <p className="text-sm font-black tracking-wide text-emerald-300 mt-2">
+            {raporData.jenisRapor}
+          </p>
+        )}
       </div>
 
       <CardContent className="p-6 sm:p-8 space-y-6">
@@ -250,6 +281,9 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
           <EmptyState title="Belum Ada Data Nilai" description="Belum ada data penilaian untuk periode ini." />
         )}
 
+        {/* Penilaian Sikap & Perilaku */}
+        <SikapSection sikap={raporData.sikap} />
+
         {/* Kehadiran & Catatan */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
@@ -285,5 +319,61 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+/* ========================================================================= */
+/* PENILAIAN SIKAP & PERILAKU (input manual wali kelas)                      */
+/* ========================================================================= */
+function SikapSection({ sikap }: { sikap?: RaporData["sikap"] }) {
+  const hasSikap = !!(
+    sikap &&
+    (sikap.kedisiplinan != null ||
+      sikap.kemandirian != null ||
+      sikap.tingkahLaku ||
+      sikap.prestasi)
+  )
+
+  if (!hasSikap) {
+    return (
+      <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200">
+        <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 block">
+          Penilaian Sikap &amp; Perilaku
+        </span>
+        <p className="text-xs text-emerald-600 italic mt-1">
+          Belum ada penilaian sikap dari wali kelas.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-3">
+      <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 block">
+        Penilaian Sikap &amp; Perilaku
+      </span>
+      <div className="grid grid-cols-2 gap-3 max-w-xs">
+        <div className="rounded-xl bg-white/70 border border-emerald-100 px-3 py-2">
+          <span className="text-[11px] text-emerald-700/70 block">Kedisiplinan</span>
+          <strong className="text-sm text-emerald-900">{sikap!.kedisiplinan ?? "-"}</strong>
+        </div>
+        <div className="rounded-xl bg-white/70 border border-emerald-100 px-3 py-2">
+          <span className="text-[11px] text-emerald-700/70 block">Kemandirian</span>
+          <strong className="text-sm text-emerald-900">{sikap!.kemandirian ?? "-"}</strong>
+        </div>
+      </div>
+      {sikap!.tingkahLaku && (
+        <div className="rounded-xl bg-white/70 border border-emerald-100 px-3 py-2">
+          <span className="text-[11px] text-emerald-700/70 block">Tingkah Laku / Perilaku</span>
+          <p className="text-sm text-emerald-900">{sikap!.tingkahLaku}</p>
+        </div>
+      )}
+      {sikap!.prestasi && (
+        <div className="rounded-xl bg-white/70 border border-emerald-100 px-3 py-2">
+          <span className="text-[11px] text-emerald-700/70 block">Prestasi / Capaian</span>
+          <p className="text-sm text-emerald-900">{sikap!.prestasi}</p>
+        </div>
+      )}
+    </div>
   )
 }

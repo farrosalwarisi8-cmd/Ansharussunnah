@@ -642,8 +642,17 @@ model CatatanRapor {
   siswaId         String        @map("siswa_id")
   periodeAjaranId String        @map("periode_ajaran_id")
   waliKelasId     String        @map("wali_kelas_id")
+  // Jenis rapor dibedakan via kolom `bulan`:
+  // 0 = Rapor Akhir Semester (rapor besar, mencakup seluruh periode);
+  // 1-12 = Rapor Bulanan (bulan kalender).
+  bulan           Int           @default(0) @map("bulan")
   catatan         String
   ranking         Int?
+  // Penilaian sikap & perilaku yang diinput MANUAL oleh wali kelas/admin.
+  kedisiplinan    Decimal?      @map("kedisiplinan") @db.Decimal(5, 2)
+  kemandirian     Decimal?      @map("kemandirian") @db.Decimal(5, 2)
+  tingkahLaku     String?       @map("tingkah_laku")
+  prestasi        String?       @map("prestasi")
   dibuatOlehId    String        @map("dibuat_oleh_id")
   createdAt       DateTime @db.Timestamptz(3)      @default(now()) @map("created_at")
   updatedAt       DateTime @db.Timestamptz(3)      @updatedAt @map("updated_at")
@@ -652,7 +661,7 @@ model CatatanRapor {
   siswa           Siswa         @relation(fields: [siswaId], references: [id], onDelete: Cascade)
   waliKelas       Guru          @relation(fields: [waliKelasId], references: [id])
 
-  @@unique([siswaId, periodeAjaranId])
+  @@unique([siswaId, periodeAjaranId, bulan])
   @@index([siswaId])
   @@index([periodeAjaranId])
   @@map("catatan_rapors")

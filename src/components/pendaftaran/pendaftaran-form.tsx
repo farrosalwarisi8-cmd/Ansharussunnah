@@ -336,6 +336,22 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
     }
   }
 
+  // Form submit NATIF (termasuk implicit submission via tombol Enter pada
+  // field teks) DIPINDAH gerbangnya ke langkah terakhir. Tanpa ini, menekan
+  // Enter di kolom teks mana pun akan menjalankan validasi SELURUH form dan
+  // langsung membuat pendaftaran + pindah ke halaman sukses tanpa melewati
+  // langkah 4 & 5 (dan tanpa menekan tombol "Daftar Sekarang").
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (currentStep < STEPS.length) {
+      // Enter pada langkah selain terakhir diperlakukan seperti "Selanjutnya":
+      // validasi langkah berjalan, tapi form TIDAK dikirim.
+      void goToNextStep()
+    } else {
+      void handleSubmit(onSubmit)(e)
+    }
+  }
+
   const onSubmit = async (data: PendaftaranFormValues) => {
     setIsSubmitting(true)
     setServerError(null)
@@ -446,7 +462,7 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleFormSubmit} className="space-y-6">
       {serverError && (
         <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-sm">
           {serverError}

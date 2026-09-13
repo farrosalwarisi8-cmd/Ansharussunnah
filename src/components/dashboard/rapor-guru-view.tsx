@@ -1,10 +1,17 @@
 "use client"
 
 import * as React from "react"
-import { createOrUpdateCatatanRapor, getRekapRaporKelas } from "@/actions/rapor"
+import {
+  createOrUpdateCatatanRapor,
+  getCatatanRaporDetail,
+  getRekapRaporKelas,
+} from "@/actions/rapor"
 import { getPeriodeAjaranAktif } from "@/actions/periode-ajaran"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
 import { getSiswaByKelas } from "@/actions/absensi"
+import { labelJenisRapor, namaBulan } from "@/lib/bulan"
+import { peranOptionSuffix, type PeranKelas } from "@/lib/kelas-peran"
+import { PeranKelasBadge, PeranKelasLegend } from "@/components/ui/peran-kelas-badge"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -18,6 +25,7 @@ type KelasItem = {
   jenjang: string
   jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   jumlahSiswa: number
+  peran?: PeranKelas
 }
 
 type SiswaOption = {
@@ -37,6 +45,15 @@ export function GuruRaporView() {
   const [selectedStudentId, setSelectedStudentId] = React.useState("")
   const [catatan, setCatatan] = React.useState("")
   const [saving, setSaving] = React.useState(false)
+
+  // Jenis rapor: 0 = Akhir Semester, 1-12 = Bulanan
+  const [raporBulan, setRaporBulan] = React.useState(0)
+  const [ranking, setRanking] = React.useState("")
+  const [kedisiplinan, setKedisiplinan] = React.useState("")
+  const [kemandirian, setKemandirian] = React.useState("")
+  const [tingkahLaku, setTingkahLaku] = React.useState("")
+  const [prestasi, setPrestasi] = React.useState("")
+  const [loadingDetail, setLoadingDetail] = React.useState(false)
 
   const [showRekap, setShowRekap] = React.useState(false)
   const [rekapData, setRekapData] = React.useState<{
@@ -128,7 +145,13 @@ export function GuruRaporView() {
       const result = await createOrUpdateCatatanRapor({
         siswaId: selectedStudentId,
         periodeAjaranId,
+        bulan: raporBulan,
         catatan,
+        ranking: ranking ? Number(ranking) : undefined,
+        kedisiplinan: kedisiplinan !== "" ? Number(kedisiplinan) : undefined,
+        kemandirian: kemandirian !== "" ? Number(kemandirian) : undefined,
+        tingkahLaku: tingkahLaku || undefined,
+        prestasi: prestasi || undefined,
       })
       if (result.success) {
         toast({ title: "Catatan Rapor Berhasil Disimpan! 📝", description: result.message })
@@ -142,6 +165,49 @@ export function GuruRaporView() {
     }
   }
 
+  // Muat catatan & nilai sikap yang sudah ada saat santri/jenis rapor diganti
+  React.useEffect(() => {
+    if (!selectedStudentId || !periodeAjaranId) return
+    let cancelled = false
+    setLoadingDetail(true)
+    async function loadDetail() {
+      const res = await getCatatanRaporDetail(selectedStudentId, periodeAjaranId, raporBulan)
+      if (!cancelled) {
+        if (res.success && res.data) {
+          const detail = res.data as unknown as {
+            catatan?: {
+              catatan: string
+              ranking: number | null
+              kedisiplinan: number | null
+              kemandirian: number | null
+              tingkahLaku: string | null
+              prestasi: string | null
+            }
+          }
+          setCatatan(detail.catatan?.catatan ?? "")
+          setRanking(detail.catatan?.ranking != null ? String(detail.catatan.ranking) : "")
+          setKedisiplinan(detail.catatan?.kedisiplinan != null ? String(detail.catatan.kedisiplinan) : "")
+          setKemandirian(detail.catatan?.kemandirian != null ? String(detail.catatan.kemandirian) : "")
+          setTingkahLaku(detail.catatan?.tingkahLaku ?? "")
+          setPrestasi(detail.catatan?.prestasi ?? "")
+        } else {
+          setCatatan("")
+          setRanking("")
+          setKedisiplinan("")
+          setKemandirian("")
+          setTingkahLaku("")
+          setPrestasi("")
+        }
+      }
+    }
+    loadDetail().finally(() => {
+      if (!cancelled) setLoadingDetail(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedStudentId, periodeAjaranId, raporBulan])
+
   const handleLoadRekap = async () => {
     if (!kelasId || !periodeAjaranId) {
       toast({ variant: "destructive", title: "Pilih kelas & periode aktif terlebih dahulu." })
@@ -152,6 +218,7 @@ export function GuruRaporView() {
       const result = await getRekapRaporKelas({
         kelasId,
         periodeAjaranId,
+        bulan: raporBulan,
       })
       if (result.success && result.data) {
         setRekapData(result.data as typeof rekapData)
@@ -188,9 +255,14 @@ export function GuruRaporView() {
     <div className="space-y-6">
       {/* Kelas & Periode Selector */}
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
-        <CardContent className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+        <CardContent className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Kelas</label>
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+              Kelas
+              <PeranKelasBadge
+                peran={kelasList.find((k) => k.kelasId === kelasId)?.peran}
+              />
+            </label>
             <select
               value={kelasId || ""}
               onChange={(e) => handleKelasChange(e.target.value)}
@@ -201,6 +273,7 @@ export function GuruRaporView() {
                 <option key={k.kelasId} value={k.kelasId}>
                   {k.jenjang} - {k.namaKelas}
                   {k.jenisKelamin === "LAKI_LAKI" ? " (Ikhwan)" : k.jenisKelamin === "PEREMPUAN" ? " (Akhwat)" : ""} ({k.jumlahSiswa} siswa)
+                  {peranOptionSuffix(k.peran)}
                 </option>
               ))}
             </select>
@@ -216,8 +289,26 @@ export function GuruRaporView() {
               className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500"
             />
           </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Jenis Rapor</label>
+            <select
+              value={raporBulan}
+              onChange={(e) => setRaporBulan(Number(e.target.value))}
+              className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-yellow-500"
+            >
+              <option value={0}>Rapor Akhir Semester</option>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>
+                  Rapor Bulanan - {namaBulan(m)}
+                </option>
+              ))}
+            </select>
+          </div>
         </CardContent>
       </Card>
+
+      <PeranKelasLegend />
 
       {/* Student Selector Card */}
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 sm:p-6 space-y-4">
@@ -248,10 +339,79 @@ export function GuruRaporView() {
         </div>
 
         {/* Input Catatan Wali Kelas */}
-        <div className="space-y-2 pt-2 border-t border-slate-100">
-          <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-            Catatan &amp; Nasehat Wali Kelas untuk Rapor Santri:
-          </label>
+        <div className="space-y-3 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+              Catatan &amp; Nasehat Wali Kelas - {labelJenisRapor(raporBulan)}:
+            </label>
+            {loadingDetail && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+          </div>
+
+          {/* Penilaian Sikap & Perilaku (manual wali kelas) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-600">Ranking Kelas (opsional)</label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={ranking}
+                onChange={(e) => setRanking(e.target.value)}
+                placeholder="e.g. 1"
+                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-yellow-500"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-600">Nilai Kedisiplinan (0-100)</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                value={kedisiplinan}
+                onChange={(e) => setKedisiplinan(e.target.value)}
+                placeholder="e.g. 85"
+                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-yellow-500"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-600">Nilai Kemandirian (0-100)</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                value={kemandirian}
+                onChange={(e) => setKemandirian(e.target.value)}
+                placeholder="e.g. 90"
+                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-yellow-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-600">Tingkah Laku / Perilaku</label>
+              <input
+                type="text"
+                value={tingkahLaku}
+                onChange={(e) => setTingkahLaku(e.target.value)}
+                placeholder="e.g. Berperilaku baik dan santun"
+                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-yellow-500"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-600">Prestasi / Capaian</label>
+              <input
+                type="text"
+                value={prestasi}
+                onChange={(e) => setPrestasi(e.target.value)}
+                placeholder="e.g. Juara hafalan juz 30"
+                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:ring-2 focus:ring-yellow-500"
+              />
+            </div>
+          </div>
+
           <Textarea
             value={catatan}
             onChange={(e) => setCatatan(e.target.value)}
@@ -261,7 +421,7 @@ export function GuruRaporView() {
           <div className="flex justify-end">
             <Button
               onClick={handleSaveCatatan}
-              disabled={saving}
+              disabled={saving || loadingDetail}
               className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px] px-6"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Save className="h-4 w-4 mr-1.5" />}
@@ -299,6 +459,7 @@ export function GuruRaporView() {
             <div className="p-4 mb-2 text-xs text-slate-500">
               Total {rekapData.totalSiswa} siswa
               {rekapData.periode?.nama ? ` • ${rekapData.periode.nama}` : ""}
+              {" • "}{labelJenisRapor(raporBulan)}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">

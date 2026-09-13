@@ -14,11 +14,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { KelasMapelSelector } from "@/components/dashboard/kelas-mapel-selector"
 import { TargetGenderSelector } from "@/components/dashboard/target-gender-selector"
+import { DibuatOlehInfo } from "@/components/ui/dibuat-oleh-info"
+import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { ArrowLeft, Save, Loader2, Link as LinkIcon } from "lucide-react"
 
 export default function BuatTugasPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { user } = useDashboard()
   const [loading, setLoading] = React.useState(false)
 
   const [judul, setJudul] = React.useState("")
@@ -112,6 +115,7 @@ export default function BuatTugasPage() {
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
         <CardContent className="p-6 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
+            <DibuatOlehInfo nama={user.nama} />
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
                 Judul Tugas *

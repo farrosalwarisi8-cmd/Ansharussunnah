@@ -44,6 +44,8 @@ export type UpdatePeriodeAjaranValues = z.infer<typeof updatePeriodeAjaranSchema
 export const rekapKelasSchema = z.object({
   kelasId: z.string().min(1, "Kelas wajib dipilih"),
   periodeAjaranId: z.string().min(1, "Periode ajaran wajib dipilih"),
+  // 0 = Rapor Akhir Semester, 1-12 = Rapor Bulanan
+  bulan: z.coerce.number().int().min(0).max(12).optional(),
 })
 
 export type RekapKelasValues = z.infer<typeof rekapKelasSchema>
@@ -51,6 +53,8 @@ export type RekapKelasValues = z.infer<typeof rekapKelasSchema>
 export const createCatatanRaporSchema = z.object({
   siswaId: z.string().min(1),
   periodeAjaranId: z.string().min(1),
+  // 0 = Rapor Akhir Semester, 1-12 = Rapor Bulanan
+  bulan: z.coerce.number().int().min(0).max(12).optional(),
   catatan: z.string().min(1, "Catatan tidak boleh kosong").max(2000),
   ranking: z
     .number()
@@ -58,6 +62,23 @@ export const createCatatanRaporSchema = z.object({
     .min(1, "Ranking minimal 1")
     .max(100, "Ranking maksimal 100")
     .optional(),
+  // Penilaian sikap & perilaku (diinput manual wali kelas/admin)
+  kedisiplinan: z.coerce
+    .number()
+    .min(0, "Nilai kedisiplinan minimal 0")
+    .max(100, "Nilai kedisiplinan maksimal 100")
+    .optional(),
+  kemandirian: z.coerce
+    .number()
+    .min(0, "Nilai kemandirian minimal 0")
+    .max(100, "Nilai kemandirian maksimal 100")
+    .optional(),
+  tingkahLaku: z
+    .string()
+    .min(1, "Keterangan tingkah laku tidak boleh kosong")
+    .max(500)
+    .optional(),
+  prestasi: z.string().max(500).optional(),
 })
 
 export type CreateCatatanRaporValues = z.infer<typeof createCatatanRaporSchema>
@@ -66,6 +87,11 @@ export const updateCatatanRaporSchema = z.object({
   catatanId: z.string().min(1),
   catatan: z.string().min(1).max(2000).optional(),
   ranking: z.number().int().min(1).max(100).optional(),
+  // Penilaian sikap & perilaku (diinput manual wali kelas/admin)
+  kedisiplinan: z.coerce.number().min(0).max(100).optional(),
+  kemandirian: z.coerce.number().min(0).max(100).optional(),
+  tingkahLaku: z.string().min(1).max(500).optional(),
+  prestasi: z.string().max(500).optional(),
 })
 
 export type UpdateCatatanRaporValues = z.infer<typeof updateCatatanRaporSchema>

@@ -13,10 +13,29 @@ import {
   type CreateCatatanRaporValues,
   type UpdateCatatanRaporValues,
 } from "@/lib/validations/rapor"
+import { labelJenisRapor } from "@/lib/bulan"
 import type { ActionResponse } from "@/types"
 import { Role, StatusPengerjaan, StatusPengumpulan } from "@prisma/client"
 import { toUserFriendlyError } from "@/lib/prisma-error"
 import { revalidatePath } from "next/cache"
+
+// ========================================================
+// HELPER: Filter Rapor Bulanan Berdasarkan Bulan Kalender
+// ========================================================
+
+/**
+ * Rapor Bulanan (bulan = 1-12) memfilter nilai ujian/tugas & absensi ke bulan
+ * kalender tertentu. Rapor Akhir Semester (bulan = 0) mencakup seluruh periode.
+ * Pengecekan memakai UTC agar tanggal @db.Date (absensi) konsisten.
+ */
+function dalamBulan(
+  date: Date | null | undefined,
+  bulan?: number
+): boolean {
+  if (!bulan) return true
+  if (!date) return false
+  return date.getUTCMonth() + 1 === bulan
+}
 
 // ========================================================
 // HELPER: Validasi relasi Orang Tua → Siswa
@@ -49,10 +68,14 @@ interface NilaiMapel {
  * Menghitung rata-rata nilai per mata pelajaran dari data ujian & tugas.
  * Nilai gabungan = (rata-rata ujian * 0.6) + (rata-rata tugas * 0.4)
  * Bobot bisa disesuaikan sesuai kebijakan sekolah.
+ *
+ * `bulan` (1-12) membatasi penilaian ke bulan kalender tertentu (Rapor Bulanan);
+ * 0/undefined berarti seluruh periode (Rapor Akhir Semester).
  */
 async function hitungNilaiPerMapel(
   siswaId: string,
-  periodeAjaranId: string
+  periodeAjaranId: string,
+  bulan?: number
 ): Promise<NilaiMapel[]> {
   // 1. Ambil semua nilai ujian siswa di periode ini
   const pengerjaanUjian = await prisma.pengerjaanUjian.findMany({
@@ -62,7 +85,7 @@ async function hitungNilaiPerMapel(
       status: StatusPengerjaan.DINILAI,
     },
     include: {
-      ujian: { select: { mataPelajaran: { select: { nama: true } } } },
+      ujian: { select: { waktuMulai: true, mataPelajaran: { select: { nama: true } } } },
     },
   })
 
@@ -74,17 +97,18 @@ async function hitungNilaiPerMapel(
       status: StatusPengumpulan.DINILAI,
     },
     include: {
-      tugas: { select: { mataPelajaran: { select: { nama: true } } } },
+      tugas: { select: { deadline: true, mataPelajaran: { select: { nama: true } } } },
     },
   })
 
-  // 3. Kelompokkan per mata pelajaran
+  // 3. Kelompokkan per mata pelajaran (hanya yang masuk bulan rapor bila dipilih)
   const mapelMap = new Map<
     string,
     { nilaiUjian: number[]; nilaiTugas: number[] }
   >()
 
   for (const p of pengerjaanUjian) {
+    if (!dalamBulan(p.ujian.waktuMulai, bulan)) continue
     const mapel = p.ujian.mataPelajaran.nama
     if (!mapelMap.has(mapel)) {
       mapelMap.set(mapel, { nilaiUjian: [], nilaiTugas: [] })
@@ -95,6 +119,7 @@ async function hitungNilaiPerMapel(
   }
 
   for (const p of pengumpulanTugas) {
+    if (!dalamBulan(p.tugas.deadline, bulan)) continue
     const mapel = p.tugas.mataPelajaran.nama
     if (!mapelMap.has(mapel)) {
       mapelMap.set(mapel, { nilaiUjian: [], nilaiTugas: [] })
@@ -149,10 +174,12 @@ async function hitungNilaiPerMapel(
 
 /**
  * Menghitung persentase kehadiran siswa di periode tertentu.
+ * `bulan` (1-12) membatasi ke bulan kalender tertentu (Rapor Bulanan).
  */
 async function hitungKehadiran(
   siswaId: string,
-  periodeAjaranId: string
+  periodeAjaranId: string,
+  bulan?: number
 ): Promise<{
   total: number
   hadir: number
@@ -167,6 +194,7 @@ async function hitungKehadiran(
 
   const hitung = { HADIR: 0, SAKIT: 0, IZIN: 0, ALPHA: 0 }
   for (const a of absensiList) {
+    if (!dalamBulan(a.tanggal, bulan)) continue
     hitung[a.status]++
   }
 
@@ -205,7 +233,7 @@ export async function getRekapRaporKelas(
       }
     }
 
-    const { kelasId, periodeAjaranId } = validated.data
+    const { kelasId, periodeAjaranId, bulan = 0 } = validated.data
 
     await verifyGuruAksesKelas(kelasId)
 
@@ -241,7 +269,12 @@ export async function getRekapRaporKelas(
           select: {
             siswaId: true,
             nilaiTotal: true,
-            ujian: { select: { mataPelajaran: { select: { nama: true } } } },
+            ujian: {
+              select: {
+                waktuMulai: true,
+                mataPelajaran: { select: { nama: true } },
+              },
+            },
           },
         }),
         // 2. Semua pengumpulan tugas yang sudah dinilai
@@ -254,7 +287,12 @@ export async function getRekapRaporKelas(
           select: {
             siswaId: true,
             nilai: true,
-            tugas: { select: { mataPelajaran: { select: { nama: true } } } },
+            tugas: {
+              select: {
+                deadline: true,
+                mataPelajaran: { select: { nama: true } },
+              },
+            },
           },
         }),
         // 3. Semua absensi untuk siswa di kelas ini
@@ -265,6 +303,7 @@ export async function getRekapRaporKelas(
           },
           select: {
             siswaId: true,
+            tanggal: true,
             status: true,
           },
         }),
@@ -273,6 +312,7 @@ export async function getRekapRaporKelas(
           where: {
             siswaId: { in: siswaIdList },
             periodeAjaranId,
+            bulan,
           },
           select: {
             siswaId: true,
@@ -287,6 +327,7 @@ export async function getRekapRaporKelas(
     const nilaiPerSiswa = new Map<string, Map<string, { nilaiUjian: number[]; nilaiTugas: number[] }>>()
 
     for (const p of semuaPengerjaanUjian) {
+      if (!dalamBulan(p.ujian.waktuMulai, bulan)) continue
       if (!nilaiPerSiswa.has(p.siswaId)) {
         nilaiPerSiswa.set(p.siswaId, new Map())
       }
@@ -301,6 +342,7 @@ export async function getRekapRaporKelas(
     }
 
     for (const p of semuaPengumpulanTugas) {
+      if (!dalamBulan(p.tugas.deadline, bulan)) continue
       if (!nilaiPerSiswa.has(p.siswaId)) {
         nilaiPerSiswa.set(p.siswaId, new Map())
       }
@@ -358,6 +400,7 @@ export async function getRekapRaporKelas(
     const hitungPerSiswa = new Map<string, { HADIR: number; SAKIT: number; IZIN: number; ALPHA: number; total: number }>()
 
     for (const a of semuaAbsensi) {
+      if (!dalamBulan(a.tanggal, bulan)) continue
       if (!hitungPerSiswa.has(a.siswaId)) {
         hitungPerSiswa.set(a.siswaId, { HADIR: 0, SAKIT: 0, IZIN: 0, ALPHA: 0, total: 0 })
       }
@@ -418,6 +461,8 @@ export async function getRekapRaporKelas(
           id: periode.id,
           nama: periode.nama,
         },
+        bulan,
+        jenisRapor: labelJenisRapor(bulan),
         totalSiswa: siswaList.length,
         rekap,
       },
@@ -452,7 +497,17 @@ export async function createOrUpdateCatatanRapor(
       }
     }
 
-    const { siswaId, periodeAjaranId, catatan, ranking } = validated.data
+    const {
+      siswaId,
+      periodeAjaranId,
+      bulan = 0,
+      catatan,
+      ranking,
+      kedisiplinan,
+      kemandirian,
+      tingkahLaku,
+      prestasi,
+    } = validated.data
 
     // Ambil data siswa untuk validasi kelas
     const siswa = await prisma.siswa.findUnique({
@@ -471,22 +526,31 @@ export async function createOrUpdateCatatanRapor(
       return { success: false, message: "Akses ditolak: Hanya wali kelas yang dapat menulis catatan rapor" }
     }
 
-    // Upsert catatan rapor
+    // Upsert catatan rapor (uniqueness: siswa × periode × bulan; 0 = rapor akhir semester)
     await prisma.catatanRapor.upsert({
       where: {
-        siswaId_periodeAjaranId: { siswaId, periodeAjaranId },
+        siswaId_periodeAjaranId_bulan: { siswaId, periodeAjaranId, bulan },
       },
       update: {
         catatan,
         ranking,
+        kedisiplinan,
+        kemandirian,
+        tingkahLaku,
+        prestasi,
         dibuatOlehId: user.id,
       },
       create: {
         siswaId,
         periodeAjaranId,
+        bulan,
         waliKelasId: guru.id,
         catatan,
         ranking,
+        kedisiplinan,
+        kemandirian,
+        tingkahLaku,
+        prestasi,
         dibuatOlehId: user.id,
       },
     })
@@ -520,7 +584,8 @@ export async function updateCatatanRapor(
       }
     }
 
-    const { catatanId, catatan, ranking } = validated.data
+    const { catatanId, catatan, ranking, kedisiplinan, kemandirian, tingkahLaku, prestasi } =
+      validated.data
 
     const catatanRapor = await prisma.catatanRapor.findUnique({
       where: { id: catatanId },
@@ -544,7 +609,15 @@ export async function updateCatatanRapor(
 
     await prisma.catatanRapor.update({
       where: { id: catatanId },
-      data: { catatan, ranking, dibuatOlehId: pembuatId },
+      data: {
+        catatan,
+        ranking,
+        kedisiplinan,
+        kemandirian,
+        tingkahLaku,
+        prestasi,
+        dibuatOlehId: pembuatId,
+      },
     })
 
     revalidatePath(`/dashboard/rapor`)
@@ -557,6 +630,77 @@ export async function updateCatatanRapor(
   }
 }
 
+/**
+ * Ambil detail catatan rapor (termasuk penilaian sikap) untuk 1 siswa pada
+ * periode & bulan tertentu. Dipakai guru saat mengisi rapor; bulan 0 =
+ * rapor akhir semester, 1-12 = rapor bulanan. Boleh null jika belum diisi.
+ */
+export async function getCatatanRaporDetail(
+  siswaId: string,
+  periodeAjaranId: string,
+  bulan?: number
+): Promise<ActionResponse> {
+  try {
+    if (!siswaId || !periodeAjaranId) {
+      return { success: false, message: "Parameter siswa dan periode wajib ada" }
+    }
+
+    const siswa = await prisma.siswa.findUnique({
+      where: { id: siswaId, deleted_at: null },
+      include: { kelas: true },
+    })
+    if (!siswa || !siswa.kelas) {
+      return { success: false, message: "Data siswa tidak ditemukan" }
+    }
+
+    const { user, roleInKelas } = await verifyGuruAksesKelas(siswa.kelas.id)
+    if (roleInKelas !== "WALI_KELAS" && roleInKelas !== "ADMIN") {
+      return { success: false, message: "Akses ditolak: Hanya wali kelas yang dapat mengisi rapor" }
+    }
+
+    const raporBulan = bulan ?? 0
+    const catatanRapor = await prisma.catatanRapor.findUnique({
+      where: {
+        siswaId_periodeAjaranId_bulan: { siswaId, periodeAjaranId, bulan: raporBulan },
+      },
+    })
+
+    return {
+      success: true,
+      message: "Detail catatan rapor berhasil dimuat",
+      data: {
+        siswaId,
+        bulan: raporBulan,
+        jenisRapor: labelJenisRapor(raporBulan),
+        _pembuat: {
+          id: user.id,
+          roleInKelas,
+        },
+        catatan: catatanRapor
+          ? {
+              id: catatanRapor.id,
+              catatan: catatanRapor.catatan,
+              ranking: catatanRapor.ranking,
+              kedisiplinan: catatanRapor.kedisiplinan
+                ? Number(catatanRapor.kedisiplinan)
+                : null,
+              kemandirian: catatanRapor.kemandirian
+                ? Number(catatanRapor.kemandirian)
+                : null,
+              tingkahLaku: catatanRapor.tingkahLaku,
+              prestasi: catatanRapor.prestasi,
+            }
+          : null,
+      },
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal memuat detail catatan rapor",
+    }
+  }
+}
+
 // ========================================================
 // 4. ACTIONS SISWA: LIHAT RAPOR SENDIRI (Read-Only)
 // ========================================================
@@ -564,9 +708,11 @@ export async function updateCatatanRapor(
 /**
  * Siswa melihat rapor dirinya sendiri untuk periode tertentu.
  * SiswaId diambil dari session, bukan dari input client.
+ * `bulan`: 0 = rapor akhir semester (default), 1-12 = rapor bulanan.
  */
 export async function getRaporSiswa(
-  periodeAjaranId: string
+  periodeAjaranId: string,
+  bulan?: number
 ): Promise<ActionResponse> {
   try {
     const user = await requireRole([Role.SISWA])
@@ -603,12 +749,17 @@ export async function getRaporSiswa(
       return { success: false, message: "Periode ajaran tidak ditemukan" }
     }
 
-    const nilaiPerMapel = await hitungNilaiPerMapel(siswaId, periodeAjaranId)
-    const kehadiran = await hitungKehadiran(siswaId, periodeAjaranId)
+    const raporBulan = bulan ?? 0
+    const nilaiPerMapel = await hitungNilaiPerMapel(siswaId, periodeAjaranId, raporBulan)
+    const kehadiran = await hitungKehadiran(siswaId, periodeAjaranId, raporBulan)
 
     const catatanRapor = await prisma.catatanRapor.findUnique({
       where: {
-        siswaId_periodeAjaranId: { siswaId, periodeAjaranId },
+        siswaId_periodeAjaranId_bulan: {
+          siswaId,
+          periodeAjaranId,
+          bulan: raporBulan,
+        },
       },
     })
 
@@ -633,13 +784,26 @@ export async function getRaporSiswa(
           tahunAjaran: periode.tahunAjaran,
           semester: periode.semester,
         },
+        bulan: raporBulan,
+        jenisRapor: labelJenisRapor(raporBulan),
         nilaiPerMapel,
         rataRataKeseluruhan: Math.round(rataKeseluruhan * 100) / 100,
         kehadiran,
         catatan: catatanRapor?.catatan || null,
         ranking: catatanRapor?.ranking || null,
+        sikap: {
+          kedisiplinan: catatanRapor?.kedisiplinan
+            ? Number(catatanRapor.kedisiplinan)
+            : null,
+          kemandirian: catatanRapor?.kemandirian
+            ? Number(catatanRapor.kemandirian)
+            : null,
+          tingkahLaku: catatanRapor?.tingkahLaku || null,
+          prestasi: catatanRapor?.prestasi || null,
+        },
       },
-    }  } catch (error: unknown) {
+    }
+  } catch (error: unknown) {
     return {
       success: false,
       message: error instanceof Error ? error.message : "Gagal memuat rapor",
@@ -656,10 +820,12 @@ export async function getRaporSiswa(
 /**
  * Orang tua melihat rapor anaknya.
  * ✅ KEAMANAN: Validasi relasi ParentStudent.
+ * `bulan`: 0 = rapor akhir semester (default), 1-12 = rapor bulanan.
  */
 export async function getRaporAnak(
   siswaId: string,
-  periodeAjaranId: string
+  periodeAjaranId: string,
+  bulan?: number
 ): Promise<ActionResponse> {
   try {
     const user = await requireRole([Role.ORANG_TUA])
@@ -702,12 +868,17 @@ export async function getRaporAnak(
       return { success: false, message: "Periode ajaran tidak ditemukan" }
     }
 
-    const nilaiPerMapel = await hitungNilaiPerMapel(siswaId, periodeAjaranId)
-    const kehadiran = await hitungKehadiran(siswaId, periodeAjaranId)
+    const raporBulan = bulan ?? 0
+    const nilaiPerMapel = await hitungNilaiPerMapel(siswaId, periodeAjaranId, raporBulan)
+    const kehadiran = await hitungKehadiran(siswaId, periodeAjaranId, raporBulan)
 
     const catatanRapor = await prisma.catatanRapor.findUnique({
       where: {
-        siswaId_periodeAjaranId: { siswaId, periodeAjaranId },
+        siswaId_periodeAjaranId_bulan: {
+          siswaId,
+          periodeAjaranId,
+          bulan: raporBulan,
+        },
       },
     })
 
@@ -732,11 +903,23 @@ export async function getRaporAnak(
           tahunAjaran: periode.tahunAjaran,
           semester: periode.semester,
         },
+        bulan: raporBulan,
+        jenisRapor: labelJenisRapor(raporBulan),
         nilaiPerMapel,
         rataRataKeseluruhan: Math.round(rataKeseluruhan * 100) / 100,
         kehadiran,
         catatan: catatanRapor?.catatan || null,
         ranking: catatanRapor?.ranking || null,
+        sikap: {
+          kedisiplinan: catatanRapor?.kedisiplinan
+            ? Number(catatanRapor.kedisiplinan)
+            : null,
+          kemandirian: catatanRapor?.kemandirian
+            ? Number(catatanRapor.kemandirian)
+            : null,
+          tingkahLaku: catatanRapor?.tingkahLaku || null,
+          prestasi: catatanRapor?.prestasi || null,
+        },
       },
     }
   } catch (error: unknown) {

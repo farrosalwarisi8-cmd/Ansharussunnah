@@ -13,6 +13,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { KelasMapelSelector } from "@/components/dashboard/kelas-mapel-selector"
 import { TargetGenderSelector } from "@/components/dashboard/target-gender-selector"
+import { DibuatOlehInfo } from "@/components/ui/dibuat-oleh-info"
+import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { Plus, Trash2, ArrowLeft, Loader2, Save } from "lucide-react"
 import Link from "next/link"
 import { toDatetimeLocalValue } from "@/lib/datetime-local"
@@ -39,6 +41,7 @@ export default function BuatUjianPage() {
   const isEditMode = Boolean(editId)
 
   const { toast } = useToast()
+  const { user } = useDashboard()
   const [loading, setLoading] = React.useState(false)
   const [loadingEdit, setLoadingEdit] = React.useState(isEditMode)
 
@@ -407,6 +410,7 @@ export default function BuatUjianPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
+            <DibuatOlehInfo nama={user.nama} />
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
                 Judul Ujian *

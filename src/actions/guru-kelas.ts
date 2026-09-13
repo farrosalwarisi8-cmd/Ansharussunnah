@@ -265,6 +265,8 @@ export async function getDaftarKelasYangDiajarGuru(
         jenisKelamin: k.jenisKelamin,
         mataPelajaranId: null,
         jumlahSiswa: k._count.siswa,
+        // Admin: untuk memberitahu relasi wali kelas ASLI-nya kepada admin
+        peran: k.waliKelasId === user.guru?.id ? ("WALI_KELAS" as const) : ("ADMIN" as const),
       }))
 
       return {
@@ -305,24 +307,30 @@ export async function getDaftarKelasYangDiajarGuru(
     })
 
     const formatted = [
-...guruKelasList.map((gk) => ({
-          guruKelasId: gk.id,
-          kelasId: gk.kelasId,
-          namaKelas: gk.kelas.nama,
-          jenjang: gk.kelas.jenjang.nama,
-          jenisKelamin: gk.kelas.jenisKelamin,
-          mataPelajaranId: gk.mataPelajaranId,
-          jumlahSiswa: gk.kelas._count.siswa,
-        })),
-        ...waliKelasList.map((k) => ({
-          guruKelasId: null,
-          kelasId: k.id,
-          namaKelas: k.nama,
-          jenjang: k.jenjang.nama,
-          jenisKelamin: k.jenisKelamin,
-          mataPelajaranId: null,
-          jumlahSiswa: k._count.siswa,
-        })),
+      ...guruKelasList.map((gk) => ({
+        guruKelasId: gk.id,
+        kelasId: gk.kelasId,
+        namaKelas: gk.kelas.nama,
+        jenjang: gk.kelas.jenjang.nama,
+        jenisKelamin: gk.kelas.jenisKelamin,
+        mataPelajaranId: gk.mataPelajaranId,
+        jumlahSiswa: gk.kelas._count.siswa,
+        // Kelas diajarkan = Guru Mapel; bila sekaligus wali kelas → tandai keduanya
+        peran: (gk.kelas.waliKelasId === targetGuruId
+          ? "WALI_KELAS_PENGAJAR"
+          : "PENGAJAR") as "WALI_KELAS_PENGAJAR" | "PENGAJAR",
+      })),
+      ...waliKelasList.map((k) => ({
+        guruKelasId: null,
+        kelasId: k.id,
+        namaKelas: k.nama,
+        jenjang: k.jenjang.nama,
+        jenisKelamin: k.jenisKelamin,
+        mataPelajaranId: null,
+        jumlahSiswa: k._count.siswa,
+        // Hanya wali kelas (tidak mengajar mapel apa pun di kelas ini)
+        peran: "WALI_KELAS" as const,
+      })),
     ]
 
     return {

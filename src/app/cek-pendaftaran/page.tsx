@@ -164,6 +164,13 @@ export default function CekPendaftaranPage() {
                     </Link>
                   </Button>
                 )}
+
+                <Button asChild variant="outline" className="w-full h-11 rounded-xl text-slate-700 border-slate-300 font-semibold text-sm mt-2">
+                  <Link href={`/pendaftaran/${result.data.nomorPendaftaran}/upload-dokumen`}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Unggah / Lengkapi Dokumen
+                  </Link>
+                </Button>
               </div>
             )}
           </CardContent>

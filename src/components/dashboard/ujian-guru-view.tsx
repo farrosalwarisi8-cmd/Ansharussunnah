@@ -14,6 +14,8 @@ import { getDaftarUjianGuru, deleteUjian } from "@/actions/ujian"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
 import { useToast } from "@/hooks/use-toast"
 import { formatDateTimeWIB } from "@/lib/utils"
+import { peranOptionSuffix, type PeranKelas } from "@/lib/kelas-peran"
+import { PeranKelasBadge, PeranKelasLegend } from "@/components/ui/peran-kelas-badge"
 
 type KelasItem = {
   kelasId: string
@@ -22,6 +24,7 @@ type KelasItem = {
   jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
   mataPelajaranId: string
   jumlahSiswa: number
+  peran?: PeranKelas
 }
 
 type UjianItem = {
@@ -155,8 +158,11 @@ export function GuruUjianView() {
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
         <CardContent className="p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
               Pilih Kelas:
+              <PeranKelasBadge
+                peran={kelasList.find((k) => k.kelasId === selectedKelasId)?.peran}
+              />
             </label>
             <select
               value={selectedKelasId}
@@ -170,9 +176,11 @@ export function GuruUjianView() {
                 <option key={k.kelasId} value={k.kelasId}>
                   {k.jenjang} - {k.namaKelas}
                   {k.jenisKelamin === "LAKI_LAKI" ? " (Ikhwan)" : k.jenisKelamin === "PEREMPUAN" ? " (Akhwat)" : ""} — {k.jumlahSiswa} siswa
+                  {peranOptionSuffix(k.peran)}
                 </option>
               ))}
             </select>
+            <PeranKelasLegend />
           </div>
         </CardContent>
       </Card>
@@ -239,6 +247,12 @@ export function GuruUjianView() {
                     {formatDateTimeWIB(item.waktuSelesai)}
                   </span>
                 </div>
+                {item.guru && (
+                  <div className="flex items-center justify-between text-xs text-slate-500 col-span-2">
+                    <span>Dibuat oleh:</span>
+                    <span className="font-semibold text-slate-700">{item.guru}</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between text-xs text-slate-500">

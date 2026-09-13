@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { CheckCircle2, ArrowRight } from "lucide-react"
+import { CheckCircle2, ArrowRight, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CopyNomorButton } from "@/components/pendaftaran/copy-nomor-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -144,6 +144,31 @@ export default async function SuksesPage({ searchParams }: SuksesPageProps) {
                 </li>
               </ul>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Dokumen Pendukung */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              Dokumen Pendukung
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-gray-500">
+              Berkas pendukung (Kartu Keluarga, Akta Lahir, Pas Foto) dapat
+              diunggah kapan pun setelah pendaftaran — termasuk setelah
+              pendaftaran diterima — melalui halaman berikut.
+            </p>
+            <Link
+              href={`/pendaftaran/${pendaftaran.nomorPendaftaran}/upload-dokumen`}
+            >
+              <Button variant="outline" size="lg" className="w-full">
+                <FileText className="mr-2 h-4 w-4" />
+                Unggah / Lengkapi Dokumen
+              </Button>
+            </Link>
           </CardContent>
         </Card>
 
