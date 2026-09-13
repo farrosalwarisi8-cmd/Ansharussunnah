@@ -240,9 +240,26 @@ export async function promosiSiswaMassal(
 // ========================================================
 
 /**
+ * Ekstrak urutan numerik dari nama kelas, misal "Kelas 2" → 2, "Tingkat 1" → 1.
+ * Dipakai untuk menghitung "kelas berikutnya" di dalam satu jenjang.
+ * Kelas tanpa angka dianggap paling akhir (tak bisa naik di jenjang itu).
+ */
+function urutanNumerikKelas(nama: string): number {
+  const match = nama.match(/(\d+)/)
+  return match ? parseInt(match[0], 10) : Number.MAX_SAFE_INTEGER
+}
+
+/**
  * Mengambil daftar siswa di suatu kelas beserta rekomendasi kelas tujuan.
- * Rekomendasi: berdasarkan urutan Jenjang, misal siswa di kelas "7A" → 
- * otomatis ke jenjang berikutnya, tapi guru bisa override manual.
+ *
+ * ALUR:
+ * 1. Naik kelas DI DALAM jenjang yang sama terlebih dahulu.
+ *    Contoh: "Madrasah Aliyah - Kelas 2" → rekomendasi "Kelas 3".
+ *    Target = semua kelas aktif di jenjang yang sama dengan urutan lebih tinggi.
+ * 2. Hanya jika siswa berada di kelas TERAKHIR jenjangnya (lulus), barulah
+ *    diarahkan ke kelas-kelas di jenjang berikutnya (urutan + 1).
+ * 3. Jika jenjang tertinggi, tidak ada kelas tujuan sama sekali.
+ * Guru tetap bisa override manual pemilihan kelas tujuan per siswa.
  */
 export async function getSiswaUntukPromosi(
   kelasId: string
@@ -252,34 +269,33 @@ export async function getSiswaUntukPromosi(
 
     const kelas = await prisma.kelas.findUnique({
       where: { id: kelasId },
-      include: {
-        jenjang: true,
-      },
+      include: { jenjang: true },
     })
     if (!kelas) {
       return { success: false, message: "Kelas tidak ditemukan" }
     }
 
-    // Cari jenjang berikutnya (urutan + 1)
-    const jenjangBerikutnya = await prisma.jenjang.findFirst({
-      where: {
-        urutan: kelas.jenjang.urutan + 1,
-        aktif: true,
-      },
-      include: {
-        kelas: {
-          where: { aktif: true },
-          orderBy: { nama: "asc" },
-          select: {
-            id: true,
-            nama: true,
-            kapasitas: true,
-            jenisKelamin: true,
-            _count: { select: { siswa: true } },
-          },
-        },
+    const urutanKelasSekarang = urutanNumerikKelas(kelas.nama)
+
+    // Ambil semua kelas aktif di jenjang yang SAMA, urutkan berdasarkan urutan numerik
+    const kelasSamaJenjang = await prisma.kelas.findMany({
+      where: { jenjangId: kelas.jenjangId, aktif: true },
+      select: {
+        id: true,
+        nama: true,
+        kapasitas: true,
+        jenisKelamin: true,
+        _count: { select: { siswa: true } },
       },
     })
+    kelasSamaJenjang.sort(
+      (a, b) => urutanNumerikKelas(a.nama) - urutanNumerikKelas(b.nama)
+    )
+
+    // Kelas berikutnya dalam jenjang yang sama (urutan lebih tinggi dari kelas asal)
+    const kelasBerikutnyaSamaJenjang = kelasSamaJenjang.filter(
+      (k) => urutanNumerikKelas(k.nama) > urutanKelasSekarang
+    )
 
     // Ambil semua siswa di kelas ini
     const siswaList = await prisma.siswa.findMany({
@@ -290,9 +306,57 @@ export async function getSiswaUntukPromosi(
       orderBy: { user: { nama: "asc" } },
     })
 
-    // Format kelas tujuan dengan info kapasitas
-    const kelasTujuan = jenjangBerikutnya
-      ? jenjangBerikutnya.kelas.map((k) => ({
+    // Menentukan kelas tujuan:
+    // - Masih ada kelas lebih tinggi di jenjang yang sama → NAIK_KELAS
+    // - Tidak ada → siswa di kelas terakhir → LULUS ke jenjang berikutnya
+    let targetKelas: Array<{
+      id: string
+      nama: string
+      jenjang: string
+      jenisKelamin: (typeof kelas)["jenisKelamin"]
+      terisi: number
+      kapasitas: number
+      sisaKuota: number
+    }> = []
+    let jenisPromosi: "NAIK_KELAS" | "LULUS" | null = null
+    let jenjangTujuan: { id: string; nama: string } | null = null
+
+    if (kelasBerikutnyaSamaJenjang.length > 0) {
+      jenisPromosi = "NAIK_KELAS"
+      jenjangTujuan = { id: kelas.jenjang.id, nama: kelas.jenjang.nama }
+      targetKelas = kelasBerikutnyaSamaJenjang.map((k) => ({
+        id: k.id,
+        nama: k.nama,
+        jenjang: kelas.jenjang.nama,
+        jenisKelamin: k.jenisKelamin,
+        terisi: k._count.siswa,
+        kapasitas: k.kapasitas,
+        sisaKuota: k.kapasitas - k._count.siswa,
+      }))
+    } else {
+      const jenjangBerikutnya = await prisma.jenjang.findFirst({
+        where: { urutan: kelas.jenjang.urutan + 1, aktif: true },
+        include: {
+          kelas: {
+            where: { aktif: true },
+            orderBy: { nama: "asc" },
+            select: {
+              id: true,
+              nama: true,
+              kapasitas: true,
+              jenisKelamin: true,
+              _count: { select: { siswa: true } },
+            },
+          },
+        },
+      })
+      if (jenjangBerikutnya) {
+        jenisPromosi = "LULUS"
+        jenjangTujuan = { id: jenjangBerikutnya.id, nama: jenjangBerikutnya.nama }
+        const kelasLulus = [...jenjangBerikutnya.kelas].sort(
+          (a, b) => urutanNumerikKelas(a.nama) - urutanNumerikKelas(b.nama)
+        )
+        targetKelas = kelasLulus.map((k) => ({
           id: k.id,
           nama: k.nama,
           jenjang: jenjangBerikutnya.nama,
@@ -301,29 +365,21 @@ export async function getSiswaUntukPromosi(
           kapasitas: k.kapasitas,
           sisaKuota: k.kapasitas - k._count.siswa,
         }))
-      : []
+      }
+    }
 
     // Format daftar siswa dengan rekomendasi kelas tujuan
     const formatted = siswaList.map((siswa) => {
-      // Rekomendasi: kelas dengan nama mirip di jenjang berikutnya
-      // Contoh: "7A" → cari "8A" di jenjang berikutnya
-      // Utamakan kelas dengan jenis kelamin yang sama (akhwat/ikhwan terpisah).
+      // Rekomendasi: kelas tujuan terdekat yang masih punya kuota &
+      // kompatibel dengan jenis kelamin siswa (akhwat/ikhwan terpisah).
+      // targetKelas sudah diurutkan dari kelas terdekat ke terjauh.
       let rekomendasiKelasId: string | null = null
-      if (kelasTujuan.length > 0) {
-        const namaAsal = kelas.nama
-        const suffixAsal = namaAsal.replace(/\d+/, "") // Ambil suffix huruf, contoh: "A" dari "7A"
-        const kandidat = kelasTujuan.filter((k) => k.sisaKuota > 0)
-        const kandidatSuffix = kandidat.filter((k) => k.nama.endsWith(suffixAsal))
+      if (targetKelas.length > 0) {
+        const kandidat = targetKelas.filter((k) => k.sisaKuota > 0)
         const kandidatGenderSama = kandidat.filter(
           (k) => !k.jenisKelamin || siswa.jenisKelamin === k.jenisKelamin
         )
-        const rekomendasi =
-          kandidatSuffix.find(
-            (k) => !k.jenisKelamin || siswa.jenisKelamin === k.jenisKelamin
-          ) ||
-          kandidatGenderSama[0] ||
-          kandidatSuffix[0] ||
-          null
+        const rekomendasi = kandidatGenderSama[0] || kandidat[0] || null
         rekomendasiKelasId = rekomendasi?.id ?? null
       }
 
@@ -347,10 +403,9 @@ export async function getSiswaUntukPromosi(
           jenjang: kelas.jenjang.nama,
           totalSiswa: siswaList.length,
         },
-        jenjangBerikutnya: jenjangBerikutnya
-          ? { id: jenjangBerikutnya.id, nama: jenjangBerikutnya.nama }
-          : null,
-        kelasTujuan,
+        jenisPromosi,
+        jenjangTujuan,
+        kelasTujuan: targetKelas,
         daftarSiswa: formatted,
       },
     }

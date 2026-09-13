@@ -62,6 +62,8 @@ export default function KenaikanKelasPage() {
   const [loadingSiswa, setLoadingSiswa] = React.useState(false)
   const [siswaError, setSiswaError] = React.useState<string | null>(null)
   const [genderFilter, setGenderFilter] = React.useState<GenderFilter>("SEMUA")
+  const [jenisPromosi, setJenisPromosi] = React.useState<"NAIK_KELAS" | "LULUS" | null>(null)
+  const [jenjangTujuan, setJenjangTujuan] = React.useState<{ id: string; nama: string } | null>(null)
 
   const siswaTampil =
     genderFilter === "SEMUA"
@@ -162,7 +164,8 @@ export default function KenaikanKelasPage() {
         if (result.success && result.data) {
           const data = result.data as {
             kelasAsal: { id: string; nama: string; jenjang: string; totalSiswa: number }
-            jenjangBerikutnya: { id: string; nama: string } | null
+            jenisPromosi: "NAIK_KELAS" | "LULUS" | null
+            jenjangTujuan: { id: string; nama: string } | null
             kelasTujuan: KelasTujuan[]
             daftarSiswa: Array<{
               siswaId: string
@@ -176,6 +179,8 @@ export default function KenaikanKelasPage() {
 
           setKelasAsalInfo(data.kelasAsal)
           setKelasTujuanList(data.kelasTujuan)
+          setJenisPromosi(data.jenisPromosi)
+          setJenjangTujuan(data.jenjangTujuan)
 
           // Map to SiswaPromosi with kelas tujuan recommendation
           const mapped: SiswaPromosi[] = data.daftarSiswa.map((s) => ({
@@ -193,10 +198,14 @@ export default function KenaikanKelasPage() {
           setSiswaList([])
           setKelasAsalInfo(null)
           setKelasTujuanList([])
+          setJenisPromosi(null)
+          setJenjangTujuan(null)
         }
       } catch {
         setSiswaError("Gagal memuat data siswa untuk promosi")
         setSiswaList([])
+        setJenisPromosi(null)
+        setJenjangTujuan(null)
       } finally {
         setLoadingSiswa(false)
       }
@@ -246,6 +255,8 @@ export default function KenaikanKelasPage() {
         setSiswaList([])
         setKelasAsalInfo(null)
         setKelasTujuanList([])
+        setJenisPromosi(null)
+        setJenjangTujuan(null)
         setSiswaError(null)
       } else {
         toast({
@@ -326,8 +337,23 @@ export default function KenaikanKelasPage() {
 
         {/* Kelas Asal Info */}
         {kelasAsalInfo && (
-          <div className="mt-4 p-3 rounded-xl bg-yellow-50 border border-yellow-200 text-xs text-yellow-700">
-            <strong>Kelas Asal:</strong> {kelasAsalInfo.nama} ({kelasAsalInfo.jenjang}) — {kelasAsalInfo.totalSiswa} siswa aktif
+          <div className="mt-4 p-3 rounded-xl bg-yellow-50 border border-yellow-200 text-xs text-yellow-700 space-y-1">
+            <div>
+              <strong>Kelas Asal:</strong> {kelasAsalInfo.nama} ({kelasAsalInfo.jenjang}) — {kelasAsalInfo.totalSiswa} siswa aktif
+            </div>
+            {jenisPromosi && jenjangTujuan && (
+              <div className="pt-1 border-t border-yellow-200/70">
+                {jenisPromosi === "NAIK_KELAS" ? (
+                  <>
+                    <strong className="text-emerald-700">Naik Kelas</strong> — santri naik ke kelas berikutnya di dalam jenjang <strong>{jenjangTujuan.nama}</strong>
+                  </>
+                ) : (
+                  <>
+                    <strong className="text-blue-700">Lulus</strong> — santri berada di kelas terakhir jenjang ini, tujuan berikutnya jenjang <strong>{jenjangTujuan.nama}</strong>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 
