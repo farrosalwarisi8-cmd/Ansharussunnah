@@ -7,13 +7,8 @@ import { deriveUniqueUsername } from "@/lib/username"
 import { requireGuru, requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
-import {
-  sendEmail,
-  buildKredensialGuruEmail,
-  buildPemberitahuanRoleBaruEmail,
-} from "@/lib/email"
+import { sendEmail, buildKredensialGuruEmail } from "@/lib/email"
 import { guruCocokKelas } from "@/lib/guru-kelas-gender"
-import { toUserFriendlyError, AppError } from "@/lib/prisma-error"
 import {
   createAkunGuruSchema,
   updateAkunGuruSchema,
@@ -100,7 +95,6 @@ export async function createAkunGuru(
     const supabaseAdmin = createSupabaseAdmin()
     let authId: string
     let authUserBaruDibuat = false
-    let akunSudahAda = false
 
     const { data: authData, error: authError } =
       await supabaseAdmin.auth.admin.createUser({
@@ -117,15 +111,12 @@ export async function createAkunGuru(
       if (authError.message.includes("already been registered")) {
         // Email ini sudah punya akun Supabase Auth (dari role lain).
         // REUSE authId supaya identitas login tetap sama.
-        // Password TIDAK diubah/digenerate ulang — akun lama tetap dipakai,
-        // jadi tidak ada password baru yang perlu dikirim.
         const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
           perPage: 1000,
         })
         const matched = existingUsers.users.find((u) => u.email === email)
-        if (!matched) throw new AppError("Gagal memetakan akun auth guru yang sudah ada")
+        if (!matched) throw new Error("Gagal memetakan akun auth guru yang sudah ada")
         authId = matched.id
-        akunSudahAda = true
       } else {
         console.error("Supabase auth error:", authError)
         return { success: false, message: `Gagal membuat akun auth: ${authError.message}` }
@@ -145,16 +136,9 @@ export async function createAkunGuru(
             email,
             username: await deriveUniqueUsername(tx, email),
             nama,
-            // Constraint DB (chk_admin_role_consistency): is_admin=true hanya sah
-            // untuk role admin. Role GURU + isAdmin → ditolak DB. Karena itu,
-            // "hak admin" pada akun guru dipetakan ke role ADMIN_AKADEMIK.
-            role: isAdmin ? "ADMIN_AKADEMIK" : "GURU",
+            role: "GURU",
             authId,
-            // Akun reuse (email sudah punya akun di role lain): tidak ada password
-            // baru yang digenerate → tidak perlu memaksa ganti password.
-            ...(akunSudahAda
-              ? { mustChangePassword: false }
-              : { mustChangePassword: true }),
+            mustChangePassword: true,
             aktif: true,
             isAdmin: isAdmin ?? false,
           },
@@ -196,24 +180,15 @@ export async function createAkunGuru(
       throw txError
     }
 
-    // Kirim kredensial (akun baru) atau pemberitahuan role baru (reuse akun lama)
-    // via email (fire-and-forget, jangan block response)
+    // Kirim kredensial via email (fire-and-forget, jangan block response)
     sendEmail({
       to: email,
-      subject: akunSudahAda
-        ? "Akun Guru Baru Ditambahkan — Ansharussunnah"
-        : "Akun Guru Baru — Ansharussunnah",
-      html: akunSudahAda
-        ? buildPemberitahuanRoleBaruEmail({
-            nama,
-            email,
-            roleBaru: "Guru",
-          })
-        : buildKredensialGuruEmail({
-            nama,
-            email,
-            password,
-          }),
+      subject: "Akun Guru Baru — Anshorussunnah",
+      html: buildKredensialGuruEmail({
+        nama,
+        email,
+        password,
+      }),
     }).catch((err) => console.error("Gagal mengirim email kredensial guru:", err))
 
     revalidatePath("/dashboard/guru")
@@ -221,19 +196,15 @@ export async function createAkunGuru(
       !isAdmin && penugasanDefault.length > 0
         ? ` Guru otomatis ditugaskan ke mapel aktif di kelas aktif yang sesuai gender guru (${jenisKelamin ? (jenisKelamin === "LAKI_LAKI" ? "Ikhwan" : "Akhwat") : "semua gender"}).`
         : ""
-    const infoEmail = akunSudahAda
-      ? `Pemberitahuan role baru telah dikirim ke ${email}.`
-      : `Kredensial telah dikirim ke ${email}.`
     return {
       success: true,
-      message: `Akun guru "${nama}" berhasil dibuat. ${infoEmail}${infoPenugasan}`,
+      message: `Akun guru "${nama}" berhasil dibuat. Kredensial telah dikirim ke ${email}.${infoPenugasan}`,
       data: { userId: result.userId },
     }
   } catch (error: unknown) {
-    console.error("Error createAkunGuru:", error)
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal membuat akun guru. Silakan coba lagi atau hubungi admin."),
+      message: error instanceof Error ? error.message : "Gagal membuat akun guru",
     }
   }
 }
@@ -266,11 +237,11 @@ export async function updateAkunGuru(
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: userId, deleted_at: null },
+      where: { id: userId },
       include: { guru: true },
     })
 
-    if (!user || (user.role !== "GURU" && user.role !== "ADMIN_AKADEMIK")) {
+    if (!user || user.role !== "GURU") {
       return { success: false, message: "Akun guru tidak ditemukan" }
     }
 
@@ -317,7 +288,7 @@ export async function updateAkunGuru(
   } catch (error: unknown) {
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal memperbarui data guru"),
+      message: error instanceof Error ? error.message : "Gagal memperbarui data guru",
     }
   }
 }
@@ -334,11 +305,11 @@ export async function nonaktifkanAkunGuru(
     await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: userId, deleted_at: null },
+      where: { id: userId },
       include: { guru: true },
     })
 
-    if (!user || (user.role !== "GURU" && user.role !== "ADMIN_AKADEMIK")) {
+    if (!user || user.role !== "GURU") {
       return { success: false, message: "Akun guru tidak ditemukan" }
     }
 
@@ -369,7 +340,7 @@ export async function nonaktifkanAkunGuru(
   } catch (error: unknown) {
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal menonaktifkan akun guru"),
+      message: error instanceof Error ? error.message : "Gagal menonaktifkan akun guru",
     }
   }
 }
@@ -385,11 +356,11 @@ export async function aktifkanKembaliAkunGuru(
     await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: userId, deleted_at: null },
+      where: { id: userId },
       include: { guru: true },
     })
 
-    if (!user || (user.role !== "GURU" && user.role !== "ADMIN_AKADEMIK")) {
+    if (!user || user.role !== "GURU") {
       return { success: false, message: "Akun guru tidak ditemukan" }
     }
 
@@ -419,7 +390,7 @@ export async function aktifkanKembaliAkunGuru(
   } catch (error: unknown) {
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal mengaktifkan kembali akun guru"),
+      message: error instanceof Error ? error.message : "Gagal mengaktifkan kembali akun guru",
     }
   }
 }
@@ -436,11 +407,11 @@ export async function setGuruAdmin(
     await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: userId, deleted_at: null },
+      where: { id: userId },
       include: { guru: true },
     })
 
-    if (!user || (user.role !== "GURU" && user.role !== "ADMIN_AKADEMIK")) {
+    if (!user || user.role !== "GURU") {
       return { success: false, message: "Akun guru tidak ditemukan" }
     }
 
@@ -450,15 +421,9 @@ export async function setGuruAdmin(
       return { success: false, message: "Tidak dapat mengubah status admin diri sendiri" }
     }
 
-    // Constraint DB (chk_admin_role_consistency): is_admin=true hanya sah untuk
-    // role admin. Saat guru diangkat admin, ubah role-nya menjadi ADMIN_AKADEMIK;
-    // saat diturunkan, kembalikan ke GURU.
     await prisma.user.update({
       where: { id: userId },
-      data: {
-        isAdmin,
-        role: isAdmin ? "ADMIN_AKADEMIK" : "GURU",
-      },
+      data: { isAdmin },
     })
 
     const action = isAdmin ? "diangkat menjadi admin" : "diturunkan dari admin"
@@ -470,7 +435,7 @@ export async function setGuruAdmin(
   } catch (error: unknown) {
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal mengubah status admin guru"),
+      message: error instanceof Error ? error.message : "Gagal mengubah status admin guru",
     }
   }
 }
@@ -495,7 +460,7 @@ export async function hapusAkunGuruPermanent(
     const currentUser = await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: userId, deleted_at: null },
+      where: { id: userId },
       include: {
         guru: {
           include: {
@@ -525,7 +490,7 @@ export async function hapusAkunGuruPermanent(
       },
     })
 
-    if (!user || (user.role !== Role.GURU && user.role !== Role.ADMIN_AKADEMIK)) {
+    if (!user || user.role !== Role.GURU) {
       return { success: false, message: "Akun guru tidak ditemukan" }
     }
 
@@ -613,7 +578,7 @@ export async function hapusAkunGuruPermanent(
     console.error("Error hapus guru:", error)
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal menghapus akun guru"),
+      message: error instanceof Error ? error.message : "Gagal menghapus akun guru",
     }
   }
 }
@@ -626,7 +591,6 @@ export async function getDaftarGuru(): Promise<ActionResponse> {
     await requireGuru()
 
     const guruList = await prisma.guru.findMany({
-      where: { deleted_at: null },
       include: {
         user: {
           select: {
@@ -677,7 +641,7 @@ export async function getDaftarGuru(): Promise<ActionResponse> {
   } catch (error: unknown) {
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal memuat daftar guru"),
+      message: error instanceof Error ? error.message : "Gagal memuat daftar guru",
     }
   }
 }

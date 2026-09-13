@@ -63,7 +63,7 @@ export function SiswaDashboardHome({ user }: { user: DashboardUser }) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <span className="text-xs uppercase font-bold text-yellow-200 tracking-wider">
-              {user.kelas ? `${user.kelas.jenjang?.nama} - ${user.kelas.nama}` : "Santri Ansharussunnah"}
+              {user.kelas ? `${user.kelas.jenjang?.nama} - ${user.kelas.nama}` : "Santri Anshorussunnah"}
             </span>
             <h2 className="text-xl sm:text-2xl font-black">
               {sosialisasi}, {user.nama.split(" ")[0]}!

@@ -12,8 +12,8 @@ const inter = Inter({ subsets: ["latin"], display: "swap", preload: true })
 const supabaseOrigin = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://jjybghdoagdumcdujdgm.supabase.co").replace(/\/$/, "")
 
 export const metadata: Metadata = {
-  title: "Ansharussunnah - Sistem Manajemen Sekolah & LMS",
-  description: "Platform Manajemen Pendidikan & Pembelajaran Digital Pesantren/Sekolah Ansharussunnah",
+  title: "Anshorussunnah - Sistem Manajemen Sekolah & LMS",
+  description: "Platform Manajemen Pendidikan & Pembelajaran Digital Pesantren/Sekolah Anshorussunnah",
   other: {
     "theme-color": "#f59e0b",
   },

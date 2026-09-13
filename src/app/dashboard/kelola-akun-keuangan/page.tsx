@@ -5,7 +5,7 @@ import { getDaftarAdminKeuangan } from "@/actions/admin-keuangan"
 import { KelolaAkunKeuanganClient } from "@/components/dashboard/kelola-akun-keuangan-client"
 
 export const metadata: Metadata = {
-  title: "Kelola Akun Admin Keuangan — Ansharussunnah",
+  title: "Kelola Akun Admin Keuangan — Anshorussunnah",
   description: "Manajemen akun kasir/admin keuangan yang mengelola SPP, verifikasi pembayaran, dan pencatatan keuangan.",
 }
 

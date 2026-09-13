@@ -125,7 +125,7 @@ export default function PilihRoleClient() {
     <div className="w-full max-w-md relative z-10 space-y-6">
       <div className="text-center space-y-2">
         <div className="mx-auto w-14 h-14 rounded-2xl overflow-hidden relative shadow-lg shadow-yellow-800/50 mb-4">
-          <Image src="/ansharussunnah-logo.webp" alt="Logo" fill sizes="56px" className="object-cover" priority />
+          <Image src="/anshorussunnah-logo.webp" alt="Logo" fill sizes="56px" className="object-cover" priority />
         </div>
         <h1 className="text-2xl font-extrabold text-white tracking-tight">
           Pilih Akun <span className="text-amber-400">✦</span>

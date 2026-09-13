@@ -7,14 +7,13 @@ import { deriveUniqueUsername } from "@/lib/username"
 import { requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
-import { sendEmail, buildPemberitahuanRoleBaruEmail } from "@/lib/email"
+import { sendEmail } from "@/lib/email"
 import {
   createAkunAdminKeuanganSchema,
   updateAkunAdminKeuanganSchema,
   type CreateAkunAdminKeuanganValues,
   type UpdateAkunAdminKeuanganValues,
 } from "@/lib/validations/admin-keuangan"
-import { toUserFriendlyError, AppError } from "@/lib/prisma-error"
 import type { ActionResponse } from "@/types"
 import { Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
@@ -34,9 +33,9 @@ function buildKredensialAdminKeuanganEmail(params: {
     <head><meta charset="UTF-8"></head>
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
       <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <h2 style="color: #1e40af; margin-top: 0;">💰 Akun Admin Keuangan Baru — Ansharussunnah</h2>
+        <h2 style="color: #1e40af; margin-top: 0;">💰 Akun Admin Keuangan Baru — Anshorussunnah</h2>
         <p>Halo <strong>${params.nama}</strong>,</p>
-        <p>Anda telah terdaftar sebagai Admin Keuangan di sistem LMS Ansharussunnah. Berikut adalah informasi akun Anda:</p>
+        <p>Anda telah terdaftar sebagai Admin Keuangan di sistem LMS Anshorussunnah. Berikut adalah informasi akun Anda:</p>
         
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
         
@@ -102,7 +101,6 @@ export async function createAkunAdminKeuangan(
     const supabaseAdmin = createSupabaseAdmin()
     let authId: string
     let authUserBaruDibuat = false
-    let akunSudahAda = false
 
     const { data: authData, error: authError } =
       await supabaseAdmin.auth.admin.createUser({
@@ -119,15 +117,12 @@ export async function createAkunAdminKeuangan(
       if (authError.message.includes("already been registered")) {
         // Email ini sudah punya akun Supabase Auth (dari role lain).
         // REUSE authId supaya identitas login tetap sama.
-        // Password TIDAK diubah/digenerate ulang — akun lama tetap dipakai,
-        // jadi tidak ada password baru yang perlu dikirim.
         const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
           perPage: 1000,
         })
         const matched = existingUsers.users.find((u) => u.email === email)
-        if (!matched) throw new AppError("Gagal memetakan akun auth admin keuangan yang sudah ada")
+        if (!matched) throw new Error("Gagal memetakan akun auth admin keuangan yang sudah ada")
         authId = matched.id
-        akunSudahAda = true
       } else {
         console.error("Supabase auth error:", authError)
         return { success: false, message: `Gagal membuat akun auth: ${authError.message}` }
@@ -147,11 +142,7 @@ export async function createAkunAdminKeuangan(
           nama,
           role: "ADMIN_KEUANGAN",
           authId,
-          // Akun reuse (email sudah punya akun di role lain): tidak ada password
-          // baru yang digenerate → tidak perlu memaksa ganti password.
-          ...(akunSudahAda
-            ? { mustChangePassword: false }
-            : { mustChangePassword: true }),
+          mustChangePassword: true,
           aktif: true,
         },
       })
@@ -165,39 +156,27 @@ export async function createAkunAdminKeuangan(
       throw createError
     }
 
-    // Kirim kredensial (akun baru) atau pemberitahuan role baru (reuse akun lama)
-    // via email (fire-and-forget, jangan block response)
+    // Kirim kredensial via email (fire-and-forget, jangan block response)
     sendEmail({
       to: email,
-      subject: akunSudahAda
-        ? "Akun Admin Keuangan Baru Ditambahkan — Ansharussunnah"
-        : "Akun Admin Keuangan Baru — Ansharussunnah",
-      html: akunSudahAda
-        ? buildPemberitahuanRoleBaruEmail({
-            nama,
-            email,
-            roleBaru: "Admin Keuangan",
-          })
-        : buildKredensialAdminKeuanganEmail({
-            nama,
-            email,
-            password,
-          }),
+      subject: "Akun Admin Keuangan Baru — Anshorussunnah",
+      html: buildKredensialAdminKeuanganEmail({
+        nama,
+        email,
+        password,
+      }),
     }).catch((err) => console.error("Gagal mengirim email kredensial admin keuangan:", err))
 
     revalidatePath("/dashboard/kelola-akun-keuangan")
-    const infoEmail = akunSudahAda
-      ? "Pemberitahuan role baru telah dikirim"
-      : "Kredensial telah dikirim"
     return {
       success: true,
-      message: `Akun admin keuangan "${nama}" berhasil dibuat. ${infoEmail} ke ${email}.`,
+      message: `Akun admin keuangan "${nama}" berhasil dibuat. Kredensial telah dikirim ke ${email}.`,
       data: { userId: user.id },
     }
   } catch (error: unknown) {
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal membuat akun admin keuangan"),
+      message: error instanceof Error ? error.message : "Gagal membuat akun admin keuangan",
     }
   }
 }
@@ -236,7 +215,7 @@ export async function updateAkunAdminKeuangan(
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: userId, deleted_at: null },
+      where: { id: userId },
     })
 
     if (!user || user.role !== "ADMIN_KEUANGAN") {
@@ -256,7 +235,7 @@ export async function updateAkunAdminKeuangan(
   } catch (error: unknown) {
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal memperbarui data admin keuangan"),
+      message: error instanceof Error ? error.message : "Gagal memperbarui data admin keuangan",
     }
   }
 }
@@ -273,7 +252,7 @@ export async function nonaktifkanAkunAdminKeuangan(
     await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: userId, deleted_at: null },
+      where: { id: userId },
     })
 
     if (!user || user.role !== "ADMIN_KEUANGAN") {
@@ -307,7 +286,7 @@ export async function nonaktifkanAkunAdminKeuangan(
   } catch (error: unknown) {
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal menonaktifkan akun admin keuangan"),
+      message: error instanceof Error ? error.message : "Gagal menonaktifkan akun admin keuangan",
     }
   }
 }
@@ -323,7 +302,7 @@ export async function aktifkanKembaliAkunAdminKeuangan(
     await requireGuruAdmin()
 
     const user = await prisma.user.findUnique({
-      where: { id: userId, deleted_at: null },
+      where: { id: userId },
     })
 
     if (!user || user.role !== "ADMIN_KEUANGAN") {
@@ -356,7 +335,7 @@ export async function aktifkanKembaliAkunAdminKeuangan(
   } catch (error: unknown) {
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal mengaktifkan kembali akun admin keuangan"),
+      message: error instanceof Error ? error.message : "Gagal mengaktifkan kembali akun admin keuangan",
     }
   }
 }
@@ -369,7 +348,7 @@ export async function getDaftarAdminKeuangan(): Promise<ActionResponse> {
     await requireGuruAdmin()
 
     const adminList = await prisma.user.findMany({
-      where: { role: "ADMIN_KEUANGAN", deleted_at: null },
+      where: { role: "ADMIN_KEUANGAN" },
       select: {
         id: true,
         nama: true,
@@ -389,7 +368,7 @@ export async function getDaftarAdminKeuangan(): Promise<ActionResponse> {
   } catch (error: unknown) {
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal memuat daftar admin keuangan"),
+      message: error instanceof Error ? error.message : "Gagal memuat daftar admin keuangan",
     }
   }
 }
