@@ -35,7 +35,7 @@ export default function HomePage() {
                   Pesantren & Sekolah
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium">Mantingan Al-Islamy</p>
+              <p className="text-xs text-slate-500 font-medium">Al-Islamy Mantingan</p>
             </div>
           </div>
 
@@ -84,7 +84,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-base sm:text-lg text-slate-100 font-medium mb-10 max-w-2xl mx-auto leading-relaxed drop-shadow-sm">
-            Platform pembelajaran terpadu pesantren Anshorussunnah. Pantau perkembangan hafalan, nilai akademik, tugas, ujian, dan pembayaran SPP dalam satu portal modern.
+            Platform pembelajaran terpadu pesantren Anshorussunnah Al-Islamy Mantingan. Pantau perkembangan hafalan, nilai akademik, tugas, ujian, dan pembayaran SPP dalam satu portal modern.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
