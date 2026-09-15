@@ -70,6 +70,16 @@ export default function KenaikanKelasPage() {
       ? siswaList
       : siswaList.filter((s) => s.jenisKelamin === genderFilter)
 
+  // Kelas tujuan diurutkan jenjang lalu nama kelas (numerik), agar konsisten
+  const kelasTujuanTersortir = React.useMemo(() => {
+    return [...kelasTujuanList].sort((a, b) => {
+      const byJenjang = a.jenjang.localeCompare(b.jenjang, "id")
+      return byJenjang !== 0
+        ? byJenjang
+        : a.nama.localeCompare(b.nama, "id", { numeric: true })
+    })
+  }, [kelasTujuanList])
+
   // Kelas asal info
   const [kelasAsalInfo, setKelasAsalInfo] = React.useState<{
     nama: string
@@ -90,7 +100,10 @@ export default function KenaikanKelasPage() {
             nama: string
             kelas: Array<{ id: string; nama: string; jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null }>
           }>) {
-            for (const kelas of jenjang.kelas) {
+            const kelasTersortir = [...jenjang.kelas].sort((a, b) =>
+              a.nama.localeCompare(b.nama, "id", { numeric: true })
+            )
+            for (const kelas of kelasTersortir) {
               const genderSuffix =
                 kelas.jenisKelamin === "LAKI_LAKI"
                   ? " (Ikhwan)"
@@ -469,7 +482,7 @@ export default function KenaikanKelasPage() {
                           className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-yellow-800 focus:ring-2 focus:ring-yellow-500"
                         >
                           <option value="">— Pilih —</option>
-                          {kelasTujuanList
+                          {kelasTujuanTersortir
                             .filter(
                               (kt) =>
                                 !s.jenisKelamin ||
@@ -526,7 +539,7 @@ export default function KenaikanKelasPage() {
                       className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-yellow-800"
                     >
                       <option value="">— Pilih —</option>
-                      {kelasTujuanList
+                      {kelasTujuanTersortir
                         .filter(
                           (kt) =>
                             !s.jenisKelamin ||
