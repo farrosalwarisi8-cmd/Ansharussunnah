@@ -144,7 +144,7 @@ export default async function DashboardLayout({
 
   return (
     <DashboardProvider user={dashboardUser}>
-      <div className="min-h-screen bg-slate-50/60 flex flex-col">
+      <div className="min-h-screen bg-slate-50/60 flex flex-col screen-app">
         <DashboardNavWrapper />
         <main className="lg:pl-64 xl:pl-72 flex-1 pb-24 lg:pb-12 pt-4 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full transition-all">
           {children}
