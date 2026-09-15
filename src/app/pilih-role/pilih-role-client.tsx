@@ -50,8 +50,8 @@ const ROLE_META: Record<Role, { label: string; description: string; icon: React.
     color: "bg-yellow-600",
   },
   [Role.SISWA]: {
-    label: "Santri / Siswa",
-    description: "Portal Pembelajaran Siswa",
+    label: "Santri",
+    description: "Portal Pembelajaran Santri",
     icon: Users2,
     color: "bg-cyan-600",
   },

@@ -41,7 +41,7 @@ export default async function SuksesPage({ searchParams }: SuksesPageProps) {
           <div className="w-9 h-9 rounded-xl overflow-hidden relative">
             <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="36px" className="object-contain" priority />
           </div>
-          <span className="font-bold text-gray-900">Pendaftaran Siswa Baru</span>
+          <span className="font-bold text-gray-900">Pendaftaran Santri Baru</span>
         </div>
       </header>
 

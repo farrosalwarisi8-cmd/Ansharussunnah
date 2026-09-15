@@ -24,7 +24,7 @@ export default async function PendaftaranPage() {
             <div className="w-9 h-9 rounded-xl overflow-hidden relative">
               <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="36px" className="object-contain" priority />
             </div>
-            <span className="font-bold text-gray-900">Pendaftaran Siswa Baru</span>
+            <span className="font-bold text-gray-900">Pendaftaran Santri Baru</span>
           </Link>
           <Link
             href="/"
@@ -43,11 +43,11 @@ export default async function PendaftaranPage() {
             Formulir Pendaftaran
           </h1>
           <p className="text-base text-gray-800 font-medium leading-relaxed">
-            Silakan lengkapi seluruh data di bawah ini untuk mendaftarkan calon siswa baru.
+            Silakan lengkapi seluruh data di bawah ini untuk mendaftarkan calon santri baru.
           </p>
           <p className="text-sm text-gray-600 mt-2 leading-relaxed">
             Formulir terdiri dari <span className="font-semibold text-gray-800">5 langkah</span>:
-            data calon siswa, data orang tua/wali, asal sekolah, berkas persyaratan, dan konfirmasi.
+            data calon santri, data orang tua/wali, asal sekolah, berkas persyaratan, dan konfirmasi.
             Kolom bertanda <span className="text-red-500 font-bold">*</span> wajib diisi. Pastikan semua
             data benar sebelum menekan tombol lanjut — kesalahan data dapat mempengaruhi proses verifikasi.
           </p>

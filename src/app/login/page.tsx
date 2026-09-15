@@ -31,7 +31,7 @@ export default function LoginPage() {
               <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="56px" className="object-contain" priority />
             </div>
             <CardTitle className="text-2xl font-extrabold text-white tracking-tight flex items-center justify-center gap-2">
-              <span>Masuk Portal LMS</span>
+              <span>Portal KBM Online</span>
               <span className="text-amber-400">✦</span>
             </CardTitle>
             <CardDescription className="text-slate-400 text-sm mt-1">

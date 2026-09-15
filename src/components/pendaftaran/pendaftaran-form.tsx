@@ -43,7 +43,7 @@ import {
 // ============================================
 
 const STEPS = [
-  { id: 1, label: "Data Siswa", icon: User },
+  { id: 1, label: "Data Santri", icon: User },
   { id: 2, label: "Orang Tua & Wali", icon: Users },
   { id: 3, label: "Data Tambahan", icon: Globe },
   { id: 4, label: "Jenjang & Kelas", icon: School },
@@ -540,7 +540,7 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <User className="h-5 w-5 text-primary" />
-              Data Calon Siswa
+              Data Calon Santri
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -719,7 +719,7 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
                   </Label>
                   <Textarea
                     id="alamatOrangTua"
-                    placeholder="Kosongkan jika sama dengan alamat siswa"
+                    placeholder="Kosongkan jika sama dengan alamat santri"
                     rows={2}
                     {...register("alamatOrangTua")}
                   />
@@ -891,7 +891,7 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Agama & No HP Siswa */}
+            {/* Agama & No HP Santri */}
             <div>
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                 Informasi Personal
@@ -923,7 +923,7 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
                   )}
                 </div>
                 <div>
-                  <Label htmlFor="noHpSiswa">No. HP Siswa</Label>
+                  <Label htmlFor="noHpSantri">No. HP Santri</Label>
                   <Input
                     id="noHpSiswa"
                     type="tel"

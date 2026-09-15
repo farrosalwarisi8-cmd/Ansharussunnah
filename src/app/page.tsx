@@ -52,7 +52,7 @@ export default function HomePage() {
               className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all min-h-[44px]"
             >
               <LogIn className="h-4 w-4 text-slate-500" />
-              <span>Login LMS</span>
+              <span>Portal KBM Online</span>
             </Link>
             <Link
               href="/pendaftaran"
@@ -72,9 +72,9 @@ export default function HomePage() {
           <p
             dir="rtl"
             lang="ar"
-            className="text-amber-300 text-lg sm:text-2xl font-bold mb-4 leading-relaxed drop-shadow-sm"
+            className="font-arabic text-amber-200 text-xl sm:text-3xl font-bold mb-4 leading-relaxed drop-shadow-md"
           >
-            معهد أنصار السنة مانتينغ الإسلامي
+            معهد أنصار السنة الإسلامي منتغان
           </p>
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
             Membina Generasi Qurani Berakhlak Mulia &amp;{" "}
@@ -83,7 +83,7 @@ export default function HomePage() {
             </span>
           </h1>
 
-          <p className="text-base sm:text-lg text-slate-300 mb-10 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-lg text-slate-100 font-medium mb-10 max-w-2xl mx-auto leading-relaxed drop-shadow-sm">
             Platform pembelajaran terpadu pesantren Anshorussunnah. Pantau perkembangan hafalan, nilai akademik, tugas, ujian, dan pembayaran SPP dalam satu portal modern.
           </p>
 
@@ -102,7 +102,7 @@ export default function HomePage() {
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-2xl transition-all min-h-[50px]"
             >
               <LogIn className="h-5 w-5 text-yellow-400" />
-              <span>Masuk Portal LMS</span>
+              <span>Portal KBM Online</span>
             </Link>
           </div>
 
@@ -137,7 +137,7 @@ export default function HomePage() {
             <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-800 mt-3">
               4 Langkah Mudah Menjadi Santri
             </h2>
-            <p className="text-slate-500 text-sm sm:text-base mt-2">
+            <p className="text-slate-700 font-medium text-sm sm:text-base mt-2">
               Proses pendaftaran santri baru dilakukan secara online dan transparan.
             </p>
           </div>
@@ -173,7 +173,7 @@ export default function HomePage() {
                   {item.step}
                 </div>
                 <h3 className="font-bold text-lg text-slate-800 mb-2">{item.title}</h3>
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">{item.desc}</p>
+                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">{item.desc}</p>
               </div>
             ))}
           </div>
@@ -228,8 +228,8 @@ export default function HomePage() {
               <div className="w-12 h-12 rounded-2xl overflow-hidden relative">
                 <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="48px" className="object-contain" />
               </div>
-              <h3 className="font-bold text-lg text-slate-800">Untuk Santri / Siswa</h3>
-              <ul className="text-xs sm:text-sm text-slate-600 space-y-2.5">
+              <h3 className="font-bold text-lg text-slate-800">Untuk Santri</h3>
+              <ul className="text-xs sm:text-sm text-slate-700 space-y-2.5">
                 <li className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-yellow-500 shrink-0" />
                   <span>Kerjakan ujian dengan countdown timer</span>
@@ -250,7 +250,7 @@ export default function HomePage() {
                 <HeartHandshake className="h-6 w-6" />
               </div>
               <h3 className="font-bold text-lg text-slate-800">Untuk Wali Santri</h3>
-              <ul className="text-xs sm:text-sm text-slate-600 space-y-2.5">
+              <ul className="text-xs sm:text-sm text-slate-700 space-y-2.5">
                 <li className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-indigo-600 shrink-0" />
                   <span>Selector multi-anak yang aman &amp; jelas</span>
@@ -270,7 +270,7 @@ export default function HomePage() {
       </section>
 
       {/* 5. Footer */}
-      <footer className="batik-dark text-slate-400 py-12 border-t border-slate-700">
+      <footer className="batik-dark text-slate-200 py-12 border-t border-slate-700">
         <div className="container mx-auto px-4 sm:px-6 max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl overflow-hidden relative">
@@ -278,11 +278,11 @@ export default function HomePage() {
             </div>
             <div>
               <div className="font-bold text-white text-sm">Pesantren Anshorussunnah</div>
-              <div className="text-xs text-slate-500">Mencetak Generasi Berakhlak &amp; Berilmu</div>
+              <div className="text-xs text-slate-300">Mencetak Generasi Berakhlak &amp; Berilmu</div>
             </div>
           </div>
 
-          <div className="flex items-center gap-6 text-xs font-medium">
+          <div className="flex items-center gap-6 text-xs font-semibold">
             <Link href="/pendaftaran" className="hover:text-amber-400 transition-colors">
               Pendaftaran Baru
             </Link>
@@ -290,11 +290,11 @@ export default function HomePage() {
               Cek Status
             </Link>
             <Link href="/login" className="hover:text-amber-400 transition-colors">
-              Portal LMS
+              Portal KBM Online
             </Link>
           </div>
 
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-slate-300">
             &copy; {new Date().getFullYear()} Anshorussunnah. Hak cipta dilindungi.
           </p>
         </div>
