@@ -5,7 +5,7 @@ import { FileQuestion, ArrowLeft } from "lucide-react"
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+    <div className="min-h-screen batik-light flex items-center justify-center p-4">
       <div className="text-center max-w-md">
         <div className="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-6">
           <FileQuestion className="h-10 w-10 text-gray-400" />

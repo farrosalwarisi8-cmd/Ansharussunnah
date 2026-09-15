@@ -59,7 +59,7 @@ export function SiswaDashboardHome({ user }: { user: DashboardUser }) {
   return (
     <div className="space-y-6">
       {/* Top Banner with Student Class & Quick Motivation */}
-      <div className="bg-gradient-to-tr from-yellow-700 to-teal-700 rounded-3xl p-5 sm:p-7 text-white shadow-lg">
+      <div className="batik-dark rounded-3xl p-5 sm:p-7 text-white shadow-lg">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <span className="text-xs uppercase font-bold text-yellow-200 tracking-wider">

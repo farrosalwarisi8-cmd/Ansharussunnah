@@ -145,7 +145,7 @@ export function GuruDashboardHome() {
       </div>
 
       {/* Quick Action Banner */}
-      <div className="bg-gradient-to-r from-yellow-800 via-yellow-700 to-teal-900 rounded-3xl p-5 sm:p-6 text-white shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="batik-dark rounded-3xl p-5 sm:p-6 text-white shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-yellow-600/60 text-yellow-200 text-xs font-semibold">
             <Sparkles className="h-3.5 w-3.5" />

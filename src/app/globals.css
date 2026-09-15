@@ -83,6 +83,30 @@
   .dark .skeleton::after {
     background: linear-gradient(to right, transparent, rgba(255,255,255,0.08), transparent);
   }
+
+  /* ============================================
+     BATIK BACKGROUNDS (menggantikan gradient)
+     ============================================ */
+  /* Terang: untuk halaman form/publik berlatar putih — satu gambar penuh, tidak berulang */
+  .batik-light {
+    background-color: #f7f2e7;
+    background-image: url('/batik.webp');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+  /* Gelap: hero / footer / kartu promo — satu gambar batik utuh (cover), overlay tipis agar motif jelas terlihat */
+  .batik-dark {
+    background-color: #241a12;
+    background-image:
+      linear-gradient(rgba(30, 21, 14, 0.68), rgba(30, 21, 14, 0.68)),
+      url('/batik.webp');
+    background-size: cover, cover;
+    background-position: center, center;
+    background-repeat: no-repeat, no-repeat;
+    background-attachment: fixed, fixed;
+  }
 }
 
 /* ============================================

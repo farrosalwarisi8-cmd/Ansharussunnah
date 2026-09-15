@@ -10,7 +10,7 @@ import LoginForm from "@/components/login-form"
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-800 via-yellow-900 to-slate-800 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden">
+    <div className="min-h-screen batik-dark flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden">
       {/* Decorative Ornaments */}
       <div className="absolute -top-40 -left-40 w-96 h-96 bg-yellow-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />

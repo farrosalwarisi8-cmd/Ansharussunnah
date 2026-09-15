@@ -447,7 +447,7 @@ function TagihanContent() {
       )}
 
       {/* Info Rekening Resmi Sekolah */}
-      <Card className="rounded-3xl border-yellow-500/20 bg-gradient-to-r from-yellow-800 to-teal-950 text-white p-6 shadow-xl">
+      <Card className="rounded-3xl border-yellow-500/20 batik-dark text-white p-6 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-yellow-300">

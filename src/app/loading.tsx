@@ -24,7 +24,7 @@ export default function Loading() {
       </div>
 
       {/* Hero skeleton */}
-      <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28 bg-gradient-to-b from-yellow-900 via-slate-800 to-slate-800">
+      <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28 batik-dark">
         <div className="container mx-auto px-4 sm:px-6 relative z-10 text-center max-w-4xl">
           <Skeleton className="h-8 w-64 mx-auto rounded-full bg-white/10 mb-8" />
           <Skeleton className="h-12 sm:h-16 w-3/4 mx-auto rounded-2xl bg-white/10 mb-4" />

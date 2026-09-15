@@ -83,7 +83,7 @@ export function SiswaUjianView() {
         {activeExams.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {activeExams.map((exam) => (
-              <Card key={exam.id} className="rounded-3xl border-yellow-300 bg-gradient-to-br from-yellow-50/80 to-white shadow-md p-6 space-y-4">
+              <Card key={exam.id} className="rounded-3xl border-yellow-300 bg-yellow-50/80 shadow-md p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-yellow-700 bg-yellow-100 px-3 py-1 rounded-full">
                     {exam.mataPelajaran}

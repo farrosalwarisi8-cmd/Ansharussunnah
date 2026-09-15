@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function LoginLoading() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-800 via-yellow-900 to-slate-800 flex flex-col justify-center items-center p-4 sm:p-6">
+    <div className="min-h-screen batik-dark flex flex-col justify-center items-center p-4 sm:p-6">
       <div className="w-full max-w-md relative z-10">
         <Skeleton className="h-4 w-32 rounded-lg bg-white/10 mb-6" />
 

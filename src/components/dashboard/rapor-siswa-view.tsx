@@ -195,7 +195,7 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white shadow-xl overflow-hidden print:border-none print:shadow-none">
       {/* Formal Header */}
-      <div className="bg-gradient-to-r from-yellow-900 via-slate-800 to-yellow-900 text-white p-6 sm:p-8 text-center border-b border-yellow-500/20">
+      <div className="batik-dark text-white p-6 sm:p-8 text-center border-b border-yellow-500/20">
         <div className="w-12 h-12 rounded-2xl overflow-hidden relative mx-auto mb-3 shadow-md">
           <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="48px" className="object-contain" />
         </div>

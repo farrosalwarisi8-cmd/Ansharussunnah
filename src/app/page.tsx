@@ -49,14 +49,14 @@ export default function HomePage() {
             </Link>
             <Link
               href="/login"
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all min-h-[44px]"
+              className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all min-h-[44px]"
             >
               <LogIn className="h-4 w-4 text-slate-500" />
               <span>Login LMS</span>
             </Link>
             <Link
               href="/pendaftaran"
-              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-yellow-600 hover:bg-yellow-700 rounded-xl transition-all shadow-md shadow-yellow-700/20 min-h-[44px]"
+              className="hidden sm:inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-yellow-600 hover:bg-yellow-700 rounded-xl transition-all shadow-md shadow-yellow-700/20 min-h-[44px]"
             >
               <UserPlus className="h-4 w-4" />
               <span>Daftar Sekarang</span>
@@ -66,9 +66,16 @@ export default function HomePage() {
       </header>
 
       {/* 2. Hero Section */}
-      <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28 bg-gradient-to-b from-yellow-900 via-slate-800 to-slate-800 text-white">
+      <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28 batik-dark text-white">
         <div className="absolute inset-0 bg-[radial-gradient(#22c55e_1px,transparent_1px)] [background-size:24px_24px] opacity-10" />
         <div className="container mx-auto px-4 sm:px-6 relative z-10 text-center max-w-4xl">
+          <p
+            dir="rtl"
+            lang="ar"
+            className="text-amber-300 text-lg sm:text-2xl font-bold mb-4 leading-relaxed drop-shadow-sm"
+          >
+            معهد أنصار السنة مانتينغ الإسلامي
+          </p>
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
             Membina Generasi Qurani Berakhlak Mulia &amp;{" "}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-yellow-300">
@@ -162,7 +169,7 @@ export default function HomePage() {
                 key={idx}
                 className="relative p-6 rounded-3xl bg-slate-50 border border-slate-200/80              hover:border-amber-300 hover:shadow-lg transition-all group"
               >
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-yellow-600 to-yellow-700 text-white font-extrabold text-lg flex items-center justify-center mb-4 shadow-md shadow-yellow-700/20 group-hover:scale-105 transition-transform">
+                <div className="w-12 h-12 rounded-2xl bg-yellow-600 text-white font-extrabold text-lg flex items-center justify-center mb-4 shadow-md shadow-yellow-700/20 group-hover:scale-105 transition-transform">
                   {item.step}
                 </div>
                 <h3 className="font-bold text-lg text-slate-800 mb-2">{item.title}</h3>
@@ -263,7 +270,7 @@ export default function HomePage() {
       </section>
 
       {/* 5. Footer */}
-      <footer className="bg-slate-800 text-slate-400 py-12 border-t border-slate-700">
+      <footer className="batik-dark text-slate-400 py-12 border-t border-slate-700">
         <div className="container mx-auto px-4 sm:px-6 max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl overflow-hidden relative">

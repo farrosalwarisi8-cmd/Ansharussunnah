@@ -57,7 +57,7 @@ export default function UploadBuktiPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-white to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen batik-light flex items-center justify-center">
         <Card className="max-w-md w-full mx-4 text-center">
           <CardContent className="p-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-success/10 rounded-full mb-4">
@@ -77,7 +77,7 @@ export default function UploadBuktiPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+    <div className="min-h-screen batik-light">
       <header className="border-b bg-white/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <span className="font-bold text-gray-900">Upload Bukti Transfer</span>
