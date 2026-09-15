@@ -6,12 +6,21 @@ export const generateBulkSppSchema = z.object({
   bulan: z.number().int().min(1, "Bulan minimal 1 (Januari)").max(12, "Bulan maksimal 12 (Desember)"),
   tahun: z.number().int().min(2024, "Tahun minimal 2024").max(2100),
   kelasId: z.string().optional(), // Opsional: jika diisi, hanya untuk 1 kelas. Jika kosong, untuk semua siswa aktif.
+  jenjangId: z.string().optional(), // Opsional: jika diisi, hanya untuk 1 jenjang tertentu.
   // Opsional: tarif default yang dipakai bila siswa tidak punya sppKhusus
   // dan jenjang kelasnya belum punya tarifSppBulanan.
   nominalDefault: z.number().positive("Tarif default harus lebih dari 0").optional(),
 })
 
 export type GenerateBulkSppValues = z.infer<typeof generateBulkSppSchema>
+
+// Set tarif SPP per jenjang oleh admin keuangan (nilai 0 = hapus tarif).
+export const updateTarifSppJenjangSchema = z.object({
+  jenjangId: z.string().min(1, "Jenjang wajib dipilih"),
+  tarifSppBulanan: z.number().min(0, "Tarif harus lebih dari atau sama dengan 0"),
+})
+
+export type UpdateTarifSppJenjangValues = z.infer<typeof updateTarifSppJenjangSchema>
 
 export const submitBuktiSppSchema = z.object({
   tagihanId: z.string().min(1, "Tagihan wajib dipilih"),

@@ -51,6 +51,7 @@ export const createSoalSchema = z
     tipe: z.enum(["PILIHAN_GANDA", "ESAI"]),
     bobot: z.number().int().min(1, "Bobot nilai minimal 1").default(1),
     kunciEsai: z.string().optional(),
+    gambarUrl: z.string().optional(),
     opsi: z.array(opsiSoalSchema).optional(),
   })
   .refine(

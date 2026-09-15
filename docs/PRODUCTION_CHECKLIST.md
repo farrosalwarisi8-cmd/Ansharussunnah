@@ -110,6 +110,7 @@ Gunakan sebagai panduan sebelum dan sesuai go-live.
   - `nota` ✅
   - `materi` ✅
   - `dokumen-pendaftaran` ✅ (baru ditambahkan)
+  - `soal-ujian` ✅ (baru ditambahkan — gambar lampiran soal)
 - [ ] **Tidak ada** bucket yang di-set sebagai "Public Bucket"
 - [ ] Verifikasi RLS policy dengan test manual:
   ```sql

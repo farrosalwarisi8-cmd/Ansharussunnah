@@ -4,7 +4,8 @@
 
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createUjian, updateUjian, getUjianDetail, addOrUpdateSoalUjian, deleteSoalUjian } from "@/actions/ujian"
+import Image from "next/image"
+import { createUjian, updateUjian, getUjianDetail, addOrUpdateSoalUjian, deleteSoalUjian, uploadGambarSoal, deleteGambarSoal } from "@/actions/ujian"
 import { getPeriodeAjaranAktif } from "@/actions/periode-ajaran"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -15,7 +16,7 @@ import { KelasMapelSelector } from "@/components/dashboard/kelas-mapel-selector"
 import { TargetGenderSelector } from "@/components/dashboard/target-gender-selector"
 import { DibuatOlehInfo } from "@/components/ui/dibuat-oleh-info"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
-import { Plus, Trash2, ArrowLeft, Loader2, Save } from "lucide-react"
+import { Plus, Trash2, ArrowLeft, Loader2, Save, X, ImageIcon } from "lucide-react"
 import Link from "next/link"
 import { toDatetimeLocalValue } from "@/lib/datetime-local"
 
@@ -31,6 +32,8 @@ interface SoalItem {
   tipe: "PILIHAN_GANDA" | "ESAI"
   pertanyaan: string
   bobotNilai: number
+  gambarSoal?: string // Path file gambar di Supabase Storage (soal-ujian/)
+  gambarSoalPreview?: string // Signed URL untuk preview
   opsi: OpsiItem[]
 }
 
@@ -61,6 +64,7 @@ export default function BuatUjianPage() {
 
   // Question List State — dimulai kosong, guru menambah soal sendiri
   const [soalList, setSoalList] = React.useState<SoalItem[]>([])
+  const [uploadingGambarIdx, setUploadingGambarIdx] = React.useState<number | null>(null)
 
   const addPilihanGanda = () => {
     setSoalList((prev) => [
@@ -150,6 +154,55 @@ export default function BuatUjianPage() {
     )
   }
 
+  // --- Gambar Soal: Upload & Hapus ---
+  const handleUploadGambarSoal = async (soalIdx: number, file: File) => {
+    if (!ujianIdRef.current) {
+      toast({ variant: "destructive", title: "Simpan ujian terlebih dahulu sebelum menambah gambar." })
+      return
+    }
+    const prevGambar = soalList[soalIdx].gambarSoal
+    setUploadingGambarIdx(soalIdx)
+    try {
+      const formData = new FormData()
+      formData.append("ujianId", ujianIdRef.current)
+      formData.append("file", file)
+      const result = await uploadGambarSoal(formData)
+      if (!result.success || !result.data) {
+        toast({ variant: "destructive", title: result.message || "Gagal mengunggah gambar" })
+        return
+      }
+      if (prevGambar) {
+        await deleteGambarSoal(prevGambar).catch(() => {})
+      }
+      const uploaded = result.data!
+      setSoalList((prev) =>
+        prev.map((s, idx) =>
+          idx === soalIdx
+            ? { ...s, gambarSoal: uploaded.url, gambarSoalPreview: uploaded.previewUrl || undefined }
+            : s
+        )
+      )
+      toast({ title: "Gambar berhasil diunggah" })
+    } catch {
+      toast({ variant: "destructive", title: "Gagal mengunggah gambar soal" })
+    } finally {
+      setUploadingGambarIdx(null)
+    }
+  }
+
+  const handleHapusGambarSoal = async (soalIdx: number) => {
+    const gambar = soalList[soalIdx].gambarSoal
+    if (!gambar) return
+    try {
+      await deleteGambarSoal(gambar)
+    } catch {
+      // Best-effort: lanjutkan reset UI meskipun hapus server gagal
+    }
+    setSoalList((prev) =>
+      prev.map((s, idx) => (idx === soalIdx ? { ...s, gambarSoal: undefined } : s))
+    )
+  }
+
   // Fetch existing ujian data when in edit mode
   React.useEffect(() => {
     if (!editId) return
@@ -182,6 +235,8 @@ export default function BuatUjianPage() {
             tipe: "PILIHAN_GANDA" | "ESAI"
             pertanyaan: string
             bobotNilai: number
+            gambarUrl?: string | null
+            gambarSignedUrl?: string | null
             opsi: { id?: string; teks: string; benar: boolean }[]
           }[]
         }
@@ -194,7 +249,13 @@ export default function BuatUjianPage() {
         setWaktuMulai(toDatetimeLocalValue(data.waktuMulai))
         setWaktuSelesai(toDatetimeLocalValue(data.waktuSelesai))
         if (data.soal.length > 0) {
-          setSoalList(data.soal)
+          setSoalList(
+            data.soal.map((s) => ({
+              ...s,
+              gambarSoal: s.gambarUrl || undefined,
+              gambarSoalPreview: s.gambarSignedUrl || undefined,
+            }))
+          )
         }
       } catch {
         toast({
@@ -298,6 +359,7 @@ export default function BuatUjianPage() {
             tipe: soal.tipe,
             bobot: soal.bobotNilai,
             kunciEsai: soal.tipe === "ESAI" ? soal.opsi[0]?.teks || undefined : undefined,
+            gambarUrl: soal.gambarSoal || undefined,
             opsi: soal.tipe === "PILIHAN_GANDA"
               ? soal.opsi.map((o, idx) => ({
                   label: ["A", "B", "C", "D", "E"][idx] || String.fromCharCode(65 + idx),
@@ -565,6 +627,62 @@ export default function BuatUjianPage() {
                       onChange={(e) => updatePertanyaan(sIdx, e.target.value)}
                       className="rounded-xl min-h-[70px] text-sm"
                     />
+                  </div>
+
+                  {/* Gambar Soal */}
+                  <div className="space-y-2">
+                    {soal.gambarSoal && soal.gambarSoalPreview && (
+                      <div className="relative group w-full max-w-md">
+                        <Image
+                          src={soal.gambarSoalPreview}
+                          alt={`Gambar soal ${soal.nomor}`}
+                          width={600}
+                          height={400}
+                          className="w-full h-auto max-h-60 object-contain rounded-xl border border-slate-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleHapusGambarSoal(sIdx)}
+                          disabled={uploadingGambarIdx === sIdx}
+                          className="absolute top-2 right-2 bg-white/90 hover:bg-red-50 text-red-500 rounded-full p-1.5 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Hapus gambar"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <label
+                        htmlFor={`gambar-soal-${sIdx}`}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border cursor-pointer transition-colors ${
+                          uploadingGambarIdx === sIdx
+                            ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                        }`}
+                      >
+                        {uploadingGambarIdx === sIdx ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <ImageIcon className="h-3.5 w-3.5" />
+                        )}
+                        {soal.gambarSoal ? "Ganti Gambar" : "Tambah Gambar"}
+                      </label>
+                      <input
+                        id={`gambar-soal-${sIdx}`}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        disabled={uploadingGambarIdx === sIdx}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            handleUploadGambarSoal(sIdx, file)
+                            e.target.value = ""
+                          }
+                        }}
+                      />
+                      <span className="text-[11px] text-slate-400">JPG, PNG, WEBP (maks. 5 MB)</span>
+                    </div>
                   </div>
 
                   {/* PG Choices */}

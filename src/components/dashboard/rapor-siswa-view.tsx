@@ -3,16 +3,28 @@
 import * as React from "react"
 import { getRaporSiswa, getRaporAnak } from "@/actions/rapor"
 import { getDaftarPeriodeAjaran } from "@/actions/periode-ajaran"
-import { namaBulan } from "@/lib/bulan"
 import { Card, CardContent } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
 import Image from "next/image"
 import { Loader2 } from "lucide-react"
 
+function formatTanggal(dateStr: string | null | undefined): string {
+  if (!dateStr) return "-"
+  try {
+    return new Date(dateStr).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })
+  } catch {
+    return dateStr
+  }
+}
+
 type PeriodeItem = { id: string; nama: string; tahunAjaran: string; semester: string }
 type RaporData = {
   identitas: { nama?: string; namaSiswa?: string; nisn: string; kelas: string; jenjang: string }
-  periode: { nama: string; tahunAjaran: string; semester: string }
+  periode: { nama: string; tahunAjaran: string; semester: string; tanggalRapor?: string | null }
   bulan?: number
   jenisRapor?: string
   nilaiPerMapel: Array<{
@@ -44,7 +56,6 @@ export function SiswaOrangTuaRaporView({
 }) {
   const [periodes, setPeriodes] = React.useState<PeriodeItem[]>([])
   const [selectedPeriodeId, setSelectedPeriodeId] = React.useState<string>("")
-  const [raporBulan, setRaporBulan] = React.useState(0)
   const [raporData, setRaporData] = React.useState<RaporData | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [fetchingRapor, setFetchingRapor] = React.useState(false)
@@ -85,9 +96,9 @@ export function SiswaOrangTuaRaporView({
       try {
         let result
         if (isParent && selectedChild) {
-          result = await getRaporAnak(selectedChild.id, selectedPeriodeId, raporBulan)
+          result = await getRaporAnak(selectedChild.id, selectedPeriodeId, 0)
         } else {
-          result = await getRaporSiswa(selectedPeriodeId, raporBulan)
+          result = await getRaporSiswa(selectedPeriodeId, 0)
         }
 
         if (result.success && result.data) {
@@ -104,7 +115,7 @@ export function SiswaOrangTuaRaporView({
       }
     }
     fetchRapor()
-  }, [selectedPeriodeId, isParent, selectedChild, raporBulan])
+  }, [selectedPeriodeId, isParent, selectedChild])
 
   if (isParent && !selectedChild) {
     return (
@@ -144,22 +155,6 @@ export function SiswaOrangTuaRaporView({
             {periodes.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nama} ({p.tahunAjaran})
-              </option>
-            ))}
-          </select>
-
-          <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 ml-0 sm:ml-3">
-            Jenis Rapor:
-          </label>
-          <select
-            value={raporBulan}
-            onChange={(e) => setRaporBulan(Number(e.target.value))}
-            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-yellow-500"
-          >
-            <option value={0}>Rapor Akhir Semester</option>
-            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-              <option key={m} value={m}>
-                Rapor Bulanan - {namaBulan(m)}
               </option>
             ))}
           </select>
@@ -234,6 +229,12 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
             </span>
           </div>
         </div>
+
+        {raporData.periode.tanggalRapor && (
+          <p className="text-xs text-slate-500 -mt-2 text-right">
+            Diterbitkan: {formatTanggal(raporData.periode.tanggalRapor)}
+          </p>
+        )}
 
         {/* Subjects Table */}
         {raporData.nilaiPerMapel.length > 0 ? (

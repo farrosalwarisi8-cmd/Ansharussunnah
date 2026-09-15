@@ -228,6 +228,8 @@ model PeriodeAjaran {
   tanggalMulai   DateTime @db.Timestamptz(3)             @map("tanggal_mulai")
   tanggalSelesai DateTime @db.Timestamptz(3)             @map("tanggal_selesai")
   aktif          Boolean              @default(false)
+  // Tanggal pembuatan rapor akhir semester — diatur oleh admin (opsional).
+  tanggalRapor   DateTime? @db.Timestamptz(3)             @map("tanggal_rapor")
   createdAt      DateTime @db.Timestamptz(3)             @default(now()) @map("created_at")
   updatedAt      DateTime @db.Timestamptz(3)             @updatedAt @map("updated_at")
   absensi        Absensi[]
@@ -434,6 +436,7 @@ model SoalUjian {
   tipe         TipeSoal
   bobot        Int            @default(1)
   kunciEsai    String?        @map("kunci_esai")
+  gambarUrl    String?        @map("gambar_url")
   createdAt    DateTime @db.Timestamptz(3)       @default(now()) @map("created_at")
   updatedAt    DateTime @db.Timestamptz(3)       @updatedAt @map("updated_at")
   jawabanSiswa JawabanSiswa[]

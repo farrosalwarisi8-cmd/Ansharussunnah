@@ -20,6 +20,12 @@ const periodeAjaranBaseSchema = z.object({
     message: "Format tanggal selesai tidak valid",
   }),
   aktif: z.boolean().default(false),
+  tanggalRapor: z
+    .string()
+    .optional()
+    .refine((val) => !val || !isNaN(Date.parse(val)), {
+      message: "Format tanggal rapor tidak valid",
+    }),
 })
 
 export const createPeriodeAjaranSchema = periodeAjaranBaseSchema.refine(

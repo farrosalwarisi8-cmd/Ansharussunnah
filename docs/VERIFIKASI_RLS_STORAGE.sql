@@ -27,7 +27,8 @@ VALUES
   ('tugas-siswa',         'tugas-siswa',         false),
   ('nota',                'nota',                false),
   ('materi',              'materi',              false),
-  ('dokumen-pendaftaran', 'dokumen-pendaftaran', false)
+  ('dokumen-pendaftaran', 'dokumen-pendaftaran', false),
+  ('soal-ujian',          'soal-ujian',          false)
 ON CONFLICT (id) DO UPDATE SET public = false;
 
 -- ============================================================================
@@ -61,6 +62,12 @@ DROP POLICY IF EXISTS "Guru dapat membaca semua materi"                    ON st
 DROP POLICY IF EXISTS "Siswa dapat membaca materi di kelasnya"             ON storage.objects;
 DROP POLICY IF EXISTS "OrangTua dapat membaca materi anaknya"              ON storage.objects;
 DROP POLICY IF EXISTS "Guru dapat menghapus materi"                        ON storage.objects;
+
+DROP POLICY IF EXISTS "Guru dapat upload gambar soal ujian"               ON storage.objects;
+DROP POLICY IF EXISTS "Admin akademik dapat upload gambar soal ujian"      ON storage.objects;
+DROP POLICY IF EXISTS "Guru dapat membaca gambar soal ujian"               ON storage.objects;
+DROP POLICY IF EXISTS "Siswa dapat membaca gambar soal ujian"              ON storage.objects;
+DROP POLICY IF EXISTS "Guru dapat menghapus gambar soal ujian"             ON storage.objects;
 
 -- ============================================================================
 -- 3. BUCKET: dokumen-pendaftaran  (upload publik anonim — form pendaftaran)
@@ -356,7 +363,72 @@ USING (
 );
 
 -- ============================================================================
--- 9. LAPORAN VERIFIKASI
+-- 9. BUCKET: soal-ujian  (guru upload gambar soal; siswa baca saat ujian)
+-- ============================================================================
+-- Path: soal-ujian/ujian-{ujianId}/{file}
+-- Upload dilakukan server-side via service role (bukti-transfer pattern),
+-- RLS sebagai defense-in-depth.
+CREATE POLICY "Guru dapat upload gambar soal ujian"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'soal-ujian'
+  AND (storage.foldername(name))[1] = 'soal-ujian'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid() AND role = 'GURU'
+  )
+);
+
+CREATE POLICY "Admin akademik dapat upload gambar soal ujian"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'soal-ujian'
+  AND (storage.foldername(name))[1] = 'soal-ujian'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid() AND role = 'ADMIN_AKADEMIK'
+  )
+);
+
+-- Guru & admin akademik dapat membaca semua gambar soal (untuk manajemen).
+CREATE POLICY "Guru dapat membaca gambar soal ujian"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'soal-ujian'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid() AND role IN ('GURU', 'ADMIN_AKADEMIK', 'ADMIN_KEUANGAN')
+  )
+);
+
+-- Siswa dapat membaca gambar soal (saat mengerjakan ujian).
+CREATE POLICY "Siswa dapat membaca gambar soal ujian"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'soal-ujian'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid() AND role = 'SISWA'
+  )
+);
+
+CREATE POLICY "Guru dapat menghapus gambar soal ujian"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'soal-ujian'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid() AND role = 'GURU'
+  )
+);
+
+-- ============================================================================
+-- 10. LAPORAN VERIFIKASI
 -- ============================================================================
 -- Jalankan bagian ini SETELAH policy dibuat untuk memastikan semuanya aktif.
 -- Setiap bucket harus punya minimal policy INSERT (dan SELECT/DELETE sesuai tabel).
@@ -368,6 +440,7 @@ SELECT
     WHEN qual::text LIKE '%bucket_id = ''nota''%' OR with_check::text LIKE '%bucket_id = ''nota''%' THEN 'nota'
     WHEN qual::text LIKE '%bucket_id = ''materi''%' OR with_check::text LIKE '%bucket_id = ''materi''%' THEN 'materi'
     WHEN qual::text LIKE '%dokumen-pendaftaran%' OR with_check::text LIKE '%dokumen-pendaftaran%' THEN 'dokumen-pendaftaran'
+    WHEN qual::text LIKE '%soal-ujian%'         OR with_check::text LIKE '%soal-ujian%'         THEN 'soal-ujian'
     ELSE '(lainnya)'
   END AS bucket,
   policyname,
@@ -380,5 +453,5 @@ ORDER BY 1, 2;
 -- Cek status RLS tiap bucket (public = false berarti RLS aktif / bukan public bucket):
 SELECT id AS bucket, public, file_size_limit, allowed_mime_types
 FROM storage.buckets
-WHERE id IN ('bukti-transfer', 'bukti-spp', 'tugas-siswa', 'nota', 'materi', 'dokumen-pendaftaran')
+WHERE id IN ('bukti-transfer', 'bukti-spp', 'tugas-siswa', 'nota', 'materi', 'dokumen-pendaftaran', 'soal-ujian')
 ORDER BY id;

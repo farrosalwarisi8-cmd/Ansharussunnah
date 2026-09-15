@@ -3,8 +3,11 @@
 "use server"
 
 import prisma from "@/lib/prisma"
-import { requireRole } from "@/lib/auth"
+import { requireRole, requireGuru } from "@/lib/auth"
 import { verifyGuruAksesKelas, getMapelIdYangDiajarDiKelas } from "@/lib/guru-auth"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { validateFile, getSignedUrl } from "@/lib/storage"
+import { nanoid } from "nanoid"
 import {
   createUjianSchema,
   updateUjianSchema,
@@ -22,6 +25,51 @@ import type { ActionResponse } from "@/types"
 import { Role, StatusUjian, StatusPengerjaan, Prisma } from "@prisma/client"
 import { toUserFriendlyError } from "@/lib/prisma-error"
 import { revalidatePath } from "next/cache"
+
+// ========================================================
+// 0. GAMBAR SOAL — KONSTANTA & HELPER
+// ========================================================
+
+const GAMBAR_SOAL_BUCKET = "soal-ujian"
+const GAMBAR_SOAL_PREFIX = "soal-ujian/"
+const GAMBAR_SOAL_ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"])
+
+function sanitizeFolderPart(value: string): string {
+  return (
+    value
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 64) || "umum"
+  )
+}
+
+/**
+ * Hapus file gambar soal dari Supabase Storage (helper internal, tanpa guard).
+ * Path diverifikasi berada di dalam folder soal-ujian/ untuk mencegah
+ * path traversal / bucket injection. Kegagalan hanya dicatat — dipakai untuk
+ * cleanup best-effort saat soal/ujian dihapus atau gambar diganti.
+ */
+async function hapusGambarSoalDariStorage(filePath: string): Promise<void> {
+  try {
+    if (
+      !filePath ||
+      !filePath.startsWith(GAMBAR_SOAL_PREFIX) ||
+      filePath.includes("..") ||
+      filePath.includes("\\")
+    ) {
+      console.error("Path gambar soal tidak valid saat cleanup:", filePath)
+      return
+    }
+    const supabaseAdmin = createSupabaseAdmin()
+    const { error } = await supabaseAdmin.storage
+      .from(GAMBAR_SOAL_BUCKET)
+      .remove([filePath])
+    if (error) console.error("Gagal menghapus gambar soal:", error)
+  } catch (error) {
+    console.error("Gagal menghapus gambar soal:", error)
+  }
+}
 
 // ========================================================
 // 1. ACTIONS GURU: MANAJEMEN UJIAN
@@ -262,6 +310,7 @@ export async function deleteUjian(ujianId: string): Promise<ActionResponse> {
     const ujian = await prisma.ujian.findUnique({
       where: { id: ujianId },
       include: {
+        soal: { select: { gambarUrl: true } },
         _count: { select: { pengerjaan: true } },
       },
     })
@@ -279,6 +328,11 @@ export async function deleteUjian(ujianId: string): Promise<ActionResponse> {
     }
 
     await prisma.ujian.delete({ where: { id: ujianId } })
+
+    // Cleanup semua gambar soal yang terhapus dari storage (best-effort)
+    for (const soal of ujian.soal) {
+      if (soal.gambarUrl) await hapusGambarSoalDariStorage(soal.gambarUrl)
+    }
 
     revalidatePath("/dashboard/ujian")
     return { success: true, message: "Ujian berhasil dihapus" }
@@ -300,7 +354,7 @@ export async function addOrUpdateSoalUjian(
       }
     }
 
-    const { ujianId, nomorSoal, pertanyaan, tipe, bobot, kunciEsai, opsi } =
+    const { ujianId, nomorSoal, pertanyaan, tipe, bobot, kunciEsai, gambarUrl, opsi } =
       validated.data
 
     const ujian = await prisma.ujian.findUnique({ where: { id: ujianId } })
@@ -321,6 +375,14 @@ export async function addOrUpdateSoalUjian(
       }
     }
 
+    // Simpan path gambar lama untuk cleanup jika gambar diganti/dihapus
+    const existingSoal = await prisma.soalUjian.findUnique({
+      where: {
+        ujianId_nomorSoal: { ujianId, nomorSoal },
+      },
+      select: { id: true, gambarUrl: true },
+    })
+
     await prisma.$transaction(
       async (tx) => {
       // Upsert Soal
@@ -333,6 +395,7 @@ export async function addOrUpdateSoalUjian(
           tipe,
           bobot,
           kunciEsai: tipe === "ESAI" ? kunciEsai : null,
+          gambarUrl: gambarUrl || null,
         },
         create: {
           ujianId,
@@ -341,6 +404,7 @@ export async function addOrUpdateSoalUjian(
           tipe,
           bobot,
           kunciEsai: tipe === "ESAI" ? kunciEsai : null,
+          gambarUrl: gambarUrl || null,
         },
       })
 
@@ -361,6 +425,11 @@ export async function addOrUpdateSoalUjian(
       },
       { timeout: 10000, maxWait: 3000 }
     )
+
+    // Cleanup gambar lama bila diganti atau dihapus
+    if (existingSoal?.gambarUrl && existingSoal.gambarUrl !== (gambarUrl || null)) {
+      await hapusGambarSoalDariStorage(existingSoal.gambarUrl)
+    }
 
     revalidatePath(`/dashboard/ujian/buat`)
     return { success: true, message: `Soal nomor ${nomorSoal} berhasil disimpan` }
@@ -392,16 +461,149 @@ export async function deleteSoalUjian(
       }
     }
 
-    await prisma.soalUjian.delete({
+    const deletedSoal = await prisma.soalUjian.delete({
       where: {
         ujianId_nomorSoal: { ujianId, nomorSoal },
       },
+      select: { gambarUrl: true },
     })
+
+    // Cleanup gambar soal yang terhapus dari storage
+    if (deletedSoal?.gambarUrl) {
+      await hapusGambarSoalDariStorage(deletedSoal.gambarUrl)
+    }
 
     revalidatePath(`/dashboard/ujian/buat`)
     return { success: true, message: "Soal berhasil dihapus" }
   } catch (error: unknown) {
     return { success: false, message: toUserFriendlyError(error, "Gagal menghapus soal") }
+  }
+}
+
+// ========================================================
+// 2. ACTIONS GAMBAR SOAL: UPLOAD & HAPUS
+// ========================================================
+
+/**
+ * Upload gambar soal esai/pilihan-ganda.
+ *
+ * Keamanan: file DIKIRIM ke server dan diunggah oleh server (service role) ke
+ * Supabase Storage bucket `soal-ujian`. Klien tidak menentukan path — path
+ * dibuat server-side dengan nanoid sehingga path/URL klien tidak bisa
+ * dipalsukan atau digunakan untuk path traversal / bucket injection.
+ */
+export async function uploadGambarSoal(
+  formData: FormData
+): Promise<ActionResponse<{ url: string; previewUrl: string | null }>> {
+  try {
+    const ujianId = (formData.get("ujianId") as string) || ""
+    const file = formData.get("file") as File | null
+
+    if (!ujianId || !file) {
+      return { success: false, message: "Data gambar soal tidak lengkap" }
+    }
+
+    const ip = await getClientIpFromHeaders()
+    const limiter = await rateLimitAsync(`upload-gambar-soal:${ip}`, {
+      maxRequests: 20,
+      windowMs: 60 * 60 * 1000, // 20 upload per 1 jam per IP
+    })
+    if (!limiter.success) {
+      return {
+        success: false,
+        message: "Terlalu banyak percobaan upload. Silakan coba lagi dalam 1 jam.",
+      }
+    }
+
+    await requireGuru()
+
+    const ujian = await prisma.ujian.findUnique({ where: { id: ujianId } })
+    if (!ujian) return { success: false, message: "Ujian tidak ditemukan" }
+
+    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
+
+    // Validasi magic bytes + ukuran file (server-side, bukan hanya klien)
+    const validation = await validateFile(file)
+    if (!validation.valid) {
+      return {
+        success: false,
+        message: validation.error || "Berkas yang diunggah tidak valid",
+      }
+    }
+
+    const fileExt = (file.name.split(".").pop() || "").toLowerCase()
+    if (!GAMBAR_SOAL_ALLOWED_EXTENSIONS.has(fileExt)) {
+      return {
+        success: false,
+        message: "Format berkas tidak valid (gunakan JPG, PNG, atau WEBP)",
+      }
+    }
+
+    const supabaseAdmin = createSupabaseAdmin()
+    const generatedName = `${nanoid(12)}.${fileExt}`
+    const folderUjian = `ujian-${sanitizeFolderPart(ujianId)}`
+    const filePath = `${GAMBAR_SOAL_PREFIX}${folderUjian}/${generatedName}`
+
+    const arrayBuffer = await file.arrayBuffer()
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(GAMBAR_SOAL_BUCKET)
+      .upload(filePath, arrayBuffer, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type || undefined,
+      })
+
+    if (uploadError) {
+      console.error("Storage upload error:", uploadError)
+      return {
+        success: false,
+        message:
+          "Gagal mengunggah gambar soal. Pastikan format dan ukuran file sesuai (maks. 5 MB).",
+      }
+    }
+
+    const previewUrl = await getSignedUrl(GAMBAR_SOAL_BUCKET, filePath)
+
+    return {
+      success: true,
+      message: "Gambar soal berhasil diunggah",
+      data: { url: filePath, previewUrl },
+    }
+  } catch (error: unknown) {
+    return { success: false, message: toUserFriendlyError(error, "Gagal mengunggah gambar soal") }
+  }
+}
+
+/**
+ * Hapus gambar soal dari Supabase Storage (dipanggil saat guru mengganti/
+ * menghapus gambar di sebuah soal). Path diverifikasi berada di folder soal-ujian/.
+ */
+export async function deleteGambarSoal(filePath: string): Promise<ActionResponse> {
+  try {
+    await requireGuru()
+
+    if (
+      !filePath ||
+      !filePath.startsWith(GAMBAR_SOAL_PREFIX) ||
+      filePath.includes("..") ||
+      filePath.includes("\\")
+    ) {
+      return { success: false, message: "Path gambar tidak valid" }
+    }
+
+    const supabaseAdmin = createSupabaseAdmin()
+    const { error: removeError } = await supabaseAdmin.storage
+      .from(GAMBAR_SOAL_BUCKET)
+      .remove([filePath])
+
+    if (removeError) {
+      console.error("Storage remove error:", removeError)
+      return { success: false, message: "Gagal menghapus gambar soal" }
+    }
+
+    return { success: true, message: "Gambar soal berhasil dihapus" }
+  } catch (error: unknown) {
+    return { success: false, message: toUserFriendlyError(error, "Gagal menghapus gambar soal") }
   }
 }
 
@@ -441,7 +643,7 @@ export async function getRekapHasilUjian(ujianId: string): Promise<ActionRespons
         },
         jawaban: {
           include: {
-            soal: { select: { id: true, nomorSoal: true, tipe: true, bobot: true } },
+            soal: { select: { id: true, nomorSoal: true, tipe: true, bobot: true, pertanyaan: true, gambarUrl: true } },
           },
         },
       },
@@ -641,22 +843,28 @@ export async function getUjianDetail(
         waktuMulai: ujian.waktuMulai.toISOString(),
         waktuSelesai: ujian.waktuSelesai.toISOString(),
         status: ujian.status,
-        soal: ujian.soal.map((s) => ({
-          id: s.id,
-          nomor: s.nomorSoal,
-          tipe: s.tipe as "PILIHAN_GANDA" | "ESAI",
-          pertanyaan: s.pertanyaan,
-          bobotNilai: s.bobot,
-          opsi: s.tipe === "ESAI"
-            ? s.kunciEsai
-              ? [{ teks: s.kunciEsai, benar: false }]
-              : []
-            : s.opsi.map((o) => ({
-                id: o.id,
-                teks: o.teks,
-                benar: o.benar,
-              })),
-        })),
+        soal: await Promise.all(
+          ujian.soal.map(async (s) => ({
+            id: s.id,
+            nomor: s.nomorSoal,
+            tipe: s.tipe as "PILIHAN_GANDA" | "ESAI",
+            pertanyaan: s.pertanyaan,
+            bobotNilai: s.bobot,
+            gambarUrl: s.gambarUrl,
+            gambarSignedUrl: s.gambarUrl
+              ? await getSignedUrl(GAMBAR_SOAL_BUCKET, s.gambarUrl)
+              : null,
+            opsi: s.tipe === "ESAI"
+              ? s.kunciEsai
+                ? [{ teks: s.kunciEsai, benar: false }]
+                : []
+              : s.opsi.map((o) => ({
+                  id: o.id,
+                  teks: o.teks,
+                  benar: o.benar,
+                })),
+          }))
+        ),
       },
     }
   } catch (error: unknown) {
@@ -777,6 +985,7 @@ select: {
               pertanyaan: true,
               tipe: true,
               bobot: true,
+              gambarUrl: true,
               // SECURITY: Opsi TIDAK BOLEH memuat field 'benar' ke client siswa!
               opsi: {
                 select: {
@@ -885,14 +1094,20 @@ mataPelajaran: { select: { nama: true, jenisKelamin: true } },
           durasiMenit: ujian.durasiMenit,
           waktuMulaiSiswa: pengerjaan.waktuMulai,
           deadlineSelesai: deadlineFinal,
-          soal: ujian.soal.map((s) => ({
-            id: s.id,
-            nomor: s.nomorSoal,
-            tipe: s.tipe,
-            pertanyaan: s.pertanyaan,
-            bobot: s.bobot,
-            opsi: s.opsi,
-          })),
+          soal: await Promise.all(
+            ujian.soal.map(async (s) => ({
+              id: s.id,
+              nomor: s.nomorSoal,
+              tipe: s.tipe,
+              pertanyaan: s.pertanyaan,
+              bobot: s.bobot,
+              gambarUrl: s.gambarUrl,
+              gambarSignedUrl: s.gambarUrl
+                ? await getSignedUrl(GAMBAR_SOAL_BUCKET, s.gambarUrl)
+                : null,
+              opsi: s.opsi,
+            }))
+          ),
         },
         jawabanTersimpan: pengerjaan.jawaban,
       },
