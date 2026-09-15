@@ -35,7 +35,7 @@ export default function HomePage() {
                   Pesantren & Sekolah
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium">Portal Akademik & Santri Baru</p>
+              <p className="text-xs text-slate-500 font-medium">Mantingan Al-Islamy</p>
             </div>
           </div>
 
