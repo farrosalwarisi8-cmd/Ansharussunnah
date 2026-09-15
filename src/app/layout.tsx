@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ["latin"], display: "swap", preload: true })
 // gambar. Wildcard (*) tidak valid untuk preconnect, jadi pakai origin spesifik.
 const supabaseOrigin = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://jjybghdoagdumcdujdgm.supabase.co").replace(/\/$/, "")
 
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://anshorussunnah.com"
+const siteUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://anshorussunnah.com").replace(/\/$/, "")
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
