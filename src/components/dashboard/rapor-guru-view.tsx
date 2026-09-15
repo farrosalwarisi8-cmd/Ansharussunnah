@@ -9,7 +9,7 @@ import {
 import { getPeriodeAjaranAktif } from "@/actions/periode-ajaran"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
 import { getSiswaByKelas } from "@/actions/absensi"
-import { labelJenisRapor, namaBulan } from "@/lib/bulan"
+import { labelJenisRapor } from "@/lib/bulan"
 import { peranOptionSuffix, type PeranKelas } from "@/lib/kelas-peran"
 import { PeranKelasBadge, PeranKelasLegend } from "@/components/ui/peran-kelas-badge"
 import { useToast } from "@/hooks/use-toast"
@@ -34,6 +34,19 @@ type SiswaOption = {
   nisn: string | null
 }
 
+function formatTanggal(dateStr: string | null | undefined): string {
+  if (!dateStr) return "-"
+  try {
+    return new Date(dateStr).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })
+  } catch {
+    return dateStr
+  }
+}
+
 export function GuruRaporView() {
   const { toast } = useToast()
   const [kelasList, setKelasList] = React.useState<KelasItem[]>([])
@@ -46,8 +59,8 @@ export function GuruRaporView() {
   const [catatan, setCatatan] = React.useState("")
   const [saving, setSaving] = React.useState(false)
 
-  // Jenis rapor: 0 = Akhir Semester, 1-12 = Bulanan
-  const [raporBulan, setRaporBulan] = React.useState(0)
+  // Rapor akhir semester (bulan = 0). Generate rapor hanya per-semester.
+  const raporBulan = 0
   const [ranking, setRanking] = React.useState("")
   const [kedisiplinan, setKedisiplinan] = React.useState("")
   const [kemandirian, setKemandirian] = React.useState("")
@@ -58,7 +71,7 @@ export function GuruRaporView() {
   const [showRekap, setShowRekap] = React.useState(false)
   const [rekapData, setRekapData] = React.useState<{
     totalSiswa: number
-    periode?: { id: string; nama: string }
+    periode?: { id: string; nama: string; tahunAjaran?: string; tanggalRapor?: string | null }
     rekap: Array<{
       siswaId: string
       nama: string
@@ -289,22 +302,6 @@ export function GuruRaporView() {
               className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500"
             />
           </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Jenis Rapor</label>
-            <select
-              value={raporBulan}
-              onChange={(e) => setRaporBulan(Number(e.target.value))}
-              className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-yellow-500"
-            >
-              <option value={0}>Rapor Akhir Semester</option>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                <option key={m} value={m}>
-                  Rapor Bulanan - {namaBulan(m)}
-                </option>
-              ))}
-            </select>
-          </div>
         </CardContent>
       </Card>
 
@@ -459,7 +456,13 @@ export function GuruRaporView() {
             <div className="p-4 mb-2 text-xs text-slate-500">
               Total {rekapData.totalSiswa} siswa
               {rekapData.periode?.nama ? ` • ${rekapData.periode.nama}` : ""}
+              {rekapData.periode?.tahunAjaran
+                ? ` • Tahun Pelajaran ${rekapData.periode.tahunAjaran}`
+                : ""}
               {" • "}{labelJenisRapor(raporBulan)}
+              {rekapData.periode?.tanggalRapor
+                ? ` • Diterbitkan: ${formatTanggal(rekapData.periode.tanggalRapor)}`
+                : ""}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">

@@ -36,6 +36,20 @@ import { revalidatePath } from "next/cache"
 
 const BULAN_NAMES = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
 
+export type LaporanGenerateSpp = Array<{
+  jenjangId: string
+  namaJenjang: string
+  jumlahSiswa: number
+  jumlahTagihan: number
+  totalNominal: number
+}>;
+
+export type HasilGenerateSpp = {
+  totalSiswaTerproses: number
+  totalDilewati: number
+  laporanPerJenjang: LaporanGenerateSpp
+}
+
 // ========================================================
 // HELPER OTORISASI
 // ========================================================
@@ -120,7 +134,7 @@ async function sinkronkanStatusTagihan(
 
 export async function generateBulkSpp(
   payload: GenerateBulkSppValues
-): Promise<ActionResponse<{ totalSiswaTerproses: number; totalDilewati: number }>> {
+): Promise<ActionResponse<HasilGenerateSpp>> {
   try {
     await requireAdminKeuangan()
   } catch (error: unknown) {
@@ -139,7 +153,7 @@ export async function generateBulkSpp(
  */
 export async function generateTagihanSppInternal(
   payload: GenerateBulkSppValues
-): Promise<ActionResponse<{ totalSiswaTerproses: number; totalDilewati: number }>> {
+): Promise<ActionResponse<HasilGenerateSpp>> {
   try {
     const validated = generateBulkSppSchema.safeParse(payload)
     if (!validated.success) {
@@ -150,7 +164,7 @@ export async function generateTagihanSppInternal(
       }
     }
 
-    const { bulan, tahun, kelasId, nominalDefault } = validated.data
+    const { bulan, tahun, kelasId, nominalDefault, jenjangId } = validated.data
 
     // 1. Ambil semua siswa aktif yang masuk filter kelasId (jika ada)
     const filterSiswa: Record<string, unknown> = {
@@ -172,10 +186,17 @@ export async function generateTagihanSppInternal(
       },
     })
 
-    if (siswaList.length === 0) {
+    // Scope ke jenjang tertentu bila dipilih (per-jenjang generate).
+    const scopeSiswa = jenjangId
+      ? siswaList.filter((s) => s.kelas?.jenjangId === jenjangId)
+      : siswaList
+
+    if (scopeSiswa.length === 0) {
       return {
         success: false,
-        message: "Tidak ada siswa aktif yang ditemukan untuk kriteria yang dipilih",
+        message: jenjangId
+          ? "Tidak ada siswa aktif yang ditemukan untuk jenjang yang dipilih"
+          : "Tidak ada siswa aktif yang ditemukan untuk kriteria yang dipilih",
       }
     }
 
@@ -188,7 +209,25 @@ export async function generateTagihanSppInternal(
     // (connection_limit=1 pada Supabase pooler).
     const dataTagihan: Prisma.TagihanSiswaCreateManyInput[] = []
 
-    for (const siswa of siswaList) {
+    // Laporan per jenjang (untuk ringkasan hasil generate di UI keuangan).
+    const laporanMap = new Map<
+      string,
+      { jenjangId: string; namaJenjang: string; jumlahSiswa: number; jumlahTagihan: number; totalNominal: number }
+    >()
+
+    for (const siswa of scopeSiswa) {
+      const jenjangKey = siswa.kelas?.jenjangId || "tanpa-jenjang"
+      if (!laporanMap.has(jenjangKey)) {
+        laporanMap.set(jenjangKey, {
+          jenjangId: jenjangKey,
+          namaJenjang: siswa.kelas?.jenjang?.nama || "Tanpa Jenjang",
+          jumlahSiswa: 0,
+          jumlahTagihan: 0,
+          totalNominal: 0,
+        })
+      }
+      laporanMap.get(jenjangKey)!.jumlahSiswa += 1
+
       // Tentukan nominal tagihan SPP:
       // Prioritas 1: sppKhusus di level Siswa (beasiswa/keringanan)
       // Prioritas 2: tarifSppBulanan di level Jenjang Kelas
@@ -217,6 +256,12 @@ export async function generateTagihanSppInternal(
         jatuhTempo,
         status: StatusTagihan.BELUM_BAYAR,
       })
+
+      const laporan = laporanMap.get(jenjangKey)
+      if (laporan) {
+        laporan.jumlahTagihan += 1
+        laporan.totalNominal += Number(nominalSpp)
+      }
     }
 
     // skipDuplicates memakai unique (siswa_id, bulan, tahun) — tagihan yang
@@ -230,13 +275,17 @@ export async function generateTagihanSppInternal(
       : { count: 0 }
 
     const totalSiswaTerproses = hasil.count
-    const totalDilewati = siswaList.length - hasil.count
+    const totalDilewati = scopeSiswa.length - hasil.count
 
     revalidatePath("/dashboard/keuangan")
     return {
       success: true,
       message: `Pembuatan tagihan selesai. Terproses: ${totalSiswaTerproses} siswa, Dilewati (sudah ada/tanpa tarif): ${totalDilewati}`,
-      data: { totalSiswaTerproses, totalDilewati },
+      data: {
+        totalSiswaTerproses,
+        totalDilewati,
+        laporanPerJenjang: Array.from(laporanMap.values()),
+      },
     }
   } catch (error: unknown) {
     console.error("Error generateTagihanSppInternal:", error)

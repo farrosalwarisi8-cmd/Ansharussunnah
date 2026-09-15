@@ -4,6 +4,7 @@
 
 import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
+import Image from "next/image"
 import { mulaiPengerjaanUjian, submitPengerjaanUjian } from "@/actions/ujian"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -26,6 +27,7 @@ interface SoalExam {
   tipe: "PILIHAN_GANDA" | "ESAI"
   pertanyaan: string
   bobot: number
+  gambarSignedUrl?: string | null
   opsi: OpsiSoal[]
 }
 
@@ -297,6 +299,18 @@ export default function KerjakanUjianPage() {
             <p className="text-sm sm:text-base font-semibold text-slate-800 leading-relaxed">
               {currentQ.pertanyaan}
             </p>
+
+            {currentQ.gambarSignedUrl && (
+              <div className="mt-3">
+                <Image
+                  src={currentQ.gambarSignedUrl}
+                  alt={`Gambar soal ${currentQ.nomor}`}
+                  width={600}
+                  height={400}
+                  className="w-full h-auto max-h-80 object-contain rounded-xl border border-slate-200"
+                />
+              </div>
+            )}
 
             {currentQ.tipe === "PILIHAN_GANDA" ? (
               <div className="space-y-2.5">

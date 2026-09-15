@@ -110,8 +110,9 @@ Sistem Learning Management System (LMS) untuk Pesantren Ansharussunnah. Mengelol
    - `bukti-spp` — bukti pembayaran SPP
    - `tugas-siswa` — submission tugas & lampiran guru
    - `nota` — bukti transaksi keuangan non-SPP
-   - `materi` — materi pembelajaran
-   - `dokumen-pendaftaran` — dokumen pendaftaran (KK, akte, foto)
+- `materi` — materi pembelajaran
+    - `dokumen-pendaftaran` — dokumen pendaftaran (KK, akte, foto)
+    - `soal-ujian` — gambar lampiran soal ujian
 
    Aktifkan RLS pada setiap bucket. Template SQL policy ada di folder `docs/`.
 

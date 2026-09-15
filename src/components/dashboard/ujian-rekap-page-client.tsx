@@ -4,6 +4,7 @@
 
 import * as React from "react"
 import { useParams } from "next/navigation"
+import Image from "next/image"
 import Link from "next/link"
 import { getRekapHasilUjian, beriNilaiEsai } from "@/actions/ujian"
 import { useToast } from "@/hooks/use-toast"
@@ -35,7 +36,7 @@ interface PesertaRekap {
   nilaiPg: number | null
   nilaiEsai: number | null
   jawaban: Array<{
-    soal: { id: string; nomorSoal: number; tipe: string; bobot: number }
+    soal: { id: string; nomorSoal: number; tipe: string; bobot: number; gambarSignedUrl?: string | null }
     nilaiSoal: number | null
     benar: boolean | null
     jawabanEsai?: string | null
@@ -409,6 +410,15 @@ export default function RekapHasilUjianPage() {
                   <span className="text-xs font-bold text-slate-700 block">
                     Soal {jwb.soal.nomorSoal} (Bobot: {jwb.soal.bobot}):
                   </span>
+                  {jwb.soal.gambarSignedUrl && (
+                    <Image
+                      src={jwb.soal.gambarSignedUrl}
+                      alt={`Gambar soal ${jwb.soal.nomorSoal}`}
+                      width={600}
+                      height={400}
+                      className="w-full h-auto max-h-52 object-contain rounded-lg border border-slate-200 my-2"
+                    />
+                  )}
                   <p className="text-xs sm:text-sm text-slate-800 leading-relaxed italic">
                     &ldquo;{jwb.jawabanEsai || "(Tidak ada jawaban)"}&rdquo;
                   </p>

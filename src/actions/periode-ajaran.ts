@@ -93,7 +93,7 @@ export async function createPeriodeAjaran(
       }
     }
 
-    const { nama, tahunAjaran, semester, tanggalMulai, tanggalSelesai, aktif } =
+    const { nama, tahunAjaran, semester, tanggalMulai, tanggalSelesai, aktif, tanggalRapor } =
       validated.data
 
     // Cek duplikasi nama
@@ -123,6 +123,7 @@ export async function createPeriodeAjaran(
           tanggalMulai: new Date(tanggalMulai),
           tanggalSelesai: new Date(tanggalSelesai),
           aktif,
+          tanggalRapor: tanggalRapor ? new Date(tanggalRapor) : null,
         },
       })
     })
@@ -201,6 +202,12 @@ export async function updatePeriodeAjaran(
           tanggalSelesai: validated.data.tanggalSelesai
             ? new Date(validated.data.tanggalSelesai)
             : undefined,
+          tanggalRapor:
+            validated.data.tanggalRapor !== undefined
+              ? (validated.data.tanggalRapor
+                  ? new Date(validated.data.tanggalRapor)
+                  : null)
+              : undefined,
           aktif: validated.data.aktif,
         },
       })

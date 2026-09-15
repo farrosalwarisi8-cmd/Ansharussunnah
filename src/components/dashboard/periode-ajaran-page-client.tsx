@@ -33,6 +33,7 @@ interface PeriodeEntry {
   semester: "GANJIL" | "GENAP"
   tanggalMulai: string
   tanggalSelesai: string
+  tanggalRapor?: string | null
   aktif: boolean
   createdAt: string
 }
@@ -50,6 +51,7 @@ export default function PeriodeAjaranPage() {
   const [semester, setSemester] = React.useState<"GANJIL" | "GENAP">("GANJIL")
   const [tanggalMulai, setTanggalMulai] = React.useState("")
   const [tanggalSelesai, setTanggalSelesai] = React.useState("")
+  const [tanggalRapor, setTanggalRapor] = React.useState("")
   const [aktif, setAktif] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
 
@@ -61,6 +63,7 @@ export default function PeriodeAjaranPage() {
   const [editSemester, setEditSemester] = React.useState<"GANJIL" | "GENAP">("GANJIL")
   const [editTanggalMulai, setEditTanggalMulai] = React.useState("")
   const [editTanggalSelesai, setEditTanggalSelesai] = React.useState("")
+  const [editTanggalRapor, setEditTanggalRapor] = React.useState("")
   const [editAktif, setEditAktif] = React.useState(false)
   const [editing, setEditing] = React.useState(false)
 
@@ -82,6 +85,7 @@ export default function PeriodeAjaranPage() {
               ...p,
               tanggalMulai: p.tanggalMulai || "",
               tanggalSelesai: p.tanggalSelesai || "",
+              tanggalRapor: p.tanggalRapor || "",
             }))
           )
         }
@@ -95,6 +99,7 @@ export default function PeriodeAjaranPage() {
             semester: "GANJIL",
             tanggalMulai: "2024-07-15",
             tanggalSelesai: "2024-12-20",
+            tanggalRapor: "2024-12-20",
             aktif: false,
             createdAt: "2024-07-01",
           },
@@ -105,6 +110,7 @@ export default function PeriodeAjaranPage() {
             semester: "GENAP",
             tanggalMulai: "2025-01-06",
             tanggalSelesai: "2025-06-20",
+            tanggalRapor: "",
             aktif: true,
             createdAt: "2025-01-01",
           },
@@ -129,6 +135,7 @@ export default function PeriodeAjaranPage() {
         semester,
         tanggalMulai,
         tanggalSelesai,
+        tanggalRapor: tanggalRapor || undefined,
         aktif,
       })
 
@@ -145,6 +152,7 @@ export default function PeriodeAjaranPage() {
               ...p,
               tanggalMulai: p.tanggalMulai || "",
               tanggalSelesai: p.tanggalSelesai || "",
+              tanggalRapor: p.tanggalRapor || "",
             }))
           )
         }
@@ -170,6 +178,7 @@ export default function PeriodeAjaranPage() {
           semester,
           tanggalMulai,
           tanggalSelesai,
+          tanggalRapor,
           aktif,
           createdAt: new Date().toISOString(),
         },
@@ -194,6 +203,7 @@ export default function PeriodeAjaranPage() {
         semester: editSemester,
         tanggalMulai: editTanggalMulai || undefined,
         tanggalSelesai: editTanggalSelesai || undefined,
+        tanggalRapor: editTanggalRapor,
         aktif: editAktif,
       })
 
@@ -210,6 +220,7 @@ export default function PeriodeAjaranPage() {
               ...p,
               tanggalMulai: p.tanggalMulai || "",
               tanggalSelesai: p.tanggalSelesai || "",
+              tanggalRapor: p.tanggalRapor || "",
             }))
           )
         }
@@ -236,6 +247,7 @@ export default function PeriodeAjaranPage() {
                 semester: editSemester,
                 tanggalMulai: editTanggalMulai,
                 tanggalSelesai: editTanggalSelesai,
+                tanggalRapor: editTanggalRapor,
                 aktif: editAktif,
               }
             : p
@@ -333,6 +345,9 @@ export default function PeriodeAjaranPage() {
     setEditSemester(periode.semester)
     setEditTanggalMulai(toDateLocalValue(periode.tanggalMulai))
     setEditTanggalSelesai(toDateLocalValue(periode.tanggalSelesai))
+    setEditTanggalRapor(
+      periode.tanggalRapor ? toDateLocalValue(periode.tanggalRapor) : ""
+    )
     setEditAktif(periode.aktif)
     setIsEditOpen(true)
   }
@@ -343,6 +358,7 @@ export default function PeriodeAjaranPage() {
     setSemester("GANJIL")
     setTanggalMulai("")
     setTanggalSelesai("")
+    setTanggalRapor("")
     setAktif(false)
   }
 
@@ -419,6 +435,7 @@ export default function PeriodeAjaranPage() {
                       <th className="p-4">Semester</th>
                       <th className="p-4">Tanggal Mulai</th>
                       <th className="p-4">Tanggal Selesai</th>
+                      <th className="p-4">Tanggal Rapor</th>
                       <th className="p-4">Status</th>
                       <th className="p-4 pr-6 text-right">Aksi</th>
                     </tr>
@@ -450,6 +467,9 @@ export default function PeriodeAjaranPage() {
                         </td>
                         <td className="p-4 text-xs text-slate-600">
                           {formatDate(p.tanggalSelesai)}
+                        </td>
+                        <td className="p-4 text-xs text-slate-600">
+                          {p.tanggalRapor ? formatDate(p.tanggalRapor) : "-"}
                         </td>
                         <td className="p-4">
                           <StatusBadge
@@ -527,6 +547,12 @@ export default function PeriodeAjaranPage() {
                       <div>
                         Selesai:{" "}
                         <strong>{formatDate(p.tanggalSelesai)}</strong>
+                      </div>
+                      <div>
+                        Tanggal Rapor:{" "}
+                        <strong>
+                          {p.tanggalRapor ? formatDate(p.tanggalRapor) : "-"}
+                        </strong>
                       </div>
                     </div>
 
@@ -660,6 +686,22 @@ export default function PeriodeAjaranPage() {
               </div>
             </div>
 
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                Tanggal Rapor Akhir Semester (opsional)
+              </label>
+              <Input
+                type="date"
+                value={tanggalRapor}
+                onChange={(e) => setTanggalRapor(e.target.value)}
+                className="h-11 rounded-xl text-sm"
+              />
+              <p className="text-[11px] text-slate-400">
+                Tanggal pembuatan rapor akhir semester yang ditampilkan di rapor
+                santri &amp; rekap rapor kelas.
+              </p>
+            </div>
+
             <div className="flex items-center gap-2 pt-1">
               <input
                 type="checkbox"
@@ -784,6 +826,22 @@ export default function PeriodeAjaranPage() {
                   className="h-11 rounded-xl text-sm"
                 />
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                Tanggal Rapor Akhir Semester (opsional)
+              </label>
+              <Input
+                type="date"
+                value={editTanggalRapor}
+                onChange={(e) => setEditTanggalRapor(e.target.value)}
+                className="h-11 rounded-xl text-sm"
+              />
+              <p className="text-[11px] text-slate-400">
+                Tanggal pembuatan rapor akhir semester. Kosongkan untuk
+                menghapus tanggal rapor.
+              </p>
             </div>
 
             <div className="flex items-center gap-2 pt-1">
