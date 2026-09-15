@@ -11,17 +11,82 @@ const inter = Inter({ subsets: ["latin"], display: "swap", preload: true })
 // gambar. Wildcard (*) tidak valid untuk preconnect, jadi pakai origin spesifik.
 const supabaseOrigin = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://jjybghdoagdumcdujdgm.supabase.co").replace(/\/$/, "")
 
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://anshorussunnah.com"
+
 export const metadata: Metadata = {
-  title: "Anshorussunnah - Sistem Manajemen Sekolah & LMS",
-  description: "Platform Manajemen Pendidikan & Pembelajaran Digital Pesantren/Sekolah Anshorussunnah",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Anshorussunnah - Sistem Manajemen Sekolah & LMS",
+    template: "%s | Anshorussunnah",
+  },
+  description:
+    "Membina Generasi Qurani Berakhlak Mulia & Unggul Akademik. Platform Manajemen Pendidikan & Pembelajaran Digital Pesantren/Sekolah Anshorussunnah.",
+  keywords: [
+    "Anshorussunnah",
+    "Pesantren Anshorussunnah",
+    "LMS Anshorussunnah",
+    "Sistem Informasi Sekolah",
+    "Pendaftaran Santri Baru",
+    "PPDB Pesantren",
+  ],
+  authors: [{ name: "Pesantren Anshorussunnah" }],
+  creator: "Pesantren Anshorussunnah",
+  publisher: "Pesantren Anshorussunnah",
+  applicationName: "Anshorussunnah LMS",
   icons: {
-    icon: "/icon.png",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon-48x48.png", sizes: "48x48", type: "image/png" },
+      { url: "/icon-96x96.png", sizes: "96x96", type: "image/png" },
+      { url: "/icon-144x144.png", sizes: "144x144", type: "image/png" },
+      { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
     shortcut: "/favicon.ico",
-    apple: "/icon.png",
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
+  manifest: "/site.webmanifest",
+  openGraph: {
+    type: "website",
+    locale: "id_ID",
+    url: siteUrl,
+    siteName: "Anshorussunnah",
+    title: "Anshorussunnah - Sistem Manajemen Sekolah & LMS",
+    description:
+      "Membina Generasi Qurani Berakhlak Mulia & Unggul Akademik. Platform pembelajaran terpadu pesantren Anshorussunnah.",
+    images: [
+      {
+        url: "/icon-512x512.png",
+        width: 512,
+        height: 512,
+        alt: "Logo Pesantren Anshorussunnah",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "Anshorussunnah - Sistem Manajemen Sekolah & LMS",
+    description:
+      "Membina Generasi Qurani Berakhlak Mulia & Unggul Akademik. Platform pembelajaran terpadu pesantren Anshorussunnah.",
+    images: ["/icon-512x512.png"],
   },
   other: {
     "theme-color": "#f59e0b",
   },
+}
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "EducationalOrganization",
+  name: "Pesantren & Sekolah Anshorussunnah",
+  alternateName: "Anshorussunnah",
+  url: siteUrl,
+  logo: `${siteUrl}/icon-512x512.png`,
+  image: `${siteUrl}/icon-512x512.png`,
+  description:
+    "Membina Generasi Qurani Berakhlak Mulia & Unggul Akademik. Platform Manajemen Pendidikan & Pembelajaran Digital Pesantren/Sekolah Anshorussunnah.",
 }
 
 export default function RootLayout({
@@ -35,6 +100,10 @@ export default function RootLayout({
         <link rel="preconnect" href={supabaseOrigin} crossOrigin="anonymous" />
         <link rel="dns-prefetch" href={supabaseOrigin} />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
       </head>
       <body className={`${inter.className} min-h-screen bg-slate-50/50 antialiased text-slate-800 selection:bg-yellow-100 selection:text-yellow-800`}>
         <Providers>{children}</Providers>

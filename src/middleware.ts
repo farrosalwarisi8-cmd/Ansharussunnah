@@ -60,7 +60,17 @@ export async function middleware(request: NextRequest) {
   // matcher; cek prefix ini sebagai lapisan kedua. Pemilahan via
   // "pathname.includes('.')" sengaja TIDAK dipakai karena bisa dipakai untuk
   // menciptakan path berbentuk `/foo.bar/...` yang lolos cek autentikasi.)
-  if (pathname.startsWith("/_next") || pathname.startsWith("/favicon")) {
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/favicon") ||
+    pathname.startsWith("/icon") ||
+    pathname.startsWith("/apple-icon") ||
+    pathname.startsWith("/apple-touch-icon") ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname === "/site.webmanifest" ||
+    pathname === "/manifest.json"
+  ) {
     clearAuthUserHeader(request, supabaseResponse)
     return supabaseResponse
   }
