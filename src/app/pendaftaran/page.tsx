@@ -42,11 +42,11 @@ export default async function PendaftaranPage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-3">
             Formulir Pendaftaran
           </h1>
-          <p className="text-base text-gray-900 font-semibold leading-relaxed">
+          <p className="text-base text-emerald-950 font-bold leading-relaxed">
             Silakan lengkapi seluruh data di bawah ini untuk mendaftarkan calon santri baru.
           </p>
-          <p className="text-sm text-gray-900 font-semibold mt-2 leading-relaxed">
-            Formulir terdiri dari <span className="font-bold text-gray-900">5 langkah</span>:
+          <p className="text-sm text-emerald-900 font-semibold mt-2 leading-relaxed">
+            Formulir terdiri dari <span className="font-bold text-emerald-950">5 langkah</span>:
             data calon santri, data orang tua/wali, asal sekolah, berkas persyaratan, dan konfirmasi.
             Kolom bertanda <span className="text-red-500 font-bold">*</span> wajib diisi. Pastikan semua
             data benar sebelum menekan tombol lanjut — kesalahan data dapat mempengaruhi proses verifikasi.
