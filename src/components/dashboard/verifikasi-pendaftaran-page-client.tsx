@@ -3,6 +3,8 @@
 
 
 import * as React from "react"
+import Image from "next/image"
+import { createPortal } from "react-dom"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { getPendaftaranList, getPendaftaranDetail, verifikasiPendaftaran } from "@/actions/verifikasi"
 import { useToast } from "@/hooks/use-toast"
@@ -19,7 +21,7 @@ const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.
 const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
-import { CheckCircle2, XCircle, ExternalLink, Loader2, Search, RefreshCw, FileX, ArrowUpDown } from "lucide-react"
+import { CheckCircle2, XCircle, ExternalLink, Loader2, Search, RefreshCw, FileX, ArrowUpDown, Printer } from "lucide-react"
 import type { PendaftaranWithRelations } from "@/types"
 
 // Helper: Format label from enum value
@@ -70,6 +72,198 @@ const STATUS_FILTERS = [
   { value: "DITOLAK", label: "Ditolak" },
 ] as const;
 
+function statusText(status?: string | null): string {
+  const map: Record<string, string> = {
+    MENUNGGU_VERIFIKASI: "Menunggu Verifikasi",
+    DITERIMA: "Diterima",
+    DITOLAK: "Ditolak",
+  }
+  return (status && map[status]) || status || "-"
+}
+
+// Style sel tabel untuk dokumen cetak.
+const cellStyle: React.CSSProperties = {
+  border: "1px solid #cbd5e1",
+  padding: "8px 10px",
+  verticalAlign: "top",
+}
+
+// Ikutkan print CSS (body.print-mode) lalu bersihkan setelah dialog print ditutup.
+function cleanupPrintMode() {
+  document.body.classList.remove("print-mode")
+}
+
+// Menunggu pratinjau gambar/PDF di container print termuat sebelum memanggil
+// window.print(). Konten .print-only disembunyikan (display:none) di layar,
+// sehingga browser belum tentu selesai men-download berkas — tanpa penungguan
+// ini pratinjau KK/akta/foto bisa tampil kosong saat di-print / Save as PDF.
+async function activatePrintMode() {
+  document.body.classList.add("print-mode")
+
+  const printRoot = document.querySelector(".print-only")
+  if (printRoot) {
+    const resources = Array.from(
+      printRoot.querySelectorAll("img, iframe")
+    ) as Array<HTMLImageElement | HTMLIFrameElement>
+
+    if (resources.length > 0) {
+      await Promise.race([
+        Promise.all(
+          resources.map((el) => {
+            const ready =
+              el instanceof HTMLImageElement
+                ? el.complete
+                : el.contentDocument !== null || el.src.startsWith("about:")
+            if (ready) return Promise.resolve()
+            return new Promise<void>((resolve) => {
+              el.addEventListener("load", () => resolve(), { once: true })
+              el.addEventListener("error", () => resolve(), { once: true })
+            })
+          })
+        ),
+        new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+      ])
+    }
+  }
+
+  window.addEventListener("afterprint", cleanupPrintMode, { once: true })
+  window.print()
+  window.setTimeout(cleanupPrintMode, 5000)
+}
+
+/* ========================================================================= */
+/* PRINT HELPER COMPONENTS (digunakan dalam portal .print-only)              */
+/* ========================================================================= */
+function PrintSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: "1.25rem" }}>
+      <h2
+        style={{
+          fontSize: "13px",
+          fontWeight: 800,
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+          color: "#1e293b",
+          borderBottom: "1px solid #cbd5e1",
+          paddingBottom: "5px",
+          marginBottom: "8px",
+        }}
+      >
+        {title}
+      </h2>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  )
+}
+
+function PrintRow({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <tr>
+      <td
+        style={{
+          width: "260px",
+          padding: "5px 12px 5px 0",
+          color: "#475569",
+          verticalAlign: "top",
+        }}
+      >
+        {label}
+      </td>
+      <td style={{ padding: "5px 0", fontWeight: 600, color: "#1e293b", verticalAlign: "top" }}>
+        {value || "-"}
+      </td>
+    </tr>
+  )
+}
+
+function isPdfUrl(url?: string | null): boolean {
+  return !!url && /\.pdf(\?|#|$)/i.test(url)
+}
+
+// Pratinjau dokumen terlampir (KK, akta, pas foto, bukti transfer) di layout
+// cetak. File gambar dirender sebagai <img>; file PDF dirender via <iframe>
+// agar isinya ikut tercetak saat print / Save as PDF.
+function PrintDocument({ label, url }: { label: string; url?: string | null }) {
+  return (
+    <tr>
+      <td
+        style={{
+          width: "260px",
+          padding: "6px 12px 6px 0",
+          color: "#475569",
+          verticalAlign: "top",
+          fontWeight: 600,
+          fontSize: "13px",
+        }}
+      >
+        {label}
+      </td>
+      <td style={{ padding: "6px 0", verticalAlign: "top" }}>
+        {isPdfUrl(url) ? (
+          <iframe
+            src={url as string}
+            title={label}
+            style={{
+              width: "300px",
+              height: "220px",
+              border: "1px solid #cbd5e1",
+              borderRadius: "6px",
+              background: "#f8fafc",
+            }}
+          />
+        ) : url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={url}
+            alt={label}
+            style={{
+              maxWidth: "300px",
+              maxHeight: "220px",
+              border: "1px solid #cbd5e1",
+              borderRadius: "6px",
+              objectFit: "contain",
+              display: "block",
+            }}
+          />
+        ) : (
+          <span style={{ color: "#94a3b8", fontWeight: 600 }}>Tidak ada</span>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+function PrintHeader({
+  subtitle,
+  rightInfo,
+}: {
+  subtitle: string
+  rightInfo: React.ReactNode
+}) {
+  return (
+    <div className="flex items-start justify-between border-b-2 border-slate-800 pb-4 mb-6">
+      <div className="flex items-center gap-4">
+        <Image
+          src="/anshorussunnah-logo.webp"
+          alt="Anshorussunnah"
+          width={64}
+          height={64}
+          className="object-contain"
+        />
+        <div>
+          <h1 className="text-lg font-black uppercase tracking-tight text-slate-900">
+            Pondok Pesantren &amp; Sekolah Islam Terpadu Anshorussunnah
+          </h1>
+          <p className="text-sm font-semibold text-slate-700">{subtitle}</p>
+        </div>
+      </div>
+      <div className="text-right text-xs text-slate-600 space-y-0.5">{rightInfo}</div>
+    </div>
+  )
+}
+
 export default function VerifikasiPendaftaranPage() {
   const { toast } = useToast()
 
@@ -97,6 +291,12 @@ export default function VerifikasiPendaftaranPage() {
   const [isApproveConfirmOpen, setIsApproveConfirmOpen] = React.useState(false)
   const [processing, setProcessing] = React.useState(false)
   const [selectedKelasTujuanId, setSelectedKelasTujuanId] = React.useState("")
+
+  // Hanya render portal print setelah mount di client (document.body belum ada saat SSR).
+  const [mounted, setMounted] = React.useState(false)
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Debounce search
   React.useEffect(() => {
@@ -217,6 +417,11 @@ export default function VerifikasiPendaftaranPage() {
   const pendaftar = detailData?.pendaftaran
   const signedUrls = detailData?.signedUrls
 
+  const statusFilterLabel =
+    STATUS_FILTERS.find((f) => f.value === statusFilter)?.label || statusFilter
+
+  const buktiTransferPrintUrls = signedUrls?.buktiTransfer ?? []
+
   // Kelas calon santri yang bisa dipilih saat approve (sesuai jenis kelamin),
   // dipakai ketika pendaftar mendaftar tanpa kelas tujuan.
   const kelasCocokPendaftar = React.useMemo(() => {
@@ -266,6 +471,16 @@ export default function VerifikasiPendaftaranPage() {
               >
                 <ArrowUpDown className="h-3.5 w-3.5" />
                 {sortBy === "newest" ? "Terbaru" : "Terlama"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={activatePrintMode}
+                className="rounded-xl gap-1.5"
+                aria-label="Cetak / Download PDF"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Cetak
               </Button>
               <Button variant="outline" size="sm" onClick={fetchList} className="rounded-xl" aria-label="Muat Ulang">
                 <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
@@ -634,6 +849,10 @@ export default function VerifikasiPendaftaranPage() {
                 )}
 
               <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t border-slate-100">
+                <Button type="button" variant="outline" onClick={activatePrintMode} className="rounded-xl min-h-[44px] text-xs font-bold">
+                  <Printer className="h-4 w-4 mr-1.5" />
+                  Cetak / Download PDF
+                </Button>
                 {detailData?.pendaftaran.status === "MENUNGGU_VERIFIKASI" ? (
                   <>
                     <Button type="button" variant="destructive" onClick={() => setIsRejectDialogOpen(true)} className="rounded-xl min-h-[44px] text-xs font-bold">
@@ -690,6 +909,218 @@ export default function VerifikasiPendaftaranPage() {
         isLoading={processing}
         onConfirm={handleApprove}
       />
+
+      {/* ===================================================================== */}
+      {/* PRINT PORTAL: DATA SANTRI BARU (daftar/list)                          */}
+      {/* Dirender via portal ke <body> agar aktif saat print, tapi tampil      */}
+      {/* hanya ketika modal detail tertutup (tidak duplikat dengan berkas).    */}
+      {/* ===================================================================== */}
+      {mounted && !selectedId &&
+        createPortal(
+          <div className="print-only">
+            <div style={{ padding: "2.5rem 2rem", color: "#1e293b" }}>
+              <PrintHeader
+                subtitle="Data Pendaftaran Calon Santri Baru"
+                rightInfo={
+                  <>
+                    <p>
+                      <strong>Status:</strong> {statusFilterLabel}
+                    </p>
+                    <p>
+                      <strong>Total:</strong> {totalItems} pendaftar
+                    </p>
+                    <p>
+                      <strong>Dicetak:</strong> {formatDate(new Date())}
+                    </p>
+                  </>
+                }
+              />
+              <p className="mb-3" style={{ fontSize: "13px", color: "#475569" }}>
+                Menampilkan {pendaftaranList.length} data (halaman {currentPage} dari {totalPages}).
+              </p>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                <thead>
+                  <tr>
+                    {[
+                      "No.",
+                      "No. Pendaftaran",
+                      "Nama Calon Santri",
+                      "NISN",
+                      "Jenjang Tujuan",
+                      "Orang Tua / Wali",
+                      "Status",
+                      "Tanggal Daftar",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        style={{
+                          border: "1px solid #334155",
+                          background: "#f1f5f9",
+                          padding: "8px 10px",
+                          textAlign: "left",
+                          fontSize: "11px",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.04em",
+                          color: "#1e293b",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendaftaranList.map((p, idx) => (
+                    <tr key={p.id}>
+                      <td style={cellStyle}>{idx + 1}</td>
+                      <td style={{ ...cellStyle, fontFamily: "monospace", fontSize: "11px" }}>
+                        {p.nomorPendaftaran}
+                      </td>
+                      <td style={{ ...cellStyle, fontWeight: 600 }}>{p.namaLengkap}</td>
+                      <td style={cellStyle}>{p.nisn || "-"}</td>
+                      <td style={cellStyle}>
+                        {p.jenjangTujuan?.nama || "-"}
+                        {p.kelasTujuan ? ` / ${p.kelasTujuan.nama}` : ""}
+                      </td>
+                      <td style={cellStyle}>
+                        <div>{p.namaOrangTua || "-"}</div>
+                        <div style={{ fontSize: "11px", color: "#475569" }}>{p.noHpOrangTua || ""}</div>
+                      </td>
+                      <td style={cellStyle}>{statusText(p.status)}</td>
+                      <td style={cellStyle}>{formatDate(p.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p style={{ marginTop: "1.25rem", fontSize: "11px", color: "#64748b" }}>
+                Dokumen ini dicetak melalui sistem pendaftaran online Pondok Pesantren &amp; Sekolah Islam Terpadu Anshorussunnah.
+              </p>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ===================================================================== */}
+      {/* PRINT PORTAL: DETAIL BERKAS SANTRI (modal "Periksa Berkas")           */}
+      {/* ===================================================================== */}
+      {mounted && !!pendaftar &&
+        createPortal(
+          <div className="print-only">
+            <div style={{ padding: "2.5rem 2rem", color: "#1e293b" }}>
+              <PrintHeader
+                subtitle="Detail Berkas Pendaftaran Santri Baru"
+                rightInfo={
+                  <>
+                    <p>
+                      <strong>No. Pendaftaran:</strong> {pendaftar.nomorPendaftaran}
+                    </p>
+                    <p>
+                      <strong>Status:</strong> {statusText(pendaftar.status)}
+                    </p>
+                    <p>
+                      <strong>Dicetak:</strong> {formatDate(new Date())}
+                    </p>
+                  </>
+                }
+              />
+
+              <PrintSection title="Data Calon Siswa">
+                <PrintRow label="Nama Lengkap" value={pendaftar.namaLengkap} />
+                <PrintRow
+                  label="Jenis Kelamin"
+                  value={pendaftar.jenisKelamin === "LAKI_LAKI" ? "Laki-laki" : "Perempuan"}
+                />
+                <PrintRow label="Tempat, Tanggal Lahir"
+                  value={`${pendaftar.tempatLahir || "-"}, ${pendaftar.tanggalLahir ? formatDate(pendaftar.tanggalLahir) : "-"}`}
+                />
+                <PrintRow label="NISN" value={pendaftar.nisn} />
+                <PrintRow label="Agama" value={pendaftar.agama} />
+                <PrintRow label="No. HP Siswa" value={pendaftar.noHpSiswa} />
+                <PrintRow label="Alamat Siswa" value={pendaftar.alamatSiswa} />
+              </PrintSection>
+
+              <PrintSection title="Data Kontak Orang Tua">
+                <PrintRow label="Nama" value={pendaftar.namaOrangTua} />
+                <PrintRow label="No. HP / WA" value={pendaftar.noHpOrangTua} />
+                <PrintRow label="Email" value={pendaftar.emailOrangTua} />
+                <PrintRow label="Alamat" value={pendaftar.alamatOrangTua} />
+              </PrintSection>
+
+              {(pendaftar.namaAyahKandung || pendaftar.statusAyahKandung) && (
+                <PrintSection title="Data Ayah Kandung">
+                  <PrintRow label="Nama" value={pendaftar.namaAyahKandung} />
+                  <PrintRow label="Status" value={formatStatusOrangTua(pendaftar.statusAyahKandung)} />
+                  {pendaftar.statusAyahKandung === "MASIH_HIDUP" && (
+                    <PrintRow label="NIK" value={pendaftar.nikAyah} />
+                  )}
+                </PrintSection>
+              )}
+
+              {(pendaftar.namaIbuKandung || pendaftar.statusIbuKandung) && (
+                <PrintSection title="Data Ibu Kandung">
+                  <PrintRow label="Nama" value={pendaftar.namaIbuKandung} />
+                  <PrintRow label="Status" value={formatStatusOrangTua(pendaftar.statusIbuKandung)} />
+                  {pendaftar.statusIbuKandung === "MASIH_HIDUP" && (
+                    <PrintRow label="NIK" value={pendaftar.nikIbu} />
+                  )}
+                </PrintSection>
+              )}
+
+              {pendaftar.statusWali && (
+                <PrintSection title="Data Wali">
+                  <PrintRow label="Status" value={formatStatusWali(pendaftar.statusWali)} />
+                  {pendaftar.statusWali === "LAINNYA" && (
+                    <PrintRow label="Nama Wali" value={pendaftar.namaWali} />
+                  )}
+                </PrintSection>
+              )}
+
+              {pendaftar.kewarganegaraan && pendaftar.kewarganegaraan !== "WNI" && (
+                <PrintSection title="Kewarganegaraan">
+                  <PrintRow label="Kewarganegaraan" value={pendaftar.kewarganegaraan} />
+                  <PrintRow label="No. KITAS" value={pendaftar.kitas} />
+                  <PrintRow label="Asal Negara" value={pendaftar.asalNegara} />
+                </PrintSection>
+              )}
+
+              <PrintSection title="Dokumen Terlampir">
+                <PrintDocument label="Kartu Keluarga (KK)" url={signedUrls?.kartuKeluarga} />
+                <PrintDocument label="Akta Kelahiran" url={signedUrls?.akteLahir} />
+                <PrintDocument label="Pas Foto" url={signedUrls?.foto} />
+                {buktiTransferPrintUrls.length > 0 ? (
+                  buktiTransferPrintUrls.map((bt, idx) => (
+                    <PrintDocument
+                      key={bt.id}
+                      label={
+                        buktiTransferPrintUrls.length > 1
+                          ? `Foto Bukti Transfer ${idx + 1}`
+                          : "Foto Bukti Transfer"
+                      }
+                      url={bt.url}
+                    />
+                  ))
+                ) : (
+                  <PrintDocument label="Foto Bukti Transfer" url={null} />
+                )}
+              </PrintSection>
+
+              {(pendaftar.diverifikasiOleh || pendaftar.waktuVerifikasi) && (
+                <PrintSection title="Info Verifikasi">
+                  <PrintRow label="Verifikator" value={pendaftar.diverifikasiOleh?.nama} />
+                  <PrintRow
+                    label="Waktu Verifikasi"
+                    value={pendaftar.waktuVerifikasi ? formatDate(pendaftar.waktuVerifikasi) : null}
+                  />
+                </PrintSection>
+              )}
+
+              <p style={{ marginTop: "1.5rem", fontSize: "11px", color: "#64748b" }}>
+                Dokumen ini dicetak melalui sistem pendaftaran online Pondok Pesantren &amp; Sekolah Islam Terpadu Anshorussunnah.
+              </p>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

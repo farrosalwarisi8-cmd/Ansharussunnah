@@ -164,3 +164,45 @@
     background-color: rgba(255, 255, 255, 0.95);
   }
 }
+
+/* ============================================
+   PRINT MODE
+   Dipicu dengan menambahkan class `print-mode` ke <body>
+   sebelum window.print(). Menyembunyikan seluruh aplikasi
+   (screen-app) dan dialog, lalu hanya menampilkan konten
+   ber-class `.print-only` (di-render via portal ke body).
+   ============================================ */
+.print-only {
+  display: none !important;
+}
+
+@media print {
+  body.print-mode {
+    background: #fff !important;
+  }
+
+  body.print-mode .screen-app {
+    display: none !important;
+  }
+
+  /* Sembunyikan dialog/modal Radix yang ter-portal ke <body> */
+  body.print-mode [data-radix-dialog-overlay],
+  body.print-mode [data-radix-dialog-content],
+  body.print-mode [role="dialog"],
+  body.print-mode [data-radix-select-content] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  body.print-mode .print-only {
+    display: block !important;
+  }
+
+  main {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    max-width: 100% !important;
+  }
+}
