@@ -274,6 +274,64 @@ export function buildPemberitahuanRoleBaruEmail(params: {
 }
 
 /**
+ * Template email: Pemberitahuan Tagihan SPP Bulanan (termasuk potongan/khusus).
+ * Dikirim ke email siswa dan/atau orang tua/wali saat tagihan diterbitkan.
+ */
+export function buildTagihanSppEmail(params: {
+  namaSiswa: string
+  bulanLabel: string
+  nominal: number
+  jatuhTempo: Date
+}): string {
+  const namaSiswa = escapeHtml(params.namaSiswa)
+  const bulanLabel = escapeHtml(params.bulanLabel)
+  const nominal = params.nominal.toLocaleString("id-ID")
+  const jatuhTempo = params.jatuhTempo.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  })
+  return `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head><meta charset="UTF-8"></head>
+    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
+      <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h2 style="color: #1e40af; margin-top: 0;">🧾 Tagihan SPP ${bulanLabel}</h2>
+        <p>Assalamu&rsquo;alaikum Wr. Wb.,</p>
+        <p>Yth. Orang Tua/Wali dan Santri,</p>
+        <p>Kami informasikan bahwa tagihan syahriyah (SPP) untuk santri berikut telah diterbitkan:</p>
+
+        <div style="background: #fef9c3; border-radius: 8px; padding: 16px; margin: 16px 0;">
+          <p style="margin: 2px 0;"><strong>Nama Santri:</strong> ${namaSiswa}</p>
+          <p style="margin: 2px 0;"><strong>Periode:</strong> ${bulanLabel}</p>
+          <p style="margin: 2px 0;"><strong>Nominal Tagihan:</strong> <span style="font-size: 18px; font-weight: bold; color: #b45309;">Rp ${nominal}</span></p>
+          <p style="margin: 2px 0;"><strong>Jatuh Tempo:</strong> ${jatuhTempo}</p>
+        </div>
+
+        <h3 style="color: #333;">💳 Nomor Rekening Resmi Pesantren Anshorussunnah</h3>
+        <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 12px 0;">
+          <p style="margin: 2px 0; font-size: 20px; font-weight: bold; letter-spacing: 2px; font-family: monospace; color: #1e40af;">7700 8899 0011</p>
+          <p style="margin: 2px 0; color: #475569; font-size: 13px;">Bank Syariah Indonesia (BSI) — a.n Yayasan Anshorussunnah</p>
+        </div>
+
+        <p>Silakan lakukan pembayaran sebelum tanggal jatuh tempo. Setelah transfer, upload bukti pembayaran melalui <strong>menu Tagihan SPP</strong> pada akun Login Pesantren Anshorussunnah agar segera diverifikasi oleh admin keuangan.</p>
+
+        <div style="background: #fef3c7; border-radius: 8px; padding: 16px; margin: 16px 0;">
+          <p style="margin: 0; color: #92400e;">🔒 <strong>Keamanan:</strong> Jangan bagikan rincian tagihan ini kepada pihak yang tidak berwenang. Jika ada kendala, hubungi admin keuangan pesantren.</p>
+        </div>
+
+        <p style="color: #666; font-size: 13px; margin-top: 24px;">
+          Wassalamu&rsquo;alaikum Wr. Wb.<br/>
+          <strong>Yayasan Anshorussunnah Al-Islamy</strong>
+        </p>
+      </div>
+    </body>
+    </html>
+  `
+}
+
+/**
  * Template email: OTP Lupa Password
  */
 export function buildOtpEmail(params: {

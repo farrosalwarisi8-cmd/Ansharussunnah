@@ -10,6 +10,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getSignedUrls } from "@/lib/storage"
 import {
   generateBulkSppSchema,
+  generateSppKhususSchema,
   submitBuktiSppSchema,
   konfirmasiPembayaranSppSchema,
   konfirmasiPembayaranAdminSchema,
@@ -19,6 +20,7 @@ import {
   queryLaporanKeuanganSchema,
   rekapSppFilterSchema,
   type GenerateBulkSppValues,
+  type GenerateSppKhususValues,
   type SubmitBuktiSppValues,
   type KonfirmasiPembayaranSppValues,
   type KonfirmasiPembayaranAdminValues,
@@ -28,6 +30,7 @@ import {
   type QueryLaporanKeuanganValues,
   type RekapSppFilterValues,
 } from "@/lib/validations/akuntansi"
+import { sendEmail, buildTagihanSppEmail } from "@/lib/email"
 import type { ActionResponse } from "@/types"
 import { Role, StatusTagihan, StatusPembayaran, StatusTransaksi, TipeTransaksi } from "@prisma/client"
 import { Prisma } from "@prisma/client"
@@ -292,6 +295,271 @@ export async function generateTagihanSppInternal(
     return {
       success: false,
       message: toUserFriendlyError(error, "Gagal meng-generate tagihan SPP bulanan. Silakan coba lagi atau hubungi admin."),
+    }
+  }
+}
+
+// ========================================================
+// 1b. GENERATE TAGIHAN SPP KHUSUS (POTONGAN / BEASISWA) PER SISWA
+//     Membuat tagihan hanya untuk siswa yang dipilih admin, dengan nominal
+//     yang bisa berbeda-beda (potongan) untuk satu bulan tertentu.
+// ========================================================
+
+export type SiswaUntukTagihanKhusus = {
+  id: string
+  nama: string
+  email: string
+  nis: string | null
+  kelasId: string | null
+  kelasNama: string | null
+  jenjangNama: string | null
+  jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
+  sppKhusus: number | null
+  tarifJenjang: number | null
+  sudahAdaTagihan: boolean
+}
+
+/**
+ * Daftar siswa aktif (dengan tarif SPP dasar & status tagihan bulan tsb)
+ * untuk panel "Generate SPP Khusus". Admin bisa memfilter jenjang/kelas.
+ */
+export async function getSiswaUntukTagihanKhusus(params: {
+  bulan: number
+  tahun: number
+  jenjangId?: string
+  kelasId?: string
+}): Promise<ActionResponse<SiswaUntukTagihanKhusus[]>> {
+  try {
+    await requireAdminKeuangan()
+
+    const siswaList = await prisma.siswa.findMany({
+      where: {
+        deleted_at: null,
+        user: { aktif: true },
+        ...(params.kelasId ? { kelasId: params.kelasId } : {}),
+        ...(params.jenjangId && !params.kelasId
+          ? { kelas: { jenjangId: params.jenjangId } }
+          : {}),
+      },
+      include: {
+        user: { select: { nama: true, email: true } },
+        kelas: {
+          include: {
+            jenjang: { select: { nama: true, tarifSppBulanan: true } },
+          },
+        },
+        tagihanSiswa: {
+          where: { bulan: params.bulan, tahun: params.tahun, deleted_at: null },
+          select: { id: true },
+        },
+      },
+      orderBy: [
+        { kelas: { jenjang: { urutan: "asc" } } },
+        { kelas: { nama: "asc" } },
+        { user: { nama: "asc" } },
+      ],
+    })
+
+    const data: SiswaUntukTagihanKhusus[] = siswaList.map((s) => ({
+      id: s.id,
+      nama: s.user.nama,
+      email: s.user.email,
+      nis: s.nis,
+      kelasId: s.kelasId,
+      kelasNama: s.kelas?.nama ?? null,
+      jenjangNama: s.kelas?.jenjang?.nama ?? null,
+      jenisKelamin: s.jenisKelamin,
+      sppKhusus: s.sppKhusus ? Number(s.sppKhusus) : null,
+      tarifJenjang: s.kelas?.jenjang?.tarifSppBulanan
+        ? Number(s.kelas.jenjang.tarifSppBulanan)
+        : null,
+      sudahAdaTagihan: s.tagihanSiswa.length > 0,
+    }))
+
+    return {
+      success: true,
+      message: `Daftar siswa berhasil dimuat (${data.length} siswa)`,
+      data,
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: toUserFriendlyError(error, "Gagal memuat daftar siswa untuk tagihan khusus"),
+    }
+  }
+}
+
+export type HasilGenerateSppKhusus = {
+  totalDiproses: number
+  totalDilewati: number
+  totalEmailTerkirim: number
+  rincian: Array<{
+    siswaId: string
+    nama: string
+    nominal: number
+    status: "DIBUAT" | "SUDAH_ADA" | "TIDAK_DITEMUKAN"
+  }>
+}
+
+/**
+ * Menerbitkan tagihan SPP khusus (potongan/beasiswa) untuk siswa terpilih
+ * pada satu bulan tertentu. Idempoten per (siswaId, bulan, tahun).
+ * Opsional: simpan sebagai sppKhusus berkelanjutan & kirim email ke
+ * siswa dan orang tua/wali.
+ */
+export async function generateTagihanSppKhusus(
+  payload: GenerateSppKhususValues
+): Promise<ActionResponse<HasilGenerateSppKhusus>> {
+  try {
+    await requireAdminKeuangan()
+
+    const validated = generateSppKhususSchema.safeParse(payload)
+    if (!validated.success) {
+      return {
+        success: false,
+        message: "Data input tagihan khusus tidak valid",
+        errors: validated.error.flatten().fieldErrors,
+      }
+    }
+
+    const { bulan, tahun, items, simpanSebagaiSppKhusus, kirimEmail } = validated.data
+    const siswaIds = [...new Set(items.map((i) => i.siswaId))]
+    const nominalMap = new Map(items.map((i) => [i.siswaId, i.nominal]))
+
+    // Tagihan yang sudah ada pada periode ini dilewati (idempotency).
+    const existingSet = new Set(
+      (
+        await prisma.tagihanSiswa.findMany({
+          where: { siswaId: { in: siswaIds }, bulan, tahun, deleted_at: null },
+          select: { siswaId: true },
+        })
+      ).map((t) => t.siswaId)
+    )
+
+    const siswaList = await prisma.siswa.findMany({
+      where: { id: { in: siswaIds }, deleted_at: null },
+      include: {
+        user: { select: { nama: true, email: true } },
+        kelas: { select: { nama: true, jenjang: { select: { nama: true } } } },
+        orangTua: {
+          include: {
+            orangTua: { select: { user: { select: { nama: true, email: true } } } },
+          },
+        },
+      },
+    })
+    const siswaMap = new Map(siswaList.map((s) => [s.id, s]))
+
+    const jatuhTempo = new Date(tahun, bulan - 1, 10, 23, 59, 59)
+    const bulanLabel = BULAN_NAMES[bulan]
+
+    const rincian: HasilGenerateSppKhusus["rincian"] = []
+    const dataTagihan: Prisma.TagihanSiswaCreateManyInput[] = []
+    const targetEmail: Array<{ to: string; namaSiswa: string; nominal: number }> = []
+
+    for (const siswaId of siswaIds) {
+      const nominal = nominalMap.get(siswaId)!
+      const siswa = siswaMap.get(siswaId)
+
+      if (!siswa) {
+        rincian.push({ siswaId, nama: "(tidak ditemukan)", nominal, status: "TIDAK_DITEMUKAN" })
+        continue
+      }
+      if (existingSet.has(siswaId)) {
+        rincian.push({ siswaId, nama: siswa.user.nama, nominal, status: "SUDAH_ADA" })
+        continue
+      }
+
+      dataTagihan.push({
+        siswaId: siswa.id,
+        namaTagihan: `SPP ${bulanLabel} ${tahun}`,
+        bulan,
+        tahun,
+        nominal: new Prisma.Decimal(nominal),
+        jatuhTempo,
+        status: StatusTagihan.BELUM_BAYAR,
+      })
+      rincian.push({ siswaId: siswa.id, nama: siswa.user.nama, nominal, status: "DIBUAT" })
+
+      // Penerima email: siswa + semua orang tua/wali terkait.
+      const penerima = new Map<string, string>()
+      if (siswa.user.email) penerima.set(siswa.user.email, siswa.user.nama)
+      for (const rel of siswa.orangTua) {
+        const ortuUser = rel.orangTua?.user
+        if (ortuUser?.email && !penerima.has(ortuUser.email)) {
+          penerima.set(ortuUser.email, ortuUser.nama)
+        }
+      }
+      for (const email of penerima.keys()) {
+        targetEmail.push({ to: email, namaSiswa: siswa.user.nama, nominal })
+      }
+    }
+
+    const hasil = dataTagihan.length
+      ? await prisma.tagihanSiswa.createMany({
+          data: dataTagihan,
+          skipDuplicates: true,
+        })
+      : { count: 0 }
+
+    const totalDibuat = hasil.count
+    const totalDilewati = rincian.filter((r) => r.status !== "DIBUAT").length
+
+    // Simpan nominal potongan ke sppKhusus agar generate massal berikutnya
+    // otomatis memakai nominal ini (berkelanjutan sampai diubah).
+    if (simpanSebagaiSppKhusus) {
+      await prisma.$transaction(
+        siswaIds.map((siswaId) =>
+          prisma.siswa.updateMany({
+            where: { id: siswaId, deleted_at: null },
+            data: { sppKhusus: new Prisma.Decimal(nominalMap.get(siswaId)!) },
+          })
+        )
+      ).catch((err) => {
+        console.error("Gagal menyimpan sppKhusus berkelanjutan:", err)
+      })
+    }
+
+    let totalEmailTerkirim = 0
+    if (kirimEmail) {
+      for (const t of targetEmail) {
+        const res = await sendEmail({
+          to: t.to,
+          subject: `Tagihan SPP ${bulanLabel} ${tahun} — ${t.namaSiswa}`,
+          html: buildTagihanSppEmail({
+            namaSiswa: t.namaSiswa,
+            bulanLabel: `${bulanLabel} ${tahun}`,
+            nominal: t.nominal,
+            jatuhTempo,
+          }),
+        }).catch((err) => {
+          console.error("Gagal kirim email tagihan SPP:", err)
+          return { success: false as const, error: "error" }
+        })
+        if (res?.success) totalEmailTerkirim += 1
+      }
+    }
+
+    revalidatePath("/dashboard/keuangan")
+
+    return {
+      success: true,
+      message:
+        `Tagihan SPP khusus berhasil diterbitkan. Dibuat: ${totalDibuat}, ` +
+        `Dilewati (sudah ada / tidak ditemukan): ${totalDilewati}.` +
+        (kirimEmail ? ` Email dikirim ke ${totalEmailTerkirim} penerima.` : ""),
+      data: {
+        totalDiproses: totalDibuat,
+        totalDilewati,
+        totalEmailTerkirim,
+        rincian,
+      },
+    }
+  } catch (error: unknown) {
+    console.error("Error generateTagihanSppKhusus:", error)
+    return {
+      success: false,
+      message: toUserFriendlyError(error, "Gagal menerbitkan tagihan SPP khusus. Silakan coba lagi."),
     }
   }
 }

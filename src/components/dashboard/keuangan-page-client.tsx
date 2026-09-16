@@ -12,6 +12,9 @@ const VerifikasiPembayaranTab = dynamic(
 const GenerateSppTab = dynamic(
   () => import("@/components/dashboard/keuangan-generate-tab").then((m) => m.GenerateSppTab)
 )
+const SppKhususTab = dynamic(
+  () => import("@/components/dashboard/keuangan-spp-khusus-tab").then((m) => m.SppKhususTab)
+)
 const RekapTab = dynamic(
   () => import("@/components/dashboard/keuangan-rekap-tab").then((m) => m.RekapTab)
 )
@@ -34,6 +37,7 @@ export default function KeuanganPage() {
         <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:grid-cols-3 lg:flex max-w-3xl h-auto p-1.5 gap-1 rounded-2xl">
           <TabsTrigger value="verifikasi" className="rounded-xl min-h-[40px] text-xs font-bold">Verifikasi Pembayaran</TabsTrigger>
           <TabsTrigger value="generate" className="rounded-xl min-h-[40px] text-xs font-bold">Generate SPP Massal</TabsTrigger>
+          <TabsTrigger value="spp-khusus" className="rounded-xl min-h-[40px] text-xs font-bold">Potongan SPP</TabsTrigger>
           <TabsTrigger value="rekap" className="rounded-xl min-h-[40px] text-xs font-bold">
             <BarChart3 className="h-3.5 w-3.5 mr-1 inline" /> Rekap Kelas/Jenjang
           </TabsTrigger>
@@ -47,6 +51,10 @@ export default function KeuanganPage() {
 
         <TabsContent value="generate" className="mt-4">
           <GenerateSppTab />
+        </TabsContent>
+
+        <TabsContent value="spp-khusus" className="mt-4 space-y-4">
+          <SppKhususTab />
         </TabsContent>
 
         <TabsContent value="rekap" className="mt-4 space-y-4">

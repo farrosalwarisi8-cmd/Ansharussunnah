@@ -14,6 +14,30 @@ export const generateBulkSppSchema = z.object({
 
 export type GenerateBulkSppValues = z.infer<typeof generateBulkSppSchema>
 
+// Generate tagihan SPP khusus (potongan/beasiswa) per siswa terpilih.
+// items berisi pasangan (siswaId, nominal) agar nominal tiap siswa bisa berbeda.
+export const generateSppKhususSchema = z.object({
+  bulan: z.number().int().min(1, "Bulan minimal 1 (Januari)").max(12, "Bulan maksimal 12 (Desember)"),
+  tahun: z.number().int().min(2024, "Tahun minimal 2024").max(2100, "Tahun maksimal 2100"),
+  items: z
+    .array(
+      z.object({
+        siswaId: z.string().min(1, "ID siswa wajib diisi"),
+        nominal: z
+          .number()
+          .positive("Nominal tagihan harus lebih dari 0"),
+      })
+    )
+    .min(1, "Pilih minimal 1 siswa"),
+  // Jika true, nominal potongan disimpan ke kolom sppKhusus siswa sehingga
+  // generate SPP massal berikutnya otomatis memakai nominal ini (berkelanjutan).
+  simpanSebagaiSppKhusus: z.boolean().default(false),
+  // Jika true, kirim email pemberitahuan tagihan ke email siswa & orang tua/wali.
+  kirimEmail: z.boolean().default(false),
+})
+
+export type GenerateSppKhususValues = z.infer<typeof generateSppKhususSchema>
+
 // Set tarif SPP per jenjang oleh admin keuangan (nilai 0 = hapus tarif).
 export const updateTarifSppJenjangSchema = z.object({
   jenjangId: z.string().min(1, "Jenjang wajib dipilih"),
