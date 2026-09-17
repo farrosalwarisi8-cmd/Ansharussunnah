@@ -10,12 +10,41 @@ import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import { toUserFriendlyError } from "@/lib/prisma-error"
 import type { ActionResponse } from "@/types"
 import { Prisma, StatusPendaftaran } from "@prisma/client"
+import { nanoid } from "nanoid"
 
 const MAX_RETRY = 5
 
+// Segment folder di dalam bucket "dokumen-pendaftaran" (mis. "temp-<nanoid>").
+const RE_DOKUMEN_SEGMENT = /^[A-Za-z0-9_-]{6,40}$/
+// Nama file yang dihasilkan klien: nanoid + ekstensi yang diizinkan.
+const RE_DOKUMEN_FILE = /^[A-Za-z0-9_-]{1,64}\.(jpg|jpeg|png|webp|pdf)$/i
+
+/**
+ * KEAMANAN (M2): Path dokumen yang dikirim klien harus berbentuk persis hasil
+ * upload form pendaftaran: dokumen-pendaftaran/pendaftaran/temp-<nanoid>/<file>.
+ * Menolak URL eksternal, path bucket lain, path server (pendaftaran/<id>),
+ * path traversal, atau format lain apa pun yang bukan milik flow pendaftaran.
+ */
+function isValidDokumenPath(value: string | null | undefined): boolean {
+  if (!value || typeof value !== "string") return false
+  if (/^https?:\/\//i.test(value)) return false
+  if (value.includes("\\") || value.includes("..")) return false
+
+  const parts = value.split("/")
+  if (parts.length !== 4) return false
+  const [, folderPendaftaran, tempSegment, filePart] = parts
+  return (
+    parts[0] === "dokumen-pendaftaran" &&
+    folderPendaftaran === "pendaftaran" &&
+    tempSegment.startsWith("temp-") &&
+    RE_DOKUMEN_SEGMENT.test(tempSegment) &&
+    RE_DOKUMEN_FILE.test(filePart)
+  )
+}
+
 export async function createPendaftaran(
   formData: FormData
-): Promise<ActionResponse<{ nomorPendaftaran: string }>> {
+): Promise<ActionResponse<{ nomorPendaftaran: string; tokenAkses: string }>> {
   try {
     // ✅ Rate Limiting: 30 pendaftaran / 10 menit per IP
     // Batas per-IP dibuat longgar karena satu IP publik sering dipakai bersama
@@ -138,8 +167,8 @@ export async function createPendaftaran(
     if (duplikatAktif) {
       const pesan =
         duplikatAktif.status === StatusPendaftaran.MENUNGGU_PEMBAYARAN
-          ? `Sudah ada pendaftaran aktif untuk email ini (Nomor: ${duplikatAktif.nomorPendaftaran}) yang menunggu pembayaran. Lanjutkan pembayaran dan upload bukti transfer dengan nomor tersebut.`
-          : `Sudah ada pendaftaran aktif untuk email ini (Nomor: ${duplikatAktif.nomorPendaftaran}) yang sedang diverifikasi admin.`
+          ? `Sudah ada pendaftaran aktif untuk email ini yang menunggu pembayaran. Gunakan nomor pendaftaran yang diterima saat mendaftar untuk melanjutkan pembayaran dan upload bukti transfer.`
+          : `Sudah ada pendaftaran aktif untuk email ini yang sedang diverifikasi admin. Gunakan nomor pendaftaran yang diterima saat mendaftar untuk mengecek status.`
       return { success: false, message: pesan }
     }
 
@@ -177,14 +206,18 @@ export async function createPendaftaran(
       if (nisnSiswa) {
         return {
           success: false,
-          message: `NISN "${data.nisn}" sudah terdaftar atas nama ${nisnSiswa.user.nama}. Mohon gunakan NISN yang berbeda atau hubungi admin sekolah.`,
+          message: `NISN "${data.nisn}" sudah terdaftar atas nama santri lain. Mohon gunakan NISN yang benar atau hubungi admin sekolah.`,
         }
       }
 
       if (nisnPendaftaran) {
         return {
           success: false,
-          message: `NISN "${data.nisn}" sudah digunakan pada pendaftaran lain (Nomor: ${nisnPendaftaran.nomorPendaftaran}, atas nama ${nisnPendaftaran.namaLengkap}) yang sedang ${nisnPendaftaran.status === StatusPendaftaran.MENUNGGU_VERIFIKASI ? "diverifikasi admin" : "menunggu pembayaran"}. Satu NISN hanya boleh untuk satu calon siswa. Mohon periksa kembali.`,
+          message: `NISN "${data.nisn}" sudah digunakan pada pendaftaran aktif lain yang sedang ${
+            nisnPendaftaran.status === StatusPendaftaran.MENUNGGU_VERIFIKASI
+              ? "diverifikasi admin"
+              : "menunggu pembayaran"
+          }. Satu NISN hanya boleh untuk satu calon siswa. Mohon periksa kembali atau hubungi admin sekolah.`,
         }
       }
     }
@@ -193,6 +226,29 @@ export async function createPendaftaran(
     const dokAkte = formData.get("dokAkteLahir") as string | null
     const dokFoto = formData.get("dokFoto") as string | null
     const dokLainnyaRaw = formData.getAll("dokLainnya") as string[]
+    const dokLainnya = dokLainnyaRaw.filter(Boolean)
+
+    // KEAMANAN (M2): hanya izinkan path dokumen yang benar-benar dihasilkan
+    // form pendaftaran (folder temp). Menolak path dari bucket/storage lain,
+    // URL eksternal, atau alur lain — cegah record pendaftaran menunjuk ke
+    // file di luar tempat yang seharusnya.
+    const dokumenPaths = [dokKK, dokAkte, dokFoto, ...dokLainnya].filter(
+      (p): p is string => !!p
+    )
+    for (const p of dokumenPaths) {
+      if (!isValidDokumenPath(p)) {
+        return {
+          success: false,
+          message: "File dokumen tidak valid. Silakan unggah ulang dokumen.",
+        }
+      }
+    }
+    if (dokLainnya.length > 3) {
+      return {
+        success: false,
+        message: "Maksimal 3 dokumen tambahan yang dapat diunggah",
+      }
+    }
 
     const biayaPendaftaran = parseFloat(
       process.env.NEXT_PUBLIC_REGISTRATION_FEE || "500000"
@@ -204,10 +260,14 @@ export async function createPendaftaran(
     for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
       try {
         const nomorPendaftaran = await generateNomorPendaftaran()
+        // Token akses rahasia: kredensial pemilik untuk upload dokumen/bukti
+        // transfer. Hanya dikirim sekali ke klien pada saat pendaftaran dibuat.
+        const tokenAkses = nanoid(32)
 
         const pendaftaran = await prisma.pendaftaran.create({
           data: {
             nomorPendaftaran,
+            tokenAkses,
             namaLengkap: data.namaLengkap,
             tempatLahir: data.tempatLahir,
             tanggalLahir: new Date(data.tanggalLahir),
@@ -236,7 +296,7 @@ export async function createPendaftaran(
             dokKartuKeluarga: dokKK,
             dokAkteLahir: dokAkte,
             dokFoto: dokFoto,
-            dokLainnya: dokLainnyaRaw.filter(Boolean),
+            dokLainnya: dokLainnya,
             status: "MENUNGGU_PEMBAYARAN",
             biayaPendaftaran,
           },
@@ -245,7 +305,10 @@ export async function createPendaftaran(
         return {
           success: true,
           message: "Pendaftaran berhasil dibuat",
-          data: { nomorPendaftaran: pendaftaran.nomorPendaftaran },
+          data: {
+            nomorPendaftaran: pendaftaran.nomorPendaftaran,
+            tokenAkses: pendaftaran.tokenAkses,
+          },
         }
       } catch (error) {
         if (

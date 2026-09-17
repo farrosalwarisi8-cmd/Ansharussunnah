@@ -6,6 +6,10 @@ import prisma from "@/lib/prisma"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { validateFile } from "@/lib/storage"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
+import {
+  isPendaftaranTokenValid,
+  isTokenAksesBentukValid,
+} from "@/lib/pendaftaran-token"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
 import { nanoid } from "nanoid"
@@ -82,6 +86,31 @@ export async function uploadDokumenPendaftaran(
       }
     }
 
+    // KEAMANAN: token akses rahasia dikirim dari halaman upload. Tanpa token
+    // yang benar, nomor pendaftaran saja TIDAK cukup untuk menimpa berkas —
+    // menutup IDOR tulis lintas pendaftar.
+    const tokenAkses = (formData.get("tokenAkses") as string) || ""
+    if (!isTokenAksesBentukValid(tokenAkses)) {
+      return {
+        success: false,
+        message: "Kredensial akses pendaftaran tidak valid",
+      }
+    }
+
+    // Rate limit per NOMOR pendaftaran: batasi percobaan brute-force token
+    // yang menargetkan satu pendaftaran, di samping batas per-IP.
+    const nomorLimiter = await rateLimitAsync(
+      `upload-dokumen-pendaftaran:${nomorPendaftaran}`,
+      { maxRequests: 20, windowMs: 10 * 60 * 1000 }
+    )
+    if (!nomorLimiter.success) {
+      return {
+        success: false,
+        message:
+          "Terlalu banyak percobaan untuk nomor ini. Silakan coba lagi dalam 10 menit.",
+      }
+    }
+
     // Kumpulkan file yang dikirim (setidaknya satu wajib ada).
     const fileEntries = DOKUMEN_MAP.map((d) => ({
       ...d,
@@ -124,6 +153,16 @@ export async function uploadDokumenPendaftaran(
       return {
         success: false,
         message: "Nomor pendaftaran tidak ditemukan",
+      }
+    }
+
+    // KEAMANAN: verifikasi token pemilik (timing-safe). Pesan dibuat generik
+    // agar tidak membedakan antara "nomor tidak ada" vs "token salah" bagi
+    // penyerang yang sudah memegang nomor valid namun bukan pemiliknya.
+    if (!isPendaftaranTokenValid(pendaftaran.tokenAkses, tokenAkses)) {
+      return {
+        success: false,
+        message: "Kredensial akses pendaftaran tidak valid",
       }
     }
 

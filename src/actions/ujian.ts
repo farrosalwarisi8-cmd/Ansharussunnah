@@ -24,6 +24,7 @@ import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
 import { Role, StatusUjian, StatusPengerjaan, Prisma } from "@prisma/client"
 import { toUserFriendlyError } from "@/lib/prisma-error"
+import { isCronAuthorized } from "@/lib/cron-auth"
 import { revalidatePath } from "next/cache"
 
 // ========================================================
@@ -33,6 +34,25 @@ import { revalidatePath } from "next/cache"
 const GAMBAR_SOAL_BUCKET = "soal-ujian"
 const GAMBAR_SOAL_PREFIX = "soal-ujian/"
 const GAMBAR_SOAL_ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"])
+// Format path gambar soal yang dihasilkan uploadGambarSoal:
+//   soal-ujian/ujian-<idUjian>/<nanoid>.<ext>
+const RE_GAMBAR_SOAL_PATH = /^soal-ujian\/ujian-([A-Za-z0-9_-]+)\/[A-Za-z0-9_.-]+$/i
+
+/**
+ * KEAMANAN (M4): Pastikan path gambar soal milik ujian tertentu (folder
+ * ujian-<id>) — bukan URL eksternal, path ujian lain, traversal, atau bucket
+ * lain. Dipakai untuk memvalidasi gambarUrl yang dikirim klien agar soal tidak
+ * bisa menunjuk/menghapus gambar soal ujian milik orang lain.
+ */
+function isValidGambarSoalPathForUjian(
+  gambarUrl: string,
+  ujianId: string
+): boolean {
+  if (/^https?:\/\//i.test(gambarUrl)) return false
+  if (gambarUrl.includes("..") || gambarUrl.includes("\\")) return false
+  const m = gambarUrl.match(RE_GAMBAR_SOAL_PATH)
+  return !!m && m[1] === ujianId
+}
 
 function sanitizeFolderPart(value: string): string {
   return (
@@ -318,7 +338,22 @@ export async function deleteUjian(ujianId: string): Promise<ActionResponse> {
       return { success: false, message: "Ujian tidak ditemukan" }
     }
 
-    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
+    const { user, roleInKelas } = await verifyGuruAksesKelas(
+      ujian.kelasId,
+      ujian.mataPelajaranId
+    )
+
+    // KEAMANAN: hanya pembuat, wali kelas, atau admin yang boleh menghapus.
+    const isOwner = !ujian.dibuatOlehId || ujian.dibuatOlehId === user.id
+    const isPrivileged =
+      roleInKelas === "WALI_KELAS" || roleInKelas === "ADMIN"
+    if (!isOwner && !isPrivileged) {
+      return {
+        success: false,
+        message:
+          "Hanya guru pembuat, wali kelas, atau admin yang dapat menghapus ujian ini",
+      }
+    }
 
     if (ujian._count.pengerjaan > 0) {
       return {
@@ -361,6 +396,17 @@ export async function addOrUpdateSoalUjian(
     if (!ujian) return { success: false, message: "Ujian tidak ditemukan" }
 
     await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
+
+    // KEAMANAN (M4): gambarUrl harus berada di folder soal-ujian/ujian-<id>
+    // milik ujian ini. Mencegah guru menunjuk image ujian lain yang gambarnya
+    // bisa bocor ke siswa (mulaiPengerjaanUjian) atau ikut terhapus saat
+    // soal/ujian ini dihapus.
+    if (gambarUrl && !isValidGambarSoalPathForUjian(gambarUrl, ujianId)) {
+      return {
+        success: false,
+        message: "Path gambar soal tidak valid untuk ujian ini",
+      }
+    }
 
     if (
       ujian.status === StatusUjian.PUBLISHED ||
@@ -446,7 +492,23 @@ export async function deleteSoalUjian(
     const ujian = await prisma.ujian.findUnique({ where: { id: ujianId } })
     if (!ujian) return { success: false, message: "Ujian tidak ditemukan" }
 
-    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
+    const { user, roleInKelas } = await verifyGuruAksesKelas(
+      ujian.kelasId,
+      ujian.mataPelajaranId
+    )
+
+    // KEAMANAN: hanya pembuat, wali kelas, atau admin yang boleh menghapus
+    // soal ujian (mengubah isi ujian milik guru lain).
+    const pemilikGuard = (!ujian.dibuatOlehId || ujian.dibuatOlehId === user.id)
+    const privilegedGuard =
+      roleInKelas === "WALI_KELAS" || roleInKelas === "ADMIN"
+    if (!pemilikGuard && !privilegedGuard) {
+      return {
+        success: false,
+        message:
+          "Hanya guru pembuat, wali kelas, atau admin yang dapat menghapus soal ujian ini",
+      }
+    }
 
     if (
       ujian.status === StatusUjian.PUBLISHED ||
@@ -591,6 +653,24 @@ export async function deleteGambarSoal(filePath: string): Promise<ActionResponse
       return { success: false, message: "Path gambar tidak valid" }
     }
 
+    // KEAMANAN (L1): path saja tidak cukup — verifikasi guru pemanggil punya
+    // akses ke ujian yang gambarnya dihapus. Format path ditentukan oleh
+    // uploadGambarSoal: soal-ujian/ujian-<idUjian>/<namafile>.
+    const pathMatch = filePath.match(RE_GAMBAR_SOAL_PATH)
+    const ujianId = pathMatch?.[1]
+    if (!ujianId) {
+      return { success: false, message: "Path gambar tidak valid" }
+    }
+
+    const ujian = await prisma.ujian.findUnique({
+      where: { id: ujianId },
+      select: { kelasId: true, mataPelajaranId: true },
+    })
+    if (!ujian) {
+      return { success: false, message: "Ujian tidak ditemukan" }
+    }
+    await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
+
     const supabaseAdmin = createSupabaseAdmin()
     const { error: removeError } = await supabaseAdmin.storage
       .from(GAMBAR_SOAL_BUCKET)
@@ -698,6 +778,7 @@ export async function beriNilaiEsai(
             soal: true,
           },
         },
+        jawaban: true,
       },
     })
 
@@ -705,10 +786,30 @@ export async function beriNilaiEsai(
       return { success: false, message: "Data pengerjaan siswa tidak ditemukan" }
     }
 
-    const { user } = await verifyGuruAksesKelas(
+    const { user, roleInKelas } = await verifyGuruAksesKelas(
       pengerjaan.ujian.kelasId,
       pengerjaan.ujian.mataPelajaranId
     )
+
+    // KEAMANAN (re-grade): nilai esai yang sudah diinput guru lain tidak bisa
+    // ditimpa diam-diam — hanya guru yang sama, wali kelas, atau admin.
+    const dinilaiOlehLainDiPenilaian = (pengerjaan.jawaban ?? []).some(
+      (j) =>
+        j.dinilaiOlehId &&
+        j.dinilaiOlehId !== user.id &&
+        penilaian.some((item) => item.soalId === j.soalId)
+    )
+    if (dinilaiOlehLainDiPenilaian) {
+      const isPrivileged =
+        roleInKelas === "WALI_KELAS" || roleInKelas === "ADMIN"
+      if (!isPrivileged) {
+        return {
+          success: false,
+          message:
+            "Jawaban esai ini sudah dinilai guru lain. Hanya wali kelas atau admin yang dapat mengubah nilai.",
+        }
+      }
+    }
 
     await prisma.$transaction(
       async (tx) => {
@@ -1331,15 +1432,38 @@ export async function tutupPengerjaanUjianKedaluwarsa(
   ujianId?: string // Jika diisi, hanya proses ujian tersebut; jika kosong, proses semua
 ): Promise<ActionResponse<{ totalDitutup: number; detail: string[] }>> {
   try {
-    // Bisa dipanggil guru (spesifik per ujian) atau sistem cron (semua ujian)
-    // Jika ada ujianId, validasi guru punya akses ke ujian tersebut
+    // Bisa dipanggil guru (spesifik per ujian) atau sistem cron (semua ujian).
+    // Jika ada ujianId, validasi guru punya akses ke ujian tersebut.
     if (ujianId) {
       const ujian = await prisma.ujian.findUnique({ where: { id: ujianId } })
       if (!ujian) return { success: false, message: "Ujian tidak ditemukan" }
       await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
     }
-    // Untuk mode cron (tanpa ujianId), tidak perlu validasi pemanggil —
-    // middleware route handler yang bertanggung jawab memvalidasi CRON_SECRET.
+
+    // KEAMANAN (M1): Mode global (tanpa ujianId) hanya boleh dijalankan oleh
+    // cron (CRON_SECRET terverifikasi di Route Handler + header diteruskan ke
+    // action). Jika yang memanggil BUKAN cron, turunkan scope menjadi hanya
+    // sesi milik pemanggil (lazy-close siswa/orang tua) — pemanggil tidak
+    // boleh memicu pemrosesan global seluruh sesi pengerjaan.
+    let siswaScope: string[] | null = null
+    if (!ujianId && !(await isCronAuthorized())) {
+      const user = await requireRole([Role.SISWA, Role.ORANG_TUA])
+      if (user.role === Role.SISWA) {
+        if (!user.siswa) {
+          return { success: false, message: "Data siswa tidak ditemukan" }
+        }
+        siswaScope = [user.siswa.id]
+      } else if (user.role === Role.ORANG_TUA) {
+        if (!user.orangTua) {
+          return { success: false, message: "Data orang tua tidak ditemukan" }
+        }
+        const relasi = await prisma.parentStudent.findMany({
+          where: { orangTuaId: user.orangTua.id },
+          select: { siswaId: true },
+        })
+        siswaScope = relasi.map((r) => r.siswaId)
+      }
+    }
 
     const now = new Date()
 
@@ -1349,6 +1473,15 @@ export async function tutupPengerjaanUjianKedaluwarsa(
     }
     if (ujianId) {
       whereClause.ujianId = ujianId
+    }
+    if (siswaScope && siswaScope.length > 0) {
+      whereClause.siswaId = { in: siswaScope }
+    } else if (siswaScope) {
+      return {
+        success: true,
+        message: "Tidak ada anak terdaftar",
+        data: { totalDitutup: 0, detail: [] },
+      }
     }
 
     const sesiAktif = await prisma.pengerjaanUjian.findMany({

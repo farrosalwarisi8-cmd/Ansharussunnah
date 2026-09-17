@@ -134,13 +134,6 @@ export function rateLimit(
   identifier: string,
   options: RateLimitOptions
 ): RateLimitResult {
-  if (identifier.endsWith(":unknown")) {
-    return {
-      success: true,
-      remaining: options.maxRequests,
-      resetAt: Date.now() + options.windowMs,
-    }
-  }
   const now = Date.now()
   const entry = localMemoryStore.get(identifier)
 
@@ -166,24 +159,21 @@ export function rateLimit(
  * Async rate limit mendukung Upstash Redis (untuk Route Handler/Vercel Serverless).
  *
  * ⚠️ Identitas "unknown": saat IP klien TIDAK bisa ditentukan (header proxy tidak
- * tersedia, mis. Server Action di sebagian environment), semua pengguna jatuh ke
- * SATU bucket bersama `:unknown`. Menerapkan batas ketat di bucket ini berarti
- * setelah beberapa request, SELURUH pengunjung ikut terblokir — bukan hanya
- * penyalahguna. Karena kita tidak bisa membedakan pengguna, memblokir semua orang
- * lebih buruk daripada risiko spam yang dicegah, jadi bucket "unknown" dilewati
- * (tidak di-rate-limit) daripada dijadikan batas bersama.
+ * tersedia), semua pengguna jatuh ke SATU bucket bersama `:unknown`. Dulu bucket ini
+ * sengaja dilewati (tidak di-rate-limit) agar pengguna sah tidak ikut terblokir.
+ * Sayangnya itu adalah celah keamanan: penyerang yang IP-nya tidak terdeteksi menjadi
+ * TANPA BATAS — cocok untuk enumerasi nomor pendaftaran / brute-force kredensial.
+ *
+ * Kebijakan sekarang FAIL-CLOSED: identitas `:unknown` tetap dikenakan batas seperti
+ * bucket lain (berbagi satu bucket per rute/pengaturan). Konsekuensinya, sesi tanpa IP
+ * yang berbagi bucket sama bisa saling memengaruhi — tetapi enumerasi massal menjadi
+ * tidak praktis. Batas per operasi dipilih cukup longgar (lih. pemanggil) supaya
+ * pengguna sah biasa tidak terganggu.
  */
 export async function rateLimitAsync(
   identifier: string,
   options: RateLimitOptions
 ): Promise<RateLimitResult> {
-  if (identifier.endsWith(":unknown")) {
-    return {
-      success: true,
-      remaining: options.maxRequests,
-      resetAt: Date.now() + options.windowMs,
-    }
-  }
   return rateLimiterInstance.limit(identifier, options)
 }
 

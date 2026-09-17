@@ -111,6 +111,7 @@ const mockJenjang = { id: "jenjang-1", nama: "Madrasah Ibtidaiyyah" }
 const mockPendaftaranCreated = {
   id: "pend-1",
   nomorPendaftaran: "REG-2026-00001",
+  tokenAkses: "71W2jdYzzAV0FR0DUUPXD2X1seYJfY4Z",
 }
 
 // ========================================================
@@ -159,7 +160,14 @@ describe("createPendaftaran — Kasus Sukses", () => {
 
     expect(result.success).toBe(true)
     expect(result.data?.nomorPendaftaran).toBe("REG-2026-00001")
+    expect(result.data?.tokenAkses).toBe(mockPendaftaranCreated.tokenAkses)
     expect(mockPendaftaranCreate).toHaveBeenCalledOnce()
+
+    // Token dihasilkan server (nanoid 32, kredensial rahasia), ikut tersimpan
+    // saat create.
+    const createCall = mockPendaftaranCreate.mock.calls[0][0]
+    expect(createCall.data.tokenAkses).toMatch(/^[A-Za-z0-9_-]{32}$/)
+    expect(createCall.data.tokenAkses).not.toBe(mockPendaftaranCreated.tokenAkses)
   })
 
   it("harus berhasil menyimpan SEMUA field EMIS ke database", async () => {
@@ -515,7 +523,9 @@ describe("createPendaftaran — Duplikat Aktif", () => {
 
     expect(result.success).toBe(false)
     expect(result.message).toContain("Sudah ada pendaftaran aktif")
-    expect(result.message).toContain("REG-2026-00001")
+    expect(result.message).toContain("menunggu pembayaran")
+    // Oracle: nomor pendaftaran milik pendaftaran LAIN tidak boleh bocor.
+    expect(result.message).not.toContain("REG-2026-00001")
     expect(mockPendaftaranCreate).not.toHaveBeenCalled()
   })
 
@@ -530,6 +540,7 @@ describe("createPendaftaran — Duplikat Aktif", () => {
 
     expect(result.success).toBe(false)
     expect(result.message).toContain("sedang diverifikasi")
+    expect(result.message).not.toContain("REG-2026-00002")
     expect(mockPendaftaranCreate).not.toHaveBeenCalled()
   })
 
@@ -564,7 +575,8 @@ describe("createPendaftaran — Duplikat NISN", () => {
 
     expect(result.success).toBe(false)
     expect(result.message).toContain("NISN")
-    expect(result.message).toContain("Ahmad Fauzi")
+    // Nama santri pemilik NISN tidak boleh bocor ke pendaftar lain.
+    expect(result.message).not.toContain("Ahmad Fauzi")
     expect(mockPendaftaranCreate).not.toHaveBeenCalled()
   })
 
@@ -584,8 +596,10 @@ describe("createPendaftaran — Duplikat NISN", () => {
 
     expect(result.success).toBe(false)
     expect(result.message).toContain("NISN")
-    expect(result.message).toContain("REG-2026-00009")
     expect(result.message).toContain("diverifikasi admin")
+    // Oracle: nomor & nama pendaftaran LAIN tidak boleh bocor.
+    expect(result.message).not.toContain("REG-2026-00009")
+    expect(result.message).not.toContain("Siswa Lain")
     expect(mockPendaftaranCreate).not.toHaveBeenCalled()
   })
 
@@ -604,8 +618,9 @@ describe("createPendaftaran — Duplikat NISN", () => {
 
     expect(result.success).toBe(false)
     expect(result.message).toContain("NISN")
-    expect(result.message).toContain("REG-2026-00010")
     expect(result.message).toContain("menunggu pembayaran")
+    expect(result.message).not.toContain("REG-2026-00010")
+    expect(result.message).not.toContain("Siswa Lain")
     expect(mockPendaftaranCreate).not.toHaveBeenCalled()
   })
 

@@ -600,14 +600,22 @@ export async function updateCatatanRapor(
       return { success: false, message: "Catatan rapor tidak ditemukan" }
     }
 
-    let pembuatId: string | undefined
-    if (catatanRapor.siswa.kelas) {
-      const { user, roleInKelas } = await verifyGuruAksesKelas(catatanRapor.siswa.kelas.id)
-      if (roleInKelas !== "WALI_KELAS" && roleInKelas !== "ADMIN") {
-        return { success: false, message: "Akses ditolak: Hanya wali kelas yang dapat mengubah catatan rapor" }
+    // KEAMANAN (H2): Sebelumnya blok verifikasi guru di-skip ketika siswa
+    // belum memiliki kelas, sehingga action bisa di-RPC tanpa otentikasi sama
+    // sekali. Kini siswa tanpa kelas ditolak di sini — tidak ada cara aman
+    // menentukan wali kelas yang berhak mengubah catatan.
+    if (!catatanRapor.siswa.kelas) {
+      return {
+        success: false,
+        message: "Akses ditolak: Data kelas siswa tidak ditemukan",
       }
-      pembuatId = user.id
     }
+
+    const { user, roleInKelas } = await verifyGuruAksesKelas(catatanRapor.siswa.kelas.id)
+    if (roleInKelas !== "WALI_KELAS" && roleInKelas !== "ADMIN") {
+      return { success: false, message: "Akses ditolak: Hanya wali kelas yang dapat mengubah catatan rapor" }
+    }
+    const pembuatId = user.id
 
     await prisma.catatanRapor.update({
       where: { id: catatanId },

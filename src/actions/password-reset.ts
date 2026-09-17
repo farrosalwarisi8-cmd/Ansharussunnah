@@ -226,9 +226,13 @@ export async function resetPassword(
     )
 
     if (updateError) {
+      // KEAMANAN (L3): jangan bocorkan detail error Supabase ke pengguna —
+      // bisa mengungkap alasan internal akun. Cukup pesan generik; detail
+      // dicatat di sisi server untuk diagnosis.
+      console.error("Password reset updateUserById gagal:", updateError.message)
       return {
         success: false,
-        message: `Gagal memperbarui password: ${updateError.message}`,
+        message: "Gagal memperbarui password. Silakan coba lagi nanti.",
       }
     }
 

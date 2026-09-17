@@ -73,10 +73,13 @@ import { uploadDokumenPendaftaran } from "@/actions/upload-dokumen"
 const mockPendaftaran = {
   id: "pend-1",
   nomorPendaftaran: "REG-2026-00001",
+  tokenAkses: "71W2jdYzzAV0FR0DUUPXD2X1seYJfY4Z",
   dokKartuKeluarga: null,
   dokAkteLahir: "dokumen-pendaftaran/pendaftaran/pend-1/lama.pdf",
   dokFoto: null,
 }
+
+const VALID_TOKEN = mockPendaftaran.tokenAkses
 
 function makeFile(name: string, type: string): File {
   return new File(["dummy-content"], name, { type })
@@ -87,6 +90,7 @@ function makeFormData(
 ): FormData {
   const fd = new FormData()
   fd.set("nomorPendaftaran", "REG-2026-00001")
+  fd.set("tokenAkses", VALID_TOKEN)
   for (const [key, value] of Object.entries(overrides)) {
     fd.set(key, value)
   }
@@ -179,6 +183,43 @@ describe("uploadDokumenPendaftaran — Validasi Input", () => {
 
     expect(result.success).toBe(false)
     expect(result.message).toContain("Nomor pendaftaran tidak ditemukan")
+    expect(mockStorageUpload).not.toHaveBeenCalled()
+  })
+
+  it("harus menolak tanpa token akses (IDOR tulis)", async () => {
+    const fd = makeFormData({ foto: makeFile("foto.png", "image/png") })
+    fd.delete("tokenAkses")
+
+    const result = await uploadDokumenPendaftaran(fd)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("Kredensial akses")
+    expect(mockStorageUpload).not.toHaveBeenCalled()
+  })
+
+  it("harus menolak token akses yang salah walaupun nomor benar", async () => {
+    const result = await uploadDokumenPendaftaran(
+      makeFormData({
+        foto: makeFile("foto.png", "image/png"),
+        tokenAkses: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      })
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("Kredensial akses")
+    expect(mockStorageUpload).not.toHaveBeenCalled()
+  })
+
+  it("harus menolak token akses yang bentuknya tidak valid", async () => {
+    const result = await uploadDokumenPendaftaran(
+      makeFormData({
+        foto: makeFile("foto.png", "image/png"),
+        tokenAkses: "cnbc://token-snippet",
+      })
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("Kredensial akses")
     expect(mockStorageUpload).not.toHaveBeenCalled()
   })
 

@@ -67,7 +67,7 @@ export async function inputAbsensiSingle(
       validated.data
 
     // Otorisasi: guru harus punya akses ke kelas ini
-    const { user } = await verifyGuruAksesKelas(kelasId)
+    const { user, roleInKelas } = await verifyGuruAksesKelas(kelasId)
 
     // Validasi siswa benar-benar terdaftar di kelas ini
     const siswa = await prisma.siswa.findFirst({
@@ -89,6 +89,25 @@ export async function inputAbsensiSingle(
     }
 
     const tanggalDate = new Date(tanggal)
+
+    // KEAMANAN (overwrite-guard): catatan absensi yang sudah diinput guru lain
+    // hanya boleh diubah oleh guru yang SAMA, wali kelas, atau admin — mencegah
+    // pengajar lain mengubah ALPHA→HADIR (atau sebaliknya) tanpa jejak wajar.
+    const existing = await prisma.absensi.findUnique({
+      where: {
+        siswaId_tanggal: { siswaId, tanggal: tanggalDate },
+      },
+      select: { diinputOlehId: true },
+    })
+    const isPrivileged =
+      roleInKelas === "WALI_KELAS" || roleInKelas === "ADMIN"
+    if (existing && existing.diinputOlehId !== user.id && !isPrivileged) {
+      return {
+        success: false,
+        message:
+          "Absensi siswa pada tanggal ini sudah diinput guru lain. Hanya wali kelas atau pihak berwenang yang dapat mengubahnya.",
+      }
+    }
 
     // Upsert: jika sudah ada absensi untuk siswa+tanggal, update; jika belum, create
     await prisma.absensi.upsert({
@@ -148,7 +167,7 @@ export async function inputAbsensiBulk(
 
     const { kelasId, periodeAjaranId, tanggal, absensi } = validated.data
 
-    const { user } = await verifyGuruAksesKelas(kelasId)
+    const { user, roleInKelas } = await verifyGuruAksesKelas(kelasId)
 
     const periode = await prisma.periodeAjaran.findUnique({
       where: { id: periodeAjaranId },
@@ -177,6 +196,22 @@ export async function inputAbsensiBulk(
       return {
         success: false,
         message: `${siswaInvalid.length} siswa tidak terdaftar di kelas yang dipilih`,
+      }
+    }
+
+    // KEAMANAN (overwrite-guard bulk): catatan absensi yang diinput guru lain
+    // hanya boleh diubah oleh guru yang SAMA / wali kelas / admin.
+    const existingList = await prisma.absensi.findMany({
+      where: { tanggal: tanggalDate, siswaId: { in: siswaIds } },
+      select: { siswaId: true, diinputOlehId: true },
+    })
+    const isPrivileged =
+      roleInKelas === "WALI_KELAS" || roleInKelas === "ADMIN"
+    const conflicts = existingList.filter((r) => r.diinputOlehId !== user.id)
+    if (conflicts.length > 0 && !isPrivileged) {
+      return {
+        success: false,
+        message: `${conflicts.length} catatan absensi tanggal ini sudah diinput guru lain. Hanya wali kelas atau pihak berwenang yang dapat mengubahnya.`,
       }
     }
 

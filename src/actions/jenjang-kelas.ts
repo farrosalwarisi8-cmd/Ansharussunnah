@@ -15,6 +15,7 @@ import {
 import type { ActionResponse, JenjangWithKelas, KelasWithRelations } from "@/types"
 import { guruCocokKelas } from "@/lib/guru-kelas-gender"
 import { revalidatePath } from "next/cache"
+import { cachedJson, invalidateCache, CACHE_TTL_REF } from "@/lib/cache"
 
 // ========================================================
 // 1. PUBLIC ACTIONS
@@ -39,22 +40,24 @@ export async function getJenjangDenganKelas(): Promise<
   >
 > {
   try {
-    const jenjangs = await prisma.jenjang.findMany({
-      where: { aktif: true },
-      orderBy: { urutan: "asc" },
-      include: {
-        kelas: {
-          where: { aktif: true },
-          orderBy: { nama: "asc" },
-          select: {
-            id: true,
-            nama: true,
-            kapasitas: true,
-            jenisKelamin: true,
+    const jenjangs = await cachedJson("ref:jenjang:withkelas", CACHE_TTL_REF, () =>
+      prisma.jenjang.findMany({
+        where: { aktif: true },
+        orderBy: { urutan: "asc" },
+        include: {
+          kelas: {
+            where: { aktif: true },
+            orderBy: { nama: "asc" },
+            select: {
+              id: true,
+              nama: true,
+              kapasitas: true,
+              jenisKelamin: true,
+            },
           },
         },
-      },
-    })
+      })
+    )
 
     return {
       success: true,
@@ -80,23 +83,25 @@ export async function getAdminJenjangList(): Promise<ActionResponse<JenjangWithK
   try {
     await requireGuruAdmin()
 
-    const jenjangs = await prisma.jenjang.findMany({
-      orderBy: { urutan: "asc" },
-      include: {
-        kelas: {
-          include: {
-            jenjang: true,
-            waliKelas: {
-              where: { deleted_at: null },
-              include: { user: true },
-            },
-            _count: {
-              select: { siswa: true },
+    const jenjangs = await cachedJson("ref:jenjang:admin", CACHE_TTL_REF, () =>
+      prisma.jenjang.findMany({
+        orderBy: { urutan: "asc" },
+        include: {
+          kelas: {
+            include: {
+              jenjang: true,
+              waliKelas: {
+                where: { deleted_at: null },
+                include: { user: true },
+              },
+              _count: {
+                select: { siswa: true },
+              },
             },
           },
         },
-      },
-    })
+      })
+    )
 
     return {
       success: true,
@@ -152,6 +157,8 @@ export async function createJenjang(
       data: { nama, urutan, aktif: true, tarifSppBulanan: tarifSppBulanan ?? null },
     })
 
+    await invalidateCache("ref:jenjang")
+    await invalidateCache("ref:mapel")
     revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 
@@ -193,6 +200,8 @@ export async function updateJenjang(
       },
     })
 
+    await invalidateCache("ref:jenjang")
+    await invalidateCache("ref:mapel")
     revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 
@@ -247,6 +256,8 @@ export async function deleteJenjang(id: string): Promise<ActionResponse> {
 
     await prisma.jenjang.delete({ where: { id } })
 
+    await invalidateCache("ref:jenjang")
+    await invalidateCache("ref:mapel")
     revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 
@@ -273,19 +284,21 @@ export async function getAdminKelasList(): Promise<ActionResponse<KelasWithRelat
   try {
     await requireGuruAdmin()
 
-    const kelas = await prisma.kelas.findMany({
-      orderBy: [{ jenjang: { urutan: "asc" } }, { nama: "asc" }],
-      include: {
-        jenjang: true,
-        waliKelas: {
-          where: { deleted_at: null },
-          include: { user: true },
+    const kelas = await cachedJson("ref:kelas:admin", CACHE_TTL_REF, () =>
+      prisma.kelas.findMany({
+        orderBy: [{ jenjang: { urutan: "asc" } }, { nama: "asc" }],
+        include: {
+          jenjang: true,
+          waliKelas: {
+            where: { deleted_at: null },
+            include: { user: true },
+          },
+          _count: {
+            select: { siswa: true },
+          },
         },
-        _count: {
-          select: { siswa: true },
-        },
-      },
-    })
+      })
+    )
 
     return {
       success: true,
@@ -370,6 +383,8 @@ export async function createKelas(payload: KelasFormValues): Promise<ActionRespo
       },
     })
 
+    await invalidateCache("ref:kelas")
+    await invalidateCache("ref:jenjang")
     revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 
@@ -463,6 +478,8 @@ export async function updateKelas(
       },
     })
 
+    await invalidateCache("ref:kelas")
+    await invalidateCache("ref:jenjang")
     revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 
@@ -531,6 +548,8 @@ export async function deleteKelas(id: string): Promise<ActionResponse> {
 
     await prisma.kelas.delete({ where: { id } })
 
+    await invalidateCache("ref:kelas")
+    await invalidateCache("ref:jenjang")
     revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 

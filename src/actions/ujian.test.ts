@@ -10,9 +10,19 @@ import { AppError } from "@/lib/prisma-error"
 const {
   mockVerifyGuruAksesKelas,
   mockUjianFindUnique,
+  mockSoalUjianFindUnique,
+  mockSoalUjianUpsert,
+  mockOpsiDeleteMany,
+  mockOpsiCreateMany,
+  mockPrismaTransaction,
 } = vi.hoisted(() => ({
   mockVerifyGuruAksesKelas: vi.fn(),
   mockUjianFindUnique: vi.fn(),
+  mockSoalUjianFindUnique: vi.fn(),
+  mockSoalUjianUpsert: vi.fn(),
+  mockOpsiDeleteMany: vi.fn(),
+  mockOpsiCreateMany: vi.fn(),
+  mockPrismaTransaction: vi.fn(),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -24,6 +34,14 @@ vi.mock("@/lib/prisma", () => ({
     ujian: {
       findUnique: mockUjianFindUnique,
     },
+    soalUjian: {
+      findUnique: mockSoalUjianFindUnique,
+    },
+    opsiJawaban: {
+      deleteMany: mockOpsiDeleteMany,
+      createMany: mockOpsiCreateMany,
+    },
+    $transaction: mockPrismaTransaction,
   },
 }))
 
@@ -44,7 +62,7 @@ vi.mock("next/cache", () => ({
 // Import setelah semua vi.mock() terdaftar
 // ========================================================
 
-import { getUjianDetail } from "@/actions/ujian"
+import { getUjianDetail, addOrUpdateSoalUjian } from "@/actions/ujian"
 
 // ========================================================
 // Data dummy
@@ -230,5 +248,92 @@ describe("getUjianDetail", () => {
     }
     expect(data.soal[0].tipe).toBe("ESAI")
     expect(data.soal[0].opsi).toHaveLength(0)
+  })
+})
+
+// ========================================================
+// addOrUpdateSoalUjian — validasi gambarUrl (KEAMANAN M4)
+// ========================================================
+
+describe("addOrUpdateSoalUjian — validasi gambarUrl (M4)", () => {
+  const baseUjian = {
+    id: "ujc001",
+    kelasId: "7A-IKHWAN",
+    mataPelajaranId: "mapel-fiqih",
+    status: "DRAFT",
+  }
+
+  const payloadValid = {
+    ujianId: "ujc001",
+    nomorSoal: 1,
+    pertanyaan: "Berapakah jumlah rukun wudhu?",
+    tipe: "PILIHAN_GANDA" as const,
+    bobot: 10,
+    gambarUrl: "soal-ujian/ujian-ujc001/gambar1.jpg",
+    opsi: [
+      { label: "A", teks: "4", benar: false },
+      { label: "B", teks: "6", benar: true },
+    ],
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockVerifyGuruAksesKelas.mockResolvedValue({ user: { id: "guru-1" } })
+    mockUjianFindUnique.mockResolvedValue(baseUjian)
+  })
+
+  it("menolak gambarUrl milik ujian lain (folder beda)", async () => {
+    const result = await addOrUpdateSoalUjian({
+      ...payloadValid,
+      gambarUrl: "soal-ujian/ujian-ujian-lain/gambar2.png",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("Path gambar soal")
+    expect(mockSoalUjianFindUnique).not.toHaveBeenCalled()
+  })
+
+  it("menolak URL eksternal", async () => {
+    const result = await addOrUpdateSoalUjian({
+      ...payloadValid,
+      gambarUrl: "https://evil.example.com/x.png",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("Path gambar soal")
+    expect(mockSoalUjianFindUnique).not.toHaveBeenCalled()
+  })
+
+  it("menolak path traversal / backslash", async () => {
+    const result = await addOrUpdateSoalUjian({
+      ...payloadValid,
+      gambarUrl: "soal-ujian/ujian-ujc001/..\\..\\ujian-lain\\x.png",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("Path gambar soal")
+    expect(mockSoalUjianFindUnique).not.toHaveBeenCalled()
+  })
+
+  it("menerima gambarUrl milik ujian yang sama", async () => {
+    mockSoalUjianFindUnique.mockResolvedValue(null)
+    mockSoalUjianUpsert.mockResolvedValue({ id: "soal-baru" })
+    mockOpsiDeleteMany.mockResolvedValue({})
+    mockOpsiCreateMany.mockResolvedValue({})
+    mockPrismaTransaction.mockImplementation(
+      async (fn: (t: Record<string, unknown>) => Promise<unknown>) =>
+        fn({
+          soalUjian: { upsert: mockSoalUjianUpsert },
+          opsiJawaban: {
+            deleteMany: mockOpsiDeleteMany,
+            createMany: mockOpsiCreateMany,
+          },
+        })
+    )
+
+    const result = await addOrUpdateSoalUjian(payloadValid)
+
+    expect(result.success).toBe(true)
+    expect(mockSoalUjianUpsert).toHaveBeenCalled()
   })
 })

@@ -37,6 +37,23 @@ async function verifyOrangTuaAksesSiswa(
 }
 
 // ========================================================
+// HELPER: Validasi lampiran tugas (URL eksternal ATAU path bucket lampiran)
+// ========================================================
+
+/**
+ * KEAMANAN: `lampiranUrl` dulu disimpan mentah tanpa validasi — nilai arbitrer
+ * seperti `javascript:...` bisa masuk ke DB dan dirender sebagai link. Sekarang
+ * hanya menerima URL `http(s)://` (link referensi eksternal — flow yang sah,
+ * mis. Google Drive) atau path internal bucket "lampiran" (tanpa traversal).
+ */
+function isLampiranUrlValid(value: string): boolean {
+  if (/^https?:\/\//i.test(value)) return true
+  const internal = value.startsWith("lampiran/")
+  const aman = !value.includes("..") && !value.includes("\\") && !value.includes("://")
+  return internal && aman
+}
+
+// ========================================================
 // 1. ACTIONS GURU: CRUD TUGAS
 // ========================================================
 
@@ -66,6 +83,14 @@ export async function createTugas(
       deadline,
       lampiranUrl,
     } = validated.data
+
+    if (lampiranUrl && !isLampiranUrlValid(lampiranUrl)) {
+      return {
+        success: false,
+        message:
+          "Format lampiran tidak valid (gunakan URL http(s) atau lokasi lampiran internal)",
+      }
+    }
 
     const { user } = await verifyGuruAksesKelas(kelasId, mataPelajaran)
 
@@ -221,6 +246,14 @@ export async function updateTugas(
       }
     }
 
+    if (payload.lampiranUrl && !isLampiranUrlValid(payload.lampiranUrl)) {
+      return {
+        success: false,
+        message:
+          "Format lampiran tidak valid (gunakan URL http(s) atau lokasi lampiran internal)",
+      }
+    }
+
     await prisma.tugas.update({
       where: { id: tugasId },
       data: {
@@ -260,7 +293,22 @@ export async function deleteTugas(tugasId: string): Promise<ActionResponse> {
       return { success: false, message: "Tugas tidak ditemukan" }
     }
 
-    await verifyGuruAksesKelas(tugas.kelasId, tugas.mataPelajaranId)
+    const { user, roleInKelas } = await verifyGuruAksesKelas(
+      tugas.kelasId,
+      tugas.mataPelajaranId
+    )
+
+    // KEAMANAN: hanya pembuat, wali kelas, atau admin yang boleh menghapus.
+    const isOwner = !tugas.dibuatOlehId || tugas.dibuatOlehId === user.id
+    const isPrivileged =
+      roleInKelas === "WALI_KELAS" || roleInKelas === "ADMIN"
+    if (!isOwner && !isPrivileged) {
+      return {
+        success: false,
+        message:
+          "Hanya guru pembuat, wali kelas, atau admin yang dapat menghapus tugas ini",
+      }
+    }
 
     if (tugas._count.pengumpulan > 0) {
       return {
@@ -377,10 +425,24 @@ export async function beriNilaiTugas(
       }
     }
 
-    const { user } = await verifyGuruAksesKelas(
+    const { user, roleInKelas } = await verifyGuruAksesKelas(
       pengumpulan.tugas.kelasId,
       pengumpulan.tugas.mataPelajaranId
     )
+
+    // KEAMANAN (re-grade): nilai yang sudah diinput guru lain tidak bisa
+    // ditimpa diam-diam — hanya guru yang sama, wali kelas, atau admin.
+    if (pengumpulan.dinilaiOlehId && pengumpulan.dinilaiOlehId !== user.id) {
+      const isPrivileged =
+        roleInKelas === "WALI_KELAS" || roleInKelas === "ADMIN"
+      if (!isPrivileged) {
+        return {
+          success: false,
+          message:
+            "Pengumpulan ini sudah dinilai guru lain. Hanya wali kelas atau admin yang dapat mengubah nilai.",
+        }
+      }
+    }
 
     await prisma.pengumpulanTugas.update({
       where: { id: pengumpulanId },

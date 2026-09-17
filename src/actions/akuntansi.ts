@@ -35,6 +35,7 @@ import type { ActionResponse } from "@/types"
 import { Role, StatusTagihan, StatusPembayaran, StatusTransaksi, TipeTransaksi } from "@prisma/client"
 import { Prisma } from "@prisma/client"
 import { toUserFriendlyError, AppError } from "@/lib/prisma-error"
+import { isCronAuthorized } from "@/lib/cron-auth"
 import { revalidatePath } from "next/cache"
 
 const BULAN_NAMES = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
@@ -150,14 +151,24 @@ export async function generateBulkSpp(
 }
 
 /**
- * Inti logika generate tagihan SPP bulanan — tanpa guard otentikasi sesi.
- * Dipakai oleh server action (dengan requireAdminKeuangan) dan oleh
- * cron job SPP bulanan (dengan guard CRON_SECRET di route API).
+ * Inti logika generate tagihan SPP bulanan — tanpa guard otentikasi sesi
+ * LANGSUNG, karena fungsi ini dipakai oleh server action (dengan
+ * requireAdminKeuangan) DAN oleh cron job SPP bulanan (dengan guard
+ * CRON_SECRET di route API).
+ *
+ * KEAMANAN (K3): Meski bersifat "internal", fungsi ini diekspor dari modul
+ * "use server" sehingga tetap bisa di-RPC dari klien. Karena itu dilakukan
+ * otentikasi di sini: bila bukan panggilan cron yang sah (header
+ * Authorization = CRON_SECRET), pemanggil WAJIB melewati requireAdminKeuangan.
  */
 export async function generateTagihanSppInternal(
   payload: GenerateBulkSppValues
 ): Promise<ActionResponse<HasilGenerateSpp>> {
   try {
+    if (!(await isCronAuthorized())) {
+      await requireAdminKeuangan()
+    }
+
     const validated = generateBulkSppSchema.safeParse(payload)
     if (!validated.success) {
       return {

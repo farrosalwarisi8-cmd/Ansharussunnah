@@ -53,61 +53,96 @@ const nextConfig: NextConfig = {
 
   // ✅ Security Headers untuk Production
   async headers() {
+    // Cache-Control ketat: tidak ada halaman dinamis (dashboard, data pribadi,
+    // status pendaftaran) yang boleh di-cache publik. Aset statik yang
+    // ber-hash Justru di-cache lama & immutable.
+    const staticHeaders: Array<{ key: string; value: string }> = [
+      {
+        key: "Cache-Control",
+        value: "public, max-age=31536000, immutable",
+      },
+    ]
+
+    const identityHeaders: Array<{ key: string; value: string }> = [
+      {
+        key: "Cache-Control",
+        value: "no-store, private",
+      },
+    ]
+
+    // 'unsafe-eval' hanya dibutuhkan runtime development (webpack/Next dev).
+    // Production build Next.js tidak memakai eval — jadi dihapus agar CSP
+    // lebih ketat tanpa mengganggu workflow developer.
+    const unsafeEval =
+      process.env.NODE_ENV === "development" ? "'unsafe-eval' " : ""
+
+    const securityHeaders: Array<{ key: string; value: string }> = [
+      {
+        key: "X-Frame-Options",
+        value: "DENY",
+      },
+      {
+        key: "X-Content-Type-Options",
+        value: "nosniff",
+      },
+      {
+        key: "Referrer-Policy",
+        value: "strict-origin-when-cross-origin",
+      },
+      {
+        key: "X-XSS-Protection",
+        value: "1; mode=block",
+      },
+      {
+        key: "Permissions-Policy",
+        value: "camera=(), microphone=(), geolocation=()",
+      },
+      {
+        key: "Strict-Transport-Security",
+        value: "max-age=63072000; includeSubDomains; preload",
+      },
+      {
+        key: "Cross-Origin-Opener-Policy",
+        value: "same-origin",
+      },
+      {
+        key: "Cross-Origin-Resource-Policy",
+        value: "same-origin",
+      },
+      {
+        key: "Content-Security-Policy",
+        value: [
+          "default-src 'self'",
+          `script-src 'self' 'unsafe-inline' ${unsafeEval}https://va.vercel-scripts.com`,
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' blob: data: https://*.supabase.co",
+          "font-src 'self'",
+          "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+          "frame-ancestors 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+        ].join("; "),
+      },
+    ]
+
     return [
+      // Aset statik ber-hash — cache publik lama.
+      {
+        source: "/_next/static/(.*)",
+        headers: [...securityHeaders, ...staticHeaders],
+      },
+      // File statik publik (logo dkk).
+      {
+        source: "/(.*)\\.(png|jpg|jpeg|webp|svg|ico|webmanifest)$",
+        headers: [
+          ...securityHeaders,
+          { key: "Cache-Control", value: "public, max-age=3600, must-revalidate" },
+        ],
+      },
+      // Semua halaman dinamis — tidak boleh di-cache publik.
       {
         source: "/(.*)",
-        headers: [
-          {
-            key: "X-Frame-Options",
-            value: "DENY",
-          },
-          {
-            key: "X-Content-Type-Options",
-            value: "nosniff",
-          },
-          {
-            key: "Referrer-Policy",
-            value: "strict-origin-when-cross-origin",
-          },
-          {
-            key: "X-XSS-Protection",
-            value: "1; mode=block",
-          },
-          {
-            key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
-          },
-          {
-            key: "Strict-Transport-Security",
-            value: "max-age=63072000; includeSubDomains; preload",
-          },
-          {
-            key: "Cross-Origin-Opener-Policy",
-            value: "same-origin",
-          },
-          {
-            key: "Cross-Origin-Resource-Policy",
-            value: "same-origin",
-          },
-          {
-            key: "Cache-Control",
-            value: "public, max-age=0, must-revalidate",
-          },
-          {
-            key: "Content-Security-Policy",
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com",
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' blob: data: https://*.supabase.co",
-              "font-src 'self'",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
-              "frame-ancestors 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-            ].join("; "),
-          },
-        ],
+        headers: [...securityHeaders, ...identityHeaders],
       },
     ]
   },

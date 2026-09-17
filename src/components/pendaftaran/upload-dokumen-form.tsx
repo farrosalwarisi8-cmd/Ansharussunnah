@@ -4,7 +4,10 @@
 
 import * as React from "react"
 import { uploadDokumenPendaftaran } from "@/actions/upload-dokumen"
+import { getTokenAkses } from "@/lib/pendaftaran-token-client"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { FileUpload } from "@/components/ui/file-upload"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, Upload, BadgeCheck, FileUp } from "lucide-react"
@@ -26,9 +29,14 @@ export function UploadDokumenForm({
   const [filesKK, setFilesKK] = React.useState<File[]>([])
   const [filesAkte, setFilesAkte] = React.useState<File[]>([])
   const [filesFoto, setFilesFoto] = React.useState<File[]>([])
+  const [tokenAkses, setTokenAksesState] = React.useState("")
   const [isUploading, setIsUploading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState(false)
+
+  React.useEffect(() => {
+    setTokenAksesState(getTokenAkses(nomorPendaftaran))
+  }, [nomorPendaftaran])
 
   const handleUpload = async () => {
     if (
@@ -40,6 +48,13 @@ export function UploadDokumenForm({
       return
     }
 
+    if (!tokenAkses) {
+      setError(
+        "Token akses pendaftaran wajib diisi. Salin dari halaman 'Pendaftaran Berhasil'."
+      )
+      return
+    }
+
     setIsUploading(true)
     setError(null)
 
@@ -48,6 +63,7 @@ export function UploadDokumenForm({
       // storage dengan service role (kontrol path & validasi keamanan penuh).
       const formData = new FormData()
       formData.append("nomorPendaftaran", nomorPendaftaran)
+      formData.append("tokenAkses", tokenAkses)
       if (filesKK.length > 0) formData.append("kartuKeluarga", filesKK[0])
       if (filesAkte.length > 0) formData.append("akteLahir", filesAkte[0])
       if (filesFoto.length > 0) formData.append("foto", filesFoto[0])
@@ -115,6 +131,23 @@ export function UploadDokumenForm({
           Unggah berkas pendukung yang dibutuhkan untuk melengkapi pendaftaran.
           Berkas yang sudah ada dapat diganti dengan mengunggah yang baru.
         </p>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="token-akses">Token Akses Pendaftaran</Label>
+          <Input
+            id="token-akses"
+            type="text"
+            value={tokenAkses}
+            onChange={(e) => setTokenAksesState(e.target.value.trim())}
+            placeholder="Salin token akses dari halaman 'Pendaftaran Berhasil'"
+            className="font-mono"
+          />
+          <p className="text-xs text-gray-400">
+            Token otomatis terisi jika Anda mengakses halaman ini langsung dari
+            hasil pendaftaran. Diperlukan untuk memastikan berkas hanya bisa
+            diunggah pemilik pendaftaran.
+          </p>
+        </div>
 
         <FileUpload
           label="Kartu Keluarga (KK)"

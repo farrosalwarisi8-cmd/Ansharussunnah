@@ -4,6 +4,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireGuru, requireGuruAdmin, isAcademicAdminRole } from "@/lib/auth"
+import { verifyGuruAksesKelas } from "@/lib/guru-auth"
 import {
   assignGuruKeKelasSchema,
   type AssignGuruKeKelasValues,
@@ -176,11 +177,19 @@ export async function getDaftarPengajarKelas(
   kelasId: string
 ): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    const user = await requireGuru()
 
     const kelas = await prisma.kelas.findUnique({ where: { id: kelasId } })
     if (!kelas) {
       return { success: false, message: "Kelas tidak ditemukan" }
+    }
+
+    // KEAMANAN (L2): hanya SUPER_ADMIN/ADMIN_AKADEMIK yang boleh melihat
+    // pengajar kelas mana pun. Guru biasa dibatasi ke kelas yang diajarnya
+    // (verifyGuruAksesKelas) — mencegah IDOR membuka kelas lain dan bocor
+    // email rekan guru.
+    if (!isAcademicAdminRole(user.role)) {
+      await verifyGuruAksesKelas(kelasId)
     }
 
     const pengajarList = await prisma.guruKelas.findMany({

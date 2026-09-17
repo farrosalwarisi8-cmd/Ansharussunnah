@@ -282,6 +282,7 @@ model MapelKelas {
 model Pendaftaran {
   id                 String                     @id @default(cuid())
   nomorPendaftaran   String                     @unique @map("nomor_pendaftaran")
+  tokenAkses         String                     @unique @map("token_akses")
   namaLengkap        String                     @map("nama_lengkap")
   tempatLahir        String                     @map("tempat_lahir")
   tanggalLahir       DateTime @db.Timestamptz(3)                   @map("tanggal_lahir")

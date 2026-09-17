@@ -5,7 +5,10 @@
 import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
 import { uploadBuktiTransferPendaftaran } from "@/actions/bukti-transfer"
+import { getTokenAkses } from "@/lib/pendaftaran-token-client"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { FileUpload } from "@/components/ui/file-upload"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, Upload, ArrowLeft } from "lucide-react"
@@ -17,13 +20,25 @@ export default function UploadBuktiPage() {
   const nomorPendaftaran = params.nomor as string
 
   const [files, setFiles] = React.useState<File[]>([])
+  const [tokenAkses, setTokenAksesState] = React.useState("")
   const [isUploading, setIsUploading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState(false)
 
+  React.useEffect(() => {
+    setTokenAksesState(getTokenAkses(nomorPendaftaran))
+  }, [nomorPendaftaran])
+
   const handleUpload = async () => {
     if (files.length === 0) {
       setError("Silakan pilih file bukti transfer terlebih dahulu")
+      return
+    }
+
+    if (!tokenAkses) {
+      setError(
+        "Token akses pendaftaran wajib diisi. Salin dari halaman 'Pendaftaran Berhasil'."
+      )
       return
     }
 
@@ -35,6 +50,7 @@ export default function UploadBuktiPage() {
       // storage dengan service role (kontrol path & validasi keamanan penuh).
       const formData = new FormData()
       formData.append("nomorPendaftaran", nomorPendaftaran)
+      formData.append("tokenAkses", tokenAkses)
       formData.append("file", files[0])
 
       const result = await uploadBuktiTransferPendaftaran(formData)
@@ -109,6 +125,23 @@ export default function UploadBuktiPage() {
                 {error}
               </div>
             )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="token-akses">Token Akses Pendaftaran</Label>
+              <Input
+                id="token-akses"
+                type="text"
+                value={tokenAkses}
+                onChange={(e) => setTokenAksesState(e.target.value.trim())}
+                placeholder="Salin token akses dari halaman 'Pendaftaran Berhasil'"
+                className="font-mono"
+              />
+              <p className="text-xs text-gray-400">
+                Token otomatis terisi jika Anda datang dari halaman hasil
+                pendaftaran. Diperlukan agar bukti transfer hanya bisa diunggah
+                pemilik pendaftaran.
+              </p>
+            </div>
 
             <FileUpload
               label="Bukti Transfer"

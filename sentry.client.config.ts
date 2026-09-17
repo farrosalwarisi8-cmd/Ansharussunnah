@@ -10,7 +10,10 @@ if (dsn) {
     dsn,
     tracesSampleRate: 0.1,
     replaysSessionSampleRate: 0,
-    replaysOnErrorSampleRate: 1,
+    // Replay on-error dikecilkan ke 10%: replay merekam DOM & isian pengguna
+    // (data pribadi pendaftaran/keuangan) ke pihak ketiga. Sample lebih kecil
+    // tetap memberi sinyal debugging tanpa mengekspos semua sesi error.
+    replaysOnErrorSampleRate: 0.1,
     integrations: [
       // Nonaktifkan pengukuran LCP & CLS: internal web-vitals bundled Sentry
       // (onLCP/onCLS dengan reportAllChanges=true) melempar

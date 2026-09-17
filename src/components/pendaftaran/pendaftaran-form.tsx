@@ -12,6 +12,7 @@ import {
 } from "@/lib/validations/pendaftaran"
 import { createPendaftaran } from "@/actions/pendaftaran"
 import { uploadFileToStorage } from "@/lib/storage"
+import { setTokenAkses } from "@/lib/pendaftaran-token-client"
 import { nanoid } from "nanoid"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -443,6 +444,8 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
       if (result.success && result.data) {
         // File dipertahankan (direferensikan oleh record pendaftaran)
         uploadedPaths.length = 0
+        // Simpan token akses rahasia untuk alur upload dokumen/bukti transfer.
+        setTokenAkses(result.data.nomorPendaftaran, result.data.tokenAkses)
         router.push(
           `/pendaftaran/sukses?nomor=${result.data.nomorPendaftaran}`
         )

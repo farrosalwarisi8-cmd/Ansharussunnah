@@ -301,7 +301,22 @@ export async function deleteMateri(materiId: string): Promise<ActionResponse> {
       return { success: false, message: "Materi tidak ditemukan" }
     }
 
-    await verifyGuruAksesKelas(materi.kelasId, materi.mataPelajaranId)
+    const { user, roleInKelas } = await verifyGuruAksesKelas(
+      materi.kelasId,
+      materi.mataPelajaranId
+    )
+
+    // KEAMANAN: hanya pengunggah, wali kelas, atau admin yang boleh menghapus.
+    const isOwner = !materi.diunggahOlehId || materi.diunggahOlehId === user.id
+    const isPrivileged =
+      roleInKelas === "WALI_KELAS" || roleInKelas === "ADMIN"
+    if (!isOwner && !isPrivileged) {
+      return {
+        success: false,
+        message:
+          "Hanya guru yang mengunggah, wali kelas, atau admin yang dapat menghapus materi ini",
+      }
+    }
 
     await prisma.materiPembelajaran.delete({ where: { id: materiId } })
 

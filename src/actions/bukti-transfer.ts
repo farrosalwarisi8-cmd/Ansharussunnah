@@ -6,6 +6,10 @@ import prisma from "@/lib/prisma"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { validateFile } from "@/lib/storage"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
+import {
+  isPendaftaranTokenValid,
+  isTokenAksesBentukValid,
+} from "@/lib/pendaftaran-token"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
 import { nanoid } from "nanoid"
@@ -60,6 +64,28 @@ export async function uploadBuktiTransferPendaftaran(
       }
     }
 
+    // KEAMANAN: token akses rahasia pemilik pendaftaran — wajib selain nomor.
+    const tokenAkses = (formData.get("tokenAkses") as string) || ""
+    if (!isTokenAksesBentukValid(tokenAkses)) {
+      return {
+        success: false,
+        message: "Kredensial akses pendaftaran tidak valid",
+      }
+    }
+
+    // Rate limit per NOMOR pendaftaran (anti brute-force token satu pendaftaran).
+    const nomorLimiter = await rateLimitAsync(
+      `upload-bukti-transfer:${nomorPendaftaran}`,
+      { maxRequests: 20, windowMs: 10 * 60 * 1000 }
+    )
+    if (!nomorLimiter.success) {
+      return {
+        success: false,
+        message:
+          "Terlalu banyak percobaan untuk nomor ini. Silakan coba lagi dalam 10 menit.",
+      }
+    }
+
     // Validasi magic bytes + ukuran file (server-side, bukan hanya klien)
     const validation = await validateFile(file)
     if (!validation.valid) {
@@ -87,6 +113,15 @@ export async function uploadBuktiTransferPendaftaran(
       return {
         success: false,
         message: "Nomor pendaftaran tidak ditemukan",
+      }
+    }
+
+    // KEAMANAN: verifikasi token pemilik (timing-safe). Dicek SEBELUM status
+    // agar pemegang token salah tidak bisa melihat/menebak status pendaftaran.
+    if (!isPendaftaranTokenValid(pendaftaran.tokenAkses, tokenAkses)) {
+      return {
+        success: false,
+        message: "Kredensial akses pendaftaran tidak valid",
       }
     }
 

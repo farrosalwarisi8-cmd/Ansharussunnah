@@ -7,6 +7,7 @@ import { requireGuru, requireGuruAdmin } from "@/lib/auth"
 import { mapelSchema, type MapelFormValues } from "@/lib/validations/mapel"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
+import { cachedJson, invalidateCache, CACHE_TTL_REF } from "@/lib/cache"
 
 async function validateKelasIds(jenjangId: string | null | undefined, kelasIds: string[]) {
   const uniqueKelasIds = [...new Set(kelasIds)]
@@ -60,11 +61,13 @@ export async function getMapelAktif(): Promise<
   ActionResponse<Array<{ id: string; kode: string; nama: string; kelompok: string | null; jenjangId: string | null; jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null }>>
 > {
   try {
-    const mapels = await prisma.mataPelajaran.findMany({
-      where: { aktif: true },
-      orderBy: { nama: "asc" },
-      select: { id: true, kode: true, nama: true, kelompok: true, jenjangId: true, jenisKelamin: true },
-    })
+    const mapels = await cachedJson("ref:mapel", CACHE_TTL_REF, () =>
+      prisma.mataPelajaran.findMany({
+        where: { aktif: true },
+        orderBy: { nama: "asc" },
+        select: { id: true, kode: true, nama: true, kelompok: true, jenjangId: true, jenisKelamin: true },
+      })
+    )
 
     return {
       success: true,
@@ -87,11 +90,13 @@ export async function getJenjangList(): Promise<
   ActionResponse<Array<{ id: string; nama: string; urutan: number }>>
 > {
   try {
-    const jenjangs = await prisma.jenjang.findMany({
-      where: { aktif: true },
-      orderBy: { urutan: "asc" },
-      select: { id: true, nama: true, urutan: true },
-    })
+    const jenjangs = await cachedJson("ref:jenjang:list", CACHE_TTL_REF, () =>
+      prisma.jenjang.findMany({
+        where: { aktif: true },
+        orderBy: { urutan: "asc" },
+        select: { id: true, nama: true, urutan: true },
+      })
+    )
 
     return {
       success: true,
@@ -114,11 +119,13 @@ export async function getKelasByJenjang(jenjangId: string): Promise<
   ActionResponse<Array<{ id: string; nama: string; jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null }>>
 > {
   try {
-    const kelas = await prisma.kelas.findMany({
-      where: { jenjangId, aktif: true },
-      orderBy: { nama: "asc" },
-      select: { id: true, nama: true, jenisKelamin: true },
-    })
+    const kelas = await cachedJson(`ref:kelas:byjenjang:${jenjangId}`, CACHE_TTL_REF, () =>
+      prisma.kelas.findMany({
+        where: { jenjangId, aktif: true },
+        orderBy: { nama: "asc" },
+        select: { id: true, nama: true, jenisKelamin: true },
+      })
+    )
 
     return {
       success: true,
@@ -162,33 +169,35 @@ export async function getAdminMapelList(): Promise<
   try {
     await requireGuru()
 
-    const mapels = await prisma.mataPelajaran.findMany({
-      orderBy: { nama: "asc" },
-      select: {
-        id: true,
-        kode: true,
-        nama: true,
-        kelompok: true,
-        jenjangId: true,
-        jenjang: { select: { nama: true } },
-        jenisKelamin: true,
-        aktif: true,
-        mapelKelas: {
-          select: {
-            kelas: { select: { id: true, nama: true } },
+    const mapels = await cachedJson("ref:mapel:admin", CACHE_TTL_REF, () =>
+      prisma.mataPelajaran.findMany({
+        orderBy: { nama: "asc" },
+        select: {
+          id: true,
+          kode: true,
+          nama: true,
+          kelompok: true,
+          jenjangId: true,
+          jenjang: { select: { nama: true } },
+          jenisKelamin: true,
+          aktif: true,
+          mapelKelas: {
+            select: {
+              kelas: { select: { id: true, nama: true } },
+            },
+          },
+          _count: {
+            select: {
+              guruKelas: true,
+              ujian: true,
+              tugas: true,
+              materi: true,
+              nilaiRapor: true,
+            },
           },
         },
-        _count: {
-          select: {
-            guruKelas: true,
-            ujian: true,
-            tugas: true,
-            materi: true,
-            nilaiRapor: true,
-          },
-        },
-      },
-    })
+      })
+    )
 
     const data = mapels.map((m) => ({
       id: m.id,
@@ -267,6 +276,7 @@ export async function createMapel(payload: MapelFormValues): Promise<ActionRespo
       },
     })
 
+    await invalidateCache("ref:mapel")
     revalidatePath("/dashboard/mapel")
 
     return {
@@ -371,6 +381,7 @@ export async function updateMapel(
       })
     }
 
+    await invalidateCache("ref:mapel")
     revalidatePath("/dashboard/mapel")
 
     return {
@@ -427,6 +438,7 @@ export async function deleteMapel(id: string): Promise<ActionResponse> {
 
     await prisma.mataPelajaran.delete({ where: { id } })
 
+    await invalidateCache("ref:mapel")
     revalidatePath("/dashboard/mapel")
 
     return {
@@ -455,6 +467,7 @@ export async function toggleMapelAktif(id: string): Promise<ActionResponse> {
       data: { aktif: !mapel.aktif },
     })
 
+    await invalidateCache("ref:mapel")
     revalidatePath("/dashboard/mapel")
 
     return {

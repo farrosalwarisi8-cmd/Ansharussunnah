@@ -5,6 +5,7 @@ import Image from "next/image"
 import { CheckCircle2, ArrowRight, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CopyNomorButton } from "@/components/pendaftaran/copy-nomor-button"
+import { TokenAksesBox } from "@/components/pendaftaran/token-akses-box"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { formatCurrency } from "@/lib/utils"
@@ -81,6 +82,11 @@ export default async function SuksesPage({ searchParams }: SuksesPageProps) {
           <Badge variant="warning" className="text-sm px-4 py-1.5">
             {pendaftaran.status.replace(/_/g, " ")}
           </Badge>
+        </div>
+
+        {/* Token Akses */}
+        <div className="mb-6">
+          <TokenAksesBox nomor={pendaftaran.nomorPendaftaran} />
         </div>
 
         {/* Instruksi Pembayaran */}

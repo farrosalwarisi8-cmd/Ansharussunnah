@@ -32,17 +32,42 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const nomor = searchParams.get("nomor")
+    const nomorRaw = searchParams.get("nomor")
 
-    if (!nomor) {
+    if (!nomorRaw) {
       return NextResponse.json(
         { success: false, message: "Nomor pendaftaran wajib diisi" },
         { status: 400 }
       )
     }
 
+    const nomor = nomorRaw.trim().toUpperCase()
+    if (nomor.length > 40) {
+      return NextResponse.json(
+        { success: false, message: "Nomor pendaftaran tidak valid" },
+        { status: 400 }
+      )
+    }
+
+    // ✅ Per-nomor limiter: batasi probing/enumerasi yang menargetkan SATU
+    // nomor (mis. pemetaan oracle status). Berlaku di samping batas per-IP.
+    const nomorLimiter = await rateLimitAsync(`cek-pendaftaran:${ip}:${nomor}`, {
+      maxRequests: 10,
+      windowMs: 60 * 1000, // 1 menit
+    })
+
+    if (!nomorLimiter.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Terlalu banyak permintaan. Silakan coba lagi setelah 1 menit.",
+        },
+        { status: 429, headers: { "Retry-After": "60" } }
+      )
+    }
+
     const pendaftaran = await prisma.pendaftaran.findUnique({
-      where: { nomorPendaftaran: nomor.trim().toUpperCase(), deleted_at: null },
+      where: { nomorPendaftaran: nomor, deleted_at: null },
       include: {
         jenjangTujuan: { select: { nama: true } },
         kelasTujuan: { select: { nama: true } },
@@ -66,7 +91,8 @@ export async function GET(request: NextRequest) {
           status: pendaftaran.status,
           jenjangTujuan: pendaftaran.jenjangTujuan.nama,
           kelasTujuan: pendaftaran.kelasTujuan?.nama || null,
-          biayaPendaftaran: pendaftaran.biayaPendaftaran,
+          // alasanPenolakan dipertahankan: ini data milik pendaftar sendiri
+          // saat mengecek kenapa pendaftarannya ditolak (fitur cek-status).
           alasanPenolakan: pendaftaran.alasanPenolakan,
           createdAt: pendaftaran.createdAt,
         },

@@ -387,7 +387,7 @@ describe("updateAkunGuru - Otorisasi", () => {
     const result = await updateAkunGuru("guru-1", validPayload)
 
     expect(result.success).toBe(false)
-    expect(result.message).toContain("Gagal memperbarui data guru")
+    expect(result.message).toContain("Database connection timeout")
   })
 
   // --------------------------------------------------------
@@ -555,10 +555,10 @@ describe("createAkunGuru - Otorisasi & Penugasan Otomatis", () => {
   })
 
   // --------------------------------------------------------
-  // KASUS 2B: Guru admin dibuat dengan role ADMIN_AKADEMIK (bukan GURU)
-  // agar konsisten dengan constraint DB chk_admin_role_consistency
+  // KASUS 2B: Guru admin tetap ber-role GURU dengan flag isAdmin=true
+  // (mekanisme hak admin memakai flag isAdmin, bukan ganti role)
   // --------------------------------------------------------
-  it("harus membuat user ber-role ADMIN_AKADEMIK untuk guru dengan hak admin", async () => {
+  it("harus membuat user ber-role GURU dengan isAdmin=true untuk guru dengan hak admin", async () => {
     mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
     mockUserFindFirst.mockResolvedValue(null)
     mockGuruFindUnique.mockResolvedValue(null)
@@ -576,7 +576,7 @@ describe("createAkunGuru - Otorisasi & Penugasan Otomatis", () => {
 
     expect(result.success).toBe(true)
     const userCreateData = mockUserCreate.mock.calls[0][0].data
-    expect(userCreateData.role).toBe("ADMIN_AKADEMIK")
+    expect(userCreateData.role).toBe("GURU")
     expect(userCreateData.isAdmin).toBe(true)
   })
 
@@ -817,7 +817,7 @@ describe("setGuruAdmin - Role Consistency", () => {
     vi.clearAllMocks()
   })
 
-  it("harus mengubah role ke ADMIN_AKADEMIK saat guru diangkat admin", async () => {
+  it("harus mengubah isAdmin menjadi true tanpa mengubah role saat guru diangkat admin", async () => {
     mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
     mockUserFindUnique.mockResolvedValue({
       id: "guru-2",
@@ -833,15 +833,16 @@ describe("setGuruAdmin - Role Consistency", () => {
     expect(result.message).toContain("diangkat menjadi admin")
     const updateData = mockUserUpdate.mock.calls[0][0].data
     expect(updateData.isAdmin).toBe(true)
-    expect(updateData.role).toBe("ADMIN_AKADEMIK")
+    expect(updateData.role).toBeUndefined()
   })
 
-  it("harus mengembalikan role ke GURU saat admin diturunkan", async () => {
+  it("harus mengubah isAdmin menjadi false tanpa mengubah role saat admin diturunkan", async () => {
     mockRequireGuruAdmin.mockResolvedValue({ id: "admin-1", isAdmin: true })
     mockUserFindUnique.mockResolvedValue({
       id: "guru-2",
       nama: "Guru Dua",
-      role: "ADMIN_AKADEMIK",
+      role: "GURU",
+      isAdmin: true,
       guru: { id: "guru-record-2" },
     })
     mockUserUpdate.mockResolvedValue({})
@@ -852,7 +853,7 @@ describe("setGuruAdmin - Role Consistency", () => {
     expect(result.message).toContain("diturunkan dari admin")
     const updateData = mockUserUpdate.mock.calls[0][0].data
     expect(updateData.isAdmin).toBe(false)
-    expect(updateData.role).toBe("GURU")
+    expect(updateData.role).toBeUndefined()
   })
 
   it("harus menolak target yang bukan role GURU", async () => {

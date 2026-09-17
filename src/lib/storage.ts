@@ -77,7 +77,7 @@ async function validateMagicBytes(
 
 export async function validateFile(
   file: File
-): Promise<{ valid: boolean; error?: string }> {
+): Promise<{ valid: boolean; error?: string; detectedType?: string }> {
   if (file.size > MAX_FILE_SIZE) {
     return {
       valid: false,
@@ -94,7 +94,17 @@ export async function validateFile(
     return { valid: false, error: magicCheck.error }
   }
 
-  return { valid: true }
+  return { valid: true, detectedType: magicCheck.detectedType }
+}
+
+// Ekstensi kanonik per tipe yang terdeteksi dari magic bytes. Memakai nilai
+// ini (bukan ekstensi dari file.name klien) mencegah path traversal pada
+// object key, karena "ekstensi" dari nama file klien bisa berisi "/".
+const EXTENSION_BY_DETECTED_TYPE: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "application/pdf": "pdf",
 }
 
 export async function uploadFileToStorage(
@@ -107,11 +117,27 @@ export async function uploadFileToStorage(
     return { path: "", error: validation.error }
   }
 
-  const supabase = createSupabaseBrowserClient()
-  const fileExt = file.name.split(".").pop()
-  const fileName = `${nanoid(12)}.${fileExt}`
-  const filePath = `${folder}/${fileName}`
+  // KEAMANAN (M5): ekstensi diambil dari magic bytes, bukan dari file.name —
+  // nama file klien bisa memuat "/" (mis. "x.png/../../evil") yang merupakan
+  // path traversal pada object key Supabase Storage.
+  const fileExt = validation.detectedType
+    ? EXTENSION_BY_DETECTED_TYPE[validation.detectedType]
+    : undefined
+  if (!fileExt) {
+    return { path: "", error: "Format berkas tidak didukung" }
+  }
 
+  // Pertahankan nama file yang sudah dikontrol sistem.
+  const fileName = `${nanoid(12)}.${fileExt}`
+
+  // Folder harus aman (tidak ada traversal): format alfanumerik, "-", "_", "/".
+  const folderAman = folder.trim().replace(/[^a-zA-Z0-9_/-]/g, "").replace(/\/{2,}/g, "/").replace(/(^\/+|\/+$)/g, "")
+  if (!folderAman || folderAman.includes("..")) {
+    return { path: "", error: "Lokasi upload tidak valid" }
+  }
+  const filePath = `${folderAman}/${fileName}`
+
+  const supabase = createSupabaseBrowserClient()
   const { data, error } = await supabase.storage
     .from(bucket)
     .upload(filePath, file, {

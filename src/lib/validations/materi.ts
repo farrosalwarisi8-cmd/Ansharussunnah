@@ -10,7 +10,10 @@ export const createMateriSchema = z.object({
   targetGender: z.enum(["LAKI_LAKI", "PEREMPUAN"]).optional().nullable(),
   periodeAjaranId: z.string().min(1, "Periode ajaran wajib dipilih"),
   urlFile: z.string().optional(),
-  urlLink: z.string().url("Format URL tidak valid").optional(),
+  urlLink: z
+    .string()
+    .regex(/^https?:\/\//i, "URL harus diawali http:// atau https://")
+    .optional(),
 }).refine(
   (data) => data.urlFile || data.urlLink,
   {
@@ -29,7 +32,10 @@ export const updateMateriSchema = z.object({
   targetGender: z.enum(["LAKI_LAKI", "PEREMPUAN"]).optional().nullable(),
   periodeAjaranId: z.string().min(1, "Periode ajaran wajib dipilih").optional(),
   urlFile: z.string().optional(),
-  urlLink: z.string().url("Format URL tidak valid").optional(),
+  urlLink: z
+    .string()
+    .regex(/^https?:\/\//i, "URL harus diawali http:// atau https://")
+    .optional(),
 })
 
 export type UpdateMateriValues = z.infer<typeof updateMateriSchema>

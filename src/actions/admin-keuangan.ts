@@ -8,6 +8,7 @@ import { requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
 import { sendEmail } from "@/lib/email"
+import { escapeHtml } from "@/lib/html"
 import {
   createAkunAdminKeuanganSchema,
   updateAkunAdminKeuanganSchema,
@@ -27,6 +28,9 @@ function buildKredensialAdminKeuanganEmail(params: {
   email: string
   password: string
 }): string {
+  const nama = escapeHtml(params.nama)
+  const email = escapeHtml(params.email)
+  const password = escapeHtml(params.password)
   return `
     <!DOCTYPE html>
     <html lang="id">
@@ -34,7 +38,7 @@ function buildKredensialAdminKeuanganEmail(params: {
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
       <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
         <h2 style="color: #1e40af; margin-top: 0;">💰 Akun Admin Keuangan Baru — Anshorussunnah</h2>
-        <p>Halo <strong>${params.nama}</strong>,</p>
+        <p>Halo <strong>${nama}</strong>,</p>
         <p>Anda telah terdaftar sebagai Admin Keuangan di sistem LMS Anshorussunnah. Berikut adalah informasi akun Anda:</p>
         
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
@@ -42,8 +46,8 @@ function buildKredensialAdminKeuanganEmail(params: {
         <h3 style="color: #333;">🔐 Informasi Akun Login</h3>
         
         <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 12px 0;">
-          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.email}</code></p>
-          <p style="margin: 2px 0;">Password: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${params.password}</code></p>
+          <p style="margin: 2px 0;">Email: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${email}</code></p>
+          <p style="margin: 2px 0;">Password: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${password}</code></p>
         </div>
         
         <div style="background: #fef3c7; border-radius: 8px; padding: 16px; margin: 16px 0;">
