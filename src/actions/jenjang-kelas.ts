@@ -157,8 +157,10 @@ export async function createJenjang(
       data: { nama, urutan, aktif: true, tarifSppBulanan: tarifSppBulanan ?? null },
     })
 
-    await invalidateCache("ref:jenjang")
-    await invalidateCache("ref:mapel")
+    await Promise.all([
+      invalidateCache("ref:jenjang"),
+      invalidateCache("ref:mapel"),
+    ])
     revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 
@@ -200,8 +202,10 @@ export async function updateJenjang(
       },
     })
 
-    await invalidateCache("ref:jenjang")
-    await invalidateCache("ref:mapel")
+    await Promise.all([
+      invalidateCache("ref:jenjang"),
+      invalidateCache("ref:mapel"),
+    ])
     revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 
@@ -256,8 +260,10 @@ export async function deleteJenjang(id: string): Promise<ActionResponse> {
 
     await prisma.jenjang.delete({ where: { id } })
 
-    await invalidateCache("ref:jenjang")
-    await invalidateCache("ref:mapel")
+    await Promise.all([
+      invalidateCache("ref:jenjang"),
+      invalidateCache("ref:mapel"),
+    ])
     revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 
@@ -383,8 +389,10 @@ export async function createKelas(payload: KelasFormValues): Promise<ActionRespo
       },
     })
 
-    await invalidateCache("ref:kelas")
-    await invalidateCache("ref:jenjang")
+    await Promise.all([
+      invalidateCache("ref:kelas"),
+      invalidateCache("ref:jenjang"),
+    ])
     revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 
@@ -478,8 +486,10 @@ export async function updateKelas(
       },
     })
 
-    await invalidateCache("ref:kelas")
-    await invalidateCache("ref:jenjang")
+    await Promise.all([
+      invalidateCache("ref:kelas"),
+      invalidateCache("ref:jenjang"),
+    ])
     revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 
@@ -548,8 +558,10 @@ export async function deleteKelas(id: string): Promise<ActionResponse> {
 
     await prisma.kelas.delete({ where: { id } })
 
-    await invalidateCache("ref:kelas")
-    await invalidateCache("ref:jenjang")
+    await Promise.all([
+      invalidateCache("ref:kelas"),
+      invalidateCache("ref:jenjang"),
+    ])
     revalidatePath("/dashboard/kelas")
     revalidatePath("/pendaftaran")
 

@@ -13,7 +13,6 @@ import {
 import type { ActionResponse } from "@/types"
 import { Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
-import { cachedJson, invalidateCache, CACHE_TTL_REF } from "@/lib/cache"
 
 /**
  * Ambil semua periode ajaran (untuk dropdown di berbagai fitur),
@@ -29,11 +28,9 @@ export async function getDaftarPeriodeAjaran(): Promise<ActionResponse> {
       Role.ORANG_TUA,
     ])
 
-    const periodeList = await cachedJson("ref:periode", CACHE_TTL_REF, () =>
-      prisma.periodeAjaran.findMany({
-        orderBy: [{ tahunAjaran: "desc" }, { semester: "desc" }],
-      })
-    )
+    const periodeList = await prisma.periodeAjaran.findMany({
+      orderBy: [{ tahunAjaran: "desc" }, { semester: "desc" }],
+    })
 
     return {
       success: true,
@@ -58,13 +55,11 @@ export async function getPeriodeAjaranAktif(): Promise<
   try {
     await requireGuru()
 
-    const periode = await cachedJson("ref:periode:aktif", CACHE_TTL_REF, () =>
-      prisma.periodeAjaran.findFirst({
-        where: { aktif: true },
-        select: { id: true, nama: true },
-        orderBy: { tahunAjaran: "desc" },
-      })
-    )
+    const periode = await prisma.periodeAjaran.findFirst({
+      where: { aktif: true },
+      select: { id: true, nama: true },
+      orderBy: { tahunAjaran: "desc" },
+    })
 
     return {
       success: true,
@@ -133,7 +128,6 @@ export async function createPeriodeAjaran(
       })
     })
 
-    await invalidateCache("ref:periode")
     revalidatePath("/dashboard/periode-ajaran")
     return {
       success: true,
@@ -219,7 +213,6 @@ export async function updatePeriodeAjaran(
       })
     })
 
-    await invalidateCache("ref:periode")
     revalidatePath("/dashboard/periode-ajaran")
     return { success: true, message: "Periode ajaran berhasil diperbarui" }
   } catch (error: unknown) {
@@ -281,7 +274,6 @@ export async function deletePeriodeAjaran(
 
     await prisma.periodeAjaran.delete({ where: { id: periodeId } })
 
-    await invalidateCache("ref:periode")
     revalidatePath("/dashboard/periode-ajaran")
     return { success: true, message: "Periode ajaran berhasil dihapus" }
   } catch (error: unknown) {

@@ -61,13 +61,11 @@ export async function getMapelAktif(): Promise<
   ActionResponse<Array<{ id: string; kode: string; nama: string; kelompok: string | null; jenjangId: string | null; jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null }>>
 > {
   try {
-    const mapels = await cachedJson("ref:mapel", CACHE_TTL_REF, () =>
-      prisma.mataPelajaran.findMany({
-        where: { aktif: true },
-        orderBy: { nama: "asc" },
-        select: { id: true, kode: true, nama: true, kelompok: true, jenjangId: true, jenisKelamin: true },
-      })
-    )
+    const mapels = await prisma.mataPelajaran.findMany({
+      where: { aktif: true },
+      orderBy: { nama: "asc" },
+      select: { id: true, kode: true, nama: true, kelompok: true, jenjangId: true, jenisKelamin: true },
+    })
 
     return {
       success: true,
@@ -90,13 +88,11 @@ export async function getJenjangList(): Promise<
   ActionResponse<Array<{ id: string; nama: string; urutan: number }>>
 > {
   try {
-    const jenjangs = await cachedJson("ref:jenjang:list", CACHE_TTL_REF, () =>
-      prisma.jenjang.findMany({
-        where: { aktif: true },
-        orderBy: { urutan: "asc" },
-        select: { id: true, nama: true, urutan: true },
-      })
-    )
+    const jenjangs = await prisma.jenjang.findMany({
+      where: { aktif: true },
+      orderBy: { urutan: "asc" },
+      select: { id: true, nama: true, urutan: true },
+    })
 
     return {
       success: true,
@@ -119,13 +115,11 @@ export async function getKelasByJenjang(jenjangId: string): Promise<
   ActionResponse<Array<{ id: string; nama: string; jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null }>>
 > {
   try {
-    const kelas = await cachedJson(`ref:kelas:byjenjang:${jenjangId}`, CACHE_TTL_REF, () =>
-      prisma.kelas.findMany({
-        where: { jenjangId, aktif: true },
-        orderBy: { nama: "asc" },
-        select: { id: true, nama: true, jenisKelamin: true },
-      })
-    )
+    const kelas = await prisma.kelas.findMany({
+      where: { jenjangId, aktif: true },
+      orderBy: { nama: "asc" },
+      select: { id: true, nama: true, jenisKelamin: true },
+    })
 
     return {
       success: true,
