@@ -15,6 +15,7 @@
 --   nota                  → nota/{file}
 --   materi                → materi/{kelasId}/{file}
 --   dokumen-pendaftaran   → dokumen-pendaftaran/pendaftaran/{tempId}/{file}
+--   berkas-siswa          → berkas-siswa/{siswaId}/{kategori}/{file} (server-side)
 -- ============================================================================
 
 -- ============================================================================
@@ -28,7 +29,8 @@ VALUES
   ('nota',                'nota',                false),
   ('materi',              'materi',              false),
   ('dokumen-pendaftaran', 'dokumen-pendaftaran', false),
-  ('soal-ujian',          'soal-ujian',          false)
+  ('soal-ujian',          'soal-ujian',          false),
+  ('berkas-siswa',        'berkas-siswa',        false)
 ON CONFLICT (id) DO UPDATE SET public = false;
 
 -- ============================================================================
@@ -68,6 +70,9 @@ DROP POLICY IF EXISTS "Admin akademik dapat upload gambar soal ujian"      ON st
 DROP POLICY IF EXISTS "Guru dapat membaca gambar soal ujian"               ON storage.objects;
 DROP POLICY IF EXISTS "Siswa dapat membaca gambar soal ujian"              ON storage.objects;
 DROP POLICY IF EXISTS "Guru dapat menghapus gambar soal ujian"             ON storage.objects;
+
+DROP POLICY IF EXISTS "Guru admin dapat membaca berkas siswa"               ON storage.objects;
+DROP POLICY IF EXISTS "Guru admin dapat menghapus berkas siswa"             ON storage.objects;
 
 -- ============================================================================
 -- 3. BUCKET: dokumen-pendaftaran  (upload publik anonim — form pendaftaran)
@@ -428,6 +433,36 @@ USING (
 );
 
 -- ============================================================================
+-- 9b. BUCKET: berkas-siswa  (siswa manual; upload server-side service role)
+-- ============================================================================
+-- Upload/delete berkas siswa dilakukan SERVER-SIDE via service role
+-- (src/actions/berkas-siswa.ts), yang mem-bypass RLS. Karena itu TIDAK ada
+-- policy INSERT — memberi policy INSERT di bucket non-public memungkinkan
+-- siapa saja (pemegang anon/authenticated key) menulis file. RLS di sini
+-- hanya defense-in-depth untuk SELECT & DELETE oleh guru admin.
+CREATE POLICY "Guru admin dapat membaca berkas siswa"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'berkas-siswa'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid() AND role IN ('GURU', 'ADMIN_AKADEMIK')
+  )
+);
+
+CREATE POLICY "Guru admin dapat menghapus berkas siswa"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'berkas-siswa'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid() AND role IN ('GURU', 'ADMIN_AKADEMIK')
+  )
+);
+
+-- ============================================================================
 -- 10. LAPORAN VERIFIKASI
 -- ============================================================================
 -- Jalankan bagian ini SETELAH policy dibuat untuk memastikan semuanya aktif.
@@ -441,6 +476,7 @@ SELECT
     WHEN qual::text LIKE '%bucket_id = ''materi''%' OR with_check::text LIKE '%bucket_id = ''materi''%' THEN 'materi'
     WHEN qual::text LIKE '%dokumen-pendaftaran%' OR with_check::text LIKE '%dokumen-pendaftaran%' THEN 'dokumen-pendaftaran'
     WHEN qual::text LIKE '%soal-ujian%'         OR with_check::text LIKE '%soal-ujian%'         THEN 'soal-ujian'
+    WHEN qual::text LIKE '%berkas-siswa%'       OR with_check::text LIKE '%berkas-siswa%'       THEN 'berkas-siswa'
     ELSE '(lainnya)'
   END AS bucket,
   policyname,
@@ -453,5 +489,5 @@ ORDER BY 1, 2;
 -- Cek status RLS tiap bucket (public = false berarti RLS aktif / bukan public bucket):
 SELECT id AS bucket, public, file_size_limit, allowed_mime_types
 FROM storage.buckets
-WHERE id IN ('bukti-transfer', 'bukti-spp', 'tugas-siswa', 'nota', 'materi', 'dokumen-pendaftaran', 'soal-ujian')
+WHERE id IN ('bukti-transfer', 'bukti-spp', 'tugas-siswa', 'nota', 'materi', 'dokumen-pendaftaran', 'soal-ujian', 'berkas-siswa')
 ORDER BY id;

@@ -33,6 +33,7 @@ const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.
 const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
+const BerkasSiswaModal = dynamic(() => import("@/components/dashboard/berkas-siswa-modal").then(m => m.BerkasSiswaModal), { ssr: false })
 import {
   Select,
   SelectContent,
@@ -57,6 +58,7 @@ import {
   Search,
   UserCheck,
   Trash2,
+  FileText,
 } from "lucide-react"
 
 // ============================================
@@ -335,6 +337,21 @@ export default function KelolaSiswaPage() {
     nama: string
   }>({ open: false, userId: "", nama: "" })
   const [hapusLoading, setHapusLoading] = React.useState(false)
+
+  // Modal berkas siswa
+  const [berkasModal, setBerkasModal] = React.useState<{
+    open: boolean
+    siswaId: string
+    nama: string
+  }>({ open: false, siswaId: "", nama: "" })
+
+  // Refresh daftar siswa setelah berkas diubah (dipanggil dari modal).
+  const refreshSiswaList = React.useCallback(async () => {
+    const res = await getDaftarSiswaManual()
+    if (res.success && res.data) {
+      setSiswaList(res.data as unknown as SiswaListItem[])
+    }
+  }, [])
 
   // Available kelas based on selected jenjang (not used directly here, kelasId is direct)
   const [availableKelas, setAvailableKelas] = React.useState<KelasItem[]>([])
@@ -864,6 +881,17 @@ export default function KelolaSiswaPage() {
                           )}
                           <Button
                             size="sm"
+                            variant="default"
+                            onClick={() =>
+                              setBerkasModal({ open: true, siswaId: s.id, nama: s.nama })
+                            }
+                            className="rounded-xl text-xs font-semibold"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            Berkas
+                          </Button>
+                          <Button
+                            size="sm"
                             variant="destructive"
                             onClick={() =>
                               setHapusConfirm({
@@ -936,6 +964,17 @@ export default function KelolaSiswaPage() {
                       >
                         <Key className="h-3 w-3 mr-1" />
                         Ubah Akun
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() =>
+                          setBerkasModal({ open: true, siswaId: s.id, nama: s.nama })
+                        }
+                        className="flex-1 rounded-xl text-xs min-h-[40px]"
+                      >
+                        <FileText className="h-3 w-3 mr-1" />
+                        Berkas
                       </Button>
                       <Button
                         size="sm"
@@ -1830,6 +1869,17 @@ export default function KelolaSiswaPage() {
         confirmText={hapusLoading ? "Memproses..." : "Hapus Permanen"}
         variant="destructive"
         onConfirm={handleHapusSiswa}
+      />
+
+      {/* ============================================ */}
+      {/* MODAL: BERKAS SISWA (unggah/pratinjau/cetak) */}
+      {/* ============================================ */}
+      <BerkasSiswaModal
+        open={berkasModal.open}
+        siswaId={berkasModal.siswaId}
+        nama={berkasModal.nama}
+        onClose={() => setBerkasModal((prev) => ({ ...prev, open: false }))}
+        onChanged={refreshSiswaList}
       />
     </div>
   )

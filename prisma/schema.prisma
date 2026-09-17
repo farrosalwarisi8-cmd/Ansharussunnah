@@ -98,6 +98,10 @@ model Siswa {
   kewarganegaraan   Kewarganegaraan?    @default(WNI)
   kitas             String?
   asalNegara        String?             @map("asal_negara")
+  dokKartuKeluarga  String?             @map("dok_kartu_keluarga")
+  dokAkteLahir      String?             @map("dok_akte_lahir")
+  dokFoto           String?             @map("dok_foto")
+  dokLainnya        String[]            @default([]) @map("dok_lainnya")
   deleted_at        DateTime?           @db.Timestamptz(6)
   absensi           Absensi[]
   ekskul            AnggotaEkskul[]

@@ -19,6 +19,7 @@
 | `nota` | Bukti transaksi keuangan non-SPP | Admin Keuangan saja |
 | `materi` | Materi pembelajaran (file, PDF, dokumen) | Guru (upload materi) |
 | `dokumen-pendaftaran` | Dokumen pendaftaran (KK, akte lahir, foto) | Calon siswa (public form) |
+| `berkas-siswa` | Berkas siswa manual (KK, akte lahir, pas foto, dokumen lain) | Guru admin (upload server-side via service role) |
 
 ---
 
@@ -482,6 +483,60 @@ USING (
   )
 );
 ```
+
+---
+
+## Bucket: `berkas-siswa`
+
+**Konteks:** Berkas siswa manual (untuk siswa yang `pendaftaranId = null` — dibuat lewat
+"Kelola Siswa", bukan dari form pendaftaran). Path: `berkas-siswa/{siswaId}/{kategori}/{file}`
+dengan kategori `kartuKeluarga`, `akteLahir`, `foto`, atau `lainnya`.
+
+**PENTING:** Upload & delete dilakukan **server-side** lewat service role (`src/actions/berkas-siswa.ts`),
+bukan dari browser. Service role melewati RLS, sehingga **tidak perlu policy INSERT** — sengaja
+tidak dibuat agar user biasa (termasuk via client SDK) tidak bisa menulis ke bucket ini.
+RLS hanya sebagai *defense-in-depth* untuk akses **baca & hapus** oleh guru admin.
+
+```sql
+-- =============================================
+-- INSERT
+-- =============================================
+-- Sengaja TIDAK ada. Semua upload dilakukan server-side via service role.
+-- Memberikan policy CREATE pada bucket non-public membuat siapa saja (yang
+-- memegang anon/authenticated key) bisa menulis file ke bucket.
+
+-- =============================================
+-- SELECT (Baca/download berkas siswa)
+-- =============================================
+CREATE POLICY "Guru admin dapat membaca berkas siswa"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'berkas-siswa'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid()
+    AND role IN ('GURU', 'ADMIN_AKADEMIK')
+  )
+);
+
+-- =============================================
+-- DELETE
+-- =============================================
+CREATE POLICY "Guru admin dapat menghapus berkas siswa"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'berkas-siswa'
+  AND EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_id = auth.uid()
+    AND role IN ('GURU', 'ADMIN_AKADEMIK')
+  )
+);
+```
+
+Script idempoten lengkap: `docs/RLS_BERKAS_SISWA_BUCKET.sql`.
 
 ---
 
