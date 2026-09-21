@@ -297,6 +297,22 @@ describe("beriNilaiEsai — penilaian esai", () => {
     expect(result.message).toContain("tidak valid")
     expect(mockPengerjaanFindUnique).not.toHaveBeenCalled()
   })
+
+  it("menolak koreksi esai untuk ujian offline (inputManual)", async () => {
+    mockPengerjaanFindUnique.mockResolvedValue({
+      ...basePengerjaan,
+      ujian: { ...basePengerjaan.ujian, inputManual: true },
+    })
+
+    const result = await beriNilaiEsai({
+      pengerjaanId: "p1",
+      penilaian: [{ soalId: "s-esai", nilaiSoal: 15 }],
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("offline")
+    expect(mockJawabanUpdate).not.toHaveBeenCalled()
+  })
 })
 
 // ========================================================

@@ -13,10 +13,12 @@ import {
   updateTugasSchema,
   submitTugasSchema,
   nilaiTugasSchema,
+  inputNilaiTugasManualSchema,
   type CreateTugasValues,
   type UpdateTugasValues,
   type SubmitTugasValues,
   type NilaiTugasValues,
+  type InputNilaiTugasManualValues,
 } from "@/lib/validations/tugas"
 import type { ActionResponse } from "@/types"
 import { Role, StatusPengumpulan, Prisma } from "@prisma/client"
@@ -52,6 +54,33 @@ function isLampiranUrlValid(value: string): boolean {
   const aman = !value.includes("..") && !value.includes("\\") && !value.includes("://")
   return internal && aman
 }
+
+// ========================================================
+// PENERIMA NOMOR OTOMATIS & TANDA INPUT MANUAL
+// ========================================================
+
+/**
+ * Nomor urut berikutnya untuk tugas di kelas+mapel+periode yang sama
+ * (Tugas 1, Tugas 2, dst). Dipanggil SEBELUM create di dalam transaksi agar
+ * dua pembuatan bersamaan tidak mendapat nomor kembar.
+ */
+async function getNextNomorTugas(
+  tx: Prisma.TransactionClient,
+  kelasId: string,
+  mataPelajaranId: string,
+  periodeAjaranId: string
+): Promise<number> {
+  const aggregasi = await tx.tugas.aggregate({
+    where: { kelasId, mataPelajaranId, periodeAjaranId },
+    _max: { nomorTugas: true },
+  })
+  return (aggregasi._max.nomorTugas ?? 0) + 1
+}
+
+// Path/name sentinel untuk pengumpulan tugas manual (tanpa berkas di storage).
+// urlFile sengaja BUKAN path bucket agar tidak dibuatkan signed URL.
+const MANUAL_URL_FILE = "manual-input"
+const MANUAL_NAMA_FILE = "Input manual (luar aplikasi)"
 
 // ========================================================
 // 1. ACTIONS GURU: CRUD TUGAS
@@ -119,26 +148,47 @@ export async function createTugas(
       return { success: false, message: "Periode ajaran tidak ditemukan" }
     }
 
-    const deadlineDate = new Date(deadline)
-    if (deadlineDate <= new Date()) {
+    const inputManual = !!validated.data.inputManual
+
+    // Tugas manual (offline) tidak memerlukan deadline mendatang — hanya metadata.
+    if (!inputManual && !deadline) {
+      return { success: false, message: "Deadline wajib diisi" }
+    }
+    const deadlineDate = deadline ? new Date(deadline) : null
+    if (!inputManual && deadlineDate && deadlineDate <= new Date()) {
       return {
         success: false,
         message: "Deadline harus di waktu yang akan datang",
       }
     }
+    // Kolom deadline NOT NULL di DB: tugas manual memakai fallback jauh ke depan
+    // (nilai hanya agregat; deadline tidak dipakai untuk input manual).
+    const storedDeadline = deadlineDate ?? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
 
-    const tugas = await prisma.tugas.create({
-      data: {
-        judul,
-        deskripsi,
-        mataPelajaranId: mapel.id,
+    // Nomor otomatis (Tugas 1, dst.) dihitung dalam transaksi agar dua tugas
+    // yang dibuat bersamaan di kelas+mapel+periode sama tidak bernomor kembar.
+    const tugas = await prisma.$transaction(async (tx) => {
+      const nomorTugas = await getNextNomorTugas(
+        tx,
         kelasId,
-        targetGender: effectiveTargetGender,
-        periodeAjaranId,
-        deadline: deadlineDate,
-        lampiranUrl,
-        dibuatOlehId: user.id,
-      },
+        mapel.id,
+        periodeAjaranId
+      )
+      return tx.tugas.create({
+        data: {
+          judul,
+          deskripsi,
+          mataPelajaranId: mapel.id,
+          kelasId,
+          targetGender: effectiveTargetGender,
+          periodeAjaranId,
+          deadline: storedDeadline,
+          lampiranUrl,
+          nomorTugas,
+          inputManual,
+          dibuatOlehId: user.id,
+        },
+      })
     })
 
     revalidatePath("/dashboard/tugas")
@@ -254,18 +304,40 @@ export async function updateTugas(
       }
     }
 
-    await prisma.tugas.update({
-      where: { id: tugasId },
-      data: {
-        judul: payload.judul,
-        deskripsi: payload.deskripsi,
-        mataPelajaranId,
-        kelasId: payload.kelasId,
-        targetGender: effectiveTargetGender,
-        periodeAjaranId: payload.periodeAjaranId,
-        deadline: payload.deadline ? new Date(payload.deadline) : undefined,
-        lampiranUrl: payload.lampiranUrl,
-      },
+    // Jika kelas/mapel/periode berubah, pindahkan ke penomoran scope baru
+    // (nomor lama tetap dipakai yang lain; scope baru mendapatkan Tugas {n} terbaru).
+    const scopeBerubah =
+      targetKelasId !== tugas.kelasId ||
+      targetMapelId !== tugas.mataPelajaranId ||
+      (payload.periodeAjaranId !== undefined &&
+        payload.periodeAjaranId !== tugas.periodeAjaranId)
+
+    await prisma.$transaction(async (tx) => {
+      let nomorTugas: number | undefined
+      if (scopeBerubah) {
+        nomorTugas = await getNextNomorTugas(
+          tx,
+          targetKelasId,
+          targetMapelId,
+          payload.periodeAjaranId ?? tugas.periodeAjaranId
+        )
+      }
+
+      await tx.tugas.update({
+        where: { id: tugasId },
+        data: {
+          judul: payload.judul,
+          deskripsi: payload.deskripsi,
+          mataPelajaranId,
+          kelasId: payload.kelasId,
+          targetGender: effectiveTargetGender,
+          periodeAjaranId: payload.periodeAjaranId,
+          deadline: payload.deadline ? new Date(payload.deadline) : undefined,
+          lampiranUrl: payload.lampiranUrl,
+          inputManual: payload.inputManual,
+          nomorTugas,
+        },
+      })
     })
 
     revalidatePath("/dashboard/tugas")
@@ -373,6 +445,8 @@ export async function getDaftarTugasGuru(kelasId: string): Promise<ActionRespons
       guru: t.dibuatOleh.nama,
       totalPengumpulan: t._count.pengumpulan,
       hasLampiran: !!t.lampiranUrl,
+      nomorTugas: t.nomorTugas,
+      inputManual: t.inputManual,
     }))
 
     return {
@@ -469,6 +543,149 @@ export async function beriNilaiTugas(
 }
 
 /**
+ * Input nilai manual massal untuk TUGAS OFFLINE (dikerjakan di luar aplikasi).
+ * Membuat/update rekaman PengumpulanTugas berstatus DINILAI untuk tiap siswa
+ * sehingga nilai masuk agregasi rapor seperti biasa. Rekaman berpola sama
+ * dengan submission normal namun tanpa berkas (urlFile sentinel).
+ * ✅ Otorisasi: guru harus mengampu kelas & mapel tugas terkait.
+ */
+export async function inputNilaiTugasManual(
+  payload: InputNilaiTugasManualValues
+): Promise<ActionResponse<{ jumlahDinilai: number }>> {
+  try {
+    const validated = inputNilaiTugasManualSchema.safeParse(payload)
+    if (!validated.success) {
+      return {
+        success: false,
+        message: "Data penilaian manual tidak valid",
+        errors: validated.error.flatten().fieldErrors,
+      }
+    }
+
+    const { tugasId, penilaian } = validated.data
+
+    const tugas = await prisma.tugas.findUnique({
+      where: { id: tugasId },
+      include: {
+        mataPelajaran: { select: { jenisKelamin: true } },
+      },
+    })
+    if (!tugas) {
+      return { success: false, message: "Tugas tidak ditemukan" }
+    }
+
+    // KEAMANAN: input nilai manual hanya untuk tugas OFFLINE (inputManual).
+    if (!tugas.inputManual) {
+      return {
+        success: false,
+        message:
+          "Input nilai manual hanya dapat dipakai untuk tugas offline (beri tanda 'Tugas offline')",
+      }
+    }
+
+    const { user, roleInKelas } = await verifyGuruAksesKelas(tugas.kelasId, tugas.mataPelajaranId)
+
+    // Validasi: semua siswa yang dinilai harus terdaftar di kelas tugas.
+    const siswaIds = penilaian.map((item) => item.siswaId)
+    const siswaDKelas = await prisma.siswa.findMany({
+      where: { id: { in: siswaIds }, kelasId: tugas.kelasId, deleted_at: null },
+      select: { id: true, jenisKelamin: true },
+    })
+    const siswaValid = new Set(siswaDKelas.map((s) => s.id))
+    if (siswaIds.some((id) => !siswaValid.has(id))) {
+      return {
+        success: false,
+        message: "Sebagian siswa yang dinilai tidak terdaftar di kelas tugas ini",
+      }
+    }
+    // Validasi gender (paritas dengan daftar tugas siswa): tugas dengan target
+    // gender / mapel khusus gender hanya boleh menilai siswa gender yang sama —
+    // mencegah nilai bocor ke siswa gender lain di rekapan & rapor.
+    const siswaGenderSalah = siswaDKelas.filter(
+      (s) =>
+        (tugas.targetGender && s.jenisKelamin !== tugas.targetGender) ||
+        (tugas.mataPelajaran.jenisKelamin &&
+          s.jenisKelamin !== tugas.mataPelajaran.jenisKelamin)
+    )
+    if (siswaGenderSalah.length > 0) {
+      return {
+        success: false,
+        message:
+          "Sebagian siswa yang dinilai tidak sesuai dengan target gender tugas ini",
+      }
+    }
+
+    // KEAMANAN (re-grade, paritas dengan beriNilaiTugas): nilai manual yang
+    // sudah diinput guru lain tidak bisa ditimpa diam-diam — hanya guru yang
+    // sama, wali kelas, atau admin.
+    const existing = await prisma.pengumpulanTugas.findMany({
+      where: { tugasId, siswaId: { in: siswaIds } },
+      select: { siswaId: true, dinilaiOlehId: true },
+    })
+    const dinilaiLain = existing.filter(
+      (p) => p.dinilaiOlehId && p.dinilaiOlehId !== user.id
+    )
+    if (dinilaiLain.length > 0) {
+      const isPrivileged =
+        roleInKelas === "WALI_KELAS" || roleInKelas === "ADMIN"
+      if (!isPrivileged) {
+        return {
+          success: false,
+          message:
+            "Sebagian nilai sudah diinput guru lain. Hanya wali kelas atau admin yang dapat mengubahnya.",
+        }
+      }
+    }
+
+    const sekarang = new Date()
+
+    await prisma.$transaction(async (tx) => {
+      for (const item of penilaian) {
+        await tx.pengumpulanTugas.upsert({
+          where: {
+            tugasId_siswaId: { tugasId, siswaId: item.siswaId },
+          },
+          create: {
+            tugasId,
+            siswaId: item.siswaId,
+            urlFile: MANUAL_URL_FILE,
+            namaFile: MANUAL_NAMA_FILE,
+            ukuranFile: null,
+            waktuKumpul: sekarang,
+            status: StatusPengumpulan.DINILAI,
+            nilai: new Prisma.Decimal(item.nilai),
+            feedback: item.feedback ?? null,
+            jumlahRevisi: 0,
+            dinilaiOlehId: user.id,
+            waktuPenilaian: sekarang,
+          },
+          update: {
+            status: StatusPengumpulan.DINILAI,
+            nilai: new Prisma.Decimal(item.nilai),
+            ...(item.feedback !== undefined ? { feedback: item.feedback ?? null } : {}),
+            dinilaiOlehId: user.id,
+            waktuPenilaian: sekarang,
+          },
+        })
+      }
+    })
+
+    revalidatePath(`/dashboard/tugas/${tugasId}`)
+    revalidatePath("/dashboard/tugas")
+    return {
+      success: true,
+      message: `Nilai manual berhasil disimpan untuk ${penilaian.length} siswa`,
+      data: { jumlahDinilai: penilaian.length },
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Gagal menyimpan nilai manual",
+    }
+  }
+}
+
+/**
  * Rekap pengumpulan tugas: siapa sudah/belum mengumpulkan, status, nilai.
  */
 export async function getRekapPengumpulanTugas(
@@ -479,7 +696,7 @@ export async function getRekapPengumpulanTugas(
       where: { id: tugasId },
       include: {
         kelas: true,
-        mataPelajaran: { select: { nama: true } },
+        mataPelajaran: { select: { nama: true, jenisKelamin: true } },
       },
     })
     if (!tugas) {
@@ -507,10 +724,13 @@ export async function getRekapPengumpulanTugas(
 
     // Batch: generate signed URL untuk file jawaban siswa agar guru bisa membukanya.
     // URL eksternal (Google Drive / cloud) dilewati — bukan path bucket;
-    // klien membukanya langsung via properti urlFile.
+    // klien membukanya langsung via properti urlFile. Sentinel input manual juga
+    // dilewati (tidak ada berkas di storage).
     const urlFileList = pengumpulanList
       .map((p) => p.urlFile)
-      .filter((u): u is string => !!u && !isExternalUrl(u))
+      .filter(
+        (u): u is string => !!u && !isExternalUrl(u) && u !== MANUAL_URL_FILE
+      )
     const signedUrlMap = await getSignedUrls("tugas-siswa", urlFileList)
 
     const pengumpulanMap = new Map(
@@ -525,6 +745,7 @@ export async function getRekapPengumpulanTugas(
         pengumpulanId: pengumpulan?.id || null,
         nama: siswa.user.nama,
         nisn: siswa.nisn,
+        jenisKelamin: siswa.jenisKelamin,
         status: pengumpulan
           ? pengumpulan.status
           : StatusPengumpulan.BELUM_DIKUMPULKAN,
@@ -560,6 +781,9 @@ export async function getRekapPengumpulanTugas(
           judul: tugas.judul,
           deadline: tugas.deadline,
           mataPelajaran: tugas.mataPelajaran.nama,
+          inputManual: tugas.inputManual,
+          targetGender: tugas.targetGender,
+          mataPelajaranJenisKelamin: tugas.mataPelajaran.jenisKelamin,
         },
         statistik: {
           totalSiswa: siswaList.length,
@@ -636,7 +860,14 @@ export async function getDaftarTugasSiswa(): Promise<ActionResponse> {
 
     const now = new Date()
 
-    const formatted = tugasList.map((t) => {
+    // Tugas manual (offline) hanya ditampilkan ke siswa bila SUDAH dinilai
+    // (agar nilai/feedback terlihat di riwayat); bila belum dinilai, jangan
+    // tampil sebagai tugas yang bisa "dikumpulkan" — pengerjaannya offline.
+    const tugasTampil = tugasList.filter(
+      (t) => !t.inputManual || t.pengumpulan.length > 0
+    )
+
+    const formatted = tugasTampil.map((t) => {
       const pengumpulan = t.pengumpulan[0] || null
       const isOverdue = now > t.deadline
 
@@ -737,6 +968,15 @@ export async function submitTugas(
       return {
         success: false,
         message: "Tugas ini bukan untuk kelas Anda",
+      }
+    }
+
+    // Tugas offline (input manual) tidak bisa dikumpulkan lewat aplikasi —
+    // pengerjaan dilakukan di luar aplikasi dan nilainya diinput langsung guru.
+    if (tugas.inputManual) {
+      return {
+        success: false,
+        message: "Tugas ini dikerjakan di luar aplikasi. Nilai diinput langsung oleh guru.",
       }
     }
 
@@ -983,7 +1223,7 @@ export async function getDetailTugasSiswa(
           ? tugas.lampiranUrl
           : getSignedUrl("tugas-siswa", tugas.lampiranUrl)
         : null,
-      pengumpulan?.urlFile
+      pengumpulan?.urlFile && pengumpulan.urlFile !== MANUAL_URL_FILE
         ? isExternalUrl(pengumpulan.urlFile)
           ? pengumpulan.urlFile
           : getSignedUrl("tugas-siswa", pengumpulan.urlFile)

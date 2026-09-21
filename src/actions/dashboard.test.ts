@@ -182,6 +182,7 @@ describe("getRangkumanSiswaHome — filter gender", () => {
     const tugasWhere = mockTugasFindMany.mock.calls[0][0].where
     expect(tugasWhere.pengumpulan).toEqual({ none: { siswaId: "siswa-1" } })
     expect(tugasWhere.deadline).toEqual({ gte: expect.any(Date) })
+    expect(tugasWhere.inputManual).toBe(false)
   })
 
   it("menolak siswa yang belum terdaftar di kelas aktif", async () => {
@@ -245,6 +246,45 @@ describe("getRangkumanSiswaHome — filter gender", () => {
     expect(result.data?.ujianTersedia).toBe(0)
     expect(result.data?.daftarNilai).toHaveLength(2)
     expect(result.data?.rataRataNilai).toBe(85)
+  })
+
+  it("ujian offline (DRAFT + inputManual) yang sudah DINILAI masuk riwayat nilai, bukan daftar tersedia", async () => {
+    mockRequireRole.mockResolvedValue({
+      role: Role.SISWA,
+      siswa: { id: "siswa-1", kelasId: "kelas-1", jenisKelamin: "LAKI_LAKI" },
+    })
+    mockUjianFindMany.mockResolvedValue([
+      buatUjianRow({
+        id: "ujian-manual-1",
+        status: "DRAFT",
+        inputManual: true,
+        pengerjaan: [
+          { status: "DINILAI", waktuSubmit: new Date(), nilaiTotal: "75" },
+        ],
+      }),
+    ])
+
+    const result = await getRangkumanSiswaHome()
+
+    expect(result.success).toBe(true)
+    expect(result.data?.ujianTersedia).toBe(0)
+    expect(result.data?.daftarNilai).toHaveLength(1)
+    expect(result.data?.daftarNilai[0]).toMatchObject({
+      id: "ujian-manual-1",
+      nilai: 75,
+    })
+    // Query memakai OR status PUBLISHED ATAU (DRAFT + inputManual + DINILAI)
+    const ujianWhere = mockUjianFindMany.mock.calls[0][0].where
+    expect(ujianWhere.OR).toEqual(
+      expect.arrayContaining([
+        { status: "PUBLISHED" },
+        expect.objectContaining({
+          status: "DRAFT",
+          inputManual: true,
+          pengerjaan: { some: { siswaId: "siswa-1", status: "DINILAI" } },
+        }),
+      ])
+    )
   })
 })
 

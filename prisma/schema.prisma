@@ -36,6 +36,7 @@ model User {
   pembayaranDikonfirmasi  PembayaranSiswa[]          @relation("PembayaranDikonfirmasi")
   verifikasiPendaftaran   Pendaftaran[]              @relation("VerifiedBy")
   penilaianTugas          PengumpulanTugas[]         @relation("TugasDinilaiOleh")
+  penilaianUjianManual    PengerjaanUjian[]          @relation("PengerjaanDinilaiOleh")
   pengumumans             pengumumans[]
   siswa                   Siswa?
   tagihanDibatalkan       TagihanSiswa[]             @relation("TagihanDibatalkan")
@@ -414,6 +415,12 @@ model Ujian {
   waktuSelesai    DateTime @db.Timestamptz(3)          @map("waktu_selesai")
   durasiMenit     Int               @map("durasi_menit")
   status          StatusUjian       @default(DRAFT)
+  // Nomor urut ujian per kelas+mapel+periode (hanya untuk ULANGAN_HARIAN).
+  // UTS/Ujian Semester tidak bernomor — unik constraint Postgres memperbolehkan
+  // banyak NULL, sehingga aman untuk null.
+  nomorUjian      Int?              @map("nomor_ujian")
+  jenisUjian      JenisUjian        @default(ULANGAN_HARIAN) @map("jenis_ujian")
+  inputManual     Boolean           @default(false) @map("input_manual")
   dibuatOlehId    String            @map("dibuat_oleh_id")
   createdAt       DateTime @db.Timestamptz(3)          @default(now()) @map("created_at")
   updatedAt       DateTime @db.Timestamptz(3)          @updatedAt @map("updated_at")
@@ -430,6 +437,7 @@ model Ujian {
   @@index([mataPelajaranId], map: "idx_ujian_mapel")
   @@index([periodeAjaranId], map: "idx_ujian_periode")
   @@index([status], map: "idx_ujian_status")
+  @@unique([kelasId, mataPelajaranId, periodeAjaranId, nomorUjian], map: "uq_ujian_nomor")
   @@map("ujians")
 }
 
@@ -479,15 +487,18 @@ model PengerjaanUjian {
   nilaiPg         Decimal?         @map("nilai_pg") @db.Decimal(6, 2)
   nilaiEsai       Decimal?         @map("nilai_esai") @db.Decimal(6, 2)
   submitTerlambat Boolean          @default(false) @map("submit_terlambat")
+  dinilaiOlehId   String?          @map("dinilai_oleh_id")
   createdAt       DateTime @db.Timestamptz(3)         @default(now()) @map("created_at")
   updatedAt       DateTime @db.Timestamptz(3)         @updatedAt @map("updated_at")
   jawaban         JawabanSiswa[]
+  dinilaiOleh     User?            @relation("PengerjaanDinilaiOleh", fields: [dinilaiOlehId], references: [id])
   siswa           Siswa            @relation(fields: [siswaId], references: [id], onDelete: Cascade)
   ujian           Ujian            @relation(fields: [ujianId], references: [id], onDelete: Cascade)
 
   @@unique([ujianId, siswaId])
   @@index([siswaId])
   @@index([status])
+  @@index([dinilaiOlehId])
   @@index([siswaId], map: "idx_pengerjaan_siswa")
   @@index([status], map: "idx_pengerjaan_status")
   @@map("pengerjaan_ujians")
@@ -528,6 +539,10 @@ model Tugas {
   periodeAjaranId String             @map("periode_ajaran_id")
   deadline        DateTime @db.Timestamptz(3)
   lampiranUrl     String?            @map("lampiran_url")
+  // Nomor urut tugas per kelas+mapel+periode (Tugas 1, Tugas 2, ...).
+  nomorTugas      Int?               @map("nomor_tugas")
+  // Tugas offline (dikerjakan di luar aplikasi); nilai diinput manual oleh guru.
+  inputManual     Boolean            @default(false) @map("input_manual")
   dibuatOlehId    String             @map("dibuat_oleh_id")
   createdAt       DateTime @db.Timestamptz(3)           @default(now()) @map("created_at")
   updatedAt       DateTime @db.Timestamptz(3)           @updatedAt @map("updated_at")
@@ -542,6 +557,7 @@ model Tugas {
   @@index([deadline], map: "idx_tugas_deadline")
   @@index([kelasId], map: "idx_tugas_kelas")
   @@index([mataPelajaranId], map: "idx_tugas_mapel")
+  @@unique([kelasId, mataPelajaranId, periodeAjaranId, nomorTugas], map: "uq_tugas_nomor")
   @@map("tugas")
 }
 
@@ -911,6 +927,14 @@ enum StatusUjian {
   DRAFT
   PUBLISHED
   SELESAI
+}
+
+/// Jenis ujian di saat pembuatan. Hanya ULANGAN_HARIAN yang dinomori otomatis
+/// ("Ujian 1", "Ujian 2", ... per kelas+mapel+periode).
+enum JenisUjian {
+  ULANGAN_HARIAN
+  UJIAN_TENGAH_SEMESTER
+  UJIAN_SEMESTER
 }
 
 enum TipeSoal {

@@ -17,6 +17,12 @@ const ujianBaseSchema = z.object({
     message: "Format waktu selesai tidak valid",
   }),
   durasiMenit: z.number().int().min(5, "Durasi ujian minimal 5 menit").max(360),
+  // Jenis ujian (ulangan harian/UTS/semester) — default ULANGAN_HARIAN.
+  jenisUjian: z
+    .enum(["ULANGAN_HARIAN", "UJIAN_TENGAH_SEMESTER", "UJIAN_SEMESTER"])
+    .optional(),
+  // Ujian offline: tidak dikerjakan via aplikasi, nilai diinput manual guru.
+  inputManual: z.boolean().optional(),
 })
 
 export const createUjianSchema = ujianBaseSchema.refine(
@@ -96,3 +102,24 @@ export const nilaiEsaiSchema = z.object({
 })
 
 export type NilaiEsaiValues = z.infer<typeof nilaiEsaiSchema>
+
+// Input nilai manual untuk ujian offline: guru mengetik nilai total langsung
+// untuk tiap siswa. Rekaman PengerjaanUjian dibuat berstatus DINILAI sehingga
+// ter-agregasi di rapor seperti biasa (perlu status DINILAI).
+export const inputNilaiUjianManualSchema = z.object({
+  ujianId: z.string().min(1, "ID ujian wajib diisi"),
+  penilaian: z
+    .array(
+      z.object({
+        siswaId: z.string().min(1, "ID siswa wajib diisi"),
+        nilai: z
+          .number()
+          .min(0, "Nilai tidak boleh negatif")
+          .max(100, "Nilai maksimal 100"),
+      })
+    )
+    .min(1, "Minimal 1 siswa yang dinilai")
+    .max(200, "Terlalu banyak siswa dalam satu input nilai"),
+})
+
+export type InputNilaiUjianManualValues = z.infer<typeof inputNilaiUjianManualSchema>

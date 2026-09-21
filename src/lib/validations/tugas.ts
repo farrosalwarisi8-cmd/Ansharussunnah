@@ -9,10 +9,15 @@ export const createTugasSchema = z.object({
   kelasId: z.string().min(1, "Kelas wajib dipilih"),
   targetGender: z.enum(["LAKI_LAKI", "PEREMPUAN"]).optional().nullable(),
   periodeAjaranId: z.string().min(1, "Periode ajaran wajib dipilih"),
-  deadline: z.string().refine((val) => !isNaN(Date.parse(val)), {
-    message: "Format deadline tidak valid",
-  }),
+  deadline: z
+    .string()
+    .refine((val) => !isNaN(Date.parse(val)), {
+      message: "Format deadline tidak valid",
+    })
+    .optional(),
   lampiranUrl: z.string().optional(),
+  // Tugas offline: dikerjakan di luar aplikasi, nilai diinput manual guru.
+  inputManual: z.boolean().optional(),
 })
 
 export type CreateTugasValues = z.infer<typeof createTugasSchema>
@@ -40,6 +45,28 @@ export const nilaiTugasSchema = z.object({
 })
 
 export type NilaiTugasValues = z.infer<typeof nilaiTugasSchema>
+
+// Input nilai manual untuk tugas offline: guru mengetik nilai langsung untuk
+// tiap siswa yang mengerjakan di luar aplikasi. Rekaman PengumpulanTugas
+// dibuat berstatus DINILAI sehingga ter-agregasi di rapor seperti biasa.
+export const inputNilaiTugasManualSchema = z.object({
+  tugasId: z.string().min(1, "ID tugas wajib diisi"),
+  penilaian: z
+    .array(
+      z.object({
+        siswaId: z.string().min(1, "ID siswa wajib diisi"),
+        nilai: z
+          .number()
+          .min(0, "Nilai tidak boleh negatif")
+          .max(100, "Nilai maksimal 100"),
+        feedback: z.string().max(1000).optional(),
+      })
+    )
+    .min(1, "Minimal 1 siswa yang dinilai")
+    .max(200, "Terlalu banyak siswa dalam satu input nilai"),
+})
+
+export type InputNilaiTugasManualValues = z.infer<typeof inputNilaiTugasManualSchema>
 
 export const rekapTugasSchema = z.object({
   tugasId: z.string().min(1),

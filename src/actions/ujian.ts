@@ -14,15 +14,17 @@ import {
   createSoalSchema,
   submitPengerjaanUjianSchema,
   nilaiEsaiSchema,
+  inputNilaiUjianManualSchema,
   type CreateUjianValues,
   type UpdateUjianValues,
   type CreateSoalValues,
   type SubmitPengerjaanUjianValues,
   type NilaiEsaiValues,
+  type InputNilaiUjianManualValues,
 } from "@/lib/validations/ujian"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
-import { Role, StatusUjian, StatusPengerjaan, Prisma } from "@prisma/client"
+import { Role, StatusUjian, StatusPengerjaan, JenisUjian, Prisma } from "@prisma/client"
 import { toUserFriendlyError } from "@/lib/prisma-error"
 import { isCronAuthorized } from "@/lib/cron-auth"
 import { revalidatePath } from "next/cache"
@@ -92,6 +94,28 @@ async function hapusGambarSoalDariStorage(filePath: string): Promise<void> {
 }
 
 // ========================================================
+// 0b. PENOMORAN & JENIS UJIAN
+// ========================================================
+
+/**
+ * Nomor urut ujian berikutnya per kelas+mapel+periode (hanya berlaku untuk
+ * ULANGAN_HARIAN — UTS/Ujian Semester tidak bernomor, nomorUjian di-null-kan).
+ * Dipanggil sebelum create di dalam transaksi agar tidak bernomor kembar.
+ */
+async function getNextNomorUjian(
+  tx: Prisma.TransactionClient,
+  kelasId: string,
+  mataPelajaranId: string,
+  periodeAjaranId: string
+): Promise<number> {
+  const aggregasi = await tx.ujian.aggregate({
+    where: { kelasId, mataPelajaranId, periodeAjaranId },
+    _max: { nomorUjian: true },
+  })
+  return (aggregasi._max.nomorUjian ?? 0) + 1
+}
+
+// ========================================================
 // 1. ACTIONS GURU: MANAJEMEN UJIAN
 // ========================================================
 
@@ -119,6 +143,9 @@ export async function createUjian(
       waktuSelesai,
       durasiMenit,
     } = validated.data
+
+    const inputManual = !!validated.data.inputManual
+    const jenisUjian = validated.data.jenisUjian ?? JenisUjian.ULANGAN_HARIAN
 
     // Validasi otorisasi guru terhadap kelas
     const { user } = await verifyGuruAksesKelas(kelasId, mataPelajaran)
@@ -148,20 +175,32 @@ export async function createUjian(
       return { success: false, message: "Periode ajaran tidak ditemukan" }
     }
 
-    const ujian = await prisma.ujian.create({
-      data: {
-        judul,
-        deskripsi,
-        mataPelajaranId: mapel.id,
-        kelasId,
-        targetGender: effectiveTargetGender,
-        periodeAjaranId,
-        waktuMulai: new Date(waktuMulai),
-        waktuSelesai: new Date(waktuSelesai),
-        durasiMenit,
-        status: StatusUjian.DRAFT,
-        dibuatOlehId: user.id,
-      },
+    // Hanya ULANGAN_HARIAN yang dinomori otomatis; UTS/Ujian Semester tidak
+    // bernomor (nomorUjian null → unique constraint tetap berlaku).
+    const ujian = await prisma.$transaction(async (tx) => {
+      const nomorUjian =
+        jenisUjian === JenisUjian.ULANGAN_HARIAN
+          ? await getNextNomorUjian(tx, kelasId, mapel.id, periodeAjaranId)
+          : null
+
+      return tx.ujian.create({
+        data: {
+          judul,
+          deskripsi,
+          mataPelajaranId: mapel.id,
+          kelasId,
+          targetGender: effectiveTargetGender,
+          periodeAjaranId,
+          waktuMulai: new Date(waktuMulai),
+          waktuSelesai: new Date(waktuSelesai),
+          durasiMenit,
+          status: StatusUjian.DRAFT,
+          nomorUjian,
+          jenisUjian,
+          inputManual,
+          dibuatOlehId: user.id,
+        },
+      })
     })
 
     revalidatePath("/dashboard/ujian")
@@ -263,10 +302,11 @@ export async function updateUjian(
         }
       }
 
-      // Saat mempublikasikan, pastikan ujian memiliki minimal 1 soal.
+      // Saat mempublikasikan, pastikan ujian memiliki minimal 1 soal
+      // (kecuali ujian offline/input manual yang tidak butuh soal).
       if (keStatus === StatusUjian.PUBLISHED) {
         const soalCount = await prisma.soalUjian.count({ where: { ujianId } })
-        if (soalCount < 1) {
+        if (soalCount < 1 && !ujian.inputManual) {
           return {
             success: false,
             message: "Tidak dapat mempublikasikan ujian yang belum memiliki soal",
@@ -302,20 +342,48 @@ export async function updateUjian(
       }
     }
 
-    await prisma.ujian.update({
-      where: { id: ujianId },
-      data: {
-        judul: payload.judul,
-        deskripsi: payload.deskripsi,
-        mataPelajaranId,
-        kelasId: payload.kelasId,
-        targetGender: effectiveTargetGender,
-        periodeAjaranId: payload.periodeAjaranId,
-        waktuMulai: payload.waktuMulai ? new Date(payload.waktuMulai) : undefined,
-        waktuSelesai: payload.waktuSelesai ? new Date(payload.waktuSelesai) : undefined,
-        durasiMenit: payload.durasiMenit,
-        status: payload.status,
-      },
+    // Kelola nomor urut & jenis ujian saat update:
+//   - Bukan ULANGAN_HARIAN → nomor di-null (UTS/Ujian Semester tidak bernomor).
+//   - ULANGAN_HARIAN & scope berubah atau baru beralih dari jenis lain → nomor baru.
+//   - Selain itu nomor lama dipertahankan.
+    await prisma.$transaction(async (tx) => {
+      let nomorUjian: number | null | undefined
+      const jenisTarget = payload.jenisUjian ?? ujian.jenisUjian
+      const scopeBerubah =
+        targetKelasId !== ujian.kelasId ||
+        targetMapelId !== ujian.mataPelajaranId ||
+        (payload.periodeAjaranId !== undefined &&
+          payload.periodeAjaranId !== ujian.periodeAjaranId)
+
+      if (jenisTarget !== JenisUjian.ULANGAN_HARIAN) {
+        nomorUjian = null
+      } else if (scopeBerubah || ujian.jenisUjian !== jenisTarget) {
+        nomorUjian = await getNextNomorUjian(
+          tx,
+          targetKelasId,
+          targetMapelId,
+          payload.periodeAjaranId ?? ujian.periodeAjaranId
+        )
+      }
+
+      await tx.ujian.update({
+        where: { id: ujianId },
+        data: {
+          judul: payload.judul,
+          deskripsi: payload.deskripsi,
+          mataPelajaranId,
+          kelasId: payload.kelasId,
+          targetGender: effectiveTargetGender,
+          periodeAjaranId: payload.periodeAjaranId,
+          waktuMulai: payload.waktuMulai ? new Date(payload.waktuMulai) : undefined,
+          waktuSelesai: payload.waktuSelesai ? new Date(payload.waktuSelesai) : undefined,
+          durasiMenit: payload.durasiMenit,
+          status: payload.status,
+          jenisUjian: payload.jenisUjian,
+          nomorUjian,
+          inputManual: payload.inputManual,
+        },
+      })
     })
 
     revalidatePath("/dashboard/ujian")
@@ -694,6 +762,7 @@ export async function getRekapHasilUjian(ujianId: string): Promise<ActionRespons
       where: { id: ujianId },
       include: {
         kelas: true,
+        mataPelajaran: { select: { jenisKelamin: true } },
         soal: {
           select: { id: true, nomorSoal: true, bobot: true, tipe: true },
         },
@@ -784,6 +853,16 @@ export async function beriNilaiEsai(
 
     if (!pengerjaan) {
       return { success: false, message: "Data pengerjaan siswa tidak ditemukan" }
+    }
+
+    // KEAMANAN: ujian offline (input manual) tidak punya soal esai yang
+    // dikoreksi guru — koreksi esai hanya berlaku untuk pengerjaan online.
+    if (pengerjaan.ujian.inputManual) {
+      return {
+        success: false,
+        message:
+          "Ujian offline diinput manual — tidak ada soal esai untuk dikoreksi.",
+      }
     }
 
     const { user, roleInKelas } = await verifyGuruAksesKelas(
@@ -884,6 +963,7 @@ export async function beriNilaiEsai(
           status: adaEsaiBelumDinilai
             ? StatusPengerjaan.SELESAI
             : StatusPengerjaan.DINILAI,
+          dinilaiOlehId: user.id,
         },
       })
       },
@@ -897,6 +977,163 @@ export async function beriNilaiEsai(
     }
   } catch (error: unknown) {
     return { success: false, message: toUserFriendlyError(error, "Gagal menyimpan nilai esai") }
+  }
+}
+
+/**
+ * Input nilai manual massal untuk UJIAN OFFLINE (dikerjakan di luar aplikasi,
+ * mis. ulangan kertas). Membuat/update rekaman PengerjaanUjian berstatus
+ * DINILAI dengan nilaiTotal per siswa sehingga masuk agregasi rapor seperti
+ * biasa (butuh status DINILAI untuk masuk getRekapRaporKelas).
+ * Ujian manual berstatus DRAFT → tidak tampil sebagai ujian yang bisa
+ * "dikerjakan"; nilai tetap terlihat siswa di riwayat (getDaftarUjianSiswa).
+ * ✅ Otorisasi: guru harus mengampu kelas & mapel ujian terkait.
+ */
+export async function inputNilaiUjianManual(
+  payload: InputNilaiUjianManualValues
+): Promise<ActionResponse<{ jumlahDinilai: number }>> {
+  try {
+    const validated = inputNilaiUjianManualSchema.safeParse(payload)
+    if (!validated.success) {
+      return {
+        success: false,
+        message: "Data penilaian manual tidak valid",
+        errors: validated.error.flatten().fieldErrors,
+      }
+    }
+
+    const { ujianId, penilaian } = validated.data
+
+    const ujian = await prisma.ujian.findUnique({
+      where: { id: ujianId },
+      include: {
+        mataPelajaran: { select: { jenisKelamin: true } },
+      },
+    })
+    if (!ujian) {
+      return { success: false, message: "Ujian tidak ditemukan" }
+    }
+
+    // KEAMANAN: input nilai manual hanya untuk ujian OFFLINE (inputManual).
+    // Untuk ujian online, nilai dihitung dari jawaban siswa (auto-grading /
+    // penilaian esai) — input manual malah akan menimpa nilaiTotal hasil
+    // pengerjaan online tanpa jejak penilai.
+    if (!ujian.inputManual) {
+      return {
+        success: false,
+        message:
+          "Input nilai manual hanya dapat dipakai untuk ujian offline (beri tanda 'Ujian offline')",
+      }
+    }
+
+    const { user, roleInKelas } = await verifyGuruAksesKelas(
+      ujian.kelasId,
+      ujian.mataPelajaranId
+    )
+
+    // Validasi: semua siswa yang dinilai harus terdaftar di kelas ujian.
+    const siswaIds = penilaian.map((item) => item.siswaId)
+    const siswaDKelas = await prisma.siswa.findMany({
+      where: { id: { in: siswaIds }, kelasId: ujian.kelasId, deleted_at: null },
+      select: { id: true, jenisKelamin: true },
+    })
+    const siswaValid = new Set(siswaDKelas.map((s) => s.id))
+    if (siswaIds.some((id) => !siswaValid.has(id))) {
+      return {
+        success: false,
+        message: "Sebagian siswa yang dinilai tidak terdaftar di kelas ujian ini",
+      }
+    }
+    // Validasi gender (paritas dengan daftar ujian siswa): ujian dengan target
+    // gender / mapel khusus gender hanya boleh menilai siswa gender yang sama —
+    // mencegah nilai bocor ke siswa gender lain di rekapan & rapor.
+    const siswaGenderSalah = siswaDKelas.filter(
+      (s) =>
+        (ujian.targetGender && s.jenisKelamin !== ujian.targetGender) ||
+        (ujian.mataPelajaran.jenisKelamin &&
+          s.jenisKelamin !== ujian.mataPelajaran.jenisKelamin)
+    )
+    if (siswaGenderSalah.length > 0) {
+      return {
+        success: false,
+        message:
+          "Sebagian siswa yang dinilai tidak sesuai dengan target gender ujian ini",
+      }
+    }
+
+    // KEAMANAN (re-grade): nilai yang sudah diinput/dinilai guru lain tidak
+    // bisa ditimpa diam-diam — hanya guru yang sama, wali kelas, atau admin.
+    // Deteksi lewat dinilaiOlehId di level PengerjaanUjian (diisi oleh input
+    // nilai manual & beriNilaiEsai); fallback jawaban esai utk record lama
+    // yang belum memiliki dinilaiOlehId di level rekap.
+    const existing = await prisma.pengerjaanUjian.findMany({
+      where: { ujianId, siswaId: { in: siswaIds } },
+      select: {
+        siswaId: true,
+        status: true,
+        dinilaiOlehId: true,
+        jawaban: { select: { dinilaiOlehId: true } },
+      },
+    })
+    const dinilaiLain = existing.filter(
+      (p) =>
+        (p.dinilaiOlehId && p.dinilaiOlehId !== user.id) ||
+        (p.status === StatusPengerjaan.DINILAI &&
+          p.jawaban.some((j) => j.dinilaiOlehId && j.dinilaiOlehId !== user.id))
+    )
+    if (dinilaiLain.length > 0) {
+      const isPrivileged =
+        roleInKelas === "WALI_KELAS" || roleInKelas === "ADMIN"
+      if (!isPrivileged) {
+        return {
+          success: false,
+          message:
+            "Sebagian nilai sudah diinput guru lain. Hanya wali kelas atau admin yang dapat mengubahnya.",
+        }
+      }
+    }
+
+    const sekarang = new Date()
+
+    // Skor akhir skala 100 boleh digunakan langsung; nilaiTutupJawaban parity.
+    await prisma.$transaction(async (tx) => {
+      for (const item of penilaian) {
+        await tx.pengerjaanUjian.upsert({
+          where: {
+            ujianId_siswaId: { ujianId, siswaId: item.siswaId },
+          },
+          create: {
+            ujianId,
+            siswaId: item.siswaId,
+            waktuMulai: sekarang,
+            waktuSubmit: sekarang,
+            status: StatusPengerjaan.DINILAI,
+            nilaiTotal: new Prisma.Decimal(item.nilai),
+            submitTerlambat: false,
+            dinilaiOlehId: user.id,
+          },
+          update: {
+            status: StatusPengerjaan.DINILAI,
+            nilaiTotal: new Prisma.Decimal(item.nilai),
+            waktuSubmit: sekarang,
+            dinilaiOlehId: user.id,
+          },
+        })
+      }
+    })
+
+    revalidatePath(`/dashboard/ujian/${ujianId}/rekap`)
+    revalidatePath("/dashboard/ujian")
+    return {
+      success: true,
+      message: `Nilai manual berhasil disimpan untuk ${penilaian.length} siswa`,
+      data: { jumlahDinilai: penilaian.length },
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: toUserFriendlyError(error, "Gagal menyimpan nilai manual ujian"),
+    }
   }
 }
 
@@ -944,6 +1181,8 @@ export async function getUjianDetail(
         waktuMulai: ujian.waktuMulai.toISOString(),
         waktuSelesai: ujian.waktuSelesai.toISOString(),
         status: ujian.status,
+        jenisUjian: ujian.jenisUjian,
+        inputManual: ujian.inputManual,
         soal: await Promise.all(
           ujian.soal.map(async (s) => ({
             id: s.id,
@@ -997,7 +1236,22 @@ export async function getDaftarUjianSiswa(): Promise<ActionResponse> {
     const ujianList = await prisma.ujian.findMany({
       where: {
         kelasId: user.siswa.kelasId,
-        status: StatusUjian.PUBLISHED,
+        // Ujian yang bisa dikerjakan (PUBLISHED) ATAU ujian offline (DRAFT)
+        // yang sudah TELAH DINILAI untuk siswa ini (agar nilainya terlihat
+        // di riwayat; ujian offline tidak mewajibkan publish).
+        OR: [
+          { status: StatusUjian.PUBLISHED },
+          {
+            status: StatusUjian.DRAFT,
+            inputManual: true,
+            pengerjaan: {
+              some: {
+                siswaId: user.siswa.id,
+                status: StatusPengerjaan.DINILAI,
+              },
+            },
+          },
+        ],
         AND: [
           {
             OR: [
@@ -1032,26 +1286,35 @@ export async function getDaftarUjianSiswa(): Promise<ActionResponse> {
       orderBy: { waktuMulai: "desc" },
     })
 
-    const formatted = ujianList.map((u) => {
-      const pengerjaan = u.pengerjaan[0] || null
-      const isExpired = now > u.waktuSelesai
-      const isStarted = now >= u.waktuMulai
+    const formatted = ujianList
+      // Ujian manual (offline) hanya ditampilkan bila sudah dinilai — siswa
+      // tidak mengerjakan online, jadi tanpa riwayat nilai jangan tampil
+      // sebagai ujian yang bisa "dikerjakan".
+      .filter((u) => !u.inputManual || u.pengerjaan.length > 0)
+      .map((u) => {
+        const pengerjaan = u.pengerjaan[0] || null
+        const isExpired = now > u.waktuSelesai
+        const isStarted = now >= u.waktuMulai
 
-      return {
-        id: u.id,
-        judul: u.judul,
-        deskripsi: u.deskripsi,
-        mataPelajaran: u.mataPelajaran.nama,
-        durasiMenit: u.durasiMenit,
-        waktuMulai: u.waktuMulai,
-        waktuSelesai: u.waktuSelesai,
-        totalSoal: u._count.soal,
-        guru: u.dibuatOleh.nama,
-        statusPengerjaan: pengerjaan ? pengerjaan.status : "BELUM_MULAI",
-        nilai: pengerjaan?.status === StatusPengerjaan.DINILAI ? pengerjaan.nilaiTotal : null,
-        dapatDikerjakan: isStarted && !isExpired && (!pengerjaan || pengerjaan.status === StatusPengerjaan.SEDANG_MENGERJAKAN),
-      }
-    })
+        return {
+          id: u.id,
+          judul: u.judul,
+          deskripsi: u.deskripsi,
+          mataPelajaran: u.mataPelajaran.nama,
+          durasiMenit: u.durasiMenit,
+          waktuMulai: u.waktuMulai,
+          waktuSelesai: u.waktuSelesai,
+          totalSoal: u._count.soal,
+          guru: u.dibuatOleh.nama,
+          statusPengerjaan: pengerjaan ? pengerjaan.status : "BELUM_MULAI",
+          nilai: pengerjaan?.status === StatusPengerjaan.DINILAI ? pengerjaan.nilaiTotal : null,
+          dapatDikerjakan:
+            !u.inputManual &&
+            isStarted &&
+            !isExpired &&
+            (!pengerjaan || pengerjaan.status === StatusPengerjaan.SEDANG_MENGERJAKAN),
+        }
+      })
 
     return {
       success: true,
@@ -1118,6 +1381,13 @@ mataPelajaran: { select: { nama: true, jenisKelamin: true } },
     }
     if (ujian.status !== StatusUjian.PUBLISHED) {
       return { success: false, message: "Ujian belum dibuka oleh guru" }
+    }
+    // Ujian offline (input manual) tidak dikerjakan via aplikasi.
+    if (ujian.inputManual) {
+      return {
+        success: false,
+        message: "Ujian ini dikerjakan di luar aplikasi. Nilai diinput langsung oleh guru.",
+      }
     }
     if (now < ujian.waktuMulai) {
       return { success: false, message: "Ujian belum dimulai" }
@@ -1434,9 +1704,10 @@ export async function tutupPengerjaanUjianKedaluwarsa(
   try {
     // Bisa dipanggil guru (spesifik per ujian) atau sistem cron (semua ujian).
     // Jika ada ujianId, validasi guru punya akses ke ujian tersebut.
-    if (ujianId) {
+if (ujianId) {
       const ujian = await prisma.ujian.findUnique({ where: { id: ujianId } })
       if (!ujian) return { success: false, message: "Ujian tidak ditemukan" }
+      // Validasi akses guru ke ujian tersebut (melempar bila tidak berhak).
       await verifyGuruAksesKelas(ujian.kelasId, ujian.mataPelajaranId)
     }
 
@@ -1628,6 +1899,9 @@ export async function getDaftarUjianGuru(
       waktuMulai: u.waktuMulai,
       waktuSelesai: u.waktuSelesai,
       status: u.status,
+      jenisUjian: u.jenisUjian,
+      nomorUjian: u.nomorUjian,
+      inputManual: u.inputManual,
       totalSoal: u._count.soal,
       totalPeserta: u._count.pengerjaan,
       guru: u.dibuatOleh.nama,

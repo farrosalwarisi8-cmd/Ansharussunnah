@@ -6,7 +6,7 @@ import * as React from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
-import { submitTugas, beriNilaiTugas, getRekapPengumpulanTugas, getDetailTugasSiswa } from "@/actions/tugas"
+import { submitTugas, beriNilaiTugas, getRekapPengumpulanTugas, getDetailTugasSiswa, inputNilaiTugasManual } from "@/actions/tugas"
 import { useToast } from "@/hooks/use-toast"
 import { Role } from "@prisma/client"
 import { Button } from "@/components/ui/button"
@@ -21,13 +21,14 @@ const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m
 const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogHeader), { ssr: false })
 const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
-import { ArrowLeft, Upload, CheckCircle2, Link as LinkIcon, Loader2, AlertCircle, Download } from "lucide-react"
+import { ArrowLeft, Upload, CheckCircle2, Link as LinkIcon, Loader2, AlertCircle, Download, PenLine } from "lucide-react"
 
 interface SubmisiItem {
   siswaId: string
   pengumpulanId: string | null
   nama: string
   nisn: string
+  jenisKelamin?: string | null
   status: string
   waktuKumpul: string | Date | null
   nilai: number | null
@@ -45,6 +46,9 @@ interface RekapData {
     judul: string
     deadline: string | Date
     mataPelajaran: string
+    inputManual?: boolean
+    targetGender?: string | null
+    mataPelajaranJenisKelamin?: string | null
   }
   statistik: {
     totalSiswa: number
@@ -107,6 +111,44 @@ export default function DetailTugasPage() {
   const [skorNilai, setSkorNilai] = React.useState("")
   const [feedbackGuru, setFeedbackGuru] = React.useState("")
   const [savingGrade, setSavingGrade] = React.useState(false)
+
+  // State Input Nilai Manual (offline)
+  const [manualOpen, setManualOpen] = React.useState(false)
+  const [manualNilai, setManualNilai] = React.useState<Record<string, string>>({})
+  const [manualFeedback, setManualFeedback] = React.useState<Record<string, string>>({})
+  const [savingManual, setSavingManual] = React.useState(false)
+
+  const isInputManual = !!rekapData?.tugas?.inputManual
+
+  // Batasan gender tugas (targetGender ATAU mapel khusus gender) — dipakai
+  // untuk menyaring daftar yang boleh dinilai manual & tombol penilaian,
+  // selaras dengan validasi server di inputNilaiTugasManual.
+  const batasanGender =
+    rekapData?.tugas?.targetGender ?? rekapData?.tugas?.mataPelajaranJenisKelamin ?? null
+  const bolehDinilai = (sub: SubmisiItem) =>
+    !batasanGender || sub.jenisKelamin === batasanGender
+
+  // Daftar rekap yang ditampilkan: untuk tugas manual dengan pembatasan gender,
+  // santri gender lain tidak termasuk (tidak mengikuti tugas ini). Statistik
+  // dihitung ulang lokal agar konsisten dengan baris yang terlihat.
+  const rekapTampil = React.useMemo(
+    () =>
+      isInputManual
+        ? (rekapData?.rekap ?? []).filter(bolehDinilai)
+        : (rekapData?.rekap ?? []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isInputManual, rekapData?.rekap, batasanGender]
+  )
+  const statistik = React.useMemo(() => {
+    if (!isInputManual || !batasanGender) return rekapData?.statistik
+    return {
+      totalSiswa: rekapTampil.length,
+      sudahKumpul: rekapTampil.filter((s) => s.status !== "BELUM_DIKUMPULKAN").length,
+      belumKumpul: rekapTampil.filter((s) => s.status === "BELUM_DIKUMPULKAN").length,
+      sudahDinilai: rekapTampil.filter((s) => s.nilai !== null).length,
+      terlambat: rekapTampil.filter((s) => s.status === "TERLAMBAT").length,
+    }
+  }, [isInputManual, batasanGender, rekapData?.statistik, rekapTampil])
 
   // Fetch rekap data for guru
   React.useEffect(() => {
@@ -186,7 +228,7 @@ export default function DetailTugasPage() {
 
   const handleBeriNilai = async () => {
     if (!selectedSubmisi) return
-    if (!selectedSubmisi.pengumpulanId) {
+    if (!selectedSubmisi.pengumpulanId && !isInputManual) {
       toast({
         variant: "destructive",
         title: "Santri belum mengumpulkan tugas",
@@ -206,11 +248,22 @@ export default function DetailTugasPage() {
     setSavingGrade(true)
 
     try {
-      const result = await beriNilaiTugas({
-        pengumpulanId: selectedSubmisi.pengumpulanId,
-        nilai: nilaiParsed,
-        feedback: feedbackGuru || undefined,
-      })
+      const result = selectedSubmisi.pengumpulanId
+        ? await beriNilaiTugas({
+            pengumpulanId: selectedSubmisi.pengumpulanId,
+            nilai: nilaiParsed,
+            feedback: feedbackGuru || undefined,
+          })
+        : await inputNilaiTugasManual({
+            tugasId,
+            penilaian: [
+              {
+                siswaId: selectedSubmisi.siswaId,
+                nilai: nilaiParsed,
+                feedback: feedbackGuru || undefined,
+              },
+            ],
+          })
 
       if (result.success) {
         toast({
@@ -241,6 +294,73 @@ export default function DetailTugasPage() {
     }
   }
 
+  const handleSaveManualNilai = async () => {
+    if (!rekapData) return
+    const penilaian: { siswaId: string; nilai: number; feedback?: string }[] = []
+    for (const sub of rekapData.rekap) {
+      const raw = (manualNilai[sub.siswaId] || "").trim()
+      if (!raw) continue
+      const nilai = parseFloat(raw)
+      if (isNaN(nilai) || nilai < 0 || nilai > 100) {
+        toast({
+          variant: "destructive",
+          title: "Nilai tidak valid",
+          description: `Nilai untuk ${sub.nama} harus antara 0 - 100.`,
+        })
+        return
+      }
+      penilaian.push({
+        siswaId: sub.siswaId,
+        nilai,
+        feedback: manualFeedback[sub.siswaId]?.trim() || undefined,
+      })
+    }
+    if (penilaian.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Belum ada nilai diisi",
+        description: "Isi minimal satu nilai untuk siswa.",
+      })
+      return
+    }
+
+    setSavingManual(true)
+    try {
+      const result = await inputNilaiTugasManual({ tugasId, penilaian })
+      if (result.success) {
+        toast({
+          title: "Nilai Manual Disimpan! ✨",
+          description: `${penilaian.length} santri berhasil dinilai.`,
+        })
+        setManualOpen(false)
+        const refetchResult = await getRekapPengumpulanTugas(tugasId)
+        if (refetchResult.success && refetchResult.data) {
+          setRekapData(refetchResult.data as RekapData)
+        }
+      } else {
+        toast({ variant: "destructive", title: "Gagal", description: result.message })
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Gagal", description: "Terjadi kesalahan server." })
+    } finally {
+      setSavingManual(false)
+    }
+  }
+
+  const openManualDialog = () => {
+    const nilai: Record<string, string> = {}
+    const feedback: Record<string, string> = {}
+    for (const sub of rekapTampil) {
+      if (sub.nilai !== null && sub.nilai !== undefined) {
+        nilai[sub.siswaId] = String(Number(sub.nilai))
+      }
+      if (sub.feedback) feedback[sub.siswaId] = sub.feedback
+    }
+    setManualNilai(nilai)
+    setManualFeedback(feedback)
+    setManualOpen(true)
+  }
+
   if (loading) {
     return (
       <div className="space-y-6 max-w-5xl mx-auto">
@@ -266,8 +386,6 @@ export default function DetailTugasPage() {
     )
   }
 
-  const statistik = rekapData?.statistik
-
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Top Header */}
@@ -283,7 +401,9 @@ export default function DetailTugasPage() {
             {rekapData?.tugas?.judul || "Detail Tugas"}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500">
-            Deadline: {rekapData?.tugas?.deadline ? new Date(rekapData.tugas.deadline).toLocaleDateString("id-ID") : "-"}
+            {isInputManual
+              ? "Tugas offline — nilai diinput manual oleh guru"
+              : `Deadline: ${rekapData?.tugas?.deadline ? new Date(rekapData.tugas.deadline).toLocaleDateString("id-ID") : "-"}`}
           </p>
         </div>
       </div>
@@ -327,13 +447,25 @@ export default function DetailTugasPage() {
                 Pengumpulan Santri ({statistik?.sudahKumpul || 0} Terkumpul)
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                Lihat status pengumpulan dan berikan penilaian
+                {isInputManual
+                  ? "Nilai langsung tanpa berkas — klik 'Input Nilai Manual' untuk menilai semua santri"
+                  : "Lihat status pengumpulan dan berikan penilaian"}
               </CardDescription>
             </div>
+            {isInputManual && (
+              <Button
+                type="button"
+                onClick={openManualDialog}
+                className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl min-h-[40px] text-xs font-bold"
+              >
+                <PenLine className="h-3.5 w-3.5 mr-1.5" />
+                Input Nilai Manual
+              </Button>
+            )}
           </CardHeader>
 
           <CardContent className="p-0">
-            {rekapData.rekap.length === 0 ? (
+            {rekapTampil.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-sm">
                 Belum ada data pengumpulan tugas.
               </div>
@@ -353,7 +485,7 @@ export default function DetailTugasPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {rekapData.rekap.map((sub) => (
+                      {rekapTampil.map((sub) => (
                         <tr key={sub.siswaId} className="hover:bg-slate-50/80">
                           <td className="p-4 pl-6 font-bold text-slate-800">
                             {sub.nama}
@@ -387,7 +519,7 @@ export default function DetailTugasPage() {
                                 Jawaban
                               </a>
                             )}
-                            {sub.status !== "BELUM_DIKUMPULKAN" && (
+                            {(sub.status !== "BELUM_DIKUMPULKAN" || isInputManual) && bolehDinilai(sub) && (
                               <Button
                                 size="sm"
                                 onClick={() => {
@@ -409,7 +541,7 @@ export default function DetailTugasPage() {
 
                 {/* Mobile Card List View */}
                 <div className="md:hidden p-4 space-y-3">
-                  {rekapData.rekap.map((sub) => (
+                  {rekapTampil.map((sub) => (
                     <div key={sub.siswaId} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -441,7 +573,7 @@ export default function DetailTugasPage() {
                               Jawaban
                             </a>
                           )}
-                          {sub.status !== "BELUM_DIKUMPULKAN" && (
+                          {(sub.status !== "BELUM_DIKUMPULKAN" || isInputManual) && bolehDinilai(sub) && (
                             <Button
                               size="sm"
                               onClick={() => {
@@ -584,6 +716,77 @@ export default function DetailTugasPage() {
             </form>
           )}
         </Card>
+      )}
+
+      {/* Dialog Input Nilai Manual (Offline) */}
+      {isInputManual && rekapData && (
+        <Dialog open={manualOpen} onOpenChange={setManualOpen}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-800">
+                Input Nilai Manual — {rekapData.tugas.judul}
+              </DialogTitle>
+              <p className="text-xs text-slate-500">
+                Masukkan nilai (0 - 100) untuk santri yang mengerjakan di luar aplikasi. Kosongkan
+                nilai bila santri tidak mengerjakan.
+              </p>
+            </DialogHeader>
+
+            <div className="space-y-3 my-2">
+              {rekapTampil.map((sub) => (
+                <div
+                  key={sub.siswaId}
+                  className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center gap-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-slate-800 text-sm truncate">{sub.nama}</div>
+                    <div className="text-xs text-slate-500 font-mono">NISN: {sub.nisn}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      placeholder="Nilai"
+                      value={manualNilai[sub.siswaId] ?? ""}
+                      onChange={(e) =>
+                        setManualNilai((prev) => ({ ...prev, [sub.siswaId]: e.target.value }))
+                      }
+                      className="h-10 w-24 rounded-xl font-bold text-center"
+                    />
+                    <Input
+                      placeholder="Feedback (opsional)"
+                      value={manualFeedback[sub.siswaId] ?? ""}
+                      onChange={(e) =>
+                        setManualFeedback((prev) => ({ ...prev, [sub.siswaId]: e.target.value }))
+                      }
+                      className="h-10 flex-1 sm:w-52 rounded-xl text-sm"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => setManualOpen(false)}
+                disabled={savingManual}
+                className="rounded-xl min-h-[40px]"
+              >
+                Batal
+              </Button>
+              <Button
+                onClick={handleSaveManualNilai}
+                disabled={savingManual}
+                className="bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl min-h-[40px]"
+              >
+                {savingManual ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <PenLine className="h-4 w-4 mr-1.5" />}
+                Simpan Nilai Manual
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Dialog Penilaian Tugas Guru */}

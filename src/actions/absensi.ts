@@ -586,6 +586,7 @@ export async function getSiswaByKelas(
       nama: s.user.nama,
       nisn: s.nisn,
       email: s.user.email,
+      jenisKelamin: s.jenisKelamin,
     }))
 
     return {

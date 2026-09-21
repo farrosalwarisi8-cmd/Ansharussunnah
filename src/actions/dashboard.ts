@@ -141,10 +141,22 @@ async function hitungRangkumanSiswa(
   const startBulanDepan = new Date(tanggal.getFullYear(), tanggal.getMonth() + 1, 1)
 
   // --- Ujian tersedia & riwayat nilai ---
+  // Sertakan ujian offline (DRAFT + inputManual) yang sudah DINILAI untuk
+  // siswa ini, paritas dengan getDaftarUjianSiswa — nilainya tampil di
+  // riwayat walau ujian manual tidak di-publish.
   const ujianList = await prisma.ujian.findMany({
     where: {
       kelasId,
-      status: StatusUjian.PUBLISHED,
+      OR: [
+        { status: StatusUjian.PUBLISHED },
+        {
+          status: StatusUjian.DRAFT,
+          inputManual: true,
+          pengerjaan: {
+            some: { siswaId, status: StatusPengerjaan.DINILAI },
+          },
+        },
+      ],
       AND: [
         {
           OR: [
@@ -188,7 +200,8 @@ async function hitungRangkumanSiswa(
       pengerjaan?.status === StatusPengerjaan.SELESAI ||
       pengerjaan?.status === StatusPengerjaan.DINILAI
 
-    if (now >= u.waktuMulai && now <= u.waktuSelesai && !sudahDikerjakan) {
+    // Ujian offline tidak pernah "bisa dikerjakan" lewat aplikasi.
+    if (!u.inputManual && now >= u.waktuMulai && now <= u.waktuSelesai && !sudahDikerjakan) {
       daftarUjianTersedia.push(infoUjianFrom(u))
     }
 
@@ -221,6 +234,10 @@ async function hitungRangkumanSiswa(
     where: {
       kelasId,
       deadline: { gte: now },
+      // Tugas offline (input manual) bukan "tugas yang harus dikumpulkan" —
+      // tanpa filter ini, tugas manual yang belum dinilai akan muncul dengan
+      // deadline fallback +365 hari sebagai "belum dikumpulkan".
+      inputManual: false,
       // Belum ada record pengumpulan siswa sama sekali
       pengumpulan: { none: { siswaId } },
       AND: [

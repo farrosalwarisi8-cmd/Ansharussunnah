@@ -16,7 +16,7 @@ import { KelasMapelSelector } from "@/components/dashboard/kelas-mapel-selector"
 import { TargetGenderSelector } from "@/components/dashboard/target-gender-selector"
 import { DibuatOlehInfo } from "@/components/ui/dibuat-oleh-info"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
-import { Plus, Trash2, ArrowLeft, Loader2, Save, X, ImageIcon } from "lucide-react"
+import { Plus, Trash2, ArrowLeft, Loader2, Save, X, ImageIcon, PenLine } from "lucide-react"
 import Link from "next/link"
 import { toDatetimeLocalValue } from "@/lib/datetime-local"
 
@@ -61,6 +61,10 @@ export default function BuatUjianPage() {
   const [durasi, setDurasi] = React.useState("60")
   const [waktuMulai, setWaktuMulai] = React.useState("")
   const [waktuSelesai, setWaktuSelesai] = React.useState("")
+  const [jenisUjian, setJenisUjian] = React.useState<
+    "ULANGAN_HARIAN" | "UJIAN_TENGAH_SEMESTER" | "UJIAN_SEMESTER"
+  >("ULANGAN_HARIAN")
+  const [inputManual, setInputManual] = React.useState(false)
 
   // Question List State — dimulai kosong, guru menambah soal sendiri
   const [soalList, setSoalList] = React.useState<SoalItem[]>([])
@@ -229,6 +233,8 @@ export default function BuatUjianPage() {
           durasiMenit: number
           waktuMulai: string
           waktuSelesai: string
+          jenisUjian?: "ULANGAN_HARIAN" | "UJIAN_TENGAH_SEMESTER" | "UJIAN_SEMESTER"
+          inputManual?: boolean
           soal: {
             id?: string
             nomor: number
@@ -248,6 +254,8 @@ export default function BuatUjianPage() {
         setDurasi(String(data.durasiMenit))
         setWaktuMulai(toDatetimeLocalValue(data.waktuMulai))
         setWaktuSelesai(toDatetimeLocalValue(data.waktuSelesai))
+        if (data.jenisUjian) setJenisUjian(data.jenisUjian)
+        if (data.inputManual) setInputManual(true)
         if (data.soal.length > 0) {
           setSoalList(
             data.soal.map((s) => ({
@@ -308,6 +316,8 @@ export default function BuatUjianPage() {
           durasiMenit: parseInt(durasi) || 60,
           waktuMulai: waktuMulai ? new Date(waktuMulai).toISOString() : undefined,
           waktuSelesai: waktuSelesai ? new Date(waktuSelesai).toISOString() : undefined,
+          jenisUjian,
+          inputManual,
           status: publish ? "PUBLISHED" : undefined,
         })
 
@@ -332,6 +342,8 @@ export default function BuatUjianPage() {
           durasiMenit: parseInt(durasi) || 60,
           waktuMulai: waktuMulai ? new Date(waktuMulai).toISOString() : new Date().toISOString(),
           waktuSelesai: waktuSelesai ? new Date(waktuSelesai).toISOString() : new Date(Date.now() + 86400000).toISOString(),
+          jenisUjian,
+          inputManual,
         })
 
         if (!result.success || !result.data?.ujianId) {
@@ -396,7 +408,8 @@ export default function BuatUjianPage() {
       }
 
       // Step 3: If creating & user chose "Publish", set status ke PUBLISHED
-      if (publish && !isEditMode && savedSoal.length > 0) {
+      // (untuk ujian input manual, boleh publish walau tanpa soal).
+      if (publish && !isEditMode && (savedSoal.length > 0 || inputManual)) {
         await updateUjian(ujianId, { status: "PUBLISHED" })
       }
 
@@ -509,6 +522,68 @@ export default function BuatUjianPage() {
 
             <TargetGenderSelector value={targetGender} onChange={setTargetGender} />
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                  Jenis Ujian
+                </label>
+                <select
+                  value={jenisUjian}
+                  onChange={(e) =>
+                    setJenisUjian(
+                      e.target.value as "ULANGAN_HARIAN" | "UJIAN_TENGAH_SEMESTER" | "UJIAN_SEMESTER"
+                    )
+                  }
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-yellow-500"
+                >
+                  <option value="ULANGAN_HARIAN">Ulangan Harian</option>
+                  <option value="UJIAN_TENGAH_SEMESTER">Ujian Tengah Semester (UTS)</option>
+                  <option value="UJIAN_SEMESTER">Ujian Semester</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                  Periode Ajaran
+                </label>
+                <input
+                  type="text"
+                  value={periodeAjaranId ? "Periode aktif terpilih" : "Memuat periode aktif..."}
+                  readOnly
+                  disabled
+                  className="w-full h-12 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-1.5 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={inputManual}
+                  onChange={(e) => setInputManual(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-yellow-500 focus:ring-yellow-500"
+                />
+                <span className="flex-1">
+                  <span className="block text-sm font-bold text-slate-800">
+                    Ujian offline / input nilai manual
+                  </span>
+                  <span className="block text-xs text-slate-500">
+                    Ujian dikerjakan di luar aplikasi (kertas, lisan, papan tulis). Guru mengetik
+                    nilai langsung; pembuatan soal tidak wajib.
+                  </span>
+                </span>
+                <PenLine className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+              </label>
+            </div>
+
+            {inputManual && (
+              <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
+                Mode input manual (offline): nilai akan diisi lewat menu penilaian manual setelah
+                ujian disimpan. Soal &amp; batas waktu tidak wajib untuk ujian jenis ini.
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
@@ -559,7 +634,41 @@ export default function BuatUjianPage() {
               />
             </div>
 
-            <div className="pt-4 flex justify-end">
+            <div className="pt-4 flex flex-col sm:flex-row justify-end gap-3">
+              {inputManual && (
+                <>
+                  <Button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => {
+                      if (!judul.trim()) {
+                        toast({ variant: "destructive", title: "Harap isi judul ujian terlebih dahulu." })
+                        return
+                      }
+                      handleSaveUjian(false)
+                    }}
+                    className="bg-slate-800 hover:bg-slate-700 text-white font-bold h-12 px-6 rounded-xl min-h-[48px]"
+                  >
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                    Simpan Draft
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => {
+                      if (!judul.trim()) {
+                        toast({ variant: "destructive", title: "Harap isi judul ujian terlebih dahulu." })
+                        return
+                      }
+                      handleSaveUjian(true)
+                    }}
+                    className="bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-bold h-12 px-8 rounded-xl min-h-[48px] shadow-md"
+                  >
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                    Terbitkan (Tanpa Soal)
+                  </Button>
+                </>
+              )}
               <Button
                 type="button"
                 onClick={() => {
@@ -569,9 +678,9 @@ export default function BuatUjianPage() {
                   }
                   setStep(2)
                 }}
-                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold h-12 px-8 rounded-xl min-h-[48px]"
+                className={inputManual ? "bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold h-12 px-6 rounded-xl min-h-[48px]" : "bg-yellow-500 hover:bg-yellow-600 text-white font-bold h-12 px-8 rounded-xl min-h-[48px]"}
               >
-                {isEditMode ? "Lanjut ke Edit Soal" : `Lanjut ke Pembuat Soal (${soalList.length} Soal)`} &rarr;
+                {isEditMode ? "Lanjut ke Edit Soal" : inputManual ? "Tambah Soal (Opsional)" : `Lanjut ke Pembuat Soal (${soalList.length} Soal)`} &rarr;
               </Button>
             </div>
           </CardContent>

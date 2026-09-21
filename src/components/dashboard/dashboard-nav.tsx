@@ -30,6 +30,7 @@ import {
   ChevronRight,
   Sparkles,
   RefreshCw,
+  BarChart3,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { logout } from "@/actions/auth"
@@ -59,6 +60,7 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
         { title: "Ujian", href: "/dashboard/ujian", icon: Award, isPrimaryMobile: true },
         { title: "Tugas", href: "/dashboard/tugas", icon: FileCheck2, isPrimaryMobile: true },
         { title: "Materi", href: "/dashboard/materi", icon: BookOpen },
+        { title: "Rekap Nilai", href: "/dashboard/rekap-nilai", icon: BarChart3 },
         { title: "Rapor", href: "/dashboard/rapor", icon: GraduationCap },
       ]
       if (isAdmin) {
@@ -113,6 +115,7 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
         { title: "Ujian", href: "/dashboard/ujian", icon: Award, isPrimaryMobile: true },
         { title: "Tugas", href: "/dashboard/tugas", icon: FileCheck2, isPrimaryMobile: true },
         { title: "Materi", href: "/dashboard/materi", icon: BookOpen },
+        { title: "Rekap Nilai", href: "/dashboard/rekap-nilai", icon: BarChart3 },
         { title: "Rapor", href: "/dashboard/rapor", icon: GraduationCap },
         { title: "Keuangan", href: "/dashboard/keuangan", icon: DollarSign },
         { title: "Kelola Siswa", href: "/dashboard/siswa", icon: GraduationCap },

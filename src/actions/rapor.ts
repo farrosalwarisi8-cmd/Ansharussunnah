@@ -97,7 +97,16 @@ async function hitungNilaiPerMapel(
       status: StatusPengumpulan.DINILAI,
     },
     include: {
-      tugas: { select: { deadline: true, mataPelajaran: { select: { nama: true } } } },
+      // Tugas manual (offline) memakai tanggal penilaian (waktuKumpul) sebagai
+      // tanggal efektif — deadline-nya adalah fallback +1 tahun (bukan tanggal
+      // pengerjaan), sehingga bila dipakai akan terlempar keluar bulan rapor.
+      tugas: {
+        select: {
+          deadline: true,
+          inputManual: true,
+          mataPelajaran: { select: { nama: true } },
+        },
+      },
     },
   })
 
@@ -119,7 +128,8 @@ async function hitungNilaiPerMapel(
   }
 
   for (const p of pengumpulanTugas) {
-    if (!dalamBulan(p.tugas.deadline, bulan)) continue
+    const tanggalEfektif = p.tugas.inputManual ? p.waktuKumpul : p.tugas.deadline
+    if (!dalamBulan(tanggalEfektif, bulan)) continue
     const mapel = p.tugas.mataPelajaran.nama
     if (!mapelMap.has(mapel)) {
       mapelMap.set(mapel, { nilaiUjian: [], nilaiTugas: [] })
@@ -287,9 +297,11 @@ export async function getRekapRaporKelas(
           select: {
             siswaId: true,
             nilai: true,
+            waktuKumpul: true,
             tugas: {
               select: {
                 deadline: true,
+                inputManual: true,
                 mataPelajaran: { select: { nama: true } },
               },
             },
@@ -342,7 +354,10 @@ export async function getRekapRaporKelas(
     }
 
     for (const p of semuaPengumpulanTugas) {
-      if (!dalamBulan(p.tugas.deadline, bulan)) continue
+      // Tugas manual memakai tanggal penilaian (waktuKumpul), bukan deadline
+      // fallback +1 tahun (lihat komentar di hitungNilaiPerMapel).
+      const tanggalEfektif = p.tugas.inputManual ? p.waktuKumpul : p.tugas.deadline
+      if (!dalamBulan(tanggalEfektif, bulan)) continue
       if (!nilaiPerSiswa.has(p.siswaId)) {
         nilaiPerSiswa.set(p.siswaId, new Map())
       }
@@ -416,14 +431,31 @@ export async function getRekapRaporKelas(
     }
 
     // --- Bangun rekap per siswa (identik dengan struktur sebelumnya) ---
-    const rekap = siswaList.map((siswa) => {
+    // Peringkat otomatis (1..N) dihitung dari rata-rata keseluruhan di kelas,
+    // disimpan terpisah dari `ranking` manual yang diisi wali kelas/admin.
+    const rataPerSiswa = new Map<string, number>()
+    for (const siswa of siswaList) {
       const nilaiMapel = rekapNilaiPerSiswa.get(siswa.id) || []
-
-      const rataKeseluruhan =
+      const rata =
         nilaiMapel.length > 0
           ? nilaiMapel.reduce((acc, m) => acc + m.nilaiGabungan, 0) /
             nilaiMapel.length
           : 0
+      rataPerSiswa.set(siswa.id, rata)
+    }
+    const urutRata = siswaList
+      .slice()
+      .sort(
+        (a, b) => (rataPerSiswa.get(b.id) ?? 0) - (rataPerSiswa.get(a.id) ?? 0)
+      )
+    const peringkatOtomatis = new Map<string, number>(
+      urutRata.map((s, i) => [s.id, i + 1])
+    )
+
+    const rekap = siswaList.map((siswa) => {
+      const nilaiMapel = rekapNilaiPerSiswa.get(siswa.id) || []
+
+      const rataKeseluruhan = rataPerSiswa.get(siswa.id) ?? 0
 
       const h = hitungPerSiswa.get(siswa.id)
       const total = h ? h.total : 0
@@ -437,9 +469,11 @@ export async function getRekapRaporKelas(
         nisn: siswa.nisn,
         rataRataKeseluruhan: Math.round(rataKeseluruhan * 100) / 100,
         jumlahMapel: nilaiMapel.length,
+        nilaiMapel,
         kehadiran: `${persentase}%`,
         totalAlpha: h ? h.ALPHA : 0,
         ranking: catatan?.ranking || null,
+        peringkatOtomatis: peringkatOtomatis.get(siswa.id) ?? null,
         hasCatatan: !!catatan,
       }
     })

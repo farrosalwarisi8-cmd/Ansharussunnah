@@ -81,7 +81,16 @@ export function GuruRaporView() {
       kehadiran: string
       totalAlpha: number
       ranking: number | null
+      peringkatOtomatis: number | null
       hasCatatan: boolean
+      nilaiMapel: Array<{
+        mataPelajaran: string
+        jumlahTugas: number
+        jumlahUjian: number
+        rataRataTugas: number
+        rataRataUjian: number
+        nilaiGabungan: number
+      }>
     }>
   } | null>(null)
   const [loadingRekap, setLoadingRekap] = React.useState(false)
@@ -469,16 +478,43 @@ export function GuruRaporView() {
                 <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
                   <tr>
                     <th className="p-3 pl-5">Nama</th>
+                    <th className="p-3 text-center">Nilai per Mapel</th>
                     <th className="p-3 text-center">Rata-rata</th>
                     <th className="p-3 text-center">Kehadiran</th>
                     <th className="p-3 text-center">Alpha</th>
                     <th className="p-3 text-center">Ranking</th>
+                    <th className="p-3 pr-5 text-center">Ranking Auto</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {rekapData.rekap.map((r) => (
-                    <tr key={r.siswaId} className="hover:bg-slate-50/80">
+                    <React.Fragment key={r.siswaId}>
+                    <tr className="hover:bg-slate-50/80">
                       <td className="p-3 pl-5 font-bold text-slate-800 text-sm">{r.nama}</td>
+                      <td className="p-3 text-center">
+                        <details className="group relative inline-block">
+                          <summary className="cursor-pointer list-none inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-lg select-none">
+                            <span className="transition-transform group-open:rotate-90">▸</span>
+                            {r.jumlahMapel} Mapel
+                          </summary>
+                          <div className="absolute z-10 mt-1 left-0 w-72 p-3 rounded-2xl bg-white border border-slate-200 shadow-xl text-left">
+                            {r.nilaiMapel.length === 0 ? (
+                              <div className="text-xs text-slate-400">Belum ada nilai</div>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {r.nilaiMapel.map((m) => (
+                                  <div key={m.mataPelajaran} className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="text-slate-600 truncate">{m.mataPelajaran}</span>
+                                    <span className="font-bold text-slate-800">
+                                      {m.nilaiGabungan}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </details>
+                      </td>
                       <td className="p-3 text-center">
                         <span className="font-extrabold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-lg border border-yellow-200 text-sm">
                           {r.rataRataKeseluruhan}
@@ -491,9 +527,15 @@ export function GuruRaporView() {
                         </span>
                       </td>
                       <td className="p-3 text-center text-xs font-bold text-slate-700">
-                        {r.ranking || "-"}
+                        {r.ranking ? <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-lg border border-teal-200">{r.ranking}</span> : "-"}
+                      </td>
+                      <td className="p-3 pr-5 text-center">
+                        <span className="text-xs font-bold text-slate-700">
+                          {r.peringkatOtomatis !== null ? `#${r.peringkatOtomatis}` : "-"}
+                        </span>
                       </td>
                     </tr>
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

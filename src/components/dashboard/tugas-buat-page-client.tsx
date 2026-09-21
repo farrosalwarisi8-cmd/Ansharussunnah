@@ -16,7 +16,7 @@ import { KelasMapelSelector } from "@/components/dashboard/kelas-mapel-selector"
 import { TargetGenderSelector } from "@/components/dashboard/target-gender-selector"
 import { DibuatOlehInfo } from "@/components/ui/dibuat-oleh-info"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
-import { ArrowLeft, Save, Loader2, Link as LinkIcon } from "lucide-react"
+import { ArrowLeft, Save, Loader2, Link as LinkIcon, PenLine } from "lucide-react"
 
 export default function BuatTugasPage() {
   const router = useRouter()
@@ -32,6 +32,7 @@ export default function BuatTugasPage() {
   const [periodeAjaranId, setPeriodeAjaranId] = React.useState("")
   const [deadline, setDeadline] = React.useState("")
   const [fileUrl, setFileUrl] = React.useState("")
+  const [inputManual, setInputManual] = React.useState(false)
 
   // Muat periode ajaran aktif sebagai nilai default periode
   React.useEffect(() => {
@@ -50,8 +51,12 @@ export default function BuatTugasPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!judul.trim() || !deadline) {
-      toast({ variant: "destructive", title: "Judul dan batas deadline wajib diisi!" })
+    if (!judul.trim()) {
+      toast({ variant: "destructive", title: "Judul tugas wajib diisi!" })
+      return
+    }
+    if (!inputManual && !deadline) {
+      toast({ variant: "destructive", title: "Batas deadline wajib diisi!" })
       return
     }
 
@@ -64,8 +69,9 @@ export default function BuatTugasPage() {
         periodeAjaranId,
         mataPelajaran: mapel,
         targetGender,
-        deadline: new Date(deadline).toISOString(),
+        deadline: inputManual ? undefined : new Date(deadline).toISOString(),
         lampiranUrl: fileUrl || undefined,
+        inputManual,
       })
 
       if (!result.success) {
@@ -152,18 +158,46 @@ export default function BuatTugasPage() {
 
             <TargetGenderSelector value={targetGender} onChange={setTargetGender} />
 
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-                Batas Pengumpulan (Deadline) *
+            <div className="grid grid-cols-1 gap-1.5 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={inputManual}
+                  onChange={(e) => setInputManual(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-yellow-500 focus:ring-yellow-500"
+                />
+                <span className="flex-1">
+                  <span className="block text-sm font-bold text-slate-800">
+                    Tugas offline / input nilai manual
+                  </span>
+                  <span className="block text-xs text-slate-500">
+                    Tugas dikerjakan di luar aplikasi (lisan, papan tulis, kertas). Guru mengetik
+                    nilai langsung tanpa soal &amp; berkas. Tidak perlu deadline.
+                  </span>
+                </span>
+                <PenLine className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
               </label>
-              <Input
-                type="datetime-local"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                className="h-12 rounded-xl text-sm"
-                required
-              />
             </div>
+
+            {!inputManual ? (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                  Batas Pengumpulan (Deadline) *
+                </label>
+                <Input
+                  type="datetime-local"
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
+                  className="h-12 rounded-xl text-sm"
+                  required
+                />
+              </div>
+            ) : (
+              <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
+                Mode input manual (offline): nilai akan diisi lewat menu penilaian manual saat
+                tugas sudah dibuat.
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">

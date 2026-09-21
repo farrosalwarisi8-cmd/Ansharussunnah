@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Clock, Loader2, Trash2, Pencil } from "lucide-react"
+import { Clock, Loader2, Trash2, Pencil, PenLine } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
 import dynamic from "next/dynamic"
@@ -22,6 +22,7 @@ import { TargetGenderSelector } from "@/components/dashboard/target-gender-selec
 import { toDatetimeLocalValue } from "@/lib/datetime-local"
 import { peranOptionSuffix, type PeranKelas } from "@/lib/kelas-peran"
 import { PeranKelasBadge, PeranKelasLegend } from "@/components/ui/peran-kelas-badge"
+import { labelNomorTugas } from "@/lib/ujian-label"
 
 type GuruTugasItem = {
   id: string
@@ -35,6 +36,8 @@ type GuruTugasItem = {
   guru: string
   totalPengumpulan: number
   hasLampiran: boolean
+  nomorTugas: number | null
+  inputManual: boolean
 }
 
 type KelasItem = {
@@ -224,9 +227,21 @@ export function GuruTugasView() {
             <Card key={item.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
               <CardHeader className="p-5 pb-3">
                 <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2.5 py-1 rounded-lg border border-yellow-100">
-                    {item.mataPelajaran}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2.5 py-1 rounded-lg border border-yellow-100">
+                      {item.mataPelajaran}
+                    </span>
+                    {item.nomorTugas !== null && (
+                      <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                        {labelNomorTugas(item.nomorTugas)}
+                      </span>
+                    )}
+                    {item.inputManual && (
+                      <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        Input Manual
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1">
                     {(item.targetGender || item.mapelGender) && (
                       <span
@@ -252,10 +267,18 @@ export function GuruTugasView() {
               </CardHeader>
 
               <CardContent className="p-5 pt-0 space-y-4">
-                <div className="text-xs py-2.5 px-3 rounded-xl bg-slate-50 border border-slate-100 text-slate-600 flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-amber-500 shrink-0" />
-                  <span>Deadline: <strong>{new Date(item.deadline).toLocaleDateString("id-ID")}</strong></span>
-                </div>
+                {!item.inputManual && (
+                  <div className="text-xs py-2.5 px-3 rounded-xl bg-slate-50 border border-slate-100 text-slate-600 flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-amber-500 shrink-0" />
+                    <span>Deadline: <strong>{new Date(item.deadline).toLocaleDateString("id-ID")}</strong></span>
+                  </div>
+                )}
+                {item.inputManual && (
+                  <div className="text-xs py-2.5 px-3 rounded-xl bg-amber-50 border border-amber-100 text-amber-800 flex items-center gap-2">
+                    <PenLine className="h-4 w-4 text-amber-500 shrink-0" />
+                    <span>Nilai diinput manual oleh guru</span>
+                  </div>
+                )}
 
                 {item.guru && (
                   <div className="flex items-center justify-between text-xs text-slate-500">
@@ -274,7 +297,7 @@ export function GuruTugasView() {
                 <div className="flex gap-2">
                   <Button asChild className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-xl min-h-[44px]">
                     <Link href={`/dashboard/tugas/${item.id}`}>
-                      Periksa &amp; Beri Nilai
+                      {item.inputManual ? "Input Nilai" : "Periksa &amp; Beri Nilai"}
                     </Link>
                   </Button>
                   <Button
@@ -322,10 +345,12 @@ export function GuruTugasView() {
                         <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Deskripsi</label>
                         <Textarea value={editDeskripsi} onChange={(e) => setEditDeskripsi(e.target.value)} className="rounded-xl min-h-[90px] text-sm" />
                       </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Deadline Baru</label>
-                        <Input type="datetime-local" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} className="h-11 rounded-xl text-sm" />
-                      </div>
+                      {!editTugas?.inputManual && (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Deadline Baru</label>
+                          <Input type="datetime-local" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} className="h-11 rounded-xl text-sm" />
+                        </div>
+                      )}
                       <TargetGenderSelector value={editGender} onChange={setEditGender} />
                       <DialogFooter className="gap-2 sm:gap-0 pt-2">
                         <Button type="button" variant="outline" onClick={() => { setIsEditOpen(false); setEditTugas(null) }} className="rounded-xl min-h-[40px]">

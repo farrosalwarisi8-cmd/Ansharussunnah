@@ -6,7 +6,8 @@ import * as React from "react"
 import { useParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import { getRekapHasilUjian, beriNilaiEsai } from "@/actions/ujian"
+import { getRekapHasilUjian, beriNilaiEsai, inputNilaiUjianManual } from "@/actions/ujian"
+import { getSiswaByKelas } from "@/actions/absensi"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,7 +20,7 @@ const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m
 const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogHeader), { ssr: false })
 const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
-import { ArrowLeft, FileEdit, CheckCircle2, Loader2, AlertCircle } from "lucide-react"
+import { ArrowLeft, FileEdit, CheckCircle2, Loader2, AlertCircle, PenLine } from "lucide-react"
 
 interface PesertaRekap {
   id: string
@@ -48,6 +49,10 @@ interface RekapData {
     id: string
     judul: string
     kelas: { nama: string }
+    kelasId?: string
+    inputManual?: boolean
+    targetGender?: string | null
+    mataPelajaran?: { jenisKelamin?: string | null } | null
     soal: Array<{ id: string; nomorSoal: number; bobot: number; tipe: string }>
   }
   peserta: PesertaRekap[]
@@ -67,6 +72,16 @@ export default function RekapHasilUjianPage() {
   const [nilaiEsai, setNilaiEsai] = React.useState<Record<string, string>>({})
   const [catatanEsai, setCatatanEsai] = React.useState("")
   const [savingEsai, setSavingEsai] = React.useState(false)
+
+  // State Input Nilai Manual (offline)
+  const [manualOpen, setManualOpen] = React.useState(false)
+  const [manualSiswa, setManualSiswa] = React.useState<
+    { siswaId: string; nama: string; nisn: string | null; email: string; jenisKelamin?: string | null }[]
+  >([])
+  const [manualNilai, setManualNilai] = React.useState<Record<string, string>>({})
+  const [savingManual, setSavingManual] = React.useState(false)
+
+  const isInputManual = !!rekapData?.ujian?.inputManual
 
   // Fetch rekap data
   React.useEffect(() => {
@@ -156,6 +171,94 @@ export default function RekapHasilUjianPage() {
     }
   }
 
+  const openManualDialog = async () => {
+    const kelasId = rekapData?.ujian?.kelasId
+    if (!kelasId || !ujianId) return
+    const result = await getSiswaByKelas(kelasId)
+    if (!result.success || !result.data) {
+      toast({
+        variant: "destructive",
+        title: "Gagal Memuat Siswa",
+        description: result.message,
+      })
+      return
+    }
+    const siswaList = result.data as {
+      siswaId: string
+      nama: string
+      nisn: string | null
+      email: string
+      jenisKelamin?: string | null
+    }[]
+    // Batasan gender ujian (targetGender ATAU mapel khusus gender) — hanya
+    // santri yang sesuai boleh dinilai, selaras dengan inputNilaiUjianManual.
+    const batasanGender =
+      rekapData?.ujian?.targetGender ?? rekapData?.ujian?.mataPelajaran?.jenisKelamin ?? null
+    const siswaTerkunci = batasanGender
+      ? siswaList.filter((s) => s.jenisKelamin === batasanGender)
+      : siswaList
+    setManualSiswa(siswaTerkunci)
+
+    // Prefill nilai dari peserta yang sudah DINILAI manual.
+    const nilai: Record<string, string> = {}
+    for (const p of rekapData?.peserta ?? []) {
+      if (p.nilaiTotal !== null && p.status === "DINILAI") {
+        nilai[p.siswa.id] = String(Number(p.nilaiTotal))
+      }
+    }
+    setManualNilai(nilai)
+    setManualOpen(true)
+  }
+
+  const handleSaveManualNilai = async () => {
+    if (!ujianId) return
+    const penilaian: { siswaId: string; nilai: number }[] = []
+    for (const s of manualSiswa) {
+      const raw = (manualNilai[s.siswaId] || "").trim()
+      if (!raw) continue
+      const nilai = parseFloat(raw)
+      if (isNaN(nilai) || nilai < 0 || nilai > 100) {
+        toast({
+          variant: "destructive",
+          title: "Nilai tidak valid",
+          description: `Nilai untuk ${s.nama} harus antara 0 - 100.`,
+        })
+        return
+      }
+      penilaian.push({ siswaId: s.siswaId, nilai })
+    }
+    if (penilaian.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Belum ada nilai diisi",
+        description: "Isi minimal satu nilai untuk siswa.",
+      })
+      return
+    }
+
+    setSavingManual(true)
+    try {
+      const result = await inputNilaiUjianManual({ ujianId, penilaian })
+      if (result.success) {
+        toast({
+          title: "Nilai Manual Disimpan! ✨",
+          description: `${penilaian.length} santri berhasil dinilai.`,
+        })
+        setManualOpen(false)
+        const refetchResult = await getRekapHasilUjian(ujianId)
+        if (refetchResult.success && refetchResult.data) {
+          setRekapData(refetchResult.data as RekapData)
+        }
+      } else {
+        toast({ variant: "destructive", title: "Gagal Menyimpan", description: result.message })
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Gagal", description: "Terjadi kesalahan server." })
+    } finally {
+      setSavingManual(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-6 max-w-5xl mx-auto">
@@ -181,7 +284,31 @@ export default function RekapHasilUjianPage() {
     )
   }
 
-  if (!rekapData || !rekapData.peserta || rekapData.peserta.length === 0) {
+  if (!rekapData) {
+    return (
+      <div className="space-y-6 max-w-5xl mx-auto">
+        <div className="flex items-center gap-3">
+          <Button asChild variant="outline" size="sm" className="rounded-xl min-h-[40px]">
+            <Link href="/dashboard/ujian">
+              <ArrowLeft className="h-4 w-4 mr-1.5" />
+              Kembali
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">
+              Rekap Hasil Ujian
+            </h1>
+          </div>
+        </div>
+        <EmptyState
+          title="Belum Ada Data"
+          description="Data tidak tersedia."
+        />
+      </div>
+    )
+  }
+
+  if (!rekapData.ujian.inputManual && (!rekapData.peserta || rekapData.peserta.length === 0)) {
     return (
       <div className="space-y-6 max-w-5xl mx-auto">
         <div className="flex items-center gap-3">
@@ -278,18 +405,40 @@ export default function RekapHasilUjianPage() {
 
       {/* Student Score Table / Card List (Responsive) */}
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
-        <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
+        <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between gap-3">
           <div>
             <CardTitle className="text-base font-bold text-slate-800">
               Daftar Skor Santri
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
-              Klik tombol &quot;Koreksi Esai&quot; untuk menginput koreksi jawaban esai santri
+              {isInputManual
+                ? "Nilai langsung tanpa berkas — gunakan 'Input Nilai Manual' untuk menilai santri"
+                : "Klik tombol &quot;Koreksi Esai&quot; untuk menginput koreksi jawaban esai santri"}
             </CardDescription>
           </div>
+          {isInputManual && (
+            <Button
+              type="button"
+              onClick={openManualDialog}
+              className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl min-h-[40px] text-xs font-bold shrink-0"
+            >
+              <PenLine className="h-3.5 w-3.5 mr-1.5" />
+              Input Nilai Manual
+            </Button>
+          )}
         </CardHeader>
 
         <CardContent className="p-0">
+          {rekapData.peserta.length === 0 && (
+            <div className="p-8">
+              <EmptyState
+                title="Belum Ada Nilai Dimasukkan"
+                description="Klik 'Input Nilai Manual' untuk mengisi nilai santri yang mengerjakan di luar aplikasi."
+              />
+            </div>
+          )}
+
+          {rekapData.peserta.length > 0 && <>
           {/* Desktop Table View */}
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm text-left">
@@ -387,8 +536,76 @@ export default function RekapHasilUjianPage() {
               </div>
             ))}
           </div>
+          </>}
         </CardContent>
       </Card>
+
+      {/* Dialog Input Nilai Manual (Offline) */}
+      {isInputManual && (
+        <Dialog open={manualOpen} onOpenChange={setManualOpen}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-800">
+                Input Nilai Manual — {rekapData.ujian.judul}
+              </DialogTitle>
+              <p className="text-xs text-slate-500">
+                Masukkan nilai (0 - 100) untuk santri yang mengerjakan di luar aplikasi. Kosongkan
+                nilai bila santri tidak mengerjakan.
+              </p>
+            </DialogHeader>
+
+            <div className="space-y-3 my-2">
+              {manualSiswa.length === 0 && (
+                <EmptyState
+                  title="Tidak Ada Santri"
+                  description="Tidak ada santri aktif di kelas ini."
+                />
+              )}
+              {manualSiswa.map((s) => (
+                <div
+                  key={s.siswaId}
+                  className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-slate-800 text-sm truncate">{s.nama}</div>
+                    <div className="text-xs text-slate-500 font-mono">NISN: {s.nisn}</div>
+                  </div>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    placeholder="Nilai"
+                    value={manualNilai[s.siswaId] ?? ""}
+                    onChange={(e) =>
+                      setManualNilai((prev) => ({ ...prev, [s.siswaId]: e.target.value }))
+                    }
+                    className="h-10 w-24 rounded-xl font-bold text-center"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => setManualOpen(false)}
+                disabled={savingManual}
+                className="rounded-xl min-h-[40px]"
+              >
+                Batal
+              </Button>
+              <Button
+                onClick={handleSaveManualNilai}
+                disabled={savingManual}
+                className="bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl min-h-[40px]"
+              >
+                {savingManual ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <PenLine className="h-4 w-4 mr-1.5" />}
+                Simpan Nilai Manual
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Dialog Penilaian Esai */}
       {selectedStudent && (

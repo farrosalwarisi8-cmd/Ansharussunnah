@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast"
 import { formatDateTimeWIB } from "@/lib/utils"
 import { peranOptionSuffix, type PeranKelas } from "@/lib/kelas-peran"
 import { PeranKelasBadge, PeranKelasLegend } from "@/components/ui/peran-kelas-badge"
+import { labelNomorUjian } from "@/lib/ujian-label"
 
 type KelasItem = {
   kelasId: string
@@ -44,6 +45,9 @@ type UjianItem = {
   status?: string
   totalPeserta?: number
   kelasId?: string
+  jenisUjian?: "ULANGAN_HARIAN" | "UJIAN_TENGAH_SEMESTER" | "UJIAN_SEMESTER"
+  nomorUjian?: number | null
+  inputManual?: boolean
 }
 
 export function GuruUjianView() {
@@ -207,9 +211,21 @@ export function GuruUjianView() {
           <Card key={item.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
             <CardHeader className="p-5 pb-3">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2.5 py-1 rounded-lg border border-yellow-100">
-                  {item.mataPelajaran}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2.5 py-1 rounded-lg border border-yellow-100">
+                    {item.mataPelajaran}
+                  </span>
+                  {item.jenisUjian && (
+                    <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-100">
+                      {labelNomorUjian(item.jenisUjian, item.nomorUjian ?? null)}
+                    </span>
+                  )}
+                  {item.inputManual && (
+                    <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                      Input Manual
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-1">
                   {(item.targetGender || item.mapelGender) && (
                     <span
