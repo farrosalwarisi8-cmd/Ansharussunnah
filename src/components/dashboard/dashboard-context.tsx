@@ -3,7 +3,7 @@
 "use client"
 
 import * as React from "react"
-import { Role } from "@prisma/client"
+import { Role } from "@/lib/roles"
 
 export interface ChildStudent {
   id: string

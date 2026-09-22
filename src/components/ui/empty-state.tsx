@@ -36,9 +36,9 @@ export function EmptyState({
       <div className="w-14 h-14 rounded-2xl bg-yellow-50 text-yellow-500 flex items-center justify-center mb-4 shadow-sm">
         <Icon className="h-7 w-7 stroke-[1.75]" />
       </div>
-      <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-1">
+      <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-1">
         {title}
-      </h3>
+      </h2>
       {description && (
         <p className="text-sm text-gray-500 max-w-sm mb-5 leading-relaxed">
           {description}

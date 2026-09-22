@@ -501,6 +501,7 @@ model PengerjaanUjian {
   @@index([dinilaiOlehId])
   @@index([siswaId], map: "idx_pengerjaan_siswa")
   @@index([status], map: "idx_pengerjaan_status")
+  @@index([siswaId, status], map: "idx_pengerjaan_siswa_status")
   @@map("pengerjaan_ujians")
 }
 
@@ -587,6 +588,7 @@ model PengumpulanTugas {
   @@index([siswaId])
   @@index([siswaId], map: "idx_pengumpulan_siswa")
   @@index([status], map: "idx_pengumpulan_status")
+  @@index([siswaId, status], map: "idx_pengumpulan_siswa_status")
   @@index([tugasId], map: "idx_pengumpulan_tugas")
   @@map("pengumpulan_tugas")
 }
@@ -628,6 +630,7 @@ model Absensi {
   @@index([kelasId], map: "idx_absensi_kelas")
   @@index([periodeAjaranId], map: "idx_absensi_periode")
   @@index([siswaId], map: "idx_absensi_siswa")
+  @@index([siswaId, periodeAjaranId], map: "idx_absensi_siswa_periode")
   @@index([tanggal(sort: Desc)], map: "idx_absensi_tanggal")
   @@map("absensis")
 }

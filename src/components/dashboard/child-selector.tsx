@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Role } from "@prisma/client"
+import { Role } from "@/lib/roles"
 
 function ChildSelectorInner() {
   const { user, selectedChild, setSelectedChild } = useDashboard()

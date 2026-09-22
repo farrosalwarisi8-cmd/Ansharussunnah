@@ -7,7 +7,7 @@ import {
   getDaftarSiswaKeuangan,
   getStrukturKelasUntukKeuangan,
 } from "@/actions/siswa-keuangan"
-import { Role } from "@prisma/client"
+import { Role } from "@/lib/roles"
 import { Card, CardContent } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Loader2, Users2 } from "lucide-react"

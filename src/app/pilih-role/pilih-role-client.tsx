@@ -5,7 +5,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
-import { Role } from "@prisma/client"
+import { Role } from "@/lib/roles"
 import {
   GraduationCap,
   Users2,

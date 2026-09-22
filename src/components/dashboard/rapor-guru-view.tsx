@@ -34,6 +34,42 @@ type SiswaOption = {
   nisn: string | null
 }
 
+type CatatanDetail = {
+  catatan?: {
+    catatan: string
+    ranking: number | null
+    kedisiplinan: number | null
+    kemandirian: number | null
+    tingkahLaku: string | null
+    prestasi: string | null
+  }
+}
+
+type RekapData = {
+  totalSiswa: number
+  periode?: { id: string; nama: string; tahunAjaran?: string; tanggalRapor?: string | null }
+  rekap: Array<{
+    siswaId: string
+    nama: string
+    nisn: string
+    rataRataKeseluruhan: number
+    jumlahMapel: number
+    kehadiran: string
+    totalAlpha: number
+    ranking: number | null
+    peringkatOtomatis: number | null
+    hasCatatan: boolean
+    nilaiMapel: Array<{
+      mataPelajaran: string
+      jumlahTugas: number
+      jumlahUjian: number
+      rataRataTugas: number
+      rataRataUjian: number
+      nilaiGabungan: number
+    }>
+  }>
+}
+
 function formatTanggal(dateStr: string | null | undefined): string {
   if (!dateStr) return "-"
   try {
@@ -45,6 +81,26 @@ function formatTanggal(dateStr: string | null | undefined): string {
   } catch {
     return dateStr
   }
+}
+
+function applyCatatanDetail(
+  detail: CatatanDetail | null,
+  setters: {
+    setCatatan: (v: string) => void
+    setRanking: (v: string) => void
+    setKedisiplinan: (v: string) => void
+    setKemandirian: (v: string) => void
+    setTingkahLaku: (v: string) => void
+    setPrestasi: (v: string) => void
+  }
+) {
+  const c = detail?.catatan
+  setters.setCatatan(c?.catatan ?? "")
+  setters.setRanking(c?.ranking != null ? String(c.ranking) : "")
+  setters.setKedisiplinan(c?.kedisiplinan != null ? String(c.kedisiplinan) : "")
+  setters.setKemandirian(c?.kemandirian != null ? String(c.kemandirian) : "")
+  setters.setTingkahLaku(c?.tingkahLaku ?? "")
+  setters.setPrestasi(c?.prestasi ?? "")
 }
 
 export function GuruRaporView() {
@@ -69,31 +125,36 @@ export function GuruRaporView() {
   const [loadingDetail, setLoadingDetail] = React.useState(false)
 
   const [showRekap, setShowRekap] = React.useState(false)
-  const [rekapData, setRekapData] = React.useState<{
-    totalSiswa: number
-    periode?: { id: string; nama: string; tahunAjaran?: string; tanggalRapor?: string | null }
-    rekap: Array<{
-      siswaId: string
-      nama: string
-      nisn: string
-      rataRataKeseluruhan: number
-      jumlahMapel: number
-      kehadiran: string
-      totalAlpha: number
-      ranking: number | null
-      peringkatOtomatis: number | null
-      hasCatatan: boolean
-      nilaiMapel: Array<{
-        mataPelajaran: string
-        jumlahTugas: number
-        jumlahUjian: number
-        rataRataTugas: number
-        rataRataUjian: number
-        nilaiGabungan: number
-      }>
-    }>
-  } | null>(null)
+  const [rekapData, setRekapData] = React.useState<RekapData | null>(null)
   const [loadingRekap, setLoadingRekap] = React.useState(false)
+
+  const detailSetters = React.useMemo(
+    () => ({ setCatatan, setRanking, setKedisiplinan, setKemandirian, setTingkahLaku, setPrestasi }),
+    []
+  )
+
+  // Menandai santri yang detailnya sudah dimuat inline saat kelas dipilih,
+  // supaya efek terpisah tidak melakukan fetch ganda (hemat 1 round-trip).
+  const detailFetchedForRef = React.useRef<string>("")
+
+  // Memuat catatan & penilaian sikap santri tertentu.
+  const loadDetail = React.useCallback(
+    async (siswaId: string) => {
+      if (!siswaId || !periodeAjaranId) return
+      setLoadingDetail(true)
+      try {
+        const res = await getCatatanRaporDetail(siswaId, periodeAjaranId, raporBulan)
+        const detail =
+          res.success && res.data ? (res.data as unknown as CatatanDetail) : null
+        applyCatatanDetail(detail, detailSetters)
+      } catch {
+        applyCatatanDetail(null, detailSetters)
+      } finally {
+        setLoadingDetail(false)
+      }
+    },
+    [periodeAjaranId, raporBulan, detailSetters]
+  )
 
   // Muat daftar kelas yang diajar guru (konsisten dengan absensi/ujian/tugas) & periode aktif
   React.useEffect(() => {
@@ -128,17 +189,21 @@ export function GuruRaporView() {
     setKelasId(newKelasId)
   }
 
-  // Muat daftar siswa otomatis saat kelas berubah (termasuk pemilihan awal)
+  // Muat daftar siswa otomatis saat kelas berubah (termasuk pemilihan awal).
+  // Detail santri pertama dimuat INLINE di alur ini → hemat 1 round-trip
+  // jaringan (efek terpisah untuk detail akan di-skip via ref).
   React.useEffect(() => {
     if (!kelasId) {
       setStudents([])
       setSelectedStudentId("")
       setShowRekap(false)
+      applyCatatanDetail(null, detailSetters)
       return
     }
     let mounted = true
     setStudents([])
     setSelectedStudentId("")
+    applyCatatanDetail(null, detailSetters)
     setShowRekap(false)
     async function loadSiswa() {
       const res = await getSiswaByKelas(kelasId)
@@ -146,8 +211,11 @@ export function GuruRaporView() {
       if (res.success && res.data) {
         const list = res.data as SiswaOption[]
         setStudents(list)
-        if (list.length > 0) {
-          setSelectedStudentId(list[0].siswaId)
+        const first = list[0]?.siswaId ?? ""
+        setSelectedStudentId(first)
+        if (first && periodeAjaranId) {
+          detailFetchedForRef.current = first
+          void loadDetail(first)
         }
       }
     }
@@ -155,7 +223,18 @@ export function GuruRaporView() {
     return () => {
       mounted = false
     }
-  }, [kelasId])
+  }, [kelasId, periodeAjaranId, loadDetail, detailSetters])
+
+  // Muat catatan & nilai sikap yang sudah ada saat santri/jenis rapor diganti.
+  React.useEffect(() => {
+    if (!selectedStudentId || !periodeAjaranId) return
+    // Skip bila sudah dimuat inline saat pemilihan kelas.
+    if (detailFetchedForRef.current === selectedStudentId) {
+      detailFetchedForRef.current = ""
+      return
+    }
+    void loadDetail(selectedStudentId)
+  }, [selectedStudentId, periodeAjaranId, loadDetail])
 
   const handleSaveCatatan = async () => {
     if (!selectedStudentId || !periodeAjaranId) {
@@ -187,49 +266,6 @@ export function GuruRaporView() {
     }
   }
 
-  // Muat catatan & nilai sikap yang sudah ada saat santri/jenis rapor diganti
-  React.useEffect(() => {
-    if (!selectedStudentId || !periodeAjaranId) return
-    let cancelled = false
-    setLoadingDetail(true)
-    async function loadDetail() {
-      const res = await getCatatanRaporDetail(selectedStudentId, periodeAjaranId, raporBulan)
-      if (!cancelled) {
-        if (res.success && res.data) {
-          const detail = res.data as unknown as {
-            catatan?: {
-              catatan: string
-              ranking: number | null
-              kedisiplinan: number | null
-              kemandirian: number | null
-              tingkahLaku: string | null
-              prestasi: string | null
-            }
-          }
-          setCatatan(detail.catatan?.catatan ?? "")
-          setRanking(detail.catatan?.ranking != null ? String(detail.catatan.ranking) : "")
-          setKedisiplinan(detail.catatan?.kedisiplinan != null ? String(detail.catatan.kedisiplinan) : "")
-          setKemandirian(detail.catatan?.kemandirian != null ? String(detail.catatan.kemandirian) : "")
-          setTingkahLaku(detail.catatan?.tingkahLaku ?? "")
-          setPrestasi(detail.catatan?.prestasi ?? "")
-        } else {
-          setCatatan("")
-          setRanking("")
-          setKedisiplinan("")
-          setKemandirian("")
-          setTingkahLaku("")
-          setPrestasi("")
-        }
-      }
-    }
-    loadDetail().finally(() => {
-      if (!cancelled) setLoadingDetail(false)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [selectedStudentId, periodeAjaranId, raporBulan])
-
   const handleLoadRekap = async () => {
     if (!kelasId || !periodeAjaranId) {
       toast({ variant: "destructive", title: "Pilih kelas & periode aktif terlebih dahulu." })
@@ -243,7 +279,7 @@ export function GuruRaporView() {
         bulan: raporBulan,
       })
       if (result.success && result.data) {
-        setRekapData(result.data as typeof rekapData)
+        setRekapData(result.data as RekapData)
         setShowRekap(true)
       } else {
         toast({ variant: "destructive", title: "Gagal", description: result.message })
@@ -257,7 +293,7 @@ export function GuruRaporView() {
 
   if (loadingKelas) {
     return (
-      <div className="flex items-center justify-center p-12">
+      <div className="flex items-center justify-center p-12 min-h-[60vh]">
         <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
         <span className="ml-3 text-sm text-slate-500">Memuat daftar kelas...</span>
       </div>
@@ -266,10 +302,12 @@ export function GuruRaporView() {
 
   if (kelasList.length === 0) {
     return (
-      <EmptyState
-        title="Belum Ada Kelas"
-        description="Anda belum ditugaskan mengajar di kelas manapun."
-      />
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <EmptyState
+          title="Belum Ada Kelas"
+          description="Anda belum ditugaskan mengajar di kelas manapun."
+        />
+      </div>
     )
   }
 
@@ -279,13 +317,17 @@ export function GuruRaporView() {
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
         <CardContent className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+            <label
+              htmlFor="rap-guru-kelas"
+              className="text-xs font-semibold uppercase tracking-wider text-slate-700 flex items-center gap-2"
+            >
               Kelas
               <PeranKelasBadge
                 peran={kelasList.find((k) => k.kelasId === kelasId)?.peran}
               />
             </label>
             <select
+              id="rap-guru-kelas"
               value={kelasId || ""}
               onChange={(e) => handleKelasChange(e.target.value)}
               className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium focus:ring-2 focus:ring-yellow-500"
@@ -302,8 +344,9 @@ export function GuruRaporView() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Periode</label>
+            <label htmlFor="rap-guru-periode" className="text-xs font-semibold uppercase tracking-wider text-slate-700">Periode</label>
             <input
+              id="rap-guru-periode"
               type="text"
               value={periodeAjaranId ? "Periode aktif" : "Memuat periode..."}
               readOnly
@@ -326,11 +369,15 @@ export function GuruRaporView() {
             <p className="text-xs text-slate-500">Pilih santri untuk mengisi catatan rapor</p>
           </div>
 
+          <label htmlFor="rap-guru-siswa" className="sr-only">
+            Pilih santri
+          </label>
           <select
+            id="rap-guru-siswa"
             value={selectedStudentId}
             onChange={(e) => setSelectedStudentId(e.target.value)}
             disabled={students.length === 0}
-            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-yellow-500 disabled:bg-slate-100 disabled:text-slate-400"
+            className="h-11 min-w-full sm:min-w-[220px] rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-yellow-500 disabled:bg-slate-100 disabled:text-slate-400"
           >
             {students.length === 0 ? (
               <option value="">Pilih kelas untuk memuat santri</option>
@@ -356,8 +403,9 @@ export function GuruRaporView() {
           {/* Penilaian Sikap & Perilaku (manual wali kelas) */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-600">Ranking Kelas (opsional)</label>
+              <label htmlFor="rap-ranking" className="text-xs font-medium text-slate-600">Ranking Kelas (opsional)</label>
               <input
+                id="rap-ranking"
                 type="number"
                 min={1}
                 max={100}
@@ -368,8 +416,9 @@ export function GuruRaporView() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-600">Nilai Kedisiplinan (0-100)</label>
+              <label htmlFor="rap-kedisiplinan" className="text-xs font-medium text-slate-600">Nilai Kedisiplinan (0-100)</label>
               <input
+                id="rap-kedisiplinan"
                 type="number"
                 min={0}
                 max={100}
@@ -381,8 +430,9 @@ export function GuruRaporView() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-600">Nilai Kemandirian (0-100)</label>
+              <label htmlFor="rap-kemandirian" className="text-xs font-medium text-slate-600">Nilai Kemandirian (0-100)</label>
               <input
+                id="rap-kemandirian"
                 type="number"
                 min={0}
                 max={100}
@@ -397,8 +447,9 @@ export function GuruRaporView() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-600">Tingkah Laku / Perilaku</label>
+              <label htmlFor="rap-tingkah-laku" className="text-xs font-medium text-slate-600">Tingkah Laku / Perilaku</label>
               <input
+                id="rap-tingkah-laku"
                 type="text"
                 value={tingkahLaku}
                 onChange={(e) => setTingkahLaku(e.target.value)}
@@ -407,8 +458,9 @@ export function GuruRaporView() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-600">Prestasi / Capaian</label>
+              <label htmlFor="rap-prestasi" className="text-xs font-medium text-slate-600">Prestasi / Capaian</label>
               <input
+                id="rap-prestasi"
                 type="text"
                 value={prestasi}
                 onChange={(e) => setPrestasi(e.target.value)}
@@ -460,7 +512,15 @@ export function GuruRaporView() {
           </Button>
         </CardHeader>
 
-        {showRekap && rekapData && (
+        {loadingRekap && (
+          <CardContent className="p-5 space-y-3" aria-busy="true" aria-label="Memuat rekap rapor kelas">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-11 rounded-xl bg-slate-100 animate-pulse" />
+            ))}
+          </CardContent>
+        )}
+
+        {!loadingRekap && showRekap && rekapData && (
           <CardContent className="p-0">
             <div className="p-4 mb-2 text-xs text-slate-500">
               Total {rekapData.totalSiswa} siswa

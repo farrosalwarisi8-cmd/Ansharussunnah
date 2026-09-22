@@ -7,7 +7,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useDashboard } from "./dashboard-context"
-import { Role } from "@prisma/client"
+import { Role } from "@/lib/roles"
 import {
   Home,
   CalendarCheck2,

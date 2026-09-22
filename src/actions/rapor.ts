@@ -77,38 +77,39 @@ async function hitungNilaiPerMapel(
   periodeAjaranId: string,
   bulan?: number
 ): Promise<NilaiMapel[]> {
-  // 1. Ambil semua nilai ujian siswa di periode ini
-  const pengerjaanUjian = await prisma.pengerjaanUjian.findMany({
-    where: {
-      siswaId,
-      ujian: { periodeAjaranId },
-      status: StatusPengerjaan.DINILAI,
-    },
-    include: {
-      ujian: { select: { waktuMulai: true, mataPelajaran: { select: { nama: true } } } },
-    },
-  })
-
-  // 2. Ambil semua nilai tugas siswa di periode ini
-  const pengumpulanTugas = await prisma.pengumpulanTugas.findMany({
-    where: {
-      siswaId,
-      tugas: { periodeAjaranId },
-      status: StatusPengumpulan.DINILAI,
-    },
-    include: {
-      // Tugas manual (offline) memakai tanggal penilaian (waktuKumpul) sebagai
-      // tanggal efektif — deadline-nya adalah fallback +1 tahun (bukan tanggal
-      // pengerjaan), sehingga bila dipakai akan terlempar keluar bulan rapor.
-      tugas: {
-        select: {
-          deadline: true,
-          inputManual: true,
-          mataPelajaran: { select: { nama: true } },
+  // 1 & 2. Ambil nilai ujian + tugas siswa di periode ini SECARA PARALEL
+  // (sebelumnya berurutan → 2× latency; sekarang berjalan bersamaan).
+  const [pengerjaanUjian, pengumpulanTugas] = await Promise.all([
+    prisma.pengerjaanUjian.findMany({
+      where: {
+        siswaId,
+        ujian: { periodeAjaranId },
+        status: StatusPengerjaan.DINILAI,
+      },
+      include: {
+        ujian: { select: { waktuMulai: true, mataPelajaran: { select: { nama: true } } } },
+      },
+    }),
+    prisma.pengumpulanTugas.findMany({
+      where: {
+        siswaId,
+        tugas: { periodeAjaranId },
+        status: StatusPengumpulan.DINILAI,
+      },
+      include: {
+        // Tugas manual (offline) memakai tanggal penilaian (waktuKumpul) sebagai
+        // tanggal efektif — deadline-nya adalah fallback +1 tahun (bukan tanggal
+        // pengerjaan), sehingga bila dipakai akan terlempar keluar bulan rapor.
+        tugas: {
+          select: {
+            deadline: true,
+            inputManual: true,
+            mataPelajaran: { select: { nama: true } },
+          },
         },
       },
-    },
-  })
+    }),
+  ])
 
   // 3. Kelompokkan per mata pelajaran (hanya yang masuk bulan rapor bila dipilih)
   const mapelMap = new Map<
@@ -247,21 +248,22 @@ export async function getRekapRaporKelas(
 
     await verifyGuruAksesKelas(kelasId)
 
-    const periode = await prisma.periodeAjaran.findUnique({
-      where: { id: periodeAjaranId },
-    })
+    // Muat detail periode & daftar siswa kelas SECARA PARALEL.
+    const [periode, siswaList] = await Promise.all([
+      prisma.periodeAjaran.findUnique({
+        where: { id: periodeAjaranId },
+      }),
+      prisma.siswa.findMany({
+        where: { kelasId, deleted_at: null },
+        include: {
+          user: { select: { nama: true } },
+        },
+        orderBy: { user: { nama: "asc" } },
+      }),
+    ])
     if (!periode) {
       return { success: false, message: "Periode ajaran tidak ditemukan" }
     }
-
-    // Ambil semua siswa di kelas
-    const siswaList = await prisma.siswa.findMany({
-      where: { kelasId, deleted_at: null },
-      include: {
-        user: { select: { nama: true } },
-      },
-      orderBy: { user: { nama: "asc" } },
-    })
 
     // Batch: ambil semua data mentah untuk SELURUH siswa di kelas ini (4 query)
     // menggantikan N×4 query per siswa (N+1 pattern)
@@ -766,46 +768,52 @@ export async function getRaporSiswa(
 
     const siswaId = user.siswa.id // ✅ Dari session
 
-    const siswa = await prisma.siswa.findUnique({
-      where: { id: siswaId, deleted_at: null },
-      include: {
-        user: { select: { nama: true } },
-        kelas: {
-          include: {
-            jenjang: { select: { nama: true } },
-            waliKelas: {
-              where: { deleted_at: null },
-              include: { user: { select: { nama: true } } },
+    // Muat data siswa & periode secara paralel (independen satu sama lain).
+    const [siswa, periode] = await Promise.all([
+      prisma.siswa.findUnique({
+        where: { id: siswaId, deleted_at: null },
+        include: {
+          user: { select: { nama: true } },
+          kelas: {
+            include: {
+              jenjang: { select: { nama: true } },
+              waliKelas: {
+                where: { deleted_at: null },
+                include: { user: { select: { nama: true } } },
+              },
             },
           },
         },
-      },
-    })
+      }),
+      prisma.periodeAjaran.findUnique({
+        where: { id: periodeAjaranId },
+      }),
+    ])
 
     if (!siswa || !siswa.kelas) {
       return { success: false, message: "Data kelas siswa tidak valid" }
     }
 
-    const periode = await prisma.periodeAjaran.findUnique({
-      where: { id: periodeAjaranId },
-    })
     if (!periode) {
       return { success: false, message: "Periode ajaran tidak ditemukan" }
     }
 
     const raporBulan = bulan ?? 0
-    const nilaiPerMapel = await hitungNilaiPerMapel(siswaId, periodeAjaranId, raporBulan)
-    const kehadiran = await hitungKehadiran(siswaId, periodeAjaranId, raporBulan)
-
-    const catatanRapor = await prisma.catatanRapor.findUnique({
-      where: {
-        siswaId_periodeAjaranId_bulan: {
-          siswaId,
-          periodeAjaranId,
-          bulan: raporBulan,
+    // Hitung nilai, kehadiran & baca catatan rapor SECARA PARALEL —
+    // sebelumnya 3 query berurutan (≈3×latency), sekarang max dari 3.
+    const [nilaiPerMapel, kehadiran, catatanRapor] = await Promise.all([
+      hitungNilaiPerMapel(siswaId, periodeAjaranId, raporBulan),
+      hitungKehadiran(siswaId, periodeAjaranId, raporBulan),
+      prisma.catatanRapor.findUnique({
+        where: {
+          siswaId_periodeAjaranId_bulan: {
+            siswaId,
+            periodeAjaranId,
+            bulan: raporBulan,
+          },
         },
-      },
-    })
+      }),
+    ])
 
     const rataKeseluruhan =
       nilaiPerMapel.length > 0
@@ -890,42 +898,47 @@ export async function getRaporAnak(
       }
     }
 
-    const siswa = await prisma.siswa.findUnique({
-      where: { id: siswaId, deleted_at: null },
-      include: {
-        user: { select: { nama: true } },
-        kelas: {
-          include: {
-            jenjang: { select: { nama: true } },
+    // Muat data siswa & periode secara paralel (independen satu sama lain).
+    const [siswa, periode] = await Promise.all([
+      prisma.siswa.findUnique({
+        where: { id: siswaId, deleted_at: null },
+        include: {
+          user: { select: { nama: true } },
+          kelas: {
+            include: {
+              jenjang: { select: { nama: true } },
+            },
           },
         },
-      },
-    })
+      }),
+      prisma.periodeAjaran.findUnique({
+        where: { id: periodeAjaranId },
+      }),
+    ])
 
     if (!siswa || !siswa.kelas) {
       return { success: false, message: "Data siswa tidak valid" }
     }
 
-    const periode = await prisma.periodeAjaran.findUnique({
-      where: { id: periodeAjaranId },
-    })
     if (!periode) {
       return { success: false, message: "Periode ajaran tidak ditemukan" }
     }
 
     const raporBulan = bulan ?? 0
-    const nilaiPerMapel = await hitungNilaiPerMapel(siswaId, periodeAjaranId, raporBulan)
-    const kehadiran = await hitungKehadiran(siswaId, periodeAjaranId, raporBulan)
-
-    const catatanRapor = await prisma.catatanRapor.findUnique({
-      where: {
-        siswaId_periodeAjaranId_bulan: {
-          siswaId,
-          periodeAjaranId,
-          bulan: raporBulan,
+    // Hitung nilai, kehadiran & baca catatan rapor SECARA PARALEL.
+    const [nilaiPerMapel, kehadiran, catatanRapor] = await Promise.all([
+      hitungNilaiPerMapel(siswaId, periodeAjaranId, raporBulan),
+      hitungKehadiran(siswaId, periodeAjaranId, raporBulan),
+      prisma.catatanRapor.findUnique({
+        where: {
+          siswaId_periodeAjaranId_bulan: {
+            siswaId,
+            periodeAjaranId,
+            bulan: raporBulan,
+          },
         },
-      },
-    })
+      }),
+    ])
 
     const rataKeseluruhan =
       nilaiPerMapel.length > 0

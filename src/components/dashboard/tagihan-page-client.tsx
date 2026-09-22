@@ -10,7 +10,7 @@ import {
   getStrukturKelasUntukKeuangan,
 } from "@/actions/siswa-keuangan"
 import { useToast } from "@/hooks/use-toast"
-import { Role } from "@prisma/client"
+import { Role } from "@/lib/roles"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

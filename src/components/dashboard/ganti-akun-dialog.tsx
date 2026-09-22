@@ -3,7 +3,7 @@
 "use client"
 
 import * as React from "react"
-import { Role } from "@prisma/client"
+import { Role } from "@/lib/roles"
 import { useDashboard } from "./dashboard-context"
 import {
   Dialog,

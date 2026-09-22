@@ -5,7 +5,7 @@ import dynamic from "next/dynamic"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { ChildSelector } from "@/components/dashboard/child-selector"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
-import { Role } from "@prisma/client"
+import { Role } from "@/lib/roles"
 
 // Dynamic import memecah bundle per role — hanya chunk role user yang dimuat.
 // SSR diaktifkan agar konten langsung tampil saat berpindah halaman.

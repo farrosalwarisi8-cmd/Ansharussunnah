@@ -4,7 +4,7 @@ import * as React from "react"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
-import { Role } from "@prisma/client"
+import { Role } from "@/lib/roles"
 import { EmptyState } from "@/components/ui/empty-state"
 import dynamic from "next/dynamic"
 
