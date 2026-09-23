@@ -15,6 +15,8 @@ const {
   mockGenerateNomorPendaftaran,
   mockRateLimitAsync,
   mockGetClientIp,
+  mockJenjangFindMany,
+  mockPengaturanFindUnique,
 } = vi.hoisted(() => ({
   mockPendaftaranCreate: vi.fn(),
   mockPendaftaranFindFirst: vi.fn(),
@@ -24,6 +26,8 @@ const {
   mockGenerateNomorPendaftaran: vi.fn(),
   mockRateLimitAsync: vi.fn(),
   mockGetClientIp: vi.fn(),
+  mockJenjangFindMany: vi.fn(),
+  mockPengaturanFindUnique: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -34,12 +38,16 @@ vi.mock("@/lib/prisma", () => ({
     },
     jenjang: {
       findUnique: mockJenjangFindUnique,
+      findMany: mockJenjangFindMany,
     },
     kelas: {
       findFirst: mockKelasFindFirst,
     },
     siswa: {
       findUnique: mockSiswaFindUnique,
+    },
+    pengaturanPPDB: {
+      findUnique: mockPengaturanFindUnique,
     },
   },
 }))
@@ -108,6 +116,25 @@ const baseEmisFields = {
 }
 
 const mockJenjang = { id: "jenjang-1", nama: "Madrasah Ibtidaiyyah" }
+
+// Data biaya PPDB yang dikembalikan getter cache (jenjang aktif + pengaturan
+// rekening). Nilai sesuai default yayasan: MI 75rb + gedung 600rb + sarpras 250rb.
+const mockBiayaJenjangRows = [
+  {
+    id: "jenjang-1",
+    nama: "Madrasah Ibtidaiyyah",
+    biayaPendaftaranPPDB: "75000",
+    biayaUangGedung: "600000",
+    biayaSarpras: "250000",
+  },
+]
+const mockPengaturan = {
+  bankNama: "BRI",
+  bankNoRekening: "321301015889536",
+  bankAtasNama: "Sadiman",
+  kontakWa: "6285702854133",
+  namaKontakWa: "Ust. Abu Wafidah",
+}
 const mockPendaftaranCreated = {
   id: "pend-1",
   nomorPendaftaran: "REG-2026-00001",
@@ -144,6 +171,10 @@ beforeEach(() => {
 
   // Default: tidak ada siswa yang memakai NISN
   mockSiswaFindUnique.mockResolvedValue(null)
+
+  // Default: cache biaya PPDB berisi jenjang mock + pengaturan rekening
+  mockJenjangFindMany.mockResolvedValue(mockBiayaJenjangRows)
+  mockPengaturanFindUnique.mockResolvedValue(mockPengaturan)
 
   // Default: create berhasil
   mockPendaftaranCreate.mockResolvedValue(mockPendaftaranCreated)
@@ -288,6 +319,59 @@ describe("createPendaftaran — Kasus Sukses", () => {
 
     const createCall = mockPendaftaranCreate.mock.calls[0][0]
     expect(createCall.data.nomorPendaftaran).toBe("REG-2026-00099")
+  })
+
+  it("harus menyimpan snapshot biaya sesuai jenjang + rekening aktif", async () => {
+    const formData = makeFormData(baseData)
+    await createPendaftaran(formData)
+
+    const createdData = mockPendaftaranCreate.mock.calls[0][0].data
+
+    // Biaya MI: pendaftaran 75rb + uang gedung 600rb + sarpras 250rb.
+    expect(createdData.biayaPendaftaran).toBe(75000)
+    expect(createdData.biayaUangGedung).toBe(600000)
+    expect(createdData.biayaSarpras).toBe(250000)
+
+    // Snapshot rekening & kontak WA yang berlaku saat pendaftaran dibuat.
+    expect(createdData.bankNama).toBe("BRI")
+    expect(createdData.bankNoRekening).toBe("321301015889536")
+    expect(createdData.bankAtasNama).toBe("Sadiman")
+    expect(createdData.kontakWa).toBe("6285702854133")
+  })
+
+  it("harus memakai biaya jenjang yang berbeda untuk jenjang non-MI", async () => {
+    // Skenario: jenjang tujuan Madrasah Aliyah (100rb + gedung 1jt + sarpras 250rb)
+    mockJenjangFindUnique.mockResolvedValue({ id: "jenjang-2", nama: "Madrasah Aliyah" })
+    mockJenjangFindMany.mockResolvedValue([
+      {
+        id: "jenjang-2",
+        nama: "Madrasah Aliyah",
+        biayaPendaftaranPPDB: "100000",
+        biayaUangGedung: "1000000",
+        biayaSarpras: "250000",
+      },
+    ])
+
+    const formData = makeFormData({ ...baseData, jenjangTujuanId: "jenjang-2" })
+    await createPendaftaran(formData)
+
+    const createdData = mockPendaftaranCreate.mock.calls[0][0].data
+    expect(createdData.biayaPendaftaran).toBe(100000)
+    expect(createdData.biayaUangGedung).toBe(1000000)
+    expect(createdData.biayaSarpras).toBe(250000)
+  })
+
+  it("harus fallback ke default berdasar nama jenjang bila biaya belum diatur", async () => {
+    // Cache kosong (jenjang belum dikonfigurasi) → fallback default MI.
+    mockJenjangFindMany.mockResolvedValue([])
+
+    const formData = makeFormData(baseData) // jenjang: Madrasah Ibtidaiyyah
+    await createPendaftaran(formData)
+
+    const createdData = mockPendaftaranCreate.mock.calls[0][0].data
+    expect(createdData.biayaPendaftaran).toBe(75000)
+    expect(createdData.biayaUangGedung).toBe(600000)
+    expect(createdData.biayaSarpras).toBe(250000)
   })
 })
 

@@ -2,6 +2,8 @@
 
 import { PendaftaranForm } from "@/components/pendaftaran/pendaftaran-form"
 import { getJenjangDenganKelas } from "@/actions/jenjang-kelas"
+import { getBiayaPPDBPerJenjang } from "@/lib/biaya-ppdb-server"
+import type { BiayaPPDB } from "@/lib/biaya-ppdb"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
@@ -13,6 +15,15 @@ export default async function PendaftaranPage() {
     jenjangData = await getJenjangDenganKelas()
   } catch {
     // Database tidak tersedia — tampilkan form dengan data kosong
+  }
+
+  // Biaya PPDB per jenjang (cache Redis, TTL pendek) — dipakai form
+  // menampilkan rincian biaya sesuai jenjang tujuan yang dipilih.
+  let biayaPPDB: Record<string, BiayaPPDB> = {}
+  try {
+    biayaPPDB = await getBiayaPPDBPerJenjang()
+  } catch {
+    // Fallback: form tetap jalan tanpa panel biaya
   }
 
   return (
@@ -57,6 +68,7 @@ export default async function PendaftaranPage() {
 
         <PendaftaranForm
           jenjangList={jenjangData.data || []}
+          biayaPPDB={biayaPPDB}
         />
       </main>
     </div>

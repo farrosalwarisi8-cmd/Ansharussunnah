@@ -11,6 +11,11 @@ import { toUserFriendlyError } from "@/lib/prisma-error"
 import type { ActionResponse } from "@/types"
 import { Prisma, StatusPendaftaran } from "@prisma/client"
 import { nanoid } from "nanoid"
+import {
+  getBiayaPPDBPerJenjang,
+  resolveBiayaFromMap,
+  getPengaturanPPDB,
+} from "@/lib/biaya-ppdb-server"
 
 const MAX_RETRY = 5
 
@@ -250,9 +255,18 @@ export async function createPendaftaran(
       }
     }
 
-    const biayaPendaftaran = parseFloat(
-      process.env.NEXT_PUBLIC_REGISTRATION_FEE || "500000"
-    )
+    // ✅ Biaya sesuai jenjang tujuan (diatur admin di /dashboard/biaya-ppdb).
+    // Snapshot ketiga komponen + rekening/WA saat ini ke record pendaftaran,
+    // sehingga perubahan harga/rekening setelahnya tidak memengaruhi
+    // pendaftaran yang sudah ada. Total biaya dihitung SERVER, bukan klien.
+    const [biayaMap, pengaturan] = await Promise.all([
+      getBiayaPPDBPerJenjang(),
+      getPengaturanPPDB(),
+    ])
+    const biayaJenjang = resolveBiayaFromMap(biayaMap, data.jenjangTujuanId, jenjang.nama)
+    const biayaPendaftaran = biayaJenjang.biayaPendaftaran
+    const biayaUangGedung = biayaJenjang.biayaUangGedung
+    const biayaSarpras = biayaJenjang.biayaSarpras
 
     let lastError: Error | null = null
 
@@ -299,6 +313,12 @@ export async function createPendaftaran(
             dokLainnya: dokLainnya,
             status: "MENUNGGU_PEMBAYARAN",
             biayaPendaftaran,
+            biayaUangGedung,
+            biayaSarpras,
+            bankNama: pengaturan.bankNama,
+            bankNoRekening: pengaturan.bankNoRekening,
+            bankAtasNama: pengaturan.bankAtasNama,
+            kontakWa: pengaturan.kontakWa,
           },
         })
 

@@ -27,6 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import type { BiayaPPDB } from "@/lib/biaya-ppdb"
+import { totalBiayaPPDB, formatRupiah } from "@/lib/biaya-ppdb"
 import {
   Loader2,
   User,
@@ -204,9 +206,11 @@ interface PendaftaranFormProps {
       jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
     }>
   }>
+  /** Peta biaya PPDB per jenjang id — server menghitung total, form hanya menampilkan. */
+  biayaPPDB?: Record<string, BiayaPPDB>
 }
 
-export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
+export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps) {
   const router = useRouter()
   const [currentStep, setCurrentStep] = React.useState(1)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -270,6 +274,9 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
   }, [selectedJenjang, jenjangList, setValue])
 
   const jenisKelaminValue = watch("jenisKelamin")
+
+  const jenjangTerpilih = jenjangList.find((j) => j.id === selectedJenjang)
+  const biayaTerpilih = selectedJenjang ? biayaPPDB?.[selectedJenjang] : undefined
 
   // Kelas yang bisa dipilih dibatasi oleh jenis kelamin calon santri:
   // kelas khusus Ikhwan/Akhwat hanya muncul untuk gender yang cocok,
@@ -1099,6 +1106,48 @@ export function PendaftaranForm({ jenjangList }: PendaftaranFormProps) {
                 )}
               </div>
             </div>
+
+            {/* Rincian biaya sesuai jenjang terpilih (server-provided, hanya info) */}
+            {biayaTerpilih && (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">
+                  Rincian Biaya Jenjang {jenjangTerpilih?.nama}
+                </p>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Biaya Pendaftaran</span>
+                    <span className="font-medium text-gray-700">
+                      {formatRupiah(biayaTerpilih.biayaPendaftaran)}
+                    </span>
+                  </div>
+                  {biayaTerpilih.biayaUangGedung > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Uang Gedung</span>
+                      <span className="font-medium text-gray-700">
+                        {formatRupiah(biayaTerpilih.biayaUangGedung)}
+                      </span>
+                    </div>
+                  )}
+                  {biayaTerpilih.biayaSarpras > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Sarana Prasarana (Sarpras)</span>
+                      <span className="font-medium text-gray-700">
+                        {formatRupiah(biayaTerpilih.biayaSarpras)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="border-t border-primary/20 pt-1.5 mt-1.5 flex justify-between">
+                    <span className="font-semibold text-gray-700">Total</span>
+                    <span className="font-bold text-primary">
+                      {formatRupiah(totalBiayaPPDB(biayaTerpilih))}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-2">
+                  Nominal transfer akan dikonfirmasi ulang pada halaman setelah pendaftaran.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

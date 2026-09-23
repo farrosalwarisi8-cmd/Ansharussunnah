@@ -14,6 +14,11 @@
 import { PrismaClient, Role, JenisKelamin, TipeTransaksi, Prisma } from "@prisma/client"
 import { createClient } from "@supabase/supabase-js"
 import { generateSecurePassword } from "../src/lib/password"
+import {
+  defaultPendaftaranByNama,
+  defaultGedungSarprasByNama,
+  REKENING_PPDB_DEFAULT,
+} from "../src/lib/biaya-ppdb"
 import * as dotenv from "dotenv"
 
 dotenv.config()
@@ -221,14 +226,26 @@ async function main() {
   const kelasMap: Record<string, string> = {}
 
   for (const j of strukturJenjang) {
+    // Biaya PPDB default sesuai ketentuan yayasan (lihat src/lib/biaya-ppdb.ts):
+    // MI: 75rb | MTs ke atas: 100rb | Uang gedung MI/MTs 600rb, Aliyah 1jt | Sarpras 250rb.
+    const biaya = defaultGedungSarprasByNama(j.nama)
+    const biayaPendaftaran = defaultPendaftaranByNama(j.nama)
+
     const jenjang = await prisma.jenjang.upsert({
       where: { nama: j.nama },
+      // UPDATE sengaja TIDAK menyentuh kolom biaya agar biaya yang sudah
+      // diubah admin via /dashboard/biaya-ppdb tidak ter-reset saat seed
+      // dijalankan ulang. Kolom biaya NULL tetap aman: runtime fallback ke
+      // default yang sama (resolveBiayaJenjang).
       update: { urutan: j.urutan },
       create: {
         nama: j.nama,
         urutan: j.urutan,
         aktif: true,
         tarifSppBulanan: null,
+        biayaPendaftaranPPDB: new Prisma.Decimal(biayaPendaftaran),
+        biayaUangGedung: new Prisma.Decimal(biaya.uangGedung),
+        biayaSarpras: new Prisma.Decimal(biaya.sarpras),
       },
     })
     jenjangMap[j.nama] = jenjang.id
@@ -252,8 +269,29 @@ async function main() {
       kelasMap[namaKelas] = kelas.id
     }
   }
-  console.log("  ✔ 4 Jenjang berhasil dibuat")
+  console.log("  ✔ 4 Jenjang berhasil dibuat (beserta biaya PPDB default)")
   console.log(`  ✔ ${Object.keys(kelasMap).length} Kelas berhasil dibuat`)
+
+  // ========================================================
+  // 3b. PENGATURAN PPDB (Rekening & Kontak WA)
+  // ========================================================
+  console.log("\n3b. Membuat Pengaturan PPDB...")
+
+  await prisma.pengaturanPPDB.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      id: 1,
+      bankNama: REKENING_PPDB_DEFAULT.bankNama,
+      bankNoRekening: REKENING_PPDB_DEFAULT.bankNoRekening,
+      bankAtasNama: REKENING_PPDB_DEFAULT.bankAtasNama,
+      kontakWa: REKENING_PPDB_DEFAULT.kontakWa,
+      namaKontakWa: REKENING_PPDB_DEFAULT.namaKontakWa,
+    },
+  })
+  console.log(
+    `  ✔ Pengaturan PPDB: ${REKENING_PPDB_DEFAULT.bankNama} ${REKENING_PPDB_DEFAULT.bankNoRekening} a/n ${REKENING_PPDB_DEFAULT.bankAtasNama}`
+  )
 
   // Assign wali kelas untuk beberapa kelas contoh
   if (guruUser.guru) {

@@ -184,6 +184,10 @@ model Jenjang {
   urutan          Int             @unique
   aktif           Boolean         @default(true)
   tarifSppBulanan Decimal?        @map("tarif_spp_bulanan") @db.Decimal(12, 2)
+  // Biaya PPDB per jenjang (diatur admin). null = pakai default (lihat src/lib/biaya-ppdb.ts).
+  biayaPendaftaranPPDB Decimal?   @map("biaya_pendaftaran_ppdb") @db.Decimal(12, 2)
+  biayaUangGedung      Decimal?   @map("biaya_uang_gedung") @db.Decimal(12, 2)
+  biayaSarpras         Decimal?   @map("biaya_sarpras") @db.Decimal(12, 2)
   createdAt       DateTime @db.Timestamptz(3)        @default(now()) @map("created_at")
   updatedAt       DateTime @db.Timestamptz(3)        @updatedAt @map("updated_at")
   kelas           Kelas[]
@@ -191,6 +195,21 @@ model Jenjang {
   pendaftaran     Pendaftaran[]
 
   @@map("jenjangs")
+}
+
+// Pengaturan global biaya PPDB: rekening tujuan transfer & kontak konfirmasi WA.
+// Satu baris tunggal (id = 1). Diatur admin via /dashboard/biaya-ppdb.
+model PengaturanPPDB {
+  id            Int      @id @default(1)
+  bankNama      String   @default("BRI") @map("bank_nama")
+  bankNoRekening String  @default("321301015889536") @map("bank_no_rekening")
+  bankAtasNama  String   @default("Sadiman") @map("bank_atas_nama")
+  kontakWa      String   @default("6285702854133") @map("kontak_wa")
+  namaKontakWa  String   @default("Ust. Abu Wafidah") @map("nama_kontak_wa")
+  createdAt     DateTime @db.Timestamptz(3) @default(now()) @map("created_at")
+  updatedAt     DateTime @db.Timestamptz(3) @updatedAt @map("updated_at")
+
+  @@map("pengaturan_ppdb")
 }
 
 model Kelas {
@@ -305,7 +324,15 @@ model Pendaftaran {
   dokFoto            String?                    @map("dok_foto")
   dokLainnya         String[]                   @default([]) @map("dok_lainnya")
   status             StatusPendaftaran          @default(MENUNGGU_PEMBAYARAN)
+  // Snapshot nominal per komponen saat pendaftaran dibuat (kebal perubahan tarif).
   biayaPendaftaran   Decimal                    @map("biaya_pendaftaran") @db.Decimal(12, 2)
+  biayaUangGedung    Decimal                    @default(0) @map("biaya_uang_gedung") @db.Decimal(12, 2)
+  biayaSarpras       Decimal                    @default(0) @map("biaya_sarpras") @db.Decimal(12, 2)
+  // Rekening & kontak WA efektif saat pendaftaran dibuat (bila null, tampilkan nilai berlaku saat itu).
+  bankNama           String?                    @map("bank_nama")
+  bankNoRekening     String?                    @map("bank_no_rekening")
+  bankAtasNama       String?                    @map("bank_atas_nama")
+  kontakWa           String?                    @map("kontak_wa")
   catatanAdmin       String?                    @map("catatan_admin")
   alasanPenolakan    String?                    @map("alasan_penolakan")
   diverifikasiOlehId String?                    @map("diverifikasi_oleh_id")

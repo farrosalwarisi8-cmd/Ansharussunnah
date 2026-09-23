@@ -59,9 +59,12 @@ export async function cachedJson<T>(
   let parsed: T | undefined
 
   try {
-    const cached = await redis.get<string | null>(fullKey)
+    const cached = await redis.get<string | T | null>(fullKey)
     if (cached !== null) {
-      parsed = JSON.parse(cached) as T
+      // SDK Upstash otomatis deserialize nilai yang tampak seperti JSON,
+      // jadi saat runtime nilainya bisa berupa object/array (bukan string).
+      // Terima kedua bentuk: object langsung pakai, string di-parse manual.
+      parsed = (typeof cached === "string" ? JSON.parse(cached) : cached) as T
     }
   } catch (error) {
     // Value rusak/asing (mis. ditulis klien eksternal ke Redis) → anggap miss.

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { CheckCircle2, ArrowRight, FileText } from "lucide-react"
+import { CheckCircle2, ArrowRight, FileText, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CopyNomorButton } from "@/components/pendaftaran/copy-nomor-button"
 import { TokenAksesBox } from "@/components/pendaftaran/token-akses-box"
@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { formatCurrency } from "@/lib/utils"
 import prisma from "@/lib/prisma"
+import { getPengaturanPPDB } from "@/lib/biaya-ppdb-server"
 import { notFound } from "next/navigation"
 
 interface SuksesPageProps {
@@ -32,7 +33,20 @@ export default async function SuksesPage({ searchParams }: SuksesPageProps) {
     notFound()
   }
 
-  const biaya = parseFloat(pendaftaran.biayaPendaftaran.toString())
+  const biayaPendaftaran = parseFloat(pendaftaran.biayaPendaftaran.toString())
+  const biayaUangGedung = parseFloat(pendaftaran.biayaUangGedung.toString())
+  const biayaSarpras = parseFloat(pendaftaran.biayaSarpras.toString())
+  const totalBiaya = biayaPendaftaran + biayaUangGedung + biayaSarpras
+
+  // Snapshot rekening & kontak WA saat pendaftaran dibuat; fallback ke
+  // pengaturan yang berlaku bila kolom snapshot kosong (pendaftaran lama).
+  const pengaturan = await getPengaturanPPDB()
+  const bankNama = pendaftaran.bankNama ?? pengaturan.bankNama
+  const bankNoRekening = pendaftaran.bankNoRekening ?? pengaturan.bankNoRekening
+  const bankAtasNama = pendaftaran.bankAtasNama ?? pengaturan.bankAtasNama
+  const kontakWa = pendaftaran.kontakWa ?? pengaturan.kontakWa
+  const waLink = `https://wa.me/${kontakWa.replace(/\D/g, "")}`
+  const namaKontakWa = pengaturan.namaKontakWa
 
   return (
     <div className="min-h-screen batik-light">
@@ -98,36 +112,69 @@ export default async function SuksesPage({ searchParams }: SuksesPageProps) {
             <div className="bg-blue-50 rounded-xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-gray-600 font-medium">
-                  Biaya Pendaftaran
+                  Total yang Harus Ditransfer
                 </span>
                 <span className="text-2xl font-bold text-primary">
-                  {formatCurrency(biaya)}
+                  {formatCurrency(totalBiaya)}
                 </span>
               </div>
-              <div className="border-t border-blue-200 pt-3 space-y-2">
+
+              {/* Rincian per komponen (snapshot saat pendaftaran dibuat) */}
+              <div className="border-t border-blue-200 pt-3 space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Biaya Pendaftaran</span>
+                  <span className="font-medium text-gray-700">
+                    {formatCurrency(biayaPendaftaran)}
+                  </span>
+                </div>
+                {biayaUangGedung > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Uang Gedung</span>
+                    <span className="font-medium text-gray-700">
+                      {formatCurrency(biayaUangGedung)}
+                    </span>
+                  </div>
+                )}
+                {biayaSarpras > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Sarana Prasarana (Sarpras)</span>
+                    <span className="font-medium text-gray-700">
+                      {formatCurrency(biayaSarpras)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-blue-200 pt-3 mt-3 space-y-2">
                 <p className="text-sm text-gray-600">
                   Transfer ke rekening berikut:
                 </p>
                 <div className="bg-white rounded-lg p-4 space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-500 text-sm">Bank</span>
-                    <span className="font-semibold">
-                      {process.env.NEXT_PUBLIC_BANK_NAME}
-                    </span>
+                    <span className="font-semibold">{bankNama}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500 text-sm">No. Rekening</span>
-                    <span className="font-mono font-semibold">
-                      {process.env.NEXT_PUBLIC_BANK_ACCOUNT_NUMBER}
-                    </span>
+                    <span className="font-mono font-semibold">{bankNoRekening}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500 text-sm">Atas Nama</span>
-                    <span className="font-semibold">
-                      {process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME}
-                    </span>
+                    <span className="font-semibold">{bankAtasNama}</span>
                   </div>
                 </div>
+                <p className="text-xs text-gray-400">
+                  Konfirmasi pembayaran ke WhatsApp {namaKontakWa}:{" "}
+                  <a
+                    href={waLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold text-green-600 hover:text-green-700"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    wa.me/{kontakWa.replace(/\D/g, "")}
+                  </a>
+                </p>
               </div>
             </div>
 
@@ -138,7 +185,7 @@ export default async function SuksesPage({ searchParams }: SuksesPageProps) {
               <ul className="text-sm text-amber-700 space-y-1 list-disc list-inside">
                 <li>
                   Transfer sesuai nominal:{" "}
-                  <strong>{formatCurrency(biaya)}</strong>
+                  <strong>{formatCurrency(totalBiaya)}</strong>
                 </li>
                 <li>
                   Gunakan nomor pendaftaran{" "}
