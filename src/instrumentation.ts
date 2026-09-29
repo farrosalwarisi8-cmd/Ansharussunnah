@@ -1,6 +1,16 @@
 // src/instrumentation.ts
 
+import * as Sentry from "@sentry/nextjs"
+
 export async function register() {
+  // Muat config Sentry sesuai runtime (wajib agar captureMessage/captureException
+  // dari src/lib/monitoring.ts benar-benar terkirim).
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    await import("../sentry.server.config")
+  } else if (process.env.NEXT_RUNTIME === "edge") {
+    await import("../sentry.edge.config")
+  }
+
   if (process.env.NEXT_RUNTIME === "nodejs") {
     try {
       const { validateEnv } = await import("@/lib/env")
@@ -16,4 +26,5 @@ export async function register() {
   }
 }
 
-
+// Teruskan error yang tidak tertangani dari request ke Sentry (Next.js 15).
+export const onRequestError = Sentry.captureRequestError

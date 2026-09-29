@@ -2,6 +2,7 @@
 
 import type { NextConfig } from "next"
 import createBundleAnalyzer from "@next/bundle-analyzer"
+import { withSentryConfig } from "@sentry/nextjs"
 
 const withBundleAnalyzer = createBundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
@@ -162,4 +163,16 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default withBundleAnalyzer(nextConfig)
+// Sentry tanpa source maps upload (belum ada SENTRY_AUTH_TOKEN di pipeline
+// build) — monitoring runtime tetap jalan penuh.
+export default withSentryConfig(withBundleAnalyzer(nextConfig), {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  sourcemaps: {
+    disable: !process.env.SENTRY_AUTH_TOKEN,
+  },
+  // Jangan kirim telemetri build ke Sentry (kebiasaan baik, kuota kecil).
+  telemetry: false,
+  silent: true,
+})

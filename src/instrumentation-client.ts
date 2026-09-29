@@ -1,5 +1,6 @@
-
-// sentry.client.config.ts
+// src/instrumentation-client.ts
+// Konvensi Next.js 15 untuk inisialisasi client-side (pengganti
+// sentry.client.config.ts yang sudah deprecated saat memakai Turbopack).
 
 import * as Sentry from "@sentry/nextjs"
 
@@ -23,4 +24,3 @@ if (dsn) {
     ],
   })
 }
-

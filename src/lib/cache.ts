@@ -14,6 +14,7 @@
 // sehingga DB tidak ditanya berulang-ulang demi jawaban yang sama.
 
 import { Redis } from "@upstash/redis"
+import { reportCacheError } from "@/lib/monitoring"
 
 const CACHE_KEY_PREFIX = "cache:"
 
@@ -86,6 +87,7 @@ export async function cachedJson<T>(
     } else {
       // Value rusak/asing (mis. ditulis klien eksternal ke Redis) → anggap miss.
       console.warn("[cache] read miss-fallback (Redis):", error)
+      reportCacheError("read", fullKey, error)
     }
   }
 
@@ -100,6 +102,7 @@ export async function cachedJson<T>(
     } catch (error) {
       if (!isNextDynamicUsageError(error)) {
         console.warn("[cache] write failed (Redis):", error)
+        reportCacheError("write", fullKey, error)
       }
     }
   }
@@ -122,5 +125,6 @@ export async function invalidateCache(prefix: string): Promise<void> {
     }
   } catch (error) {
     console.warn("[cache] invalidation failed (Redis):", error)
+    reportCacheError("invalidation", prefix, error)
   }
 }

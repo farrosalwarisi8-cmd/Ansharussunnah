@@ -13,6 +13,7 @@ const setMock = vi.fn()
 const getMock = vi.fn()
 const delMock = vi.fn()
 const keysMock = vi.fn()
+const reportCacheErrorMock = vi.fn()
 
 vi.mock("@upstash/redis", () => ({
   Redis: class {
@@ -23,6 +24,10 @@ vi.mock("@upstash/redis", () => ({
   },
 }))
 
+vi.mock("@/lib/monitoring", () => ({
+  reportCacheError: (...args: unknown[]) => reportCacheErrorMock(...args),
+}))
+
 beforeEach(() => {
   vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io")
   vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "secret")
@@ -30,6 +35,7 @@ beforeEach(() => {
   getMock.mockReset()
   delMock.mockReset()
   keysMock.mockReset()
+  reportCacheErrorMock.mockReset()
 })
 
 afterEach(() => {
@@ -64,6 +70,8 @@ describe("cachedJson", () => {
     getMock.mockRejectedValue(new Error("redis down"))
     const result = await cachedJson("ref:mapel", 60, async () => [{ id: "c" }])
     expect(result).toEqual([{ id: "c" }])
+    // Error Redis sungguhan → harus dilaporkan ke monitoring.
+    expect(reportCacheErrorMock).toHaveBeenCalledWith("read", "cache:ref:mapel", expect.any(Error))
   })
 
   it("fail-open & tidak menyentuh Redis saat env kosong", async () => {
@@ -91,6 +99,8 @@ describe("cachedJson", () => {
     expect(result).toEqual([{ id: "e" }])
     expect(warnSpy).not.toHaveBeenCalled()
     expect(setMock).not.toHaveBeenCalled()
+    // Bukan kerusakan Redis → tidak boleh dilaporkan ke monitoring.
+    expect(reportCacheErrorMock).not.toHaveBeenCalled()
     warnSpy.mockRestore()
   })
 
@@ -105,6 +115,7 @@ describe("cachedJson", () => {
     const result = await cachedJson("ref:mapel", 60, async () => [{ id: "f" }])
     expect(result).toEqual([{ id: "f" }])
     expect(warnSpy).not.toHaveBeenCalled()
+    expect(reportCacheErrorMock).not.toHaveBeenCalled()
     warnSpy.mockRestore()
   })
 
