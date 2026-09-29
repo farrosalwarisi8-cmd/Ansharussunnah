@@ -43,6 +43,17 @@ function getRedis(): Redis | null {
 }
 
 /**
+ * Deteksi error kontrol Next.js "Dynamic server usage": saat Next mencoba
+ * render statis, fetch dengan cache "no-store" (dipakai SDK Upstash) melempar
+ * DynamicServerError. Ini BUKAN kerusakan Redis — fail-open ke `fetcher` saja,
+ * tanpa log berisik dan tanpa percobaan tulis yang pasti gagal dengan cara
+ * yang sama.
+ */
+function isNextDynamicUsageError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("Dynamic server usage")
+}
+
+/**
  * Ambil data dari cache bila ada; bila tidak, jalankan `fetcher`, simpan
  * hasilnya dengan TTL, dan kembalikan hasil tersebut.
  */
@@ -58,6 +69,8 @@ export async function cachedJson<T>(
 
   let parsed: T | undefined
 
+  let lewatiTulis = false
+
   try {
     const cached = await redis.get<string | T | null>(fullKey)
     if (cached !== null) {
@@ -67,8 +80,13 @@ export async function cachedJson<T>(
       parsed = (typeof cached === "string" ? JSON.parse(cached) : cached) as T
     }
   } catch (error) {
-    // Value rusak/asing (mis. ditulis klien eksternal ke Redis) → anggap miss.
-    console.warn("[cache] read miss-fallback (Redis):", error)
+    if (isNextDynamicUsageError(error)) {
+      // Render statis Next: Redis tidak akan bisa dipakai di pemanggilan ini.
+      lewatiTulis = true
+    } else {
+      // Value rusak/asing (mis. ditulis klien eksternal ke Redis) → anggap miss.
+      console.warn("[cache] read miss-fallback (Redis):", error)
+    }
   }
 
   if (parsed !== undefined) return parsed
@@ -76,10 +94,14 @@ export async function cachedJson<T>(
   const value = await fetcher()
   if (value === undefined) return value
 
-  try {
-    await redis.set(fullKey, JSON.stringify(value), { ex: ttlSeconds })
-  } catch (error) {
-    console.warn("[cache] write failed (Redis):", error)
+  if (!lewatiTulis) {
+    try {
+      await redis.set(fullKey, JSON.stringify(value), { ex: ttlSeconds })
+    } catch (error) {
+      if (!isNextDynamicUsageError(error)) {
+        console.warn("[cache] write failed (Redis):", error)
+      }
+    }
   }
 
   return value

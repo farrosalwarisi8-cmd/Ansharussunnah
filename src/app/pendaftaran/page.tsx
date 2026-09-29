@@ -1,5 +1,11 @@
 // src/app/pendaftaran/page.tsx
 
+// Halaman ini membaca data live (jenjang & biaya PPDB via cache Redis). Saat
+// prerender statis, SDK Upstash memanggil fetch dengan cache "no-store" dan
+// Next.js melempar DynamicServerError — cache Redis jadi selalu miss dan log
+// penuh peringatan. Jadikan dynamic penuh agar cache Redis terpakai normal.
+export const dynamic = "force-dynamic"
+
 import { PendaftaranForm } from "@/components/pendaftaran/pendaftaran-form"
 import { getJenjangDenganKelas } from "@/actions/jenjang-kelas"
 import { getBiayaPPDBPerJenjang } from "@/lib/biaya-ppdb-server"

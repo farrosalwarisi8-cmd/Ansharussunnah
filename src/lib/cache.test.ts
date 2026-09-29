@@ -77,6 +77,37 @@ describe("cachedJson", () => {
     expect(setMock).not.toHaveBeenCalled()
   })
 
+  it("fail-open hening saat Next render statis (Dynamic server usage)", async () => {
+    // Saat Next.js prerender statis, fetch no-store (dipakai SDK Upstash)
+    // melempar DynamicServerError — bukan kerusakan Redis. Tidak boleh:
+    // (1) log peringatan, (2) percobaan tulis yang pasti gagal lagi.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    getMock.mockRejectedValue(
+      new Error(
+        'Dynamic server usage: Route /pendaftaran couldn\'t be rendered statically because it used no-store fetch. See more info here: https://nextjs.org/docs/messages/dynamic-server-error'
+      )
+    )
+    const result = await cachedJson("ref:ppdb:biaya-jenjang", 300, async () => [{ id: "e" }])
+    expect(result).toEqual([{ id: "e" }])
+    expect(warnSpy).not.toHaveBeenCalled()
+    expect(setMock).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it("tidak log peringatan saat write gagal karena Dynamic server usage", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    getMock.mockResolvedValue(null)
+    setMock.mockRejectedValue(
+      new Error(
+        'Dynamic server usage: Route /pendaftaran couldn\'t be rendered statically because it used no-store fetch. See more info here: https://nextjs.org/docs/messages/dynamic-server-error'
+      )
+    )
+    const result = await cachedJson("ref:mapel", 60, async () => [{ id: "f" }])
+    expect(result).toEqual([{ id: "f" }])
+    expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
   it("sanitasi key dinamis dari klien (cegah key injection)", async () => {
     getMock.mockResolvedValue(JSON.stringify("data"))
     const maliciousKey = "ref:kelas:byjenjang:abc/../periode:* def"
