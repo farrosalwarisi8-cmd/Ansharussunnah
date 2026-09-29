@@ -8,6 +8,8 @@ export const inputAbsensiSingleSchema = z.object({
   siswaId: z.string().min(1, "Siswa wajib dipilih"),
   kelasId: z.string().min(1, "Kelas wajib dipilih"),
   periodeAjaranId: z.string().min(1, "Periode ajaran wajib dipilih"),
+  mataPelajaranId: z.string().nullable().optional(),
+  mataPelajaran: z.string().optional(),
   tanggal: z.string().refine((val) => !isNaN(Date.parse(val)), {
     message: "Format tanggal tidak valid",
   }),
@@ -26,6 +28,8 @@ export const absensiItemSchema = z.object({
 export const inputAbsensiBulkSchema = z.object({
   kelasId: z.string().min(1, "Kelas wajib dipilih"),
   periodeAjaranId: z.string().min(1, "Periode ajaran wajib dipilih"),
+  mataPelajaranId: z.string().nullable().optional(),
+  mataPelajaran: z.string().optional(),
   tanggal: z.string().refine((val) => !isNaN(Date.parse(val)), {
     message: "Format tanggal tidak valid",
   }),
@@ -39,6 +43,7 @@ export type InputAbsensiBulkValues = z.infer<typeof inputAbsensiBulkSchema>
 export const rekapKehadiranSchema = z.object({
   kelasId: z.string().min(1),
   periodeAjaranId: z.string().min(1),
+  mataPelajaranId: z.string().nullable().optional(),
   tanggalMulai: z.string().optional(),
   tanggalSelesai: z.string().optional(),
 })
@@ -47,6 +52,7 @@ export type RekapKehadiranValues = z.infer<typeof rekapKehadiranSchema>
 
 export const riwayatKehadiranSiswaSchema = z.object({
   siswaId: z.string().min(1),
+  mataPelajaranId: z.string().nullable().optional(),
   tanggalMulai: z.string().optional(),
   tanggalSelesai: z.string().optional(),
 })

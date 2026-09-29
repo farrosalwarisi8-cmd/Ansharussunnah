@@ -13,6 +13,7 @@ type RiwayatItem = {
   status: string
   keterangan?: string | null
   kelas?: string
+  mataPelajaran?: string
   periode?: string
 }
 type RiwayatData = {
@@ -27,6 +28,7 @@ export function OrangTuaAbsensiView({ selectedChild }: { selectedChild: { id: st
   const [riwayatData, setRiwayatData] = React.useState<RiwayatData | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [selectedMapel, setSelectedMapel] = React.useState("SEMUA")
 
   React.useEffect(() => {
     async function fetchRiwayat() {
@@ -65,12 +67,43 @@ export function OrangTuaAbsensiView({ selectedChild }: { selectedChild: { id: st
     return <EmptyState title="Belum Ada Data Kehadiran" description="Belum ada catatan presensi untuk anak ini." />
   }
 
-  const persentase = riwayatData.total > 0
-    ? ((riwayatData.ringkasan.HADIR / riwayatData.total) * 100).toFixed(1)
+  const mapelList = ["SEMUA", ...Array.from(new Set(riwayatData.riwayat.map((r) => r.mataPelajaran).filter(Boolean))) as string[]]
+  const filteredRiwayat = selectedMapel === "SEMUA"
+    ? riwayatData.riwayat
+    : riwayatData.riwayat.filter((r) => r.mataPelajaran === selectedMapel)
+
+  const hitung = { HADIR: 0, SAKIT: 0, IZIN: 0, ALPHA: 0 }
+  filteredRiwayat.forEach((r) => {
+    if (r.status in hitung) hitung[r.status as keyof typeof hitung]++
+  })
+
+  const totalFiltered = filteredRiwayat.length
+  const persentase = totalFiltered > 0
+    ? ((hitung.HADIR / totalFiltered) * 100).toFixed(1)
     : "0"
 
   return (
     <div className="space-y-6">
+      {/* Filter Mapel */}
+      {mapelList.length > 1 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+          {mapelList.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setSelectedMapel(m)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all min-h-[40px] touch-manipulation ${
+                selectedMapel === m
+                  ? "bg-yellow-600 text-white shadow-sm"
+                  : "bg-white border border-slate-200/80 text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Kehadiran KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="rounded-2xl border-slate-200/80 bg-white">
@@ -82,19 +115,19 @@ export function OrangTuaAbsensiView({ selectedChild }: { selectedChild: { id: st
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5 text-center">
             <span className="text-xs text-slate-500 font-semibold uppercase">Total Hadir</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">{riwayatData.ringkasan.HADIR} Hari</div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">{hitung.HADIR} Sesi</div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5 text-center">
             <span className="text-xs text-slate-500 font-semibold uppercase">Izin / Sakit</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-amber-600 mt-1">{riwayatData.ringkasan.IZIN + riwayatData.ringkasan.SAKIT} Hari</div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-amber-600 mt-1">{hitung.IZIN + hitung.SAKIT} Sesi</div>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border-slate-200/80 bg-white">
           <CardContent className="p-4 sm:p-5 text-center">
             <span className="text-xs text-slate-500 font-semibold uppercase">Alpa</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-1">{riwayatData.ringkasan.ALPHA} Hari</div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-1">{hitung.ALPHA} Sesi</div>
           </CardContent>
         </Card>
       </div>
@@ -106,15 +139,22 @@ export function OrangTuaAbsensiView({ selectedChild }: { selectedChild: { id: st
             Log Riwayat Kehadiran: {selectedChild.nama}
           </CardTitle>
           <CardDescription className="text-xs text-slate-500">
-            Catatan presensi yang diinput oleh wali kelas &amp; pengajar
+            Catatan presensi per sesi mata pelajaran yang diinput oleh para guru pengajar
           </CardDescription>
         </CardHeader>
         <CardContent className="p-5 divide-y divide-slate-100">
-          {riwayatData.riwayat.map((log) => (
+          {filteredRiwayat.map((log) => (
             <div key={log.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
               <div className="space-y-1">
-                <div className="font-bold text-slate-800 text-sm">
-                  {new Date(log.tanggal).toLocaleDateString("id-ID")}
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-800 text-sm">
+                    {new Date(log.tanggal).toLocaleDateString("id-ID")}
+                  </span>
+                  {log.mataPelajaran && (
+                    <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2.5 py-0.5 rounded-md border border-yellow-200">
+                      {log.mataPelajaran}
+                    </span>
+                  )}
                 </div>
                 {log.periode && (
                   <div className="text-xs text-slate-500">{log.periode}</div>

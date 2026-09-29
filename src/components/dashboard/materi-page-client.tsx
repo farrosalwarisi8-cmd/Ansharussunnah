@@ -1,7 +1,5 @@
 "use client"
 
-
-
 import * as React from "react"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
@@ -17,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { EmptyState } from "@/components/ui/empty-state"
 import { KelasMapelSelector } from "@/components/dashboard/kelas-mapel-selector"
 import { TargetGenderSelector } from "@/components/dashboard/target-gender-selector"
+import { ModalAbsensiMapel } from "@/components/dashboard/modal-absensi-mapel"
 import dynamic from "next/dynamic"
 const Dialog = dynamic(() => import("@/components/ui/dialog").then(m => m.Dialog), { ssr: false })
 const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogContent), { ssr: false })
@@ -24,7 +23,7 @@ const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.
 const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
-import { Plus, ExternalLink, Loader2, Pencil, Trash2 } from "lucide-react"
+import { Plus, ExternalLink, Loader2, Pencil, Trash2, UserCheck } from "lucide-react"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
 import { peranOptionSuffix, type PeranKelas } from "@/lib/kelas-peran"
 import { PeranKelasBadge, PeranKelasLegend } from "@/components/ui/peran-kelas-badge"
@@ -35,11 +34,14 @@ type MateriItem = {
   judul: string
   deskripsi?: string | null
   mataPelajaran: string
+  mataPelajaranId?: string | null
+  kelasId?: string
   targetGender?: "LAKI_LAKI" | "PEREMPUAN" | null
   urlFile?: string | null
   urlLink?: string | null
   signedUrl?: string | null
   periode?: string
+  periodeAjaranId?: string
   diunggahOleh?: string
   createdAt?: string | Date
 }
@@ -101,6 +103,10 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
   const [deleteTarget, setDeleteTarget] = React.useState<MateriItem | null>(null)
   const [deleting, setDeleting] = React.useState(false)
 
+  // Absensi per mapel modal state
+  const [isAbsensiModalOpen, setIsAbsensiModalOpen] = React.useState(false)
+  const [absensiMateriTarget, setAbsensiMateriTarget] = React.useState<MateriItem | null>(null)
+
   // Fetch guru's kelas list for dropdown
   React.useEffect(() => {
     if (!isTeacher) return
@@ -143,7 +149,6 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
     try {
       let result = null
       if (isTeacher) {
-        // For guru, use getDaftarMateriGuru with kelasId
         if (kelasList.length > 0 && kelasId) {
           result = await getDaftarMateriGuru(kelasId)
         }
@@ -274,6 +279,8 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
   const filteredMateri = selectedMapelFilter === "SEMUA"
     ? materiList
     : materiList.filter((m) => m.mataPelajaran === selectedMapelFilter)
+
+  const selectedKelasObj = kelasList.find((k) => k.kelasId === kelasId)
 
   return (
     <div className="space-y-6">
@@ -410,38 +417,51 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
                       </Button>
                     )}
 
-                    {/* Guru actions: Edit + Delete */}
+                    {/* Guru actions: Presensi + Edit + Delete */}
                     {isTeacher && (
-                      <div className="flex gap-2">
+                      <div className="space-y-2 pt-1 border-t border-slate-100">
                         <Button
                           size="sm"
-                          variant="outline"
                           onClick={() => {
-                            setEditMateri(mat)
-                            setEditJudul(mat.judul)
-                            setEditDeskripsi(mat.deskripsi || "")
-                            setEditMapel(mat.mataPelajaran)
-                            setEditGender(mat.targetGender ?? null)
-                            setEditFileUrl(mat.urlFile || mat.urlLink || "")
-                            setIsEditModalOpen(true)
+                            setAbsensiMateriTarget(mat)
+                            setIsAbsensiModalOpen(true)
                           }}
-                          className="flex-1 rounded-xl text-xs font-bold min-h-[38px]"
+                          className="w-full rounded-xl text-xs font-bold bg-yellow-50 hover:bg-yellow-100 text-yellow-800 border border-yellow-200 min-h-[38px]"
                         >
-                          <Pencil className="h-3.5 w-3.5 mr-1" />
-                          Edit
+                          <UserCheck className="h-3.5 w-3.5 mr-1.5 text-yellow-600" />
+                          Input Presensi ({mat.mataPelajaran})
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setDeleteTarget(mat)
-                            setDeleteDialogOpen(true)
-                          }}
-                          className="rounded-xl text-xs font-bold text-rose-600 border-rose-200 hover:bg-rose-50 min-h-[38px]"
-                          aria-label="Hapus materi"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditMateri(mat)
+                              setEditJudul(mat.judul)
+                              setEditDeskripsi(mat.deskripsi || "")
+                              setEditMapel(mat.mataPelajaran)
+                              setEditGender(mat.targetGender ?? null)
+                              setEditFileUrl(mat.urlFile || mat.urlLink || "")
+                              setIsEditModalOpen(true)
+                            }}
+                            className="flex-1 rounded-xl text-xs font-bold min-h-[38px]"
+                          >
+                            <Pencil className="h-3.5 w-3.5 mr-1" />
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setDeleteTarget(mat)
+                              setDeleteDialogOpen(true)
+                            }}
+                            className="rounded-xl text-xs font-bold text-rose-600 border-rose-200 hover:bg-rose-50 min-h-[38px]"
+                            aria-label="Hapus materi"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </CardContent>
@@ -626,6 +646,23 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
         isLoading={deleting}
         onConfirm={handleDeleteMateri}
       />
+
+      {/* Modal Input Presensi Mapel */}
+      {absensiMateriTarget && (
+        <ModalAbsensiMapel
+          open={isAbsensiModalOpen}
+          onOpenChange={(op) => {
+            setIsAbsensiModalOpen(op)
+            if (!op) setAbsensiMateriTarget(null)
+          }}
+          kelasId={absensiMateriTarget.kelasId || kelasId}
+          namaKelas={selectedKelasObj?.namaKelas}
+          mataPelajaran={absensiMateriTarget.mataPelajaran}
+          mataPelajaranId={absensiMateriTarget.mataPelajaranId}
+          periodeAjaranId={absensiMateriTarget.periodeAjaranId || periodeAjaranId}
+          targetGender={absensiMateriTarget.targetGender}
+        />
+      )}
     </div>
   )
 }

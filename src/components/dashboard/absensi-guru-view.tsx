@@ -3,12 +3,13 @@
 import * as React from "react"
 import { inputAbsensiBulk, inputAbsensiSingle, getSiswaByKelas, getRekapKehadiranKelas } from "@/actions/absensi"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
+import { getMapelAktif } from "@/actions/mapel"
 import { getPeriodeAjaranAktif } from "@/actions/periode-ajaran"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Check, UserCheck, Save, Loader2 } from "lucide-react"
+import { Check, UserCheck, Save, Loader2, BookOpen } from "lucide-react"
 import { toDateLocalValue } from "@/lib/datetime-local"
 import { peranOptionSuffix, type PeranKelas } from "@/lib/kelas-peran"
 import { PeranKelasBadge, PeranKelasLegend } from "@/components/ui/peran-kelas-badge"
@@ -28,6 +29,11 @@ type KelasItem = {
   jumlahSiswa: number
   peran?: PeranKelas
 }
+type MapelItem = {
+  id: string
+  kode: string
+  nama: string
+}
 
 export function GuruAbsensiView() {
   const { toast } = useToast()
@@ -36,6 +42,10 @@ export function GuruAbsensiView() {
   const [kelasList, setKelasList] = React.useState<KelasItem[]>([])
   const [selectedKelasId, setSelectedKelasId] = React.useState<string>("")
   const [loadingKelas, setLoadingKelas] = React.useState(true)
+
+  // Mapel data
+  const [mapelList, setMapelList] = React.useState<MapelItem[]>([])
+  const [selectedMapelId, setSelectedMapelId] = React.useState<string>("SEMUA")
 
   // Siswa data
   const [students, setStudents] = React.useState<SiswaItem[]>([])
@@ -64,16 +74,24 @@ export function GuruAbsensiView() {
   const [loadingRekap, setLoadingRekap] = React.useState(false)
   const [periodeAjaranId, setPeriodeAjaranId] = React.useState("")
 
-  // Muat periode ajaran aktif
+  // Muat periode ajaran aktif & daftar mapel
   React.useEffect(() => {
     let mounted = true
-    async function loadPeriode() {
-      const res = await getPeriodeAjaranAktif()
-      if (mounted && res.success && res.data?.id) {
-        setPeriodeAjaranId(res.data.id)
+    async function loadData() {
+      const [resPeriode, resMapel] = await Promise.all([
+        getPeriodeAjaranAktif(),
+        getMapelAktif(),
+      ])
+      if (mounted) {
+        if (resPeriode.success && resPeriode.data?.id) {
+          setPeriodeAjaranId(resPeriode.data.id)
+        }
+        if (resMapel.success && resMapel.data) {
+          setMapelList(resMapel.data as MapelItem[])
+        }
       }
     }
-    loadPeriode()
+    loadData()
     return () => {
       mounted = false
     }
@@ -86,6 +104,7 @@ export function GuruAbsensiView() {
       const result = await getRekapKehadiranKelas({
         kelasId: selectedKelasId,
         periodeAjaranId,
+        mataPelajaranId: selectedMapelId !== "SEMUA" ? selectedMapelId : undefined,
       })
       if (result.success && result.data) {
         const data = result.data as { rekap: typeof rekapData }
@@ -169,6 +188,7 @@ export function GuruAbsensiView() {
       const result = await inputAbsensiBulk({
         kelasId: selectedKelasId,
         periodeAjaranId,
+        mataPelajaranId: selectedMapelId !== "SEMUA" ? selectedMapelId : undefined,
         tanggal: selectedTanggal,
         absensi: students.map((s) => ({
           siswaId: s.siswaId,
@@ -179,7 +199,7 @@ export function GuruAbsensiView() {
       if (result.success) {
         toast({
           title: "Absensi Berhasil Disimpan! 🎉",
-          description: `Data presensi tanggal ${selectedTanggal} tersimpan ke database.`,
+          description: `Data presensi ${selectedMapelId !== "SEMUA" ? `mapel (${mapelList.find(m => m.id === selectedMapelId)?.nama})` : "harian"} tanggal ${selectedTanggal} tersimpan ke database.`,
         })
       } else {
         toast({
@@ -226,10 +246,10 @@ export function GuruAbsensiView() {
 
   return (
     <div className="space-y-6">
-      {/* Filter Card: Kelas & Tanggal */}
+      {/* Filter Card: Kelas, Mapel & Tanggal */}
       <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
-        <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full sm:w-auto">
+        <CardContent className="p-4 sm:p-6 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full xl:w-auto">
             <div>
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5 flex items-center gap-2">
                 Pilih Kelas
@@ -240,7 +260,7 @@ export function GuruAbsensiView() {
               <select
                 value={selectedKelasId}
                 onChange={(e) => setSelectedKelasId(e.target.value)}
-                className="w-full sm:w-56 h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-yellow-500"
               >
                 {kelasList.map((k) => (
                   <option key={k.kelasId} value={k.kelasId}>
@@ -255,18 +275,36 @@ export function GuruAbsensiView() {
 
             <div>
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">
+                Mata Pelajaran
+              </label>
+              <select
+                value={selectedMapelId}
+                onChange={(e) => setSelectedMapelId(e.target.value)}
+                className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              >
+                <option value="SEMUA">Presensi Harian (Umum)</option>
+                {mapelList.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.kode} - {m.nama}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">
                 Tanggal Presensi
               </label>
               <input
                 type="date"
                 value={selectedTanggal}
                 onChange={(e) => setSelectedTanggal(e.target.value)}
-                className="w-full sm:w-48 h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-yellow-500"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-2 pt-2 sm:pt-0">
+          <div className="flex items-center gap-2 pt-2 xl:pt-0 flex-wrap sm:flex-nowrap">
             <Button
               type="button"
               variant="outline"
@@ -337,8 +375,13 @@ export function GuruAbsensiView() {
           <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
             <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-base font-bold text-slate-800">
+                <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
                   Daftar Santri ({students.length} Orang)
+                  {selectedMapelId !== "SEMUA" && (
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-yellow-100 text-yellow-800">
+                      {mapelList.find((m) => m.id === selectedMapelId)?.nama}
+                    </span>
+                  )}
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-500">
                   Tekan tombol status untuk mengganti kehadiran santri
@@ -406,6 +449,7 @@ export function GuruAbsensiView() {
                             siswaId: student.siswaId,
                             kelasId: selectedKelasId,
                             periodeAjaranId,
+                            mataPelajaranId: selectedMapelId !== "SEMUA" ? selectedMapelId : undefined,
                             tanggal: selectedTanggal,
                             status: attendance[student.siswaId] || "HADIR",
                           })

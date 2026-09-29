@@ -173,6 +173,7 @@ model MataPelajaran {
   nilaiRapor   NilaiRapor[]
   tugas        Tugas[]
   ujian        Ujian[]
+  absensi      Absensi[]
 
   @@index([jenjangId])
   @@index([jenjangId], map: "idx_mapel_jenjang")
@@ -725,24 +726,27 @@ model RiwayatPengumpulanTugas {
 }
 
 model Absensi {
-  id              String        @id @default(cuid())
-  siswaId         String        @map("siswa_id")
-  kelasId         String        @map("kelas_id")
-  periodeAjaranId String        @map("periode_ajaran_id")
-  tanggal         DateTime      @db.Date
+  id              String         @id @default(cuid())
+  siswaId         String         @map("siswa_id")
+  kelasId         String         @map("kelas_id")
+  periodeAjaranId String         @map("periode_ajaran_id")
+  mataPelajaranId String?        @map("mata_pelajaran_id")
+  tanggal         DateTime       @db.Date
   status          StatusAbsensi
   keterangan      String?
-  diinputOlehId   String        @map("diinput_oleh_id")
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
-  diinputOleh     User          @relation("AbsensiDiinputOleh", fields: [diinputOlehId], references: [id])
-  kelas           Kelas         @relation(fields: [kelasId], references: [id])
-  periodeAjaran   PeriodeAjaran @relation(fields: [periodeAjaranId], references: [id])
-  siswa           Siswa         @relation(fields: [siswaId], references: [id], onDelete: Cascade)
+  diinputOlehId   String         @map("diinput_oleh_id")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  diinputOleh     User           @relation("AbsensiDiinputOleh", fields: [diinputOlehId], references: [id])
+  kelas           Kelas          @relation(fields: [kelasId], references: [id])
+  mataPelajaran   MataPelajaran? @relation(fields: [mataPelajaranId], references: [id])
+  periodeAjaran   PeriodeAjaran  @relation(fields: [periodeAjaranId], references: [id])
+  siswa           Siswa          @relation(fields: [siswaId], references: [id], onDelete: Cascade)
 
-  @@unique([siswaId, tanggal])
+  @@unique([siswaId, tanggal, mataPelajaranId], map: "uq_absensi_siswa_tanggal_mapel")
   @@index([kelasId, tanggal])
   @@index([siswaId, tanggal])
+  @@index([mataPelajaranId], map: "idx_absensi_mapel")
   @@index([periodeAjaranId])
   @@index([kelasId], map: "idx_absensi_kelas")
   @@index([periodeAjaranId], map: "idx_absensi_periode")

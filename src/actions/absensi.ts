@@ -47,8 +47,7 @@ async function verifyOrangTuaAksesSiswa(
 // ========================================================
 
 /**
- * Input absensi untuk 1 siswa pada 1 tanggal.
- * Menggunakan upsert agar bisa mengedit jika sudah ada record.
+ * Input absensi untuk 1 siswa pada 1 tanggal dan mata pelajaran tertentu.
  */
 export async function inputAbsensiSingle(
   payload: InputAbsensiSingleValues
@@ -63,11 +62,30 @@ export async function inputAbsensiSingle(
       }
     }
 
-    const { siswaId, kelasId, periodeAjaranId, tanggal, status, keterangan } =
-      validated.data
+    const {
+      siswaId,
+      kelasId,
+      periodeAjaranId,
+      mataPelajaranId,
+      mataPelajaran,
+      tanggal,
+      status,
+      keterangan,
+    } = validated.data
 
-    // Otorisasi: guru harus punya akses ke kelas ini
-    const { user, roleInKelas } = await verifyGuruAksesKelas(kelasId)
+    // Otorisasi: guru harus punya akses ke kelas ini (+ mapel jika diisi)
+    const { user, roleInKelas } = await verifyGuruAksesKelas(kelasId, mataPelajaran)
+
+    let resolvedMapelId = mataPelajaranId || null
+    if (!resolvedMapelId && mataPelajaran) {
+      const mapel = await prisma.mataPelajaran.findFirst({
+        where: { nama: mataPelajaran },
+        select: { id: true },
+      })
+      if (mapel) {
+        resolvedMapelId = mapel.id
+      }
+    }
 
     // Validasi siswa benar-benar terdaftar di kelas ini
     const siswa = await prisma.siswa.findFirst({
@@ -91,13 +109,14 @@ export async function inputAbsensiSingle(
     const tanggalDate = new Date(tanggal)
 
     // KEAMANAN (overwrite-guard): catatan absensi yang sudah diinput guru lain
-    // hanya boleh diubah oleh guru yang SAMA, wali kelas, atau admin — mencegah
-    // pengajar lain mengubah ALPHA→HADIR (atau sebaliknya) tanpa jejak wajar.
-    const existing = await prisma.absensi.findUnique({
+    // hanya boleh diubah oleh guru yang SAMA, wali kelas, atau admin.
+    const existing = await prisma.absensi.findFirst({
       where: {
-        siswaId_tanggal: { siswaId, tanggal: tanggalDate },
+        siswaId,
+        tanggal: tanggalDate,
+        mataPelajaranId: resolvedMapelId,
       },
-      select: { diinputOlehId: true },
+      select: { id: true, diinputOlehId: true },
     })
     const isPrivileged =
       roleInKelas === "WALI_KELAS" || roleInKelas === "ADMIN"
@@ -105,37 +124,39 @@ export async function inputAbsensiSingle(
       return {
         success: false,
         message:
-          "Absensi siswa pada tanggal ini sudah diinput guru lain. Hanya wali kelas atau pihak berwenang yang dapat mengubahnya.",
+          "Absensi siswa pada tanggal dan mapel ini sudah diinput guru lain. Hanya wali kelas atau pihak berwenang yang dapat mengubahnya.",
       }
     }
 
-    // Upsert: jika sudah ada absensi untuk siswa+tanggal, update; jika belum, create
-    await prisma.absensi.upsert({
-      where: {
-        siswaId_tanggal: {
-          siswaId,
-          tanggal: tanggalDate,
+    if (existing) {
+      await prisma.absensi.update({
+        where: { id: existing.id },
+        data: {
+          status: status as StatusAbsensi,
+          keterangan,
+          diinputOlehId: user.id,
+          kelasId,
+          periodeAjaranId,
+          mataPelajaranId: resolvedMapelId,
         },
-      },
-      update: {
-        status: status as StatusAbsensi,
-        keterangan,
-        diinputOlehId: user.id,
-        kelasId,
-        periodeAjaranId,
-      },
-      create: {
-        siswaId,
-        kelasId,
-        periodeAjaranId,
-        tanggal: tanggalDate,
-        status: status as StatusAbsensi,
-        keterangan,
-        diinputOlehId: user.id,
-      },
-    })
+      })
+    } else {
+      await prisma.absensi.create({
+        data: {
+          siswaId,
+          kelasId,
+          periodeAjaranId,
+          mataPelajaranId: resolvedMapelId,
+          tanggal: tanggalDate,
+          status: status as StatusAbsensi,
+          keterangan,
+          diinputOlehId: user.id,
+        },
+      })
+    }
 
     revalidatePath(`/dashboard/absensi`)
+    revalidatePath(`/dashboard/materi`)
     return {
       success: true,
       message: `Absensi siswa berhasil disimpan (${status})`,
@@ -149,7 +170,7 @@ export async function inputAbsensiSingle(
 }
 
 /**
- * Input absensi massal (bulk) untuk seluruh siswa dalam 1 kelas pada 1 tanggal.
+ * Input absensi massal (bulk) untuk seluruh siswa dalam 1 kelas pada 1 tanggal dan mapel.
  * Menggunakan transaction agar atomik — semua berhasil atau semua gagal.
  */
 export async function inputAbsensiBulk(
@@ -165,9 +186,27 @@ export async function inputAbsensiBulk(
       }
     }
 
-    const { kelasId, periodeAjaranId, tanggal, absensi } = validated.data
+    const {
+      kelasId,
+      periodeAjaranId,
+      mataPelajaranId,
+      mataPelajaran,
+      tanggal,
+      absensi,
+    } = validated.data
 
-    const { user, roleInKelas } = await verifyGuruAksesKelas(kelasId)
+    const { user, roleInKelas } = await verifyGuruAksesKelas(kelasId, mataPelajaran)
+
+    let resolvedMapelId = mataPelajaranId || null
+    if (!resolvedMapelId && mataPelajaran) {
+      const mapel = await prisma.mataPelajaran.findFirst({
+        where: { nama: mataPelajaran },
+        select: { id: true },
+      })
+      if (mapel) {
+        resolvedMapelId = mapel.id
+      }
+    }
 
     const periode = await prisma.periodeAjaran.findUnique({
       where: { id: periodeAjaranId },
@@ -202,8 +241,12 @@ export async function inputAbsensiBulk(
     // KEAMANAN (overwrite-guard bulk): catatan absensi yang diinput guru lain
     // hanya boleh diubah oleh guru yang SAMA / wali kelas / admin.
     const existingList = await prisma.absensi.findMany({
-      where: { tanggal: tanggalDate, siswaId: { in: siswaIds } },
-      select: { siswaId: true, diinputOlehId: true },
+      where: {
+        tanggal: tanggalDate,
+        siswaId: { in: siswaIds },
+        mataPelajaranId: resolvedMapelId,
+      },
+      select: { id: true, siswaId: true, diinputOlehId: true },
     })
     const isPrivileged =
       roleInKelas === "WALI_KELAS" || roleInKelas === "ADMIN"
@@ -211,47 +254,53 @@ export async function inputAbsensiBulk(
     if (conflicts.length > 0 && !isPrivileged) {
       return {
         success: false,
-        message: `${conflicts.length} catatan absensi tanggal ini sudah diinput guru lain. Hanya wali kelas atau pihak berwenang yang dapat mengubahnya.`,
+        message: `${conflicts.length} catatan absensi tanggal dan mapel ini sudah diinput guru lain. Hanya wali kelas atau pihak berwenang yang dapat mengubahnya.`,
       }
     }
+
+    const existingMap = new Map(existingList.map((e) => [e.siswaId, e.id]))
 
     // Eksekusi bulk upsert dalam transaction
     let berhasil = 0
 
     await prisma.$transaction(
       async (tx) => {
-      for (const item of absensi) {
-        await tx.absensi.upsert({
-          where: {
-            siswaId_tanggal: {
-              siswaId: item.siswaId,
-              tanggal: tanggalDate,
-            },
-          },
-          update: {
-            status: item.status as StatusAbsensi,
-            keterangan: item.keterangan,
-            diinputOlehId: user.id,
-            kelasId,
-            periodeAjaranId,
-          },
-          create: {
-            siswaId: item.siswaId,
-            kelasId,
-            periodeAjaranId,
-            tanggal: tanggalDate,
-            status: item.status as StatusAbsensi,
-            keterangan: item.keterangan,
-            diinputOlehId: user.id,
-          },
-        })
-        berhasil++
-      }
+        for (const item of absensi) {
+          const existingId = existingMap.get(item.siswaId)
+          if (existingId) {
+            await tx.absensi.update({
+              where: { id: existingId },
+              data: {
+                status: item.status as StatusAbsensi,
+                keterangan: item.keterangan,
+                diinputOlehId: user.id,
+                kelasId,
+                periodeAjaranId,
+                mataPelajaranId: resolvedMapelId,
+              },
+            })
+          } else {
+            await tx.absensi.create({
+              data: {
+                siswaId: item.siswaId,
+                kelasId,
+                periodeAjaranId,
+                mataPelajaranId: resolvedMapelId,
+                tanggal: tanggalDate,
+                status: item.status as StatusAbsensi,
+                keterangan: item.keterangan,
+                diinputOlehId: user.id,
+              },
+            })
+          }
+          berhasil++
+        }
       },
       { timeout: 10000, maxWait: 3000 }
     )
 
     revalidatePath(`/dashboard/absensi`)
+    revalidatePath(`/dashboard/materi`)
     return {
       success: true,
       message: `Absensi bulk berhasil: ${berhasil} siswa tercatat`,
@@ -271,7 +320,7 @@ export async function inputAbsensiBulk(
 
 /**
  * Rekap persentase kehadiran per siswa dalam satu kelas untuk periode tertentu.
- * Mengembalikan data agregat: total hari, hadir, sakit, izin, alpha, persentase.
+ * Mendukung filter opsional per mata pelajaran.
  */
 export async function getRekapKehadiranKelas(
   payload: RekapKehadiranValues
@@ -286,7 +335,7 @@ export async function getRekapKehadiranKelas(
       }
     }
 
-    const { kelasId, periodeAjaranId, tanggalMulai, tanggalSelesai } =
+    const { kelasId, periodeAjaranId, mataPelajaranId, tanggalMulai, tanggalSelesai } =
       validated.data
 
     await verifyGuruAksesKelas(kelasId)
@@ -309,10 +358,13 @@ export async function getRekapKehadiranKelas(
       orderBy: { user: { nama: "asc" } },
     })
 
-    // Ambil semua absensi untuk kelas + periode + filter tanggal
+    // Ambil semua absensi untuk kelas + periode + filter tanggal + filter mapel
     const whereAbsensi: Record<string, unknown> = {
       kelasId,
       periodeAjaranId,
+    }
+    if (mataPelajaranId && mataPelajaranId !== "SEMUA") {
+      whereAbsensi.mataPelajaranId = mataPelajaranId
     }
     if (Object.keys(tanggalFilter).length > 0) {
       whereAbsensi.tanggal = tanggalFilter
@@ -320,6 +372,9 @@ export async function getRekapKehadiranKelas(
 
     const semuaAbsensi = await prisma.absensi.findMany({
       where: whereAbsensi,
+      include: {
+        mataPelajaran: { select: { id: true, nama: true } },
+      },
     })
 
     // Agregasi per siswa
@@ -362,6 +417,7 @@ export async function getRekapKehadiranKelas(
       data: {
         kelasId,
         periodeAjaranId,
+        mataPelajaranId: mataPelajaranId || null,
         totalSiswa: siswaList.length,
         rekap,
       },
@@ -403,7 +459,7 @@ export async function getRiwayatKehadiranSiswa(
       payload = validated.data
     }
 
-    const siswaId = user.siswa.id // ✅ Paksa pakai ID dari session, bukan dari input client
+    const siswaId = user.siswa.id
 
     const tanggalFilter: Record<string, unknown> = {}
     if (payload?.tanggalMulai) {
@@ -414,6 +470,9 @@ export async function getRiwayatKehadiranSiswa(
     }
 
     const whereClause: Record<string, unknown> = { siswaId }
+    if (payload?.mataPelajaranId && payload.mataPelajaranId !== "SEMUA") {
+      whereClause.mataPelajaranId = payload.mataPelajaranId
+    }
     if (Object.keys(tanggalFilter).length > 0) {
       whereClause.tanggal = tanggalFilter
     }
@@ -423,6 +482,7 @@ export async function getRiwayatKehadiranSiswa(
       include: {
         kelas: { select: { nama: true } },
         periodeAjaran: { select: { nama: true } },
+        mataPelajaran: { select: { id: true, nama: true } },
       },
       orderBy: { tanggal: "desc" },
     })
@@ -447,6 +507,7 @@ export async function getRiwayatKehadiranSiswa(
           status: r.status,
           keterangan: r.keterangan,
           kelas: r.kelas.nama,
+          mataPelajaran: r.mataPelajaran?.nama || "Umum / Harian",
           periode: r.periodeAjaran.nama,
         })),
       },
@@ -465,8 +526,7 @@ export async function getRiwayatKehadiranSiswa(
 
 /**
  * Orang tua melihat riwayat kehadiran anaknya.
- * ✅ KEAMANAN: Validasi relasi ParentStudent sebelum mengizinkan akses.
- * Orang tua TIDAK bisa melihat data siswa lain hanya dengan mengganti siswaId.
+ * Validasi relasi ParentStudent sebelum mengizinkan akses.
  */
 export async function getRiwayatKehadiranAnak(
   payload: RiwayatKehadiranSiswaValues
@@ -486,9 +546,8 @@ export async function getRiwayatKehadiranAnak(
       return { success: false, message: "Data orang tua tidak ditemukan" }
     }
 
-    const { siswaId, tanggalMulai, tanggalSelesai } = validated.data
+    const { siswaId, mataPelajaranId, tanggalMulai, tanggalSelesai } = validated.data
 
-    // ✅ KRITIS: Validasi bahwa orang tua ini benar-benar punya relasi ke siswa ini
     const hasAkses = await verifyOrangTuaAksesSiswa(
       user.orangTua.id,
       siswaId
@@ -509,6 +568,9 @@ export async function getRiwayatKehadiranAnak(
     }
 
     const whereClause: Record<string, unknown> = { siswaId }
+    if (mataPelajaranId && mataPelajaranId !== "SEMUA") {
+      whereClause.mataPelajaranId = mataPelajaranId
+    }
     if (Object.keys(tanggalFilter).length > 0) {
       whereClause.tanggal = tanggalFilter
     }
@@ -518,11 +580,11 @@ export async function getRiwayatKehadiranAnak(
       include: {
         kelas: { select: { nama: true } },
         periodeAjaran: { select: { nama: true } },
+        mataPelajaran: { select: { id: true, nama: true } },
       },
       orderBy: { tanggal: "desc" },
     })
 
-    // Ambil nama siswa
     const siswa = await prisma.siswa.findUnique({
       where: { id: siswaId, deleted_at: null },
       include: { user: { select: { nama: true } } },
@@ -547,6 +609,7 @@ export async function getRiwayatKehadiranAnak(
           status: r.status,
           keterangan: r.keterangan,
           kelas: r.kelas.nama,
+          mataPelajaran: r.mataPelajaran?.nama || "Umum / Harian",
           periode: r.periodeAjaran.nama,
         })),
       },
@@ -565,7 +628,7 @@ export async function getRiwayatKehadiranAnak(
 
 /**
  * Guru mengambil daftar siswa di kelas tertentu untuk input absensi.
- * ✅ Validasi akses guru terhadap kelas via verifyGuruAksesKelas.
+ * Validasi akses guru terhadap kelas via verifyGuruAksesKelas.
  */
 export async function getSiswaByKelas(
   kelasId: string
