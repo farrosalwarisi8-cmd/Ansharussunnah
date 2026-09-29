@@ -98,6 +98,19 @@ export async function GET(request: NextRequest) {
           // perlu membocorkan kapan email diverifikasi. Dipakai UI untuk
           // menyembunyikan link upload yang pasti ditolak server.
           emailTerverifikasi: Boolean(pendaftaran.emailOrangTuaTerverifikasiAt),
+          // Status kelengkapan dokumen: hanya BOOLEAN, path file di bucket
+          // TIDAK pernah diekspos di endpoint publik ini. Email konfirmasi
+          // pendaftaran menjanjikan "status berkas tertera di halaman cek
+          // status" — inilah pemenuhan janji tersebut; tanpa ini pendaftar
+          // tidak punya cara tahu apakah dokumennya sudah tercatat.
+          dokumen: {
+            kartuKeluarga: Boolean(pendaftaran.dokKartuKeluarga),
+            akteLahir: Boolean(pendaftaran.dokAkteLahir),
+            foto: Boolean(pendaftaran.dokFoto),
+            lainnya: Array.isArray(pendaftaran.dokLainnya)
+              ? pendaftaran.dokLainnya.length
+              : 0,
+          },
           createdAt: pendaftaran.createdAt,
         },
       },

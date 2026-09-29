@@ -19,6 +19,8 @@ import {
 import { sendPendaftaranBerhasilEmail } from "@/lib/email"
 import { runAfterResponse } from "@/lib/after-response"
 import { hitungTokenAksesExpiraAt, hashTokenAkses } from "@/lib/pendaftaran-token"
+import { finalizeDraftRow } from "@/actions/pendaftaran-draft"
+import { hashTokenAkses as hashResumeToken } from "@/lib/pendaftaran-token"
 
 const MAX_RETRY = 5
 
@@ -304,6 +306,8 @@ export async function createPendaftaran(
     const dokLainnyaRaw = formData.getAll("dokLainnya") as string[]
     const dokLainnya = dokLainnyaRaw.filter(Boolean)
 
+    // Idempotensi finalisasi draft: klien mengirim draftToken (resume token    // server draft). Dengan token ini, submit ganda / retry setelah timeout    // mengembalikan nomor pendaftaran yang SAMA, bukan membuat record kedua.    // Token dicek sebagai hash — plaintext tidak pernah disimpan.    const draftToken = (formData.get("draftToken") as string | null)?.trim() || null
+
     // KEAMANAN (M2): hanya izinkan path dokumen yang benar-benar dihasilkan
     // form pendaftaran (folder temp). Menolak path dari bucket/storage lain,
     // URL eksternal, atau alur lain — cegah record pendaftaran menunjuk ke
@@ -341,8 +345,25 @@ export async function createPendaftaran(
 
     let lastError: Error | null = null
 
-    // ✅ Handle Race Condition dengan retry logic untuk record nomorPendaftaran unik
-    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+    // ✅ IDEMPOTENSI FINALISASI DRAFT: kalau draft ini sudah pernah difinalisasi    // (submit ganda / retry setelah response hilang), kembalikan nomor yang    // sudah ada — JANGAN membuat pendaftaran kedua.    if (draftToken) {
+      const draftFinal = await prisma.pendaftaranDraft.findUnique({
+        where: { resumeTokenHash: hashResumeToken(draftToken) },
+        select: { nomorPendaftaran: true, finalizedAt: true },
+      })
+      if (draftFinal?.finalizedAt && draftFinal.nomorPendaftaran) {
+        return {
+          success: true,
+          message: "Pendaftaran sudah dibuat sebelumnya",
+          data: {
+            nomorPendaftaran: draftFinal.nomorPendaftaran,
+            // Token akses TIDAK bisa dikembalikan pada retry (hanya hash yang            // tersimpan). Pemilik memakai token dari percobaan pertama yang            // tersimpan di sessionStorage halaman sukses.
+            tokenAkses: "",
+          },
+        }
+      }
+    }
+
+    // ✅ Handle Race Condition dengan retry logic untuk record nomorPendaftaran unik    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
       try {
         const nomorPendaftaran = await generateNomorPendaftaran()
         // Token akses rahasia: kredensial pemilik untuk upload dokumen/bukti
@@ -369,11 +390,7 @@ export async function createPendaftaran(
             noHpSiswa: data.noHpSiswa || null,
             namaOrangTua: data.namaOrangTua,
             noHpOrangTua: data.noHpOrangTua,
-            emailOrangTua: data.emailOrangTua,
-            // Eksplisit null (bukan mengandalkan default kolom): pendaftaran
-            // baru SELALU belum terverifikasi sampai OTP berhasil dimasukkan,
-            // sehingga alur publik terkunci sampai itu terjadi.
-            emailOrangTuaTerverifikasiAt: null,
+            emailOrangTua: data.emailOrangTua,            // Eksplisit null: OTP sudah DIHAPUS dari alur pendaftaran baru.            // Kolom warisan ini dipertahankan untuk data lama, bukan gerbang.            // Gerbang penerimaan sekarang = konfirmasi kontak wali oleh panitia            // (lihat kontakWaliDikonfirmasiAt + verifikasiPendaftaran).            emailOrangTuaTerverifikasiAt: null,
             alamatOrangTua: data.alamatOrangTua,
             namaAyahKandung: data.namaAyahKandung || null,
             statusAyahKandung: (data.statusAyahKandung as "MASIH_HIDUP" | "SUDAH_MENINGGAL" | "TIDAK_DIKETAHUI") || null,
@@ -438,6 +455,18 @@ export async function createPendaftaran(
             console.error("Gagal kirim email konfirmasi pendaftaran:", error)
           }
         })
+
+        // Finalisasi draft: tandai finalized + nomor pendaftaran secara
+        // atomik (updateMany dengan finalizedAt: null). Kegagalan di sini
+        // TIDAK menggagalkan pendaftaran yang sudah dibuat — akibatnya hanya
+        // retry tidak ter-idempoten-kan, bukan data hilang.
+        if (draftToken) {
+          await finalizeDraftRow(
+            prisma as unknown as Parameters<typeof finalizeDraftRow>[0],
+            draftToken,
+            pendaftaran.nomorPendaftaran
+          ).catch(() => false)
+        }
 
         return {
           success: true,

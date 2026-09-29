@@ -36,6 +36,7 @@ model User {
   pembayaranDikonfirmasi  PembayaranSiswa[]          @relation("PembayaranDikonfirmasi")
   verifikasiPendaftaran   Pendaftaran[]              @relation("VerifiedBy")
   verifikasiEmailManual   Pendaftaran[]              @relation("EmailVerifiedManuallyBy")
+  kontakWaliDikonfirmasi  Pendaftaran[]              @relation("KontakWaliDikonfirmasiBy")
   penilaianTugas          PengumpulanTugas[]         @relation("TugasDinilaiOleh")
   penilaianUjianManual    PengerjaanUjian[]          @relation("PengerjaanDinilaiOleh")
   pengumumans             pengumumans[]
@@ -357,6 +358,26 @@ model Pendaftaran {
   // NULL = belum pernah selesai OTP (termasuk semua baris grandfather).
   // Tidak ada default, dan sengaja tidak di-backfill — justru itu tujuannya.
   emailOrangTuaDiverifikasiOtpAt        DateTime?                  @map("email_orang_tua_diverifikasi_otp_at") @db.Timestamptz(3)
+  // ============ KONFIRMASI KONTAK WALI (gerbang approval baru) ============
+  // Sejak OTP email dihapus dari alur pendaftaran, pemeriksaan "apakah orang
+  // tua/wali ini bisa dihubungi dan datanya benar" dilakukan MANUAL oleh
+  // panitia sebelum pendaftaran boleh DITERIMA. Empat kolom di bawah adalah
+  // gerbang + jejak auditnya, sengaja TERPISAH dari
+  // `emailOrangTuaTerverifikasiAt` (kolom warisan OTP) supaya makna auditnya
+  // tidak tertukar: kolom lama berarti "diverifikasi via OTP di masa lalu",
+  // kolom baru berarti "panitia mengonfirmasi kontak secara langsung".
+  //
+  // NULL = belum dikonfirmasi → approval DITERIMA ditolak server dengan pesan
+  // yang jelas (lihat verifikasiPendaftaran di src/actions/verifikasi.ts).
+  kontakWaliDikonfirmasiAt     DateTime?                  @map("kontak_wali_dikonfirmasi_at") @db.Timestamptz(3)
+  kontakWaliDikonfirmasiOlehId String?                    @map("kontak_wali_dikonfirmasi_oleh_id")
+  kontakWaliDikonfirmasiOleh   User?                      @relation("KontakWaliDikonfirmasiBy", fields: [kontakWaliDikonfirmasiOlehId], references: [id], onDelete: Restrict)
+  // Enum string bebas ala repo: WHATSAPP | TELEPON | LANGSUNG. Divalidasi di
+  // layer action (zod), bukan enum DB, agar penambahan metode tidak butuh
+  // migration lagi.
+  metodeKonfirmasiKontak       String?                    @map("metode_konfirmasi_kontak")
+  catatanKonfirmasiKontak      String?                    @map("catatan_konfirmasi_kontak")
+
   // Jejak verifikasi MANUAL committee, terpisah dari `catatanAdmin`.
   //
   // Kenapa kolom sendiri? `catatanAdmin` ditimpa setiap kali ada approval /
@@ -430,7 +451,45 @@ model Pendaftaran {
   // dan justru karena itu WAJIB dicatat di sini agar selamat.
   @@index([emailOrangTuaDiverifikasiOtpAt], map: "idx_pendaftarans_email_otp")
   @@index([emailOrangTuaDiverifikasiManualAt], map: "pendaftaran_email_manual_idx")
+  @@index([kontakWaliDikonfirmasiOlehId], map: "idx_pendaftaran_kontak_wali_oleh")
   @@map("pendaftarans")
+}
+
+// Draft pendaftaran tersimpan di server (lapisan 2 dari sistem draft hybrid).
+//
+// Lapisan 1 adalah localStorage di perangkat pendaftar (lihat
+// src/lib/pendaftaran-draft-client.ts) — cepat, tapi hilang bila storage
+// dibersihkan/perangkat berganti. Lapisan ini menjamin draft tetap pulih dari
+// perangkat mana pun selama pemiliknya masih memegang resume token.
+//
+// Keamanan: resumeTokenHash adalah SHA-256 dari resume token — token plaintext
+// TIDAK pernah disimpan di database, hanya diberikan ke klien SATU kali saat
+// draft dibuat (pola sama dengan tokenAksesHash di Pendaftaran). Draft tidak
+// bisa dibaca/diubah/dihapus tanpa resume token yang cocok; tidak ada jalur
+// pencarian berdasarkan email/nama/HP tanpa token.
+//
+// Idempotensi finalisasi: saat pendaftaran berhasil dibuat, draft ditandai
+// `finalizedAt` + `nomorPendaftaran` dalam transaksi yang sama dengan create.
+// Submit ganda/retry dengan draftToken yang sama mengembalikan nomor yang
+// sudah ada, bukan membuat pendaftaran kedua.
+//
+// TTL & retensi: draft kedaluwarsa 30 hari sejak update terakhir (expiresAt);
+// pembersihan oleh cron harian /api/cron/bersihkan-token — draft expired
+// dihapus, draft finalized disimpan 90 hari untuk audit lalu dibuang.
+model PendaftaranDraft {
+  id              String    @id @default(cuid())
+  resumeTokenHash String    @unique @map("resume_token_hash")
+  payload         Json
+  lastStep        Int       @default(1) @map("last_step")
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  finalizedAt     DateTime? @map("finalized_at") @db.Timestamptz(3)
+  nomorPendaftaran String?  @unique @map("nomor_pendaftaran")
+
+  @@index([expiresAt], map: "idx_pendaftaran_draft_expired")
+  @@index([finalizedAt], map: "idx_pendaftaran_draft_finalized")
+  @@map("pendaftaran_drafts")
 }
 
 // OTP verifikasi kepemilikan email orang tua saat pendaftaran.

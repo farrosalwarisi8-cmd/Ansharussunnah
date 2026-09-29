@@ -42,22 +42,17 @@ export default async function UploadDokumenPage({
   const tokenMasihBerlaku = isTokenAksesBelumKedaluwarsa(
     pendaftaran.tokenAksesExpiraAt,
   );
-  // Gerbang verifikasi email, sama persis dengan pengecekan di server action
-  // uploadDokumenPendaftaran — di sini hanya untuk tidak menampilkan form yang
-  // pasti ditolak. Penegakan yang sebenarnya ada di sisi server.
-  const emailTerverifikasi = Boolean(pendaftaran.emailOrangTuaTerverifikasiAt);
-  const uploadTerbuka =
-    statusBolehUpload && tokenMasihBerlaku && emailTerverifikasi;
+  // OTP email dihapus dari alur: gerbang upload = status + masa berlaku token,
+  // sama persis dengan server action uploadDokumenPendaftaran. Penegakan
+  // sebenarnya tetap di server; cek di sini murni UX.
+  const uploadTerbuka = statusBolehUpload && tokenMasihBerlaku;
 
-  // Alur publik hanya terbuka selagi pendaftaran belum diterima, token (berlaku
-  // 90 hari) belum habis, dan email orang tua sudah terverifikasi. Setelah
-  // itu, pemilik memakai dashboard wali — sehingga di sini cukup tampilkan
-  // petunjuk, bukan form.
-  const pesanTerkunci = !emailTerverifikasi
-    ? "Email orang tua belum diverifikasi. Buka halaman hasil pendaftaran, masukkan kode verifikasi dari email, lalu kembali ke halaman ini."
-    : statusBolehUpload
-      ? "Masa berlaku akses pendaftaran sudah habis (90 hari). Silakan hubungi panitia PPDB untuk lebih lanjut."
-      : "Pendaftaran sudah diproses panitia, jadi tidak lagi bisa diunggah lewat halaman ini. Jika ada berkas yang kurang, lengkapi dari dashboard wali setelah pendaftaran diterima.";
+  // Alur publik hanya terbuka selagi pendaftaran belum diterima dan token
+  // (berlaku 90 hari) belum habis. Setelah itu, pemilik memakai dashboard
+  // wali — sehingga di sini cukup tampilkan petunjuk, bukan form.
+  const pesanTerkunci = statusBolehUpload
+    ? "Masa berlaku akses pendaftaran sudah habis (90 hari). Silakan hubungi panitia PPDB untuk lebih lanjut."
+    : "Pendaftaran sudah diproses panitia, jadi tidak lagi bisa diunggah lewat halaman ini. Jika ada berkas yang kurang, lengkapi dari dashboard wali setelah pendaftaran diterima.";
 
   return (
     <div className="min-h-screen batik-light">

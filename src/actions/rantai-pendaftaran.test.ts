@@ -4,15 +4,10 @@
  * Uji RANTAI: satu baris pendaftaran melewati beberapa action nyata secara
  * berurutan, dengan state yang benar-benar dimutasi oleh masing-masing.
  *
- * Kenapa tidak cukup dengan test per-action: setiap test per-action memock
- * state-nya sendiri-sendiri. Kalau suatu saat `verifyOtpVerifikasiEmail` diubah
- * supaya hanya mengisi `emailOrangTuaDiverifikasiOtpAt` (lupa mengisi
- * gerbang), ATAU `uploadBuktiTransferPendaftaran` diubah supaya membaca kolom
- * yang salah — semua test per-action tetap hijau, karena tidak ada yang melihat
- * kedua action itu bertemu.
- *
- * Di sini keduanya bertemu. Kalau OTP tidak mengisi gerbang, langkah upload
- * berikutnya ditolak dan test gagal tepat di tempat kerusakannya.
+ * OTP sudah DIHAPUS dari alur pendaftaran: rantai sekarang adalah
+ *   daftar → bayar → berkas → konfirmasi kontak wali → terima.
+ * Gerbang upload = token akses + status + expiry; gerbang approval =
+ * konfirmasi kontak wali oleh panitia (kolom kontakWaliDikonfirmasiAt).
  *
  * TIDAK menyentuh database. Semua I/O dimock. Prisma tiruan di bawah adalah
  * satu-satunya tempat state hidup — `findUnique` membacanya, `update`
@@ -45,6 +40,8 @@ const { db, mocks } = vi.hoisted(() => {
       tokenAksesExpiraAt: null as Date | null,
       emailOrangTuaTerverifikasiAt: null as Date | null,
       emailOrangTuaDiverifikasiOtpAt: null as Date | null,
+      kontakWaliDikonfirmasiAt: null as Date | null,
+      metodeKonfirmasiKontak: null as string | null,
       catatanAdmin: null as string | null,
       deleted_at: null as Date | null,
       jenjangTujuanId: "jenjang-1",
@@ -266,7 +263,9 @@ import {
 import { uploadBuktiTransferPendaftaran } from "@/actions/bukti-transfer";
 import { uploadDokumenPendaftaran } from "@/actions/upload-dokumen";
 import { verifikasiPendaftaran } from "@/actions/verifikasi";
-import { tandaiEmailPendaftaranTerverifikasi } from "@/actions/verifikasi-email-manual";
+// Jalur verifikasi email manual TIDAK lagi dipakai rantai baru: OTP dihapus,
+// gerbang approval sekarang = konfirmasi kontak wali (ditulis langsung ke
+// state bersama dalam test).
 import { hashTokenAkses } from "@/lib/pendaftaran-token";
 
 const TOKEN = "71W2jdYzzAV0FR0DUUPXD2X1seYJfY4Z";
@@ -278,6 +277,8 @@ function resetDb() {
     tokenAksesExpiraAt: new Date(Date.now() + 30 * 86_400_000),
     emailOrangTuaTerverifikasiAt: null,
     emailOrangTuaDiverifikasiOtpAt: null,
+    kontakWaliDikonfirmasiAt: null,
+    metodeKonfirmasiKontak: null,
     catatanAdmin: null,
     buktiTransfer: [],
   });
@@ -332,33 +333,35 @@ beforeEach(() => {
 });
 
 // ===========================================================================
-// RANTAI 1 — daftar → OTP → bayar → berkas → terima
+// RANTAI 1 — daftar → bayar → berkas → konfirmasi kontak wali → terima
 // ===========================================================================
 describe("RANTAI 1 — alur lengkap sampai DITERIMA", () => {
-  it("OTP mengisi gerbang, lalu semua pintu terbuka berurutan", async () => {
-    // Langkah 1 — OTP
-    const otp = await verifyOtpVerifikasiEmail(
-      "REG-2026-00001",
-      TOKEN,
-      "123456",
-    );
-    expect(otp.success, `OTP: ${otp.message}`).toBe(true);
-
-    // Inti rantai ini: OTP mengisi GERBANG, bukan hanya kolom bukti.
-    // Kalau ini berubah, langkah 2 di bawah yang gagal.
-    expect(db.pendaftaran.emailOrangTuaTerverifikasiAt).toBeInstanceOf(Date);
-    expect(db.pendaftaran.emailOrangTuaDiverifikasiOtpAt).toBeInstanceOf(Date);
-
-    // Langkah 2 — bayar (hanya mungkin karena langkah 1 membuka gerbang)
+  it("tanpa OTP: bayar → berkas → konfirmasi kontak wali → terima", async () => {
+    // Langkah 1 — bayar langsung bisa: tidak ada gerbang OTP lagi.
     const bayar = await uploadBuktiTransferPendaftaran(formBukti());
     expect(bayar.success, `bayar: ${bayar.message}`).toBe(true);
     expect(db.pendaftaran.status).toBe("MENUNGGU_VERIFIKASI");
 
-    // Langkah 3 — berkas masih boleh di MENUNGGU_VERIFIKASI
+    // Langkah 2 — berkas masih boleh di MENUNGGU_VERIFIKASI
     const berkas = await uploadDokumenPendaftaran(formDokumen());
     expect(berkas.success, `berkas: ${berkas.message}`).toBe(true);
 
-    // Langkah 4 — approve
+    // Langkah 3 — approve TANPA konfirmasi kontak wali: ditolak gerbang baru.
+    const tanpaKonfirmasi = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+      catatanAdmin: "",
+      kelasTujuanId: "kelas-1",
+    });
+    expect(tanpaKonfirmasi.success).toBe(false);
+    expect(tanpaKonfirmasi.message).toContain("Kontak wali belum dikonfirmasi");
+    expect(db.pendaftaran.status).toBe("MENUNGGU_VERIFIKASI");
+
+    // Langkah 4 — panitia mengonfirmasi kontak wali (menulis state bersama).
+    db.pendaftaran.kontakWaliDikonfirmasiAt = new Date();
+    db.pendaftaran.metodeKonfirmasiKontak = "WHATSAPP";
+
+    // Langkah 5 — approve sekarang lolos.
     const terima = await verifikasiPendaftaran({
       pendaftaranId: "pend-1",
       status: "DITERIMA",
@@ -369,14 +372,8 @@ describe("RANTAI 1 — alur lengkap sampai DITERIMA", () => {
     expect(db.pendaftaran.status).toBe("DITERIMA");
   });
 
-  it("TIDAK bisa membayar sebelum OTP — rantai macet di langkah 1", async () => {
-    const bayar = await uploadBuktiTransferPendaftaran(formBukti());
-    expect(bayar.success).toBe(false);
-    expect(db.pendaftaran.status).toBe("MENUNGGU_PEMBAYARAN");
-  });
-
   it("TIDAK bisa menyetujui yang belum bayar", async () => {
-    await verifyOtpVerifikasiEmail("REG-2026-00001", TOKEN, "123456");
+    db.pendaftaran.kontakWaliDikonfirmasiAt = new Date();
     const terima = await verifikasiPendaftaran({
       pendaftaranId: "pend-1",
       status: "DITERIMA",
@@ -389,46 +386,10 @@ describe("RANTAI 1 — alur lengkap sampai DITERIMA", () => {
 });
 
 // ===========================================================================
-// RANTAI 2 — jalur manual untuk yang tersangkut di MENUNGGU_PEMBAYARAN
-// ===========================================================================
-describe("RANTAI 2 — tersangkut, committee buka gerbang manual", () => {
-  it("setelah verifikasi manual, alur jalan tanpa OTP sama sekali", async () => {
-    // Skenario nyata: orang tua kehilangan token, tidak bisa membayar.
-    const macet = await uploadBuktiTransferPendaftaran(formBukti());
-    expect(macet.success).toBe(false);
-    expect(db.pendaftaran.emailOrangTuaTerverifikasiAt).toBeNull();
-
-    const manual = await tandaiEmailPendaftaranTerverifikasi(
-      "pend-1",
-      "Konfirmasi telepon ke 081234567890 pada 12/03/2026",
-    );
-    expect(manual.success, `manual: ${manual.message}`).toBe(true);
-    expect(db.pendaftaran.emailOrangTuaTerverifikasiAt).toBeInstanceOf(Date);
-
-    // Tidak menyamar sebagai bukti OTP — committee harus bisa bedakan.
-    expect(db.pendaftaran.emailOrangTuaDiverifikasiOtpAt).toBeNull();
-
-    // Setelah itu alur mengalir normal.
-    const bayar = await uploadBuktiTransferPendaftaran(formBukti());
-    expect(bayar.success, `bayar: ${bayar.message}`).toBe(true);
-    expect(db.pendaftaran.status).toBe("MENUNGGU_VERIFIKASI");
-
-    const terima = await verifikasiPendaftaran({
-      pendaftaranId: "pend-1",
-      status: "DITERIMA",
-      catatanAdmin: "",
-      kelasTujuanId: "kelas-1",
-    });
-    expect(terima.success, `terima: ${terima.message}`).toBe(true);
-  });
-});
-
-// ===========================================================================
 // RANTAI 3 — DITOLAK lalu banding
 // ===========================================================================
 describe("RANTAI 3 — ditolak lalu banding", () => {
   it("tolak → bukti ulang → terima", async () => {
-    await verifyOtpVerifikasiEmail("REG-2026-00001", TOKEN, "123456");
     await uploadBuktiTransferPendaftaran(formBukti());
 
     const tolak = await verifikasiPendaftaran({
@@ -446,6 +407,7 @@ describe("RANTAI 3 — ditolak lalu banding", () => {
     expect(banding.success, `banding: ${banding.message}`).toBe(true);
     expect(db.pendaftaran.status).toBe("MENUNGGU_VERIFIKASI");
 
+    db.pendaftaran.kontakWaliDikonfirmasiAt = new Date();
     const terima = await verifikasiPendaftaran({
       pendaftaranId: "pend-1",
       status: "DITERIMA",
@@ -456,7 +418,6 @@ describe("RANTAI 3 — ditolak lalu banding", () => {
   });
 
   it("di DITOLAK, bukti boleh ulang tapi berkas tidak", async () => {
-    await verifyOtpVerifikasiEmail("REG-2026-00001", TOKEN, "123456");
     await uploadBuktiTransferPendaftaran(formBukti());
     await verifikasiPendaftaran({
       pendaftaranId: "pend-1",
@@ -473,8 +434,8 @@ describe("RANTAI 3 — ditolak lalu banding", () => {
   });
 
   it("DITERIMA menutup semua pintu upload", async () => {
-    await verifyOtpVerifikasiEmail("REG-2026-00001", TOKEN, "123456");
     await uploadBuktiTransferPendaftaran(formBukti());
+    db.pendaftaran.kontakWaliDikonfirmasiAt = new Date();
     await verifikasiPendaftaran({
       pendaftaranId: "pend-1",
       status: "DITERIMA",

@@ -144,9 +144,11 @@ const pendaftaranWithEmis = {
   emailOrangTua: "ortu@example.com",
   namaOrangTua: "Bapak Ahmad",
   noHpOrangTua: "081234567890",
-  // Gerbang verifikasi email WAJIB terisi untuk approval berhasil. Fixture
-  // dasar mewakili pendaftaran yang sah & sudah terverifikasi; kasus
-  // "belum terverifikasi" diuji terpisah.
+  // GERBANG APPROVAL BARU: konfirmasi kontak wali oleh panitia (pengganti
+  // OTP yang dihapus dari alur). Fixture dasar mewakili pendaftaran yang
+  // sudah dikonfirmasi; kasus "belum dikonfirmasi" diuji terpisah.
+  kontakWaliDikonfirmasiAt: new Date("2026-01-01"),
+  metodeKonfirmasiKontak: "WHATSAPP",
   emailOrangTuaTerverifikasiAt: new Date("2026-01-01"),
   emailOrangTuaDiverifikasiOtpAt: new Date("2026-01-01"),
   alamatSiswa: "Jl. Mawar No. 10, RT 01/RW 02, Kel. Sukamaju",
@@ -181,6 +183,8 @@ const pendaftaranMinimal = {
   emailOrangTua: "ortumin@example.com",
   namaOrangTua: "Orang Tua Minimal",
   noHpOrangTua: "085612345678",
+  kontakWaliDikonfirmasiAt: new Date("2026-01-01"),
+  metodeKonfirmasiKontak: "TELEPON",
   emailOrangTuaTerverifikasiAt: new Date("2026-01-01"),
   emailOrangTuaDiverifikasiOtpAt: new Date("2026-01-01"),
   alamatSiswa: "Jl. Kenanga No. 20, RT 05/RW 03, Kel. Sukamaju",
@@ -215,6 +219,8 @@ const pendaftaranWna = {
   emailOrangTua: "mohammed@email.com",
   namaOrangTua: "Mohammed Al-Farisi",
   noHpOrangTua: "081234567890",
+  kontakWaliDikonfirmasiAt: new Date("2026-01-01"),
+  metodeKonfirmasiKontak: "LANGSUNG",
   emailOrangTuaTerverifikasiAt: new Date("2026-01-01"),
   emailOrangTuaDiverifikasiOtpAt: new Date("2026-01-01"),
   alamatSiswa: "Jl. Internasional No. 10, Jakarta Selatan",
@@ -1481,20 +1487,20 @@ describe("verifikasiPendaftaran — Duplikat NISN", () => {
 });
 
 // ========================================================
-// Gerbang verifikasi email saat approval
+// Gerbang approval: KONFIRMASI KONTAK WALI (pengganti OTP)
 // ========================================================
 
-describe("verifikasiPendaftaran — Gerbang Verifikasi Email", () => {
+describe("verifikasiPendaftaran — Gerbang Konfirmasi Kontak Wali", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
-  it("menolak menyetujui pendaftaran yang emailnya belum terverifikasi", async () => {
+  it("menolak menyetujui pendaftaran yang kontak walinya belum dikonfirmasi", async () => {
     setupDiterimaMinimal({
       ...pendaftaranWithEmis,
-      emailOrangTuaTerverifikasiAt: null,
-      emailOrangTuaDiverifikasiOtpAt: null,
+      kontakWaliDikonfirmasiAt: null,
+      metodeKonfirmasiKontak: null,
     });
 
     const result = await verifikasiPendaftaran({
@@ -1505,36 +1511,20 @@ describe("verifikasiPendaftaran — Gerbang Verifikasi Email", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.message).toContain("belum diverifikasi");
+    expect(result.message).toContain("Kontak wali belum dikonfirmasi");
     // Tidak boleh ada akun auth yang dibuat, dan tidak boleh ada siswa.
     expect(mockCreateUser).not.toHaveBeenCalled();
     expect(mockSiswaUpdate).not.toHaveBeenCalled();
   });
 
-  it("tetap bisa MENOLAK pendaftaran yang emailnya belum terverifikasi", async () => {
+  it("approval TIDAK lagi bergantung pada kolom verifikasi email warisan (OTP dihapus)", async () => {
+    // OTP sudah dihapus dari alur: kolom warisan null pun approval tetap
+    // lolos selama konfirmasi kontak wali ada. Ini kontrak bisnis baru —
+    // kalau gerbang lama menyala lagi, test ini yang akan menangkapnya.
     setupDiterimaMinimal({
       ...pendaftaranWithEmis,
+      kontakWaliDikonfirmasiAt: new Date("2026-01-01"),
       emailOrangTuaTerverifikasiAt: null,
-      emailOrangTuaDiverifikasiOtpAt: null,
-    });
-
-    const result = await verifikasiPendaftaran({
-      pendaftaranId: "pend-1",
-      status: "DITOLAK",
-      alasanPenolakan: "Data tidak sesuai",
-      catatanAdmin: "",
-    });
-
-    // Menolak tidak membuat akun apa pun, jadi tidak perlu melewati gerbang.
-    expect(result.success).toBe(true);
-  });
-
-  it("menerima pendaftaran grandfather: gerbang ada, bukti OTP tidak", async () => {
-    // Kasus nyata keenam pendaftar lama — tidak punya bukti OTP, tapi gerbangnya
-    // sudah terbuka. Kalau yang dicek kolom bukti, mereka terkunci selamanya.
-    setupDiterimaMinimal({
-      ...pendaftaranWithEmis,
-      emailOrangTuaTerverifikasiAt: new Date("2026-01-01"),
       emailOrangTuaDiverifikasiOtpAt: null,
     });
 
@@ -1545,6 +1535,24 @@ describe("verifikasiPendaftaran — Gerbang Verifikasi Email", () => {
       kelasTujuanId: "kelas-1",
     });
 
+    expect(result.success).toBe(true);
+  });
+
+  it("tetap bisa MENOLAK pendaftaran yang kontak walinya belum dikonfirmasi", async () => {
+    setupDiterimaMinimal({
+      ...pendaftaranWithEmis,
+      kontakWaliDikonfirmasiAt: null,
+      metodeKonfirmasiKontak: null,
+    });
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITOLAK",
+      alasanPenolakan: "Data tidak sesuai",
+      catatanAdmin: "",
+    });
+
+    // Menolak tidak membuat akun apa pun, jadi tidak perlu melewati gerbang.
     expect(result.success).toBe(true);
   });
 });

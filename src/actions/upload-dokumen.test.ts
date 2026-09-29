@@ -442,24 +442,25 @@ describe("uploadDokumenPendaftaran — Kegagalan & Rollback", () => {
 // Gerbang verifikasi email
 // ========================================================
 
-describe("uploadDokumenPendaftaran — Gerbang Verifikasi Email", () => {
-  it("menolak upload jika email orang tua belum diverifikasi", async () => {
+// OTP DIHAPUS dari alur: gerbang upload tidak lagi membaca
+// emailOrangTuaTerverifikasiAt. Test di bawah menjaga kontrak baru — upload
+// diteruskan meski kolom warisan null, dan token tetap dicek lebih dulu.
+describe("uploadDokumenPendaftaran — Tanpa Gerbang OTP", () => {
+  it("meneruskan upload meski kolom verifikasi email warisan null", async () => {
     mockPendaftaranFindUnique.mockResolvedValue({
       ...mockPendaftaran,
       emailOrangTuaTerverifikasiAt: null,
+      emailOrangTuaDiverifikasiOtpAt: null,
     } as never);
 
     const hasil = await uploadDokumenPendaftaran(
       makeFormData({ kartuKeluarga: makeFile("kk.jpg", "image/jpeg") }),
     );
 
-    expect(hasil.success).toBe(false);
-    expect(hasil.message).toContain("belum diverifikasi");
-    // Tidak boleh ada file yang sempat terunggah ke storage.
-    expect(mockStorageUpload).not.toHaveBeenCalled();
+    expect(hasil.success).toBe(true);
   });
 
-  it("meneruskan upload ketika email sudah terverifikasi", async () => {
+  it("upload tetap sukses ketika email sudah terverifikasi (pendaftaran lama)", async () => {
     mockPendaftaranFindUnique.mockResolvedValue({
       ...mockPendaftaran,
       emailOrangTuaTerverifikasiAt: new Date("2026-01-01"),
@@ -472,12 +473,7 @@ describe("uploadDokumenPendaftaran — Gerbang Verifikasi Email", () => {
     expect(hasil.success).toBe(true);
   });
 
-  it("menolak lebih dulu karena token salah, bukan karena email (tidak membocorkan status)", async () => {
-    mockPendaftaranFindUnique.mockResolvedValue({
-      ...mockPendaftaran,
-      emailOrangTuaTerverifikasiAt: null,
-    } as never);
-
+  it("token salah tetap ditolak lebih dulu (perlindungan token tidak berubah)", async () => {
     const hasil = await uploadDokumenPendaftaran(
       makeFormData({
         tokenAkses: "Z".repeat(32),

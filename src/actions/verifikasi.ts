@@ -232,6 +232,8 @@ export async function verifikasiPendaftaran(
     if (!pendaftaran) {
       return { success: false, message: "Data pendaftaran tidak ditemukan" };
     }
+    // pendaftaran diambil include penuh; field konfirmasi kontak wali ikut
+    // tersedia pada objek ini untuk gerbang di bawah.
 
     // Guard transisi status: hanya pendaftaran yang masih MENUNGGU_VERIFIKASI
     // boleh diverifikasi (diterima/ditolak). Mencegah verifikasi ganda yang
@@ -243,27 +245,24 @@ export async function verifikasiPendaftaran(
       };
     }
 
-    // Gerbang verifikasi email pada saat MENYETUJUI. Tanpa cek ini, satu klik
-    // committee melewati seluruh tujuan OTP: akun ortu + siswa dibuat lalu
-    // kredensial dikirim ke email yang tidak pernah dibuktikan pemiliknya.
+    // GERBANG APPROVAL: konfirmasi kontak wali oleh panitia (pengganti OTP).
     //
-    // Yang dicek adalah `emailOrangTuaTerverifikasiAt` (gerbang), bukan
-    // `emailOrangTuaDiverifikasiOtpAt` (bukti OTP). Alasannya: pendaftaran
-    // lama diverifikasi lewat grandfathering dan tidak punya bukti OTP —
-    // kalau yang dicek kolom bukti, enam pendaftar lama ini terkunci selamanya
-    // dan tidak ada jalan untuk menutupnya kecuali mengarang bukti.
-    //
-    // Jalur emergency ada di `tandaiEmailPendaftaranTerverifikasi` (committee
-    // mencatatnya dengan alasan), jadi menolak di sini tidak membuat
-    // pendaftar hilang tanpa jalan.
-    //
-    // Penolakan TIDAK diblokir: menolak tidak membuat akun apa pun, dan tetap
-    // harus bisa dilakukan walau email tak pernah terverifikasi.
-    if (status === "DITERIMA" && !pendaftaran.emailOrangTuaTerverifikasiAt) {
+    // OTP email dihapus dari alur pendaftaran, jadi tidak ada lagi bukti
+    // otomatis kepemilikan kontak. Sebagai gantinya, panitia WAJIB mengonfirmasi
+    // kontak wali (WhatsApp/telepon/langsung) SEBELUM menyetujui — tombol
+    // "Konfirmasi Kontak Wali" di panel verifikasi mencatatnya ke kolom
+    // khusus (kontakWaliDikonfirmasiAt + metode + catatan). Bila belum,
+    // approval ditolak dengan pesan yang jelas — BUKAN diam-diam dianggap    // "email sudah terverifikasi".
+    //    // Kolom emailOrangTuaTerverifikasiAt yang lama TIDAK dipakai lagi sebagai    // gerbang: isinya adalah jejak OTP/grandfathering pendaftaran lama, dan    // memakainya untuk approval baru akan mencampur makna audit.
+    //    // Penolakan (DITOLAK) tidak melewati gerbang ini: menolak tidak membuat    // akun apa pun dan harus selalu bisa dilakukan.
+    if (
+      status === "DITERIMA" &&
+      !pendaftaran.kontakWaliDikonfirmasiAt
+    ) {
       return {
         success: false,
         message:
-          "Email orang tua belum diverifikasi, sehingga pendaftaran tidak bisa disetujui. Minta orang tua memverifikasi emailnya, atau gunakan tombol \"Tandai Email Terverifikasi\" setelah mengonfirmasi langsung ke orang tua.",
+          "Kontak wali belum dikonfirmasi panitia, sehingga pendaftaran tidak bisa disetujui. Hubungi orang tua/wali (WhatsApp/telepon/langsung), lalu tekan \"Konfirmasi Kontak Wali\" pada panel pendaftaran ini sebelum menerima.",
       };
     }
 

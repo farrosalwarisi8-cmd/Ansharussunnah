@@ -3,6 +3,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { uploadDokumenPendaftaran } from "@/actions/upload-dokumen"
 import { getTokenAkses, setTokenAkses } from "@/lib/pendaftaran-token-client"
 import { Button } from "@/components/ui/button"
@@ -33,6 +34,7 @@ export function UploadDokumenForm({
   const [isUploading, setIsUploading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState(false)
+  const router = useRouter()
 
   React.useEffect(() => {
     setTokenAksesState(getTokenAkses(nomorPendaftaran))
@@ -65,6 +67,26 @@ export function UploadDokumenForm({
       return
     }
 
+    // Guard ukuran TOTAL sebelum mengirim: server action punya batas body
+    // (lihat next.config.ts). Tanpa cek ini, payload yang melebihi batas
+    // ditolak Next.js di luar action — pengguna hanya melihat error generik
+    // "Terjadi kesalahan saat mengupload" tanpa tahu penyebabnya.
+    const terpilih = [
+      { label: "Kartu Keluarga (KK)", file: filesKK[0] },
+      { label: "Akta Kelahiran", file: filesAkte[0] },
+      { label: "Pas Foto 3x4", file: filesFoto[0] },
+    ].filter((e): e is { label: string; file: File } => Boolean(e.file))
+    const totalMB =
+      terpilih.reduce((acc, e) => acc + e.file.size, 0) / 1024 / 1024
+    if (totalMB > 23) {
+      setError(
+        "Total ukuran berkas terlalu besar (" +
+          totalMB.toFixed(1) +
+          " MB). Maksimal 23 MB per pengiriman — unggah berkas dalam dua tahap bila perlu."
+      )
+      return
+    }
+
     setIsUploading(true)
     setError(null)
 
@@ -85,6 +107,11 @@ export function UploadDokumenForm({
         setFilesKK([])
         setFilesAkte([])
         setFilesFoto([])
+        // Status "sudah diupload" di form ini berasal dari server component
+        // (props sudahAda). Refresh supaya prop terbaru terpakai saat pengguna
+        // kembali ke form — tanpa ini indikator tetap "opsional" walau berkas
+        // sudah tersimpan.
+        router.refresh()
       } else {
         setError(result.message)
       }
@@ -108,13 +135,16 @@ export function UploadDokumenForm({
           </h2>
           <p className="text-gray-500 text-sm">
             Berkas pendaftaran Anda telah diperbarui dan siap diverifikasi
-            panitia. Silakan ulangi halaman ini untuk mengunggah berkas lain.
+            panitia. Status terbaru dapat dilihat di halaman cek status.
           </p>
-          <div className="pt-2">
+          <div className="pt-2 flex flex-col gap-2">
             <Button asChild>
               <Link href={`/pendaftaran/${nomorPendaftaran}/upload-dokumen`}>
                 Unggah Dokumen Lain
               </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/cek-pendaftaran">Lihat Status Pendaftaran</Link>
             </Button>
           </div>
         </CardContent>

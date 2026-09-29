@@ -18,6 +18,29 @@ import {
 import { StatusBadge } from "@/components/ui/status-badge";
 import { KEMAMPUAN_BY_STATUS } from "./kemampuan-status";
 
+// Baris checklist dokumen di kartu hasil cek status.
+function DokumenStatusItem({
+  label,
+  sudah,
+}: {
+  label: string;
+  sudah: boolean;
+}) {
+  return (
+    <li
+      className={
+        "flex items-center justify-between gap-2 " +
+        (sudah ? "text-emerald-700" : "text-amber-700")
+      }
+    >
+      <span>{label}</span>
+      <span className="font-semibold">
+        {sudah ? "\u2714 sudah diunggah" : "\u25CF BELUM diunggah"}
+      </span>
+    </li>
+  );
+}
+
 export default function CekPendaftaranPage() {
   const [nomor, setNomor] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -31,6 +54,13 @@ export default function CekPendaftaranPage() {
       jenjangTujuan: string;
       alasanPenolakan?: string | null;
       emailTerverifikasi?: boolean;
+      // Status kelengkapan dokumen dari API (boolean, tanpa path file).
+      dokumen?: {
+        kartuKeluarga: boolean;
+        akteLahir: boolean;
+        foto: boolean;
+        lainnya: number;
+      };
     };
   } | null>(null);
 
@@ -199,6 +229,40 @@ export default function CekPendaftaranPage() {
                     </div>
                   )}
 
+                {/* Status kelengkapan dokumen — email konfirmasi pendaftaran
+                    menjanjikan status berkas di halaman ini. Sumbernya boolean
+                    dari API, jadi tidak ada path file yang terekspos. */}
+                {result.data.dokumen && (
+                  <div className="p-3.5 rounded-xl bg-white border border-slate-200 text-xs space-y-2">
+                    <span className="font-bold block text-slate-700">
+                      Status Dokumen Pendukung
+                    </span>
+                    <ul className="space-y-1">
+                      <DokumenStatusItem
+                        label="Kartu Keluarga (KK)"
+                        sudah={result.data.dokumen.kartuKeluarga}
+                      />
+                      <DokumenStatusItem
+                        label="Akta Kelahiran"
+                        sudah={result.data.dokumen.akteLahir}
+                      />
+                      <DokumenStatusItem
+                        label="Pas Foto 3x4"
+                        sudah={result.data.dokumen.foto}
+                      />
+                    </ul>
+                    {result.data.dokumen.lainnya > 0 && (
+                      <p className="m-0 text-slate-500">
+                        +{result.data.dokumen.lainnya} dokumen tambahan
+                      </p>
+                    )}
+                    <p className="m-0 text-slate-400">
+                      Berkas yang belum tercatat masih bisa diunggah melalui
+                      tombol di bawah (jika tersedia).
+                    </p>
+                  </div>
+                )}
+
                 {(() => {
                   const k = KEMAMPUAN_BY_STATUS[result.data.status];
                   // Status di luar peta berarti enum berubah tanpa halaman ini
@@ -214,37 +278,26 @@ export default function CekPendaftaranPage() {
                         <p className="m-0">{k.penjelasan}</p>
                       </div>
 
-                      {k.bolehBukti &&
-                        (result.data.emailTerverifikasi ? (
-                          <Button
-                            asChild
-                            className="w-full h-11 rounded-xl bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-sm"
+                      {k.bolehBukti && (
+                        // OTP dihapus dari alur: tombol bukti pembayaran tidak
+                        // lagi bergantung pada verifikasi email. Halaman upload
+                        // + server action tetap memvalidasi status & token.
+                        <Button
+                          asChild
+                          className="w-full h-11 rounded-xl bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-sm"
+                        >
+                          <Link
+                            href={`/pendaftaran/${result.data.nomorPendaftaran}/upload-bukti`}
                           >
-                            <Link
-                              href={`/pendaftaran/${result.data.nomorPendaftaran}/upload-bukti`}
-                            >
-                              <FileText className="h-4 w-4 mr-2" />
-                              Unggah Bukti Pembayaran
-                            </Link>
-                          </Button>
-                        ) : (
-                          // Server menolak upload sebelum email terverifikasi,
-                          // jadi tombolnya disembunyikan — bukan mengandalkan
-                          // error setelah pengguna terlanjur mengisi form.
-                          <div className="p-3.5 rounded-xl bg-amber-100 border border-amber-200 text-amber-900 text-xs">
-                            <span className="font-bold block mb-1">
-                              Verifikasi Email Dulu
-                            </span>
-                            <p className="m-0">
-                              Kode verifikasi belum dimasukkan. Buka halaman
-                              hasil pendaftaran untuk memasukkan kode, setelah
-                              itu tombol unggah bukti pembayaran akan muncul di
-                              sini.
-                            </p>
-                          </div>
-                        ))}
+                            <FileText className="h-4 w-4 mr-2" />
+                            Unggah Bukti Pembayaran
+                          </Link>
+                        </Button>
+                      )}
 
                       {k.bolehBerkas && (
+                        // Sama seperti bukti: tanpa gerbang email. Penjelasan
+                        // kebutuhan token akses sudah ada di catatan di bawah.
                         <Button
                           asChild
                           variant="outline"
@@ -265,7 +318,8 @@ export default function CekPendaftaranPage() {
                 <p className="text-[11px] text-slate-500 leading-relaxed">
                   Halaman ini hanya menampilkan status. Untuk mengunggah berkas
                   atau bukti transfer, buka halaman unggah dengan nomor dan
-                  token akses pendaftaran Anda.
+                  token akses pendaftaran Anda — nomor pendaftaran saja tidak
+                  cukup.
                 </p>
               </div>
             )}

@@ -215,34 +215,30 @@ describe("uploadBuktiTransferPendaftaran — Status & Token", () => {
 // Gerbang verifikasi email
 // ========================================================
 
-describe("uploadBuktiTransferPendaftaran — Gerbang Verifikasi Email", () => {
-  it("menolak upload bukti bila email orang tua belum diverifikasi", async () => {
+// OTP DIHAPUS dari alur: gerbang upload bukti tidak lagi membaca
+// emailOrangTuaTerverifikasiAt. Test menjaga kontrak baru.
+describe("uploadBuktiTransferPendaftaran — Tanpa Gerbang OTP", () => {
+  it("meneruskan upload bukti meski kolom verifikasi email warisan null", async () => {
     mockPendaftaranFindUnique.mockResolvedValue({
       ...mockPendaftaran,
       emailOrangTuaTerverifikasiAt: null,
+      emailOrangTuaDiverifikasiOtpAt: null,
     } as never);
 
-    const hasil = await uploadBuktiTransferPendaftaran(makeFormData());
-
-    expect(hasil.success).toBe(false);
-    expect(hasil.message).toContain("belum diverifikasi");
-    // Tidak boleh ada file yang sempat masuk ke bucket bukti-transfer.
-    expect(mockStorageUpload).not.toHaveBeenCalled();
-  });
-
-  it("meneruskan upload bukti ketika email sudah terverifikasi", async () => {
     const hasil = await uploadBuktiTransferPendaftaran(makeFormData());
 
     expect(hasil.success).toBe(true);
     expect(mockStorageUpload).toHaveBeenCalledOnce();
   });
 
-  it("menolak lebih dulu karena token salah, bukan karena email (tidak membocorkan status)", async () => {
-    mockPendaftaranFindUnique.mockResolvedValue({
-      ...mockPendaftaran,
-      emailOrangTuaTerverifikasiAt: null,
-    } as never);
+  it("upload tetap sukses ketika email sudah terverifikasi (pendaftaran lama)", async () => {
+    const hasil = await uploadBuktiTransferPendaftaran(makeFormData());
 
+    expect(hasil.success).toBe(true);
+    expect(mockStorageUpload).toHaveBeenCalledOnce();
+  });
+
+  it("token salah tetap ditolak lebih dulu (perlindungan token tidak berubah)", async () => {
     const hasil = await uploadBuktiTransferPendaftaran(
       makeFormData({ tokenAkses: "Z".repeat(32) }),
     );

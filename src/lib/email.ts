@@ -427,14 +427,28 @@ export function buildPendaftaranBerhasilEmail(params: {
         <h3 style="color: #333; margin-bottom: 4px;">2&#41; Unggah bukti transfer</h3>
         <p style="margin: 0 0 8px 0; color: #475569; font-size: 14px;">Screenshot atau foto bukti transfer (JPG/PNG/PDF, maks. 5 MB), lalu unggah di halaman &ldquo;Upload Bukti Transfer&rdquo; menggunakan nomor pendaftaran di atas.</p>
 
-        <h3 style="color: #333; margin: 20px 0 4px 0;">3&#41; Lengkapi dokumen pendukung</h3>
-        <p style="margin: 0 0 8px 0; color: #475569; font-size: 14px;">Status Berkas Anda saat ini:</p>
+        <h3 style="color: #333; margin: 20px 0 4px 0;">3&#41; Simpan token akses Anda</h3>
+        <div style="background: #fef9c3; border: 1px solid #fde047; border-radius: 8px; padding: 16px; margin: 12px 0;">
+          <p style="margin: 0; color: #713f12; font-size: 14px;">
+            Buka kembali halaman konfirmasi pendaftaran
+            <strong> /pendaftaran/sukses?nomor=${nomorPendaftaran}</strong> lalu
+            <strong>salin Token Akses</strong> yang ditampilkan di sana. Token
+            akses + nomor pendaftaran dibutuhkan untuk mengunggah bukti
+            transfer dan dokumen. Token tidak dikirim lewat email demi
+            keamanan.
+          </p>
+        </div>
+
+        <h3 style="color: #333; margin: 20px 0 4px 0;">4&#41; Lengkapi dokumen pendukung</h3>
+        <p style="margin: 0 0 8px 0; color: #475569; font-size: 14px;">Status berkas yang sudah tercatat saat email ini dibuat:</p>
         <div style="background: #f8fafc; border-radius: 8px; padding: 16px; margin: 12px 0;">
           ${ceklis("Kartu Keluarga (KK)", params.sudahUploadKartuKeluarga)}
           ${ceklis("Akta Lahir", params.sudahUploadAkteLahir)}
           ${ceklis("Pas Foto", params.sudahUploadPasFoto)}
           <p style="margin: 10px 0 0 0; color: #64748b; font-size: 13px; border-top: 1px solid #e2e8f0; padding-top: 10px;">
-            Status berkas lengkap akan tertera di halaman cek status. Anda tetap bisa mengunggah berkas yang kurang kapan saja, termasuk setelah pendaftaran dinyatakan diterima.
+            Berkas dapat dilengkapi melalui halaman upload pendaftaran selama
+            status masih mengizinkan. Setelah pendaftaran dinyatakan diterima,
+            berkas yang kurang hanya dapat dilengkapi melalui Dashboard Wali.
           </p>
         </div>
 

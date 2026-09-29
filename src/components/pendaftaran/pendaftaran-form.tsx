@@ -13,6 +13,19 @@ import {
 import { createPendaftaran } from "@/actions/pendaftaran"
 import { uploadFileToStorage } from "@/lib/storage"
 import { setTokenAkses } from "@/lib/pendaftaran-token-client"
+import {
+  bacaDraftLokal,
+  simpanDraftLokal,
+  hapusDraftLokal,
+  draftLebihBaru,
+  type LocalDraft,
+} from "@/lib/pendaftaran-draft-client"
+import {
+  createPendaftaranDraft,
+  savePendaftaranDraft,
+  deletePendaftaranDraft,
+  resumePendaftaranDraft,
+} from "@/actions/pendaftaran-draft"
 import { nanoid } from "nanoid"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -220,6 +233,22 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
   const [filesAkte, setFilesAkte] = React.useState<File[]>([])
   const [filesFoto, setFilesFoto] = React.useState<File[]>([])
 
+  // ===================== DRAFT OTOMATIS (hybrid) =====================
+  // Lapisan 1: localStorage (segera, debounce 800 ms).
+  // Lapisan 2: server draft bertoken (ketahanan lintas perangkat).
+  // File binary TIDAK ikut draft; hanya metadata penanda (lihat
+  // pendaftaran-draft-client.ts) yang muncul sebagai "perlu dipilih ulang".
+  const [draftBanner, setDraftBanner] = React.useState<
+    | null
+    | { jenis: "lokal"; draft: LocalDraft }
+    | { jenis: "server"; draft: LocalDraft; resumeToken: string; serverUpdatedAt: string }
+  >(null)
+  const [draftResumeToken, setDraftResumeToken] = React.useState<string | null>(null)
+  const [lastSavedAt, setLastSavedAt] = React.useState<string | null>(null)
+  const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const draftReadyRef = React.useRef(false)
+  // =================== AKHIR STATE DRAFT (logic menyusul setelah useForm) ===================
+
   const [availableKelas, setAvailableKelas] = React.useState<
     Array<{
       id: string
@@ -255,6 +284,110 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
   const kewarganegaraan = watch("kewarganegaraan")
   const nikAyahValue = watch("nikAyah")
   const nikIbuValue = watch("nikIbu")
+
+  // ===================== DRAFT OTOMATIS (hybrid) — logic =====================
+  // 1) Saat mount: cek draft lokal + (jika ada resume token) draft server.
+  React.useEffect(() => {
+    let batal = false
+    const lokal = bacaDraftLokal()
+    if (!lokal) {
+      draftReadyRef.current = true
+      return
+    }
+
+    const tawarkanServer = async () => {
+      if (!lokal.resumeToken) {
+        setDraftBanner({ jenis: "lokal", draft: lokal })
+        return
+      }
+      const res = await resumePendaftaranDraft(lokal.resumeToken)
+      if (batal) return
+      if (res.success && res.data) {
+        const lebihBaru = draftLebihBaru(lokal, { updatedAt: res.data.updatedAt })
+        if (lebihBaru === "server") {
+          setDraftBanner({ jenis: "server", draft: lokal, resumeToken: lokal.resumeToken, serverUpdatedAt: res.data.updatedAt })
+        } else {
+          setDraftBanner({ jenis: "lokal", draft: lokal })
+        }
+      } else {
+        // Server tidak punya (expired/dihapus) — lokal tetap ditawarkan.
+        setDraftBanner({ jenis: "lokal", draft: lokal })
+      }
+    }
+
+    void tawarkanServer()
+    return () => {
+      batal = true
+    }
+  }, [])
+
+  // 2) Autosave lokal (debounce 800 ms) + server tiap perubahan.
+  const watchAll = watch()
+  React.useEffect(() => {
+    if (!draftReadyRef.current) return
+    const values = watchAll as Record<string, unknown>
+    const formValues: Record<string, string> = {}
+    for (const [k, v] of Object.entries(values)) {
+      if (typeof v === "string" && v.length > 0) formValues[k] = v
+    }
+
+    const fileMeta: LocalDraft["fileMeta"] = {
+      kartuKeluarga: filesKK[0] ? { nama: filesKK[0].name, ukuran: filesKK[0].size } : null,
+      akteLahir: filesAkte[0] ? { nama: filesAkte[0].name, ukuran: filesAkte[0].size } : null,
+      foto: filesFoto[0] ? { nama: filesFoto[0].name, ukuran: filesFoto[0].size } : null,
+    }
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      const draftId = formValues.emailOrangTua || "draft"
+      const hasilLokal = simpanDraftLokal({
+        draftId,
+        resumeToken: draftResumeToken,
+        lastStep: currentStep,
+        formValues,
+        fileMeta,
+      })
+      setLastSavedAt(hasilLokal.lastSavedAt)
+
+      // Server draft: buat sekali, lalu update. Gagal senyap — lapisan lokal
+      // tetap melindungi; banner hanya menampilkan info penyimpanan.
+      if (!draftResumeToken) {
+        void createPendaftaranDraft(formValues, currentStep).then((res) => {
+          if (res.success && res.data) {
+            setDraftResumeToken(res.data.resumeToken)
+          }
+        })
+      } else {
+        void savePendaftaranDraft(draftResumeToken, formValues, currentStep)
+      }
+    }, 800)
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    }
+  }, [watchAll, currentStep, filesKK, filesAkte, filesFoto, draftResumeToken])
+
+  // 3) Restore: isi form + kembali ke lastStep.
+  const restoreDraft = (draft: LocalDraft) => {
+    for (const [key, val] of Object.entries(draft.formValues)) {
+      setValue(key as never, val as never, { shouldValidate: false })
+    }
+    setCurrentStep(Math.min(5, Math.max(1, draft.lastStep)))
+    window.scrollTo({ top: 0, behavior: "smooth" })
+    setDraftBanner(null)
+    draftReadyRef.current = true
+  }
+
+  const mulaiBaruDariDraft = async () => {
+    const lokal = bacaDraftLokal()
+    if (lokal?.resumeToken) {
+      await deletePendaftaranDraft(lokal.resumeToken)
+    }
+    hapusDraftLokal()
+    setDraftBanner(null)
+    draftReadyRef.current = true
+  }
+  // =================== AKHIR DRAFT OTOMATIS ===================
 
   React.useEffect(() => {
     if (selectedJenjang) {
@@ -446,13 +579,27 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
       if (dokAktePath) formData.append("dokAkteLahir", dokAktePath)
       if (dokFotoPath) formData.append("dokFoto", dokFotoPath)
 
+      // Idempotensi finalisasi: draftToken membuat submit ganda / retry
+      // mengembalikan nomor yang sama, bukan membuat pendaftaran kedua.
+      if (draftResumeToken) formData.append("draftToken", draftResumeToken)
+
       const result = await createPendaftaran(formData)
 
       if (result.success && result.data) {
         // File dipertahankan (direferensikan oleh record pendaftaran)
         uploadedPaths.length = 0
-        // Simpan token akses rahasia untuk alur upload dokumen/bukti transfer.
-        setTokenAkses(result.data.nomorPendaftaran, result.data.tokenAkses)
+        if (result.data.tokenAkses) {
+          // Simpan token akses rahasia untuk alur upload dokumen/bukti transfer.
+          // Pada retry yang mengembalikan nomor lama, tokenAkses kosong —
+          // token dari percobaan pertama di sessionStorage tetap berlaku.
+          setTokenAkses(result.data.nomorPendaftaran, result.data.tokenAkses)
+        }
+        // Final sukses: draft (lokal & server) dibersihkan — data sudah jadi
+        // pendaftaran sungguhan, bukan draft lagi.
+        if (draftResumeToken) {
+          void deletePendaftaranDraft(draftResumeToken)
+        }
+        hapusDraftLokal()
         router.push(
           `/pendaftaran/sukses?nomor=${result.data.nomorPendaftaran}`
         )
@@ -477,6 +624,43 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
         <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-sm">
           {serverError}
         </div>
+      )}
+
+      {/* Banner draft tersimpan: Lanjutkan atau Mulai Baru */}
+      {draftBanner && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm space-y-2">
+          <p className="font-semibold text-amber-900 m-0">
+            Ada draft pendaftaran tersimpan
+          </p>
+          <p className="text-amber-800 m-0">
+            Terakhir disimpan {new Date(draftBanner.draft.lastSavedAt).toLocaleString("id-ID")}
+            {draftBanner.jenis === "server" && " (versi server lebih baru)"}.
+            Lanjutkan dari langkah {draftBanner.draft.lastStep}?
+          </p>
+          {Object.keys(draftBanner.draft.fileMeta).some(
+            (k) => draftBanner.draft.fileMeta[k as keyof typeof draftBanner.draft.fileMeta]
+          ) && (
+            <p className="text-xs text-amber-700 m-0">
+              Berkas yang dipilih sebelumnya perlu dipilih ulang — isinya tidak
+              ikut tersimpan di draft.
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button type="button" size="sm" onClick={() => restoreDraft(draftBanner.draft)}>
+              Lanjutkan Draft
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => void mulaiBaruDariDraft()}>
+              Mulai Baru
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Indikator "tersimpan otomatis" */}
+      {lastSavedAt && !draftBanner && (
+        <p className="text-xs text-muted-foreground text-right m-0">
+          Draft tersimpan otomatis {new Date(lastSavedAt).toLocaleTimeString("id-ID")}
+        </p>
       )}
 
       {/* PROGRESS INDICATOR */}

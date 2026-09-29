@@ -137,17 +137,11 @@ export async function uploadBuktiTransferPendaftaran(
       }
     }
 
-    // Gerbang verifikasi email: bukti transfer hanya bermakna kalau email
-    // orang tua sudah dikonfirmasi, supaya pendaftaran fiktif tidak
-    // menghasilkan transaksi palsu bagi panitia. Dicek SESUDAH token agar
-    // pesan kredensial tetap sama untuk penyerang tanpa token.
-    if (!pendaftaran.emailOrangTuaTerverifikasiAt) {
-      return {
-        success: false,
-        message:
-          "Email orang tua belum diverifikasi. Periksa email Anda untuk kode verifikasi terlebih dahulu.",
-      }
-    }
+    // CATATAN (OTP DIHAPUS): gerbang emailOrangTuaTerverifikasiAt dibuang.
+    // OTP tidak lagi syarat upload bukti pembayaran; keaslian pendaftaran
+    // tetap terjaga token akses + rate limit per IP & per nomor. Pemeriksaan
+    // keabsahan kontak wali kini dilakukan panitia sebelum approval
+    // (konfirmasi kontak wali), bukan lewat OTP email.
 
     // Cek status
     if (

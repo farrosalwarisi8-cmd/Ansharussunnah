@@ -21,10 +21,20 @@ const nextConfig: NextConfig = {
   // ✅ Disable source maps di production (mengurangi transfer size)
   productionBrowserSourceMaps: false,
 
-  // ✅ Server Actions — body size limit (5MB untuk upload file)
+  // ✅ Server Actions — body size limit.
+  // PENTING: ini bukan "batas ukuran satu file", tapi batas TOTAL body request.
+  // Halaman upload dokumen pendaftaran mengirim KARTU KELUARGA + AKTA + PAS FOTO
+  // dalam SATU server action (masing-masing divalidasi maks. 5 MB oleh
+  // validateFile di src/lib/storage.ts). Tiga berkas @5MB + overhead payload
+  // server action ≈ 20 MB. Dengan batas 5mb, Next.js MENOLAK body-nya sebelum
+  // action uploadDokumenPendaftaran sempat berjalan — pengguna hanya melihat
+  // error generik "Terjadi kesalahan saat mengupload" meski tiap berkasnya sah,
+  // dan karena itu pula berkas tidak pernah tersimpan/tercatat di database.
+  // Batas 25mb memberi ruang 3 berkas maksimal; validasi per-file tetap 5 MB
+  // di server, jadi keamanannya tidak berubah.
   experimental: {
     serverActions: {
-      bodySizeLimit: "5mb",
+      bodySizeLimit: "25mb",
     },
     // Optimize tree-shaking untuk package besar yang dipakai lintas halaman.
     optimizePackageImports: [

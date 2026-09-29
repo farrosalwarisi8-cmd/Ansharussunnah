@@ -193,17 +193,11 @@ export async function uploadDokumenPendaftaran(
       }
     }
 
-    // Gerbang verifikasi email: sebelum orang tua mengonfirmasi kepemilikan
-    // email, pendaftaran belum boleh apa-apa pun diunggah. Dicek SESUDAH token
-    // (bukan sebelum) supaya penyerang tanpa token tetap mendapat pesan
-    // kredensial yang sama dan tidak bisa memetakan status pendaftaran.
-    if (!pendaftaran.emailOrangTuaTerverifikasiAt) {
-      return {
-        success: false,
-        message:
-          "Email orang tua belum diverifikasi. Periksa email Anda untuk kode verifikasi terlebih dahulu.",
-      }
-    }
+    // CATATAN (OTP DIHAPUS): gerbang emailOrangTuaTerverifikasiAt sengaja
+    // DIBUANG dari sini. OTP tidak lagi bagian dari alur pendaftaran; gerbang
+    // upload sekarang = nomor valid + token akses valid + token belum
+    // kedaluwarsa + status mengizinkan + file lolos validasi. Kolom warisan
+    // tetap ada di DB untuk audit pendaftaran lama, tapi tidak dipakai lagi.
 
     // Server-side upload dengan service role. Path ditentukan server,
     // disimpan per-pendaftaran di folder `pendaftaran/{idPendaftaran}`.

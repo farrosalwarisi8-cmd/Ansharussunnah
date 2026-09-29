@@ -34,7 +34,9 @@ export default async function UploadBuktiPage({ params }: UploadBuktiPageProps) 
     notFound()
   }
 
-  const emailTerverifikasi = Boolean(pendaftaran.emailOrangTuaTerverifikasiAt)
+  // OTP email dihapus dari alur: gerbang upload = status + masa berlaku token.
+  // (Kolom emailOrangTuaTerverifikasiAt tetap ada di DB untuk audit data lama,
+  // tapi tidak lagi jadi syarat di sini maupun di server action.)
   const tokenMasihBerlaku = isTokenAksesBelumKedaluwarsa(
     pendaftaran.tokenAksesExpiraAt
   )
@@ -43,13 +45,11 @@ export default async function UploadBuktiPage({ params }: UploadBuktiPageProps) 
   const statusBolehUpload =
     pendaftaran.status === "MENUNGGU_PEMBAYARAN" ||
     pendaftaran.status === "DITOLAK"
-  const uploadTerbuka = emailTerverifikasi && tokenMasihBerlaku && statusBolehUpload
+  const uploadTerbuka = tokenMasihBerlaku && statusBolehUpload
 
-  const pesanTerkunci = !emailTerverifikasi
-    ? "Email orang tua belum diverifikasi. Buka halaman hasil pendaftaran, masukkan kode verifikasi dari email, lalu kembali ke halaman ini."
-    : !tokenMasihBerlaku
-      ? "Masa berlaku akses pendaftaran sudah habis (90 hari). Silakan hubungi panitia PPDB untuk lebih lanjut."
-      : "Pendaftaran sudah diproses panitia, jadi tidak lagi bisa diunggah lewat halaman ini."
+  const pesanTerkunci = !tokenMasihBerlaku
+    ? "Masa berlaku akses pendaftaran sudah habis (90 hari). Silakan hubungi panitia PPDB untuk lebih lanjut."
+    : "Pendaftaran sudah diproses panitia, jadi tidak lagi bisa diunggah lewat halaman ini."
 
   if (uploadTerbuka) {
     return (
