@@ -1,177 +1,87 @@
 // src/app/pendaftaran/[nomor]/upload-bukti/page.tsx
 
-"use client"
-
-import * as React from "react"
-import { useParams, useRouter } from "next/navigation"
-import { uploadBuktiTransferPendaftaran } from "@/actions/bukti-transfer"
-import { getTokenAkses } from "@/lib/pendaftaran-token-client"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { FileUpload } from "@/components/ui/file-upload"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, Upload, ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import { notFound } from "next/navigation"
+import { ArrowLeft, Lock } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { UploadBuktiForm } from "@/components/pendaftaran/upload-bukti-form"
+import { isTokenAksesBelumKedaluwarsa } from "@/lib/pendaftaran-token"
+import prisma from "@/lib/prisma"
 
-export default function UploadBuktiPage() {
-  const params = useParams()
-  const router = useRouter()
-  const nomorPendaftaran = params.nomor as string
+interface UploadBuktiPageProps {
+  params: Promise<{ nomor: string }>
+}
 
-  const [files, setFiles] = React.useState<File[]>([])
-  const [tokenAkses, setTokenAksesState] = React.useState("")
-  const [isUploading, setIsUploading] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
-  const [success, setSuccess] = React.useState(false)
+// Server component: menolak menampilkan form bila pendaftaran tidak memenuhi
+// syarat, sehingga pengguna tidak sempat mengisi form yang pasti ditolak.
+// Penegakan yang menentukan tetap ada di server action
+// uploadBuktiTransferPendaftaran (yang juga memeriksa token, status, dan masa
+// berlaku token) — pemeriksaan di sini murni untuk UX.
+export default async function UploadBuktiPage({ params }: UploadBuktiPageProps) {
+  const { nomor } = await params
 
-  React.useEffect(() => {
-    setTokenAksesState(getTokenAkses(nomorPendaftaran))
-  }, [nomorPendaftaran])
+  const pendaftaran = await prisma.pendaftaran.findUnique({
+    where: { nomorPendaftaran: nomor, deleted_at: null },
+    select: {
+      nomorPendaftaran: true,
+      status: true,
+      tokenAksesExpiraAt: true,
+      emailOrangTuaTerverifikasiAt: true,
+    },
+  })
 
-  const handleUpload = async () => {
-    if (files.length === 0) {
-      setError("Silakan pilih file bukti transfer terlebih dahulu")
-      return
-    }
-
-    if (!tokenAkses) {
-      setError(
-        "Token akses pendaftaran wajib diisi. Salin dari halaman 'Pendaftaran Berhasil'."
-      )
-      return
-    }
-
-    setIsUploading(true)
-    setError(null)
-
-    try {
-      // File dikirim langsung ke server action — server yang mengunggahnya ke
-      // storage dengan service role (kontrol path & validasi keamanan penuh).
-      const formData = new FormData()
-      formData.append("nomorPendaftaran", nomorPendaftaran)
-      formData.append("tokenAkses", tokenAkses)
-      formData.append("file", files[0])
-
-      const result = await uploadBuktiTransferPendaftaran(formData)
-
-      if (result.success) {
-        setSuccess(true)
-        setTimeout(() => {
-          router.push("/cek-pendaftaran")
-        }, 3000)
-      } else {
-        setError(result.message)
-      }
-    } catch (err) {
-      console.error("Upload error:", err)
-      setError("Terjadi kesalahan saat mengupload. Silakan coba lagi.")
-    } finally {
-      setIsUploading(false)
-    }
+  if (!pendaftaran) {
+    notFound()
   }
 
-  if (success) {
+  const emailTerverifikasi = Boolean(pendaftaran.emailOrangTuaTerverifikasiAt)
+  const tokenMasihBerlaku = isTokenAksesBelumKedaluwarsa(
+    pendaftaran.tokenAksesExpiraAt
+  )
+  // MENUNGGU_PEMBAYARAN & DITOLAK boleh: pada DITOLAK bukti baru bisa
+  // menghidupkan kembali pendaftaran, sama seperti di server action.
+  const statusBolehUpload =
+    pendaftaran.status === "MENUNGGU_PEMBAYARAN" ||
+    pendaftaran.status === "DITOLAK"
+  const uploadTerbuka = emailTerverifikasi && tokenMasihBerlaku && statusBolehUpload
+
+  const pesanTerkunci = !emailTerverifikasi
+    ? "Email orang tua belum diverifikasi. Buka halaman hasil pendaftaran, masukkan kode verifikasi dari email, lalu kembali ke halaman ini."
+    : !tokenMasihBerlaku
+      ? "Masa berlaku akses pendaftaran sudah habis (90 hari). Silakan hubungi panitia PPDB untuk lebih lanjut."
+      : "Pendaftaran sudah diproses panitia, jadi tidak lagi bisa diunggah lewat halaman ini."
+
+  if (uploadTerbuka) {
     return (
-      <div className="min-h-screen batik-light flex items-center justify-center">
-        <Card className="max-w-md w-full mx-4 text-center">
-          <CardContent className="p-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-success/10 rounded-full mb-4">
-              <Upload className="h-8 w-8 text-success" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
-              Bukti Transfer Berhasil Diupload!
-            </h2>
-            <p className="text-gray-500 text-sm">
-              Pendaftaran Anda sedang dalam proses verifikasi. Anda akan
-              diarahkan ke halaman cek status.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <UploadBuktiForm
+        nomorPendaftaran={pendaftaran.nomorPendaftaran}
+      />
     )
   }
 
   return (
-    <div className="min-h-screen batik-light">
-      <header className="border-b bg-white/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <span className="font-bold text-gray-900">Upload Bukti Transfer</span>
-          <Link
-            href={`/pendaftaran/sukses?nomor=${nomorPendaftaran}`}
-            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-primary"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Kembali
-          </Link>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8 max-w-lg">
-        <div className="mb-6">
-          <p className="text-sm text-gray-500 mb-1">Nomor Pendaftaran</p>
-          <p className="text-xl font-bold font-mono text-primary">
-            {nomorPendaftaran}
-          </p>
-        </div>
-
+    <div className="min-h-screen batik-light flex items-center justify-center">
+      <div className="container mx-auto px-4 py-8 max-w-lg">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Upload Bukti Transfer</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {error && (
-              <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-sm">
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label htmlFor="token-akses">Token Akses Pendaftaran</Label>
-              <Input
-                id="token-akses"
-                type="text"
-                value={tokenAkses}
-                onChange={(e) => setTokenAksesState(e.target.value.trim())}
-                placeholder="Salin token akses dari halaman 'Pendaftaran Berhasil'"
-                className="font-mono"
-              />
-              <p className="text-xs text-gray-400">
-                Token otomatis terisi jika Anda datang dari halaman hasil
-                pendaftaran. Diperlukan agar bukti transfer hanya bisa diunggah
-                pemilik pendaftaran.
-              </p>
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 rounded-full">
+              <Lock className="h-8 w-8 text-amber-700" />
             </div>
-
-            <FileUpload
-              label="Bukti Transfer"
-              description="Screenshot/foto bukti transfer"
-              files={files}
-              onFilesChange={setFiles}
-              accept="image/*,.pdf"
-            />
-
-            <Button
-              onClick={handleUpload}
-              disabled={isUploading || files.length === 0}
-              className="w-full"
-              size="lg"
+            <h1 className="text-xl font-bold text-gray-900">
+              Upload Bukti Transfer Terkunci
+            </h1>
+            <p className="text-gray-600 text-sm">{pesanTerkunci}</p>
+            <Link
+              href={`/pendaftaran/sukses?nomor=${pendaftaran.nomorPendaftaran}`}
             >
-              {isUploading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Mengupload...
-                </>
-              ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Upload Bukti Transfer
-                </>
-              )}
-            </Button>
+              <div className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+                <ArrowLeft className="h-4 w-4" />
+                Kembali ke halaman hasil pendaftaran
+              </div>
+            </Link>
           </CardContent>
         </Card>
-      </main>
+      </div>
     </div>
   )
 }

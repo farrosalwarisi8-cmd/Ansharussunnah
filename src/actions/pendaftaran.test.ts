@@ -63,11 +63,32 @@ vi.mock("@/lib/rate-limit", () => ({
     mockGetClientIp(...args),
 }))
 
+const mockSendPendaftaranBerhasilEmail = vi.fn()
+vi.mock("@/lib/email", () => ({
+  sendPendaftaranBerhasilEmail: (...args: unknown[]) =>
+    mockSendPendaftaranBerhasilEmail(...args),
+}))
+
+// Jalankan task after() secara sinkron agar email bisa di-assert.
+const mockAfterTasks: Array<() => Promise<unknown>> = []
+vi.mock("@/lib/after-response", () => ({
+  runAfterResponse: (task: () => Promise<unknown>) => {
+    mockAfterTasks.push(task)
+  },
+}))
+
+async function flushAfterTasks() {
+  for (const task of mockAfterTasks.splice(0)) {
+    await task()
+  }
+}
+
 // ========================================================
 // Import setelah semua vi.mock() terdaftar
 // ========================================================
 
 import { createPendaftaran } from "@/actions/pendaftaran"
+import { hashTokenAkses } from "@/lib/pendaftaran-token"
 import { Prisma } from "@prisma/client"
 
 // ========================================================
@@ -138,7 +159,6 @@ const mockPengaturan = {
 const mockPendaftaranCreated = {
   id: "pend-1",
   nomorPendaftaran: "REG-2026-00001",
-  tokenAkses: "71W2jdYzzAV0FR0DUUPXD2X1seYJfY4Z",
 }
 
 // ========================================================
@@ -147,6 +167,8 @@ const mockPendaftaranCreated = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockAfterTasks.length = 0
+  mockSendPendaftaranBerhasilEmail.mockResolvedValue({ success: true })
 
   // Default: rate limit lolos
   mockRateLimitAsync.mockResolvedValue({ success: true })
@@ -191,14 +213,68 @@ describe("createPendaftaran — Kasus Sukses", () => {
 
     expect(result.success).toBe(true)
     expect(result.data?.nomorPendaftaran).toBe("REG-2026-00001")
-    expect(result.data?.tokenAkses).toBe(mockPendaftaranCreated.tokenAkses)
     expect(mockPendaftaranCreate).toHaveBeenCalledOnce()
 
-    // Token dihasilkan server (nanoid 32, kredensial rahasia), ikut tersimpan
-    // saat create.
+    // Token dihasilkan server (nanoid 32, kredensial rahasia) dan dikembalikan
+    // apa adanya ke klien satu kali ini.
+    expect(result.data?.tokenAkses).toMatch(/^[A-Za-z0-9_-]{32}$/)
+
+    // Yang masuk ke database HANYA hash-nya — token plaintext tidak boleh
+    // pernah menyentuh kolom mana pun.
     const createCall = mockPendaftaranCreate.mock.calls[0][0]
-    expect(createCall.data.tokenAkses).toMatch(/^[A-Za-z0-9_-]{32}$/)
-    expect(createCall.data.tokenAkses).not.toBe(mockPendaftaranCreated.tokenAkses)
+    expect(createCall.data).not.toHaveProperty("tokenAkses")
+    expect(createCall.data.tokenAksesHash).toBe(
+      hashTokenAkses(result.data!.tokenAkses)
+    )
+  })
+
+  it("menyimpan hash token dan tidak pernah menyimpan plaintext-nya", async () => {
+    const result = await createPendaftaran(makeFormData(baseData))
+    const createCall = mockPendaftaranCreate.mock.calls[0][0]
+
+    expect(createCall.data.tokenAksesHash).toBe(
+      hashTokenAkses(result.data!.tokenAkses)
+    )
+    expect(createCall.data.tokenAksesHash).not.toBe(result.data!.tokenAkses)
+    // Nolnya nilai asli tidak boleh muncul di payload create mana pun
+    expect(JSON.stringify(createCall.data)).not.toContain(
+      result.data!.tokenAkses
+    )
+  })
+
+  it("menjadwalkan email konfirmasi, dan tidak memblokir pendaftaran bila gagal", async () => {
+    const result = await createPendaftaran(makeFormData(baseData))
+    expect(result.success).toBe(true)
+
+    // Email belum dikirim saat response — dijadwalkan lewat after().
+    expect(mockSendPendaftaranBerhasilEmail).not.toHaveBeenCalled()
+    expect(mockAfterTasks).toHaveLength(1)
+
+    await flushAfterTasks()
+
+    expect(mockSendPendaftaranBerhasilEmail).toHaveBeenCalledOnce()
+    const payload = mockSendPendaftaranBerhasilEmail.mock.calls[0][0] as Record<string, unknown>
+    expect(payload.emailOrangTua).toBe(baseData.emailOrangTua)
+    expect(payload.namaSiswa).toBe(baseData.namaLengkap)
+    expect(payload.nomorPendaftaran).toBe("REG-2026-00001")
+    // Token akses adalah rahasia pemilik pendaftaran — TIDAK boleh ikut email.
+    // Token di-generate acak tiap panggilan, jadi yang dicek adalah nilai yang
+    // benar-benar dikembalikan ke klien pada pemanggilan ini.
+    expect(JSON.stringify(payload)).not.toContain(result.data!.tokenAkses)
+    expect(payload).not.toHaveProperty("tokenAkses")
+  })
+
+  it("tetap sukses meski email gagal terkirim", async () => {
+    mockSendPendaftaranBerhasilEmail.mockResolvedValue({
+      success: false,
+      error: "Resend down",
+    })
+
+    const result = await createPendaftaran(makeFormData(baseData))
+    await expect(flushAfterTasks()).resolves.not.toThrow()
+
+    expect(result.success).toBe(true)
+    expect(result.data?.nomorPendaftaran).toBe("REG-2026-00001")
   })
 
   it("harus berhasil menyimpan SEMUA field EMIS ke database", async () => {
@@ -791,6 +867,29 @@ describe("createPendaftaran — Rate Limiting", () => {
     // Pastikan tidak ada query database sama sekali
     expect(mockJenjangFindUnique).not.toHaveBeenCalled()
     expect(mockPendaftaranCreate).not.toHaveBeenCalled()
+  })
+
+  it("menegakkan batas per email penerima, bukan hanya per IP", async () => {
+    // Rate limit IP lolos, tapi bucket per-email yang menolak.
+    mockRateLimitAsync.mockImplementation(async (identifier: string) => {
+      const gagal = identifier.startsWith("create-pendaftaran-email:")
+      return { success: !gagal, remaining: 0, resetAt: 0 }
+    })
+
+    const result = await createPendaftaran(makeFormData(baseData))
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("maksimal 10")
+    expect(mockPendaftaranCreate).not.toHaveBeenCalled()
+  })
+
+  it("memakai email penerima lowercase sebagai kunci bucket per-email", async () => {
+    await createPendaftaran(makeFormData({ ...baseData, emailOrangTua: "ORTU@Example.COM" }))
+
+    const identifier = mockRateLimitAsync.mock.calls.find(
+      (c) => (c[0] as string).startsWith("create-pendaftaran-email:")
+    )?.[0]
+    expect(identifier).toBe("create-pendaftaran-email:ortu@example.com")
   })
 })
 

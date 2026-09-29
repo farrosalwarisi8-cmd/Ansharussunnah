@@ -9,6 +9,7 @@ import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import {
   isPendaftaranTokenValid,
   isTokenAksesBentukValid,
+  isTokenAksesBelumKedaluwarsa,
 } from "@/lib/pendaftaran-token"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
@@ -49,7 +50,11 @@ function normalizeNomor(nomor: string): string {
 /**
  * Unggah dokumen pendukung (KK, Akta Lahir, Pas Foto) PENDAFTARAN setelah
  * formulir awal disubmit — berguna untuk melengkapi berkas yang opsional
- * saat mendaftar, maupun yang ditagih setelah pendaftaran diterima.
+ * saat mendaftar.
+ *
+ * Hanya berlaku selagi pendaftaran berstatus MENUNGGU_PEMBAYARAN atau
+ * MENUNGGU_VERIFIKASI dan token akses belum lewat 90 hari. Setelah diterima,
+ * pemilik melengkapi berkas dari dashboard orang tua.
  *
  * Keamanan: file DIKIRIM ke server dan diunggah oleh server (service role) ke
  * Supabase Storage. Klien tidak pernah menentukan path file — path dibuat
@@ -143,8 +148,8 @@ export async function uploadDokumenPendaftaran(
       }
     }
 
-    // Cek apakah pendaftaran ada (tidak dihapus). Dokumen dibutuhkan terlepas
-    // dari status (menunggu pembayaran/verifikasi, diterima, maupun ditolak).
+    // Cek apakah pendaftaran ada (tidak dihapus). Upload publik hanya untuk
+    // pendaftaran yang belum selesai (menunggu pembayaran/verifikasi).
     const pendaftaran = await prisma.pendaftaran.findUnique({
       where: { nomorPendaftaran, deleted_at: null },
     })
@@ -156,13 +161,47 @@ export async function uploadDokumenPendaftaran(
       }
     }
 
-    // KEAMANAN: verifikasi token pemilik (timing-safe). Pesan dibuat generik
-    // agar tidak membedakan antara "nomor tidak ada" vs "token salah" bagi
-    // penyerang yang sudah memegang nomor valid namun bukan pemiliknya.
-    if (!isPendaftaranTokenValid(pendaftaran.tokenAkses, tokenAkses)) {
+    // KEAMANAN: verifikasi token pemilik terhadap hash yang tersimpan
+    // (timing-safe). Pesan dibuat generik agar tidak membedakan antara
+    // "nomor tidak ada" vs "token salah" bagi penyerang yang sudah memegang
+    // nomor valid namun bukan pemiliknya.
+    if (!isPendaftaranTokenValid(pendaftaran.tokenAksesHash, tokenAkses)) {
       return {
         success: false,
         message: "Kredensial akses pendaftaran tidak valid",
+      }
+    }
+
+    // Status yang MASIH boleh memakai alur upload publik. Setelah DITERIMA,
+    // dokumen diselesaikan dari dashboard orang tua (akun sudah ada), bukan lagi
+    // lewat alur publik bertoken.
+    const uploadStatus = pendaftaran.status
+    if (uploadStatus !== "MENUNGGU_PEMBAYARAN" && uploadStatus !== "MENUNGGU_VERIFIKASI") {
+      return {
+        success: false,
+        message: `Pendaftaran dengan status "${uploadStatus}" tidak dapat mengupload dokumen`,
+      }
+    }
+
+    // Masa berlaku token: 90 hari sejak pendaftaran dibuat. Setelah lewat,
+    // alur publik mengunci dan pemilik diarahkan menghubungi panitia.
+    if (!isTokenAksesBelumKedaluwarsa(pendaftaran.tokenAksesExpiraAt)) {
+      return {
+        success: false,
+        message:
+          "Masa berlaku akses pendaftaran sudah habis (90 hari). Silakan hubungi panitia PPDB.",
+      }
+    }
+
+    // Gerbang verifikasi email: sebelum orang tua mengonfirmasi kepemilikan
+    // email, pendaftaran belum boleh apa-apa pun diunggah. Dicek SESUDAH token
+    // (bukan sebelum) supaya penyerang tanpa token tetap mendapat pesan
+    // kredensial yang sama dan tidak bisa memetakan status pendaftaran.
+    if (!pendaftaran.emailOrangTuaTerverifikasiAt) {
+      return {
+        success: false,
+        message:
+          "Email orang tua belum diverifikasi. Periksa email Anda untuk kode verifikasi terlebih dahulu.",
       }
     }
 

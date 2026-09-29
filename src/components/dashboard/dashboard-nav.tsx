@@ -16,6 +16,7 @@ import {
   BookOpen,
   Award,
   CreditCard,
+  FileText,
   Users2,
   Layers,
   BookMarked,
@@ -94,7 +95,8 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
         { title: "Absensi Anak", href: "/dashboard/absensi", icon: CalendarCheck2, isPrimaryMobile: true },
         { title: "Ujian Anak", href: "/dashboard/ujian", icon: Award, isPrimaryMobile: true },
         { title: "Tagihan SPP", href: "/dashboard/tagihan", icon: CreditCard, isPrimaryMobile: true },
-        { title: "Rapor Anak", href: "/dashboard/rapor", icon: GraduationCap, isPrimaryMobile: true },
+        { title: "Berkas Santri", href: "/dashboard/berkas", icon: FileText },
+        { title: "Rapor Anak", href: "/dashboard/rapor", icon: GraduationCap },
         { title: "Tugas Anak", href: "/dashboard/tugas", icon: FileCheck2 },
         { title: "Materi Belajar", href: "/dashboard/materi", icon: BookOpen },
       ]

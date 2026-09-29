@@ -4,7 +4,7 @@
 
 import * as React from "react"
 import { uploadDokumenPendaftaran } from "@/actions/upload-dokumen"
-import { getTokenAkses } from "@/lib/pendaftaran-token-client"
+import { getTokenAkses, setTokenAkses } from "@/lib/pendaftaran-token-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -37,6 +37,16 @@ export function UploadDokumenForm({
   React.useEffect(() => {
     setTokenAksesState(getTokenAkses(nomorPendaftaran))
   }, [nomorPendaftaran])
+
+  // Token yang diketik manual ikut disimpan ke sessionStorage. Tanpa ini,
+  // pengguna yang mendaftar di perangkat lain harus mengetik ulang token yang
+  // sama di halaman berikutnya (termasuk halaman verifikasi email), karena
+  // halaman sukses tidak punya cara lain untuk mendapatkannya.
+  const handleTokenChange = (nilai: string) => {
+    const bersih = nilai.trim()
+    setTokenAksesState(bersih)
+    setTokenAkses(nomorPendaftaran, bersih)
+  }
 
   const handleUpload = async () => {
     if (
@@ -138,7 +148,7 @@ export function UploadDokumenForm({
             id="token-akses"
             type="text"
             value={tokenAkses}
-            onChange={(e) => setTokenAksesState(e.target.value.trim())}
+            onChange={(e) => handleTokenChange(e.target.value)}
             placeholder="Salin token akses dari halaman 'Pendaftaran Berhasil'"
             className="font-mono"
           />

@@ -16,6 +16,9 @@ import {
   resolveBiayaFromMap,
   getPengaturanPPDB,
 } from "@/lib/biaya-ppdb-server"
+import { sendPendaftaranBerhasilEmail } from "@/lib/email"
+import { runAfterResponse } from "@/lib/after-response"
+import { hitungTokenAksesExpiraAt, hashTokenAkses } from "@/lib/pendaftaran-token"
 
 const MAX_RETRY = 5
 
@@ -113,6 +116,29 @@ export async function createPendaftaran(
     }
 
     const data = validation.data
+    const emailOrtu = data.emailOrangTua.toLowerCase().trim()
+
+    // ✅ Batas pendaftaran per EMAIL PENERIMA (bukan hanya per IP).
+    // Setiap pendaftaran yang berhasil memicu satu email ke emailOrangTua.
+    // Rate limit per-IP saja tidak cukup: penyerang cukup berganti IP untuk
+    // membanjiri satu alamat korban dengan email (harassment / pemborosan kuota
+    // email sekolah). Batas per-penerima inilah yang benar-benar menahan
+    // dampaknya. Longgar agar keluarga dengan banyak anak tetap aman.
+    const MAX_PENDAFTARAN_PER_EMAIL_PER_HARI = 10
+    const limiterPerEmail = await rateLimitAsync(
+      `create-pendaftaran-email:${emailOrtu}`,
+      {
+        maxRequests: MAX_PENDAFTARAN_PER_EMAIL_PER_HARI,
+        windowMs: 24 * 60 * 60 * 1000,
+      }
+    )
+
+    if (!limiterPerEmail.success) {
+      return {
+        success: false,
+        message: `Terlalu banyak pendaftaran dari email ini dalam 24 jam terakhir (maksimal ${MAX_PENDAFTARAN_PER_EMAIL_PER_HARI}). Mohon hubungi admin sekolah jika Anda perlu mendaftar lebih dari itu.`,
+      }
+    }
 
     const jenjang = await prisma.jenjang.findUnique({
       where: { id: data.jenjangTujuanId },
@@ -156,7 +182,52 @@ export async function createPendaftaran(
     // / MENUNGGU_VERIFIKASI). Melindungi dari submit ganda/retry yang membuat
     // banyak nomor pendaftaran untuk anak yang sama. Pendaftaran yang sudah
     // DITERIMA/DITOLAK tidak memblokir karena alurnya sudah keluar dari antrean.
-    const emailOrtu = data.emailOrangTua.toLowerCase().trim()
+    //
+    // ⚠️ BATAS YANG DISENAIKAN — baca sebelum mengandalkan ini sebagai jaminan.
+    //
+    // Ini adalah check-then-act (findFirst lalu create) TANPA constraint di
+    // database. Dua request yang benar-benar bersamaan bisa dua-duanya lolos
+    // pemeriksaan ini, lalu sama-sama membuat baris. Jendelanya hanya
+    // beberapa milidetik, dan tombol submit sudah dikunci `isSubmitting` di
+    // sisi klien (src/components/pendaftaran/pendaftaran-form.tsx), sehingga
+    // klik ganda — pemicu paling umum — sudah tertutup di lapisan itu.
+    // Yang masih bisa lolos: mengisi formulir di dua tab/perangkat, atau
+    // koneksi yang terputus lalu mengirim ulang.
+    //
+    // Kalau sampai terjadi, akibatnya: satu anak punya DUA nomor pendaftaran.
+    // Bukan kebocoran data dan bukan kerusakan diam-diam — status tidak
+    // berubah tanpa ada manusia yang menekan tombol di dashboard panitia.
+    // Committee cukup menolak/menghapus baris berlebih — dua nama dengan
+    // email sama berdampingan, jadi mudah dikenali.
+    //
+    // TAPI: kalau committee tidak menyadari dan menyetujui keduanya, dua record
+    // Siswa terbentuk di bawah satu orang tua. `auth.users` sengaja dipakai
+    // ulang antar anak (lihat catatan "Akun ortu SUDAH ADA / reuse authId"
+    // di bawah), jadi approval kedua TIDAK akan gagal dengan error email
+    // duplikat — keduanya benar-benar lolos.
+    //
+    // CATATAN: ini masih check-then-act tanpa constraint database, jadi dua
+    // request yang benar-benar bersamaan bisa dua-duanya lolos. Rentangnya
+    // hanya beberapa milidetik, dan tombol submit sudah dikunci
+    // `isSubmitting` di klien, jadi pemicu paling umum (klik ganda) tertutup.
+    //
+    // Penutupannya yang rapi adalah partial unique index
+    // (`WHERE deleted_at IS NULL AND status IN (...)`) yang enforcement-nya
+    // di database. TAPI itu tidak bisa ditulis di prisma/schema.prisma:
+    // Prisma 6.19 tidak mendukung klausa WHERE pada @@unique maupun @@index.
+    //
+    // Index yang dibuat lewat SQL mentah DIJEBAK Prisma: kalau tidak
+    // direpresentasikan di schema, `migrate diff` menandainya sebagai drift
+    // dan `migrate dev` akan mengusulkan DROP-nya. Ini sudah terbukti terjadi
+    // di repo ini — `idx_pendaftarans_email_otp` dan
+    // `pendaftaran_email_manual_idx` keduanya hampir terhapus sebelum keduanya
+    // didaftarkan sebagai `@@index` biasa di schema.
+    //
+    // Jadi kalau suatu saat index parsial ditambahkan, `prisma migrate dev`
+    // WAJIB diberi tahu indeks itu ada. Verifikasi cepat:
+    //   npx prisma migrate diff --from-schema-datasource prisma/schema.prisma \
+    //     --to-schema-datamodel prisma/schema.prisma --script
+    // Harus keluar "This is an empty migration".
     const duplikatAktif = await prisma.pendaftaran.findFirst({
       where: {
         emailOrangTua: { equals: emailOrtu, mode: "insensitive" },
@@ -275,13 +346,19 @@ export async function createPendaftaran(
       try {
         const nomorPendaftaran = await generateNomorPendaftaran()
         // Token akses rahasia: kredensial pemilik untuk upload dokumen/bukti
-        // transfer. Hanya dikirim sekali ke klien pada saat pendaftaran dibuat.
+        // transfer. Hanya dikirim sekali ke klien pada saat pendaftaran dibuat
+        // lalu disimpan klien di localStorage — TIDAK PERNAH disimpan di
+        // database. Yang tersimpan hanya SHA-256-nya, sehingga bocornya dump
+        // database tidak langsung berarti kredensial upload yang valid.
         const tokenAkses = nanoid(32)
+        // Batas berlaku token akses publik: 90 hari sejak pendaftaran dibuat.
+        const tokenAksesExpiraAt = hitungTokenAksesExpiraAt()
 
         const pendaftaran = await prisma.pendaftaran.create({
           data: {
             nomorPendaftaran,
-            tokenAkses,
+            tokenAksesHash: hashTokenAkses(tokenAkses),
+            tokenAksesExpiraAt,
             namaLengkap: data.namaLengkap,
             tempatLahir: data.tempatLahir,
             tanggalLahir: new Date(data.tanggalLahir),
@@ -293,6 +370,10 @@ export async function createPendaftaran(
             namaOrangTua: data.namaOrangTua,
             noHpOrangTua: data.noHpOrangTua,
             emailOrangTua: data.emailOrangTua,
+            // Eksplisit null (bukan mengandalkan default kolom): pendaftaran
+            // baru SELALU belum terverifikasi sampai OTP berhasil dimasukkan,
+            // sehingga alur publik terkunci sampai itu terjadi.
+            emailOrangTuaTerverifikasiAt: null,
             alamatOrangTua: data.alamatOrangTua,
             namaAyahKandung: data.namaAyahKandung || null,
             statusAyahKandung: (data.statusAyahKandung as "MASIH_HIDUP" | "SUDAH_MENINGGAL" | "TIDAK_DIKETAHUI") || null,
@@ -322,12 +403,51 @@ export async function createPendaftaran(
           },
         })
 
+        // Kirim email konfirmasi + instruksi melengkapi pembayaran & dokumen.
+        // Ditunda ke setelah response (after): pendaftaran sudah tersimpan &
+        // nomor sudah dikembalikan, sehingga email tidak boleh menunda atau
+        // menggagalkan pendaftaran — tapi juga tidak boleh hilang begitu
+        // response terkirim (lihat runAfterResponse).
+        runAfterResponse(async () => {
+          try {
+            const hasil = await sendPendaftaranBerhasilEmail({
+            namaOrangTua: data.namaOrangTua,
+            emailOrangTua: data.emailOrangTua,
+              namaSiswa: data.namaLengkap,
+              jenjangNama: jenjang.nama,
+              nomorPendaftaran: pendaftaran.nomorPendaftaran,
+              biayaPendaftaran,
+              biayaUangGedung,
+              biayaSarpras,
+              bankNama: pengaturan.bankNama,
+              bankNoRekening: pengaturan.bankNoRekening,
+              bankAtasNama: pengaturan.bankAtasNama,
+              kontakWa: pengaturan.kontakWa,
+              namaKontakWa: pengaturan.namaKontakWa ?? null,
+              sudahUploadKartuKeluarga: Boolean(dokKK),
+              sudahUploadAkteLahir: Boolean(dokAkte),
+              sudahUploadPasFoto: Boolean(dokFoto),
+            })
+            if (!hasil.success) {
+              console.error(
+                `[email] Email konfirmasi pendaftaran ${pendaftaran.nomorPendaftaran} gagal:`,
+                hasil.error
+              )
+            }
+          } catch (error) {
+            console.error("Gagal kirim email konfirmasi pendaftaran:", error)
+          }
+        })
+
         return {
           success: true,
           message: "Pendaftaran berhasil dibuat",
           data: {
             nomorPendaftaran: pendaftaran.nomorPendaftaran,
-            tokenAkses: pendaftaran.tokenAkses,
+            // Token asli (bukan hasil hash) dikembalikan ke klien. Nilai ini
+            // hanya hidup di memori server sebentar lalu disimpan di
+            // localStorage pengguna; tidak pernah masuk ke email maupun log.
+            tokenAkses,
           },
         }
       } catch (error) {

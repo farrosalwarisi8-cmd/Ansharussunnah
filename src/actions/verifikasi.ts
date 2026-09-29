@@ -1,54 +1,58 @@
 // src/actions/verifikasi.ts
 
-"use server"
+"use server";
 
-import prisma from "@/lib/prisma"
-import { deriveUniqueUsername } from "@/lib/username"
-import { siswaCocokKelas } from "@/lib/guru-kelas-gender"
-import { requireGuruAdmin } from "@/lib/auth"
-import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { getSignedUrl } from "@/lib/storage"
-import { generateSecurePassword } from "@/lib/password"
+import prisma from "@/lib/prisma";
+import { deriveUniqueUsername } from "@/lib/username";
+import { siswaCocokKelas } from "@/lib/guru-kelas-gender";
+import { requireGuruAdmin } from "@/lib/auth";
+import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { getSignedUrl } from "@/lib/storage";
+import { generateSecurePassword } from "@/lib/password";
+import { REKENING_PPDB_DEFAULT } from "@/lib/biaya-ppdb";
 import {
   sendEmail,
   buildKredensialEmail,
   buildKredensialEmailAnakKedua,
   buildPemberitahuanRoleBaruEmail,
-} from "@/lib/email"
+  sendPendaftaranDitolakEmail,
+} from "@/lib/email";
 import {
   verifikasiPendaftaranSchema,
   type VerifikasiPendaftaranValues,
-} from "@/lib/validations/pendaftaran"
-import { toUserFriendlyError, AppError } from "@/lib/prisma-error"
-import type { ActionResponse, PendaftaranWithRelations } from "@/types"
-import { StatusPendaftaran, StatusVerifikasiBukti, Role } from "@prisma/client"
-import { revalidatePath } from "next/cache"
+} from "@/lib/validations/pendaftaran";
+import { salinDokumenPendaftaranKeSiswa } from "@/lib/salin-dokumen-pendaftaran";
+import { BERKAS_BUCKET } from "@/lib/berkas-siswa-service";
+import { toUserFriendlyError, AppError } from "@/lib/prisma-error";
+import type { ActionResponse, PendaftaranWithRelations } from "@/types";
+import { StatusPendaftaran, StatusVerifikasiBukti, Role } from "@prisma/client";
+import { revalidatePath } from "next/cache";
 
 export async function getPendaftaranList(options?: {
-  status?: StatusPendaftaran
-  search?: string
-  limit?: number
-  page?: number
-  sortBy?: "newest" | "oldest"
+  status?: StatusPendaftaran;
+  search?: string;
+  limit?: number;
+  page?: number;
+  sortBy?: "newest" | "oldest";
 }): Promise<
   ActionResponse<{
-    items: PendaftaranWithRelations[]
-    total: number
-    page: number
-    totalPages: number
+    items: PendaftaranWithRelations[];
+    total: number;
+    page: number;
+    totalPages: number;
   }>
 > {
   try {
-    await requireGuruAdmin()
+    await requireGuruAdmin();
 
-    const page = options?.page || 1
-    const limit = options?.limit || 10
-    const skip = (page - 1) * limit
+    const page = options?.page || 1;
+    const limit = options?.limit || 10;
+    const skip = (page - 1) * limit;
 
-    const whereCondition: Record<string, unknown> = { deleted_at: null }
+    const whereCondition: Record<string, unknown> = { deleted_at: null };
 
     if (options?.status) {
-      whereCondition.status = options.status
+      whereCondition.status = options.status;
     }
 
     if (options?.search) {
@@ -57,10 +61,10 @@ export async function getPendaftaranList(options?: {
         { namaLengkap: { contains: options.search, mode: "insensitive" } },
         { namaOrangTua: { contains: options.search, mode: "insensitive" } },
         { emailOrangTua: { contains: options.search, mode: "insensitive" } },
-      ]
+      ];
     }
 
-    const sortDirection = options?.sortBy === "oldest" ? "asc" : "desc"
+    const sortDirection = options?.sortBy === "oldest" ? "asc" : "desc";
 
     const [items, total] = await Promise.all([
       prisma.pendaftaran.findMany({
@@ -76,7 +80,7 @@ export async function getPendaftaranList(options?: {
         },
       }),
       prisma.pendaftaran.count({ where: whereCondition }),
-    ])
+    ]);
 
     return {
       success: true,
@@ -87,31 +91,32 @@ export async function getPendaftaranList(options?: {
         page,
         totalPages: Math.ceil(total / limit),
       },
-    }
+    };
   } catch (error: unknown) {
-    console.error("Error getPendaftaranList:", error)
+    console.error("Error getPendaftaranList:", error);
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal memuat daftar pendaftaran. Silakan coba lagi atau hubungi admin."),
-    }
+      message: toUserFriendlyError(
+        error,
+        "Gagal memuat daftar pendaftaran. Silakan coba lagi atau hubungi admin.",
+      ),
+    };
   }
 }
 
-export async function getPendaftaranDetail(
-  pendaftaranId: string
-): Promise<
+export async function getPendaftaranDetail(pendaftaranId: string): Promise<
   ActionResponse<{
-    pendaftaran: PendaftaranWithRelations
+    pendaftaran: PendaftaranWithRelations;
     signedUrls: {
-      kartuKeluarga?: string | null
-      akteLahir?: string | null
-      foto?: string | null
-      buktiTransfer: Array<{ id: string; url: string | null }>
-    }
+      kartuKeluarga?: string | null;
+      akteLahir?: string | null;
+      foto?: string | null;
+      buktiTransfer: Array<{ id: string; url: string | null }>;
+    };
   }>
 > {
   try {
-    await requireGuruAdmin()
+    await requireGuruAdmin();
 
     const pendaftaran = await prisma.pendaftaran.findUnique({
       where: { id: pendaftaranId, deleted_at: null },
@@ -121,10 +126,10 @@ export async function getPendaftaranDetail(
         buktiTransfer: { orderBy: { waktuUpload: "desc" } },
         diverifikasiOleh: true,
       },
-    })
+    });
 
     if (!pendaftaran) {
-      return { success: false, message: "Data pendaftaran tidak ditemukan" }
+      return { success: false, message: "Data pendaftaran tidak ditemukan" };
     }
 
     const [signedKK, signedAkte, signedFoto, signedBukti] = await Promise.all([
@@ -141,9 +146,9 @@ export async function getPendaftaranDetail(
         pendaftaran.buktiTransfer.map(async (bt) => ({
           id: bt.id,
           url: await getSignedUrl("bukti-transfer", bt.urlFile),
-        }))
+        })),
       ),
-    ])
+    ]);
 
     return {
       success: true,
@@ -157,61 +162,75 @@ export async function getPendaftaranDetail(
           buktiTransfer: signedBukti,
         },
       },
-    }
+    };
   } catch (error: unknown) {
-    console.error("Error getPendaftaranDetail:", error)
+    console.error("Error getPendaftaranDetail:", error);
     return {
       success: false,
-      message: toUserFriendlyError(error, "Gagal memuat detail pendaftaran. Silakan coba lagi atau hubungi admin."),
-    }
+      message: toUserFriendlyError(
+        error,
+        "Gagal memuat detail pendaftaran. Silakan coba lagi atau hubungi admin.",
+      ),
+    };
   }
 }
 
 // Helper untuk menghapus user Supabase Auth jika transaction gagal
 async function cleanupAuthUsers(
   supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
-  authIds: string[]
+  authIds: string[],
 ): Promise<void> {
   for (const authId of authIds) {
     try {
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(authId)
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(authId);
       if (error) {
-        console.error(`⚠️ Cleanup Error (Auth ID: ${authId}): ${error.message}`)
+        console.error(
+          `⚠️ Cleanup Error (Auth ID: ${authId}): ${error.message}`,
+        );
       } else {
-        console.log(`✅ Cleanup Sukses (Auth ID: ${authId})`)
+        console.log(`✅ Cleanup Sukses (Auth ID: ${authId})`);
       }
     } catch (cleanupErr) {
-      console.error(`⚠️ Exception saat membersihkan Auth ID: ${authId}`, cleanupErr)
+      console.error(
+        `⚠️ Exception saat membersihkan Auth ID: ${authId}`,
+        cleanupErr,
+      );
     }
   }
 }
 
 export async function verifikasiPendaftaran(
-  payload: VerifikasiPendaftaranValues
+  payload: VerifikasiPendaftaranValues,
 ): Promise<ActionResponse> {
   try {
-    const guruUser = await requireGuruAdmin()
+    const guruUser = await requireGuruAdmin();
 
-    const validated = verifikasiPendaftaranSchema.safeParse(payload)
+    const validated = verifikasiPendaftaranSchema.safeParse(payload);
     if (!validated.success) {
       return {
         success: false,
         message: "Data verifikasi tidak valid",
         errors: validated.error.flatten().fieldErrors,
-      }
+      };
     }
 
-    const { pendaftaranId, status, catatanAdmin, alasanPenolakan, kelasTujuanId } = validated.data
+    const {
+      pendaftaranId,
+      status,
+      catatanAdmin,
+      alasanPenolakan,
+      kelasTujuanId,
+    } = validated.data;
 
     const pendaftaran = await prisma.pendaftaran.findUnique({
       where: { id: pendaftaranId, deleted_at: null },
       include: {
         buktiTransfer: { orderBy: { waktuUpload: "desc" }, take: 1 },
       },
-    })
+    });
 
     if (!pendaftaran) {
-      return { success: false, message: "Data pendaftaran tidak ditemukan" }
+      return { success: false, message: "Data pendaftaran tidak ditemukan" };
     }
 
     // Guard transisi status: hanya pendaftaran yang masih MENUNGGU_VERIFIKASI
@@ -221,14 +240,38 @@ export async function verifikasiPendaftaran(
       return {
         success: false,
         message: `Pendaftaran ${pendaftaran.nomorPendaftaran} sudah berstatus ${pendaftaran.status} dan tidak dapat diverifikasi lagi.`,
-      }
+      };
     }
 
-    const latestBuktiId = pendaftaran.buktiTransfer[0]?.id
+    // Gerbang verifikasi email pada saat MENYETUJUI. Tanpa cek ini, satu klik
+    // committee melewati seluruh tujuan OTP: akun ortu + siswa dibuat lalu
+    // kredensial dikirim ke email yang tidak pernah dibuktikan pemiliknya.
+    //
+    // Yang dicek adalah `emailOrangTuaTerverifikasiAt` (gerbang), bukan
+    // `emailOrangTuaDiverifikasiOtpAt` (bukti OTP). Alasannya: pendaftaran
+    // lama diverifikasi lewat grandfathering dan tidak punya bukti OTP —
+    // kalau yang dicek kolom bukti, enam pendaftar lama ini terkunci selamanya
+    // dan tidak ada jalan untuk menutupnya kecuali mengarang bukti.
+    //
+    // Jalur emergency ada di `tandaiEmailPendaftaranTerverifikasi` (committee
+    // mencatatnya dengan alasan), jadi menolak di sini tidak membuat
+    // pendaftar hilang tanpa jalan.
+    //
+    // Penolakan TIDAK diblokir: menolak tidak membuat akun apa pun, dan tetap
+    // harus bisa dilakukan walau email tak pernah terverifikasi.
+    if (status === "DITERIMA" && !pendaftaran.emailOrangTuaTerverifikasiAt) {
+      return {
+        success: false,
+        message:
+          "Email orang tua belum diverifikasi, sehingga pendaftaran tidak bisa disetujui. Minta orang tua memverifikasi emailnya, atau gunakan tombol \"Tandai Email Terverifikasi\" setelah mengonfirmasi langsung ke orang tua.",
+      };
+    }
+
+    const latestBuktiId = pendaftaran.buktiTransfer[0]?.id;
 
     // Kelas tujuan final: pakai override dari admin bila dikirim, selain itu
     // gunakan kelas tujuan yang dipilih pendaftar saat mendaftar.
-    const finalKelasId = kelasTujuanId || pendaftaran.kelasTujuanId || null
+    const finalKelasId = kelasTujuanId || pendaftaran.kelasTujuanId || null;
 
     // --- CASE A: PENDAFTARAN DITOLAK ---
     if (status === "DITOLAK") {
@@ -236,7 +279,7 @@ export async function verifikasiPendaftaran(
         return {
           success: false,
           message: "Alasan penolakan wajib diisi jika menolak pendaftaran",
-        }
+        };
       }
 
       await prisma.$transaction(
@@ -250,7 +293,7 @@ export async function verifikasiPendaftaran(
               diverifikasiOlehId: guruUser.id,
               waktuVerifikasi: new Date(),
             },
-          })
+          });
 
           if (latestBuktiId) {
             await tx.buktiTransferPendaftaran.update({
@@ -261,69 +304,116 @@ export async function verifikasiPendaftaran(
                 diverifikasiOlehId: guruUser.id,
                 waktuVerifikasi: new Date(),
               },
-            })
+            });
           }
         },
-        { timeout: 10000, maxWait: 5000 }
-      )
+        { timeout: 10000, maxWait: 5000 },
+      );
 
-      revalidatePath("/dashboard/pendaftaran")
+      // Beri tahu orang tua/wali: pendaftaran ditolak + alasannya, agar tidak
+      // menunggu status yang tidak akan pernah berubah. Snapshot kontakWa pada
+      // record dipakai; fallback ke default bila kosong (pendaftaran lama).
+      //
+      // PENTING: dibungkus try/catch sendiri karena status SUDAH final di DB
+      // pada titik ini. Jika EMAIL yang melempar, admin tidak boleh melihat
+      // aksi "gagal" padahal penolakan sudah tersimpan — dan mengulangi aksi
+      // akan ditolak guard transisi status dengan pesan membingungkan.
+      let emailPenolakanTerkirim = false;
+      try {
+        const hasil = await sendPendaftaranDitolakEmail({
+          namaOrangTua: pendaftaran.namaOrangTua,
+          emailOrangTua: pendaftaran.emailOrangTua,
+          namaSiswa: pendaftaran.namaLengkap,
+          nomorPendaftaran: pendaftaran.nomorPendaftaran,
+          alasanPenolakan,
+          catatanAdmin: catatanAdmin || null,
+          kontakWa: pendaftaran.kontakWa || REKENING_PPDB_DEFAULT.kontakWa,
+        });
+        emailPenolakanTerkirim = hasil.success;
+        if (!hasil.success) {
+          console.error(
+            `[email] Email penolakan ${pendaftaran.nomorPendaftaran} gagal:`,
+            hasil.error,
+          );
+        }
+      } catch (error) {
+        console.error(
+          `[email] Error tak terduga saat mengirim email penolakan ${pendaftaran.nomorPendaftaran}:`,
+          error,
+        );
+      }
+
+      revalidatePath("/dashboard/pendaftaran");
       return {
         success: true,
-        message: `Pendaftaran ${pendaftaran.nomorPendaftaran} telah DITOLAK.`,
-      }
+        message: emailPenolakanTerkirim
+          ? `Pendaftaran ${pendaftaran.nomorPendaftaran} telah DITOLAK. Email pemberitahuan dikirim ke ${pendaftaran.emailOrangTua}.`
+          : `Pendaftaran ${pendaftaran.nomorPendaftaran} telah DITOLAK, tetapi email pemberitahuan GAGAL terkirim. Mohon informasikan penolakan secara manual ke ${pendaftaran.emailOrangTua}.`,
+      };
     }
 
     // --- CASE B: PENDAFTARAN DITERIMA ---
     if (status === "DITERIMA") {
-      const supabaseAdmin = createSupabaseAdmin()
+      const supabaseAdmin = createSupabaseAdmin();
 
       // ✅ Validasi kapasitas kelas sebelum menerima pendaftaran
       if (finalKelasId) {
         const kelas = await prisma.kelas.findUnique({
           where: { id: finalKelasId },
           include: { _count: { select: { siswa: true } } },
-        })
+        });
         if (!kelas) {
           return {
             success: false,
-            message: "Kelas tujuan tidak ditemukan. Pilih kelas yang tersedia sebelum menerima pendaftaran.",
-          }
+            message:
+              "Kelas tujuan tidak ditemukan. Pilih kelas yang tersedia sebelum menerima pendaftaran.",
+          };
         }
         if (kelas.kapasitas > 0 && kelas._count.siswa >= kelas.kapasitas) {
           return {
             success: false,
             message: `Kelas "${kelas.nama}" sudah penuh (${kelas._count.siswa}/${kelas.kapasitas}). Pilih kelas lain sebelum menerima pendaftaran.`,
-          }
+          };
         }
 
         // ✅ Validasi kecocokan gender pendaftar dengan kelas tujuan
-        if (kelas && kelas.jenisKelamin && pendaftaran.jenisKelamin && kelas.jenisKelamin !== pendaftaran.jenisKelamin) {
-          const labelKelas = kelas.jenisKelamin === "LAKI_LAKI" ? "Ikhwan" : "Akhwat"
+        if (
+          kelas &&
+          kelas.jenisKelamin &&
+          pendaftaran.jenisKelamin &&
+          kelas.jenisKelamin !== pendaftaran.jenisKelamin
+        ) {
+          const labelKelas =
+            kelas.jenisKelamin === "LAKI_LAKI" ? "Ikhwan" : "Akhwat";
           return {
             success: false,
             message: `Kelas "${kelas.nama}" adalah kelas khusus ${labelKelas} dan tidak sesuai dengan jenis kelamin pendaftar. Pilih kelas tujuan yang sesuai sebelum menerima.`,
-          }
+          };
         }
       }
 
       // Amankan credentials secara random. Password ortu hanya digenerate bila
       // akun ortu benar-benar BARU akan dibuat. Jika email ortu sudah punya akun
       // (reuse authId), password lama tetap dipakai — TIDAK ada password ortu baru.
-      let passwordOrangTua: string | undefined
-      const passwordSiswa = generateSecurePassword(14)
+      let passwordOrangTua: string | undefined;
+      const passwordSiswa = generateSecurePassword(14);
 
-      const emailOrtu = pendaftaran.emailOrangTua.toLowerCase().trim()
-      const cleanNomor = pendaftaran.nomorPendaftaran.toLowerCase().replace(/[^a-z0-9]/g, "")
-      const emailSiswa = `siswa.${cleanNomor}@sekolah.internal`
+      const emailOrtu = pendaftaran.emailOrangTua.toLowerCase().trim();
+      const cleanNomor = pendaftaran.nomorPendaftaran
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+      const emailSiswa = `siswa.${cleanNomor}@sekolah.internal`;
 
-      const newlyCreatedAuthIds: string[] = []
-      let authOrtuId: string
-      let ortuAlreadyExisted = false
-      let ortuRecordBaruDibuat = false
+      const newlyCreatedAuthIds: string[] = [];
+      let authOrtuId: string;
+      let ortuAlreadyExisted = false;
+      // Id siswa hasil approval; dipakai SETELAH transaksi commit untuk menyalin
+      // dokumen pendaftaran ke bucket berkas-siswa.
+      let siswaIdTerverifikasi: string | null = null;
+      let ortuRecordBaruDibuat = false;
 
       // Create Supabase Auth Orang Tua
-      passwordOrangTua = generateSecurePassword(14)
+      passwordOrangTua = generateSecurePassword(14);
       const { data: authOrtuData, error: authOrtuError } =
         await supabaseAdmin.auth.admin.createUser({
           email: emailOrtu,
@@ -333,28 +423,33 @@ export async function verifikasiPendaftaran(
             nama: pendaftaran.namaOrangTua,
             role: Role.ORANG_TUA,
           },
-        })
+        });
 
       if (authOrtuError) {
         if (authOrtuError.message.includes("already been registered")) {
           // Paginate dengan perPage besar agar lookup tidak terbatas pada 50 user
           // pertama (listUsers default 50). Email orang tua bisa berada di halaman berikutnya.
-          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
-            perPage: 1000,
-          })
-          const matched = existingUsers.users.find((u) => u.email === emailOrtu)
-          if (!matched) throw new Error("Gagal memetakan akun auth orang tua")
-          authOrtuId = matched.id
-          ortuAlreadyExisted = true
+          const { data: existingUsers } =
+            await supabaseAdmin.auth.admin.listUsers({
+              perPage: 1000,
+            });
+          const matched = existingUsers.users.find(
+            (u) => u.email === emailOrtu,
+          );
+          if (!matched) throw new Error("Gagal memetakan akun auth orang tua");
+          authOrtuId = matched.id;
+          ortuAlreadyExisted = true;
           // Akun reuse: password ortu "baru" yang digenerate tidak dipakai
           // kemana-mana (createUser gagal, akun lama tidak diubah).
-          passwordOrangTua = undefined
+          passwordOrangTua = undefined;
         } else {
-          throw new Error(`Gagal membuat akun auth orang tua: ${authOrtuError.message}`)
+          throw new Error(
+            `Gagal membuat akun auth orang tua: ${authOrtuError.message}`,
+          );
         }
       } else {
-        authOrtuId = authOrtuData.user.id
-        if (!ortuAlreadyExisted) newlyCreatedAuthIds.push(authOrtuId)
+        authOrtuId = authOrtuData.user.id;
+        if (!ortuAlreadyExisted) newlyCreatedAuthIds.push(authOrtuId);
       }
 
       // Create Supabase Auth Siswa
@@ -367,15 +462,17 @@ export async function verifikasiPendaftaran(
             nama: pendaftaran.namaLengkap,
             role: Role.SISWA,
           },
-        })
+        });
 
       if (authSiswaError) {
-        await cleanupAuthUsers(supabaseAdmin, newlyCreatedAuthIds)
-        throw new Error(`Gagal membuat akun auth siswa: ${authSiswaError.message}`)
+        await cleanupAuthUsers(supabaseAdmin, newlyCreatedAuthIds);
+        throw new Error(
+          `Gagal membuat akun auth siswa: ${authSiswaError.message}`,
+        );
       }
 
-      const authSiswaId = authSiswaData.user.id
-      newlyCreatedAuthIds.push(authSiswaId)
+      const authSiswaId = authSiswaData.user.id;
+      newlyCreatedAuthIds.push(authSiswaId);
 
       // ✅ Prisma Transaction with strict rollback cleanup
       try {
@@ -393,7 +490,10 @@ export async function verifikasiPendaftaran(
               const [nisnSiswa, nisnPendaftaran] = await Promise.all([
                 tx.siswa.findUnique({
                   where: { nisn: pendaftaran.nisn },
-                  select: { id: true, user: { select: { nama: true, id: true } } },
+                  select: {
+                    id: true,
+                    user: { select: { nama: true, id: true } },
+                  },
                 }),
                 tx.pendaftaran.findFirst({
                   where: {
@@ -406,226 +506,308 @@ export async function verifikasiPendaftaran(
                       ],
                     },
                   },
-                  select: { nomorPendaftaran: true, namaLengkap: true, status: true },
+                  select: {
+                    nomorPendaftaran: true,
+                    namaLengkap: true,
+                    status: true,
+                  },
                 }),
-              ])
+              ]);
               if (nisnSiswa) {
                 throw new AppError(
-                  `NISN "${pendaftaran.nisn}" sudah terdaftar atas nama ${nisnSiswa.user.nama}. Mohon periksa kembali data pendaftaran ini sebelum melanjutkan.`
-                )
+                  `NISN "${pendaftaran.nisn}" sudah terdaftar atas nama ${nisnSiswa.user.nama}. Mohon periksa kembali data pendaftaran ini sebelum melanjutkan.`,
+                );
               }
               if (nisnPendaftaran) {
                 throw new AppError(
-                  `NISN "${pendaftaran.nisn}" sudah digunakan pada pendaftaran lain (Nomor: ${nisnPendaftaran.nomorPendaftaran}, atas nama ${nisnPendaftaran.namaLengkap}) yang sedang ${nisnPendaftaran.status === StatusPendaftaran.MENUNGGU_VERIFIKASI ? "diverifikasi admin" : "menunggu pembayaran"}. Satu NISN hanya boleh untuk satu calon siswa. Mohon periksa kembali.`
-                )
+                  `NISN "${pendaftaran.nisn}" sudah digunakan pada pendaftaran lain (Nomor: ${nisnPendaftaran.nomorPendaftaran}, atas nama ${nisnPendaftaran.namaLengkap}) yang sedang ${nisnPendaftaran.status === StatusPendaftaran.MENUNGGU_VERIFIKASI ? "diverifikasi admin" : "menunggu pembayaran"}. Satu NISN hanya boleh untuk satu calon siswa. Mohon periksa kembali.`,
+                );
               }
             }
 
             // Find existing user by authId + role first, then by email as fallback
-          // (handles cases where authId differs but email matches — e.g. parent
-          // re-registers with a new Supabase auth but the DB still has the old record)
-          let userOrtu = await tx.user.findFirst({
-            where: { authId: authOrtuId, role: Role.ORANG_TUA },
-          })
+            // (handles cases where authId differs but email matches — e.g. parent
+            // re-registers with a new Supabase auth but the DB still has the old record)
+            let userOrtu = await tx.user.findFirst({
+              where: { authId: authOrtuId, role: Role.ORANG_TUA },
+            });
 
-          if (!userOrtu) {
-            userOrtu = await tx.user.findFirst({
-              where: { email: emailOrtu, role: Role.ORANG_TUA },
-            })
-            if (userOrtu) {
-              await tx.user.update({
-                where: { id: userOrtu.id },
-                data: { authId: authOrtuId },
-              })
+            if (!userOrtu) {
+              userOrtu = await tx.user.findFirst({
+                where: { email: emailOrtu, role: Role.ORANG_TUA },
+              });
+              if (userOrtu) {
+                await tx.user.update({
+                  where: { id: userOrtu.id },
+                  data: { authId: authOrtuId },
+                });
+              }
             }
-          }
 
-          // Jangan pernah mengambil/menimpa record user dengan role lain (misal
-          // ADMIN_KEUANGAN/GURU) yang ber-email sama. Satu orang bisa punya
-          // beberapa role, dan role ORANG_TUA harus punya record tersendiri agar
-          // muncul di fitur "Ganti Akun" dan bisa login sebagai wali santri.
-          if (!userOrtu) {
-            userOrtu = await tx.user.create({
-              data: {
-                email: emailOrtu,
-                username: await deriveUniqueUsername(tx, emailOrtu),
-                nama: pendaftaran.namaOrangTua,
-                role: Role.ORANG_TUA,
-                authId: authOrtuId,
-                // Akun reuse (email sudah punya akun di role lain): tidak ada
-                // password baru → jangan paksa ganti password.
-                ...(ortuAlreadyExisted
-                  ? { mustChangePassword: false }
-                  : { mustChangePassword: true }),
-                aktif: true,
-                orangTua: {
-                  create: {
-                    noHp: pendaftaran.noHpOrangTua,
-                    alamat: pendaftaran.alamatOrangTua || pendaftaran.alamatSiswa,
-                  },
-                },
-              },
-            })
-            if (ortuAlreadyExisted) {
-              // Record ORANG_TUA ini BARU dibuat dari akun yang email-nya sudah
-              // punya akun lain (reuse authId) → peran ORANG_TUA baru ditambahkan.
-              ortuRecordBaruDibuat = true
-            }
-          } else if (userOrtu.aktif === false) {
-            // Reaktivasi akun orang tua yang pernah dinonaktifkan (orang tua dengan
-            // anak kedua+ yang sebelumnya dia nonaktifkan / record lama).
-            await tx.user.update({
-              where: { id: userOrtu.id },
-              data: { aktif: true },
-            })
-          }
-
-          const orangTuaRecord = await tx.orangTua.findUnique({
-            where: { userId: userOrtu.id, deleted_at: null },
-          })
-
-          let userSiswa = await tx.user.findFirst({
-            where: { authId: authSiswaId, role: Role.SISWA },
-          })
-
-          if (!userSiswa) {
-            userSiswa = await tx.user.findFirst({
-              where: { email: emailSiswa, role: Role.SISWA },
-            })
-            if (userSiswa) {
-              await tx.user.update({
-                where: { id: userSiswa.id },
-                data: { authId: authSiswaId },
-              })
-            }
-          }
-
-          // Re-check kapasitas + gender kelas DI DALAM transaction untuk
-          if (finalKelasId) {
-            const kelasTx = await tx.kelas.findUnique({
-              where: { id: finalKelasId },
-              include: { _count: { select: { siswa: true } } },
-            })
-            if (!kelasTx) {
-              throw new AppError("Kelas tujuan tidak ditemukan pada saat verifikasi.")
-            }
-            if (
-              kelasTx &&
-              kelasTx.kapasitas > 0 &&
-              kelasTx._count.siswa >= kelasTx.kapasitas
-            ) {
-              throw new AppError(
-                `Kelas "${kelasTx.nama}" sudah penuh (${kelasTx._count.siswa}/${kelasTx.kapasitas}).`
-              )
-            }
-            if (kelasTx && !siswaCocokKelas(pendaftaran.jenisKelamin, kelasTx.jenisKelamin)) {
-              throw new AppError(
-                `Kelas "${kelasTx.nama}" adalah kelas khusus gender yang tidak sesuai dengan jenis kelamin pendaftar.`
-              )
-            }
-          }
-
-          if (!userSiswa) {
-            const existingByEmail = await tx.user.findFirst({
-              where: { email: emailSiswa, role: Role.SISWA },
-            })
-            if (existingByEmail) {
-              userSiswa = existingByEmail
-              await tx.user.update({
-                where: { id: userSiswa.id },
-                data: { authId: authSiswaId },
-              })
-            } else {
-              userSiswa = await tx.user.create({
+            // Jangan pernah mengambil/menimpa record user dengan role lain (misal
+            // ADMIN_KEUANGAN/GURU) yang ber-email sama. Satu orang bisa punya
+            // beberapa role, dan role ORANG_TUA harus punya record tersendiri agar
+            // muncul di fitur "Ganti Akun" dan bisa login sebagai wali santri.
+            if (!userOrtu) {
+              userOrtu = await tx.user.create({
                 data: {
-                  email: emailSiswa,
-                  username: await deriveUniqueUsername(tx, emailSiswa),
-                  nama: pendaftaran.namaLengkap,
-                  role: Role.SISWA,
-                  authId: authSiswaId,
-                  mustChangePassword: true,
-                  siswa: {
+                  email: emailOrtu,
+                  username: await deriveUniqueUsername(tx, emailOrtu),
+                  nama: pendaftaran.namaOrangTua,
+                  role: Role.ORANG_TUA,
+                  authId: authOrtuId,
+                  // Akun reuse (email sudah punya akun di role lain): tidak ada
+                  // password baru → jangan paksa ganti password.
+                  ...(ortuAlreadyExisted
+                    ? { mustChangePassword: false }
+                    : { mustChangePassword: true }),
+                  aktif: true,
+                  orangTua: {
                     create: {
-                      nisn: pendaftaran.nisn || null,
-                      agama: pendaftaran.agama || null,
-                      tempatLahir: pendaftaran.tempatLahir,
-                      tanggalLahir: pendaftaran.tanggalLahir,
-                      jenisKelamin: pendaftaran.jenisKelamin,
-                      alamat: pendaftaran.alamatSiswa,
-                      noHpSiswa: pendaftaran.noHpSiswa || null,
-                      namaAyahKandung: pendaftaran.namaAyahKandung || null,
-                      statusAyahKandung: pendaftaran.statusAyahKandung || null,
-                      nikAyah: pendaftaran.nikAyah || null,
-                      namaIbuKandung: pendaftaran.namaIbuKandung || null,
-                      statusIbuKandung: pendaftaran.statusIbuKandung || null,
-                      nikIbu: pendaftaran.nikIbu || null,
-                      statusWali: pendaftaran.statusWali || null,
-                      namaWali: pendaftaran.namaWali || null,
-                      kewarganegaraan: pendaftaran.kewarganegaraan || "WNI",
-                      kitas: pendaftaran.kitas || null,
-                      asalNegara: pendaftaran.asalNegara || null,
-                      kelasId: finalKelasId,
-                      pendaftaranId: pendaftaran.id,
+                      noHp: pendaftaran.noHpOrangTua,
+                      alamat:
+                        pendaftaran.alamatOrangTua || pendaftaran.alamatSiswa,
                     },
                   },
                 },
-              })
+              });
+              if (ortuAlreadyExisted) {
+                // Record ORANG_TUA ini BARU dibuat dari akun yang email-nya sudah
+                // punya akun lain (reuse authId) → peran ORANG_TUA baru ditambahkan.
+                ortuRecordBaruDibuat = true;
+              }
+            } else if (userOrtu.aktif === false) {
+              // Reaktivasi akun orang tua yang pernah dinonaktifkan (orang tua dengan
+              // anak kedua+ yang sebelumnya dia nonaktifkan / record lama).
+              await tx.user.update({
+                where: { id: userOrtu.id },
+                data: { aktif: true },
+              });
             }
-          }
 
-          const siswaRecord = await tx.siswa.findUnique({
-            where: { userId: userSiswa.id, deleted_at: null },
-          })
+            const orangTuaRecord = await tx.orangTua.findUnique({
+              where: { userId: userOrtu.id, deleted_at: null },
+            });
 
-          if (orangTuaRecord && siswaRecord) {
-            const existingRelation = await tx.parentStudent.findUnique({
-              where: {
-                orangTuaId_siswaId: {
-                  orangTuaId: orangTuaRecord.id,
-                  siswaId: siswaRecord.id,
+            let userSiswa = await tx.user.findFirst({
+              where: { authId: authSiswaId, role: Role.SISWA },
+            });
+
+            if (!userSiswa) {
+              userSiswa = await tx.user.findFirst({
+                where: { email: emailSiswa, role: Role.SISWA },
+              });
+              if (userSiswa) {
+                await tx.user.update({
+                  where: { id: userSiswa.id },
+                  data: { authId: authSiswaId },
+                });
+              }
+            }
+
+            // Re-check kapasitas + gender kelas DI DALAM transaction untuk
+            if (finalKelasId) {
+              const kelasTx = await tx.kelas.findUnique({
+                where: { id: finalKelasId },
+                include: { _count: { select: { siswa: true } } },
+              });
+              if (!kelasTx) {
+                throw new AppError(
+                  "Kelas tujuan tidak ditemukan pada saat verifikasi.",
+                );
+              }
+              if (
+                kelasTx &&
+                kelasTx.kapasitas > 0 &&
+                kelasTx._count.siswa >= kelasTx.kapasitas
+              ) {
+                throw new AppError(
+                  `Kelas "${kelasTx.nama}" sudah penuh (${kelasTx._count.siswa}/${kelasTx.kapasitas}).`,
+                );
+              }
+              if (
+                kelasTx &&
+                !siswaCocokKelas(pendaftaran.jenisKelamin, kelasTx.jenisKelamin)
+              ) {
+                throw new AppError(
+                  `Kelas "${kelasTx.nama}" adalah kelas khusus gender yang tidak sesuai dengan jenis kelamin pendaftar.`,
+                );
+              }
+            }
+
+            if (!userSiswa) {
+              const existingByEmail = await tx.user.findFirst({
+                where: { email: emailSiswa, role: Role.SISWA },
+              });
+              if (existingByEmail) {
+                userSiswa = existingByEmail;
+                await tx.user.update({
+                  where: { id: userSiswa.id },
+                  data: { authId: authSiswaId },
+                });
+              } else {
+                userSiswa = await tx.user.create({
+                  data: {
+                    email: emailSiswa,
+                    username: await deriveUniqueUsername(tx, emailSiswa),
+                    nama: pendaftaran.namaLengkap,
+                    role: Role.SISWA,
+                    authId: authSiswaId,
+                    mustChangePassword: true,
+                    siswa: {
+                      create: {
+                        nisn: pendaftaran.nisn || null,
+                        agama: pendaftaran.agama || null,
+                        tempatLahir: pendaftaran.tempatLahir,
+                        tanggalLahir: pendaftaran.tanggalLahir,
+                        jenisKelamin: pendaftaran.jenisKelamin,
+                        alamat: pendaftaran.alamatSiswa,
+                        noHpSiswa: pendaftaran.noHpSiswa || null,
+                        namaAyahKandung: pendaftaran.namaAyahKandung || null,
+                        statusAyahKandung:
+                          pendaftaran.statusAyahKandung || null,
+                        nikAyah: pendaftaran.nikAyah || null,
+                        namaIbuKandung: pendaftaran.namaIbuKandung || null,
+                        statusIbuKandung: pendaftaran.statusIbuKandung || null,
+                        nikIbu: pendaftaran.nikIbu || null,
+                        statusWali: pendaftaran.statusWali || null,
+                        namaWali: pendaftaran.namaWali || null,
+                        kewarganegaraan: pendaftaran.kewarganegaraan || "WNI",
+                        kitas: pendaftaran.kitas || null,
+                        asalNegara: pendaftaran.asalNegara || null,
+                        kelasId: finalKelasId,
+                        pendaftaranId: pendaftaran.id,
+                      },
+                    },
+                  },
+                });
+              }
+            }
+
+            const siswaRecord = await tx.siswa.findUnique({
+              where: { userId: userSiswa.id, deleted_at: null },
+            });
+
+            siswaIdTerverifikasi = siswaRecord?.id ?? null;
+
+            if (orangTuaRecord && siswaRecord) {
+              const existingRelation = await tx.parentStudent.findUnique({
+                where: {
+                  orangTuaId_siswaId: {
+                    orangTuaId: orangTuaRecord.id,
+                    siswaId: siswaRecord.id,
+                  },
                 },
-              },
-            })
+              });
 
-            if (!existingRelation) {
-              await tx.parentStudent.create({
+              if (!existingRelation) {
+                await tx.parentStudent.create({
+                  data: {
+                    orangTuaId: orangTuaRecord.id,
+                    siswaId: siswaRecord.id,
+                    hubungan: "Orang Tua",
+                  },
+                });
+              }
+            }
+
+            if (latestBuktiId) {
+              await tx.buktiTransferPendaftaran.update({
+                where: { id: latestBuktiId },
                 data: {
-                  orangTuaId: orangTuaRecord.id,
-                  siswaId: siswaRecord.id,
-                  hubungan: "Orang Tua",
+                  status: StatusVerifikasiBukti.DITERIMA,
+                  diverifikasiOlehId: guruUser.id,
+                  waktuVerifikasi: new Date(),
                 },
-              })
+              });
             }
-          }
 
-          if (latestBuktiId) {
-            await tx.buktiTransferPendaftaran.update({
-              where: { id: latestBuktiId },
+            await tx.pendaftaran.update({
+              where: { id: pendaftaranId },
               data: {
-                status: StatusVerifikasiBukti.DITERIMA,
+                status: StatusPendaftaran.DITERIMA,
+                catatanAdmin: catatanAdmin || null,
+                kelasTujuanId: finalKelasId,
                 diverifikasiOlehId: guruUser.id,
                 waktuVerifikasi: new Date(),
               },
-            })
-          }
-
-          await tx.pendaftaran.update({
-            where: { id: pendaftaranId },
-            data: {
-              status: StatusPendaftaran.DITERIMA,
-              catatanAdmin: catatanAdmin || null,
-              kelasTujuanId: finalKelasId,
-              diverifikasiOlehId: guruUser.id,
-              waktuVerifikasi: new Date(),
-            },
-          })
+            });
           },
-          { timeout: 15000, maxWait: 5000 }
-        )
+          { timeout: 15000, maxWait: 5000 },
+        );
       } catch (txError) {
-        console.error("Prisma transaction error, rolling back Supabase Users...", txError)
-        await cleanupAuthUsers(supabaseAdmin, newlyCreatedAuthIds)
-        throw txError
+        console.error(
+          "Prisma transaction error, rolling back Supabase Users...",
+          txError,
+        );
+        await cleanupAuthUsers(supabaseAdmin, newlyCreatedAuthIds);
+        throw txError;
+      }
+
+      // Salin dokumen pendaftaran ke bucket `berkas-siswa` supaya langsung
+      // menyatu dengan berkas siswa. Dilakukan SETELAH transaksi commit:
+      //   - ID siswa baru hanya ada setelah commit, sedangkan path tujuan butuh
+      //     siswaId.
+      //   - I/O storage di dalam transaksi menahan lock DB terlalu lama, dan
+      //     rollback transaksi tidak akan membatalkan file yang sudah tercopy.
+      //
+      // Best-effort: kegagalan satu berkas tidak membatalkan approval (status
+      // sudah final), berkas gagal ditandai kosong agar wali bisa mengunggah
+      // ulang dari dashboard. Doc source tetap dipertahankan di pendaftaran.
+      let dokumenGagalDisalin = 0;
+      if (siswaIdTerverifikasi) {
+        // Path tujuan yang sudah tercopy, dipakai untuk membersihkannya bila
+        // penulisan path ke DB gagal (lihat catch di bawah).
+        let pathTersalin: string[] = [];
+        try {
+          const hasilSalin = await salinDokumenPendaftaranKeSiswa(
+            siswaIdTerverifikasi,
+            {
+              kartuKeluarga: pendaftaran.dokKartuKeluarga,
+              akteLahir: pendaftaran.dokAkteLahir,
+              foto: pendaftaran.dokFoto,
+              lainnya: Array.isArray(pendaftaran.dokLainnya)
+                ? pendaftaran.dokLainnya
+                : [],
+            },
+          );
+
+          dokumenGagalDisalin = hasilSalin.gagal.length;
+          pathTersalin = hasilSalin.tersalin;
+
+          await prisma.siswa.update({
+            where: { id: siswaIdTerverifikasi },
+            data: {
+              dokKartuKeluarga: hasilSalin.kartuKeluarga,
+              dokAkteLahir: hasilSalin.akteLahir,
+              dokFoto: hasilSalin.foto,
+              dokLainnya: hasilSalin.lainnya,
+            },
+          });
+
+          pathTersalin = [];
+        } catch (copyError) {
+          dokumenGagalDisalin = 1;
+          console.error(
+            `Gagal menyalin dokumen pendaftaran ${pendaftaran.nomorPendaftaran}:`,
+            copyError,
+          );
+
+          // Approval sudah commit dan tidak bisa di-rollback, jadi file yang
+          // sudah tercopy tapi tidak tercatat di DB akan menggantung sebagai
+          // arsip PII yang tidak tertaut. Hapus agar tidak tertinggal.
+          if (pathTersalin.length > 0) {
+            await supabaseAdmin.storage
+              .from(BERKAS_BUCKET)
+              .remove(pathTersalin)
+              .catch((removeError) => {
+                console.error(
+                  `Gagal membersihkan ${pathTersalin.length} berkas yatim:`,
+                  removeError,
+                );
+              });
+          }
+        }
       }
 
       // Kirim email kredensial / pemberitahuan.
@@ -660,7 +842,7 @@ export async function verifikasiPendaftaran(
               passwordSiswa,
               nomorPendaftaran: pendaftaran.nomorPendaftaran,
             }),
-      })
+      });
 
       if (ortuAlreadyExisted && ortuRecordBaruDibuat) {
         await sendEmail({
@@ -671,23 +853,31 @@ export async function verifikasiPendaftaran(
             email: emailOrtu,
             roleBaru: "Orang Tua",
           }),
-        })
+        });
       }
 
-      revalidatePath("/dashboard/pendaftaran")
-      revalidatePath("/dashboard/siswa")
+      revalidatePath("/dashboard/pendaftaran");
+      revalidatePath("/dashboard/siswa");
+      revalidatePath("/dashboard/berkas");
       return {
         success: true,
-        message: `Pendaftaran ${pendaftaran.nomorPendaftaran} DITERIMA. Akun login telah dikirimkan ke ${emailOrtu}.`,
-      }
+        message:
+          `Pendaftaran ${pendaftaran.nomorPendaftaran} DITERIMA. Akun login telah dikirimkan ke ${emailOrtu}.` +
+          (dokumenGagalDisalin > 0
+            ? ` ${dokumenGagalDisalin} dokumen gagal disalin ke berkas siswa — wali dapat mengunggah ulang dari dashboard.`
+            : ""),
+      };
     }
 
-    return { success: false, message: "Status verifikasi tidak dikenali" }
+    return { success: false, message: "Status verifikasi tidak dikenali" };
   } catch (error: unknown) {
-    console.error("Error verifikasiPendaftaran:", error)
+    console.error("Error verifikasiPendaftaran:", error);
     return {
       success: false,
-      message: toUserFriendlyError(error, "Terjadi kesalahan saat memproses verifikasi. Silakan coba lagi atau hubungi admin."),
-    }
+      message: toUserFriendlyError(
+        error,
+        "Terjadi kesalahan saat memproses verifikasi. Silakan coba lagi atau hubungi admin.",
+      ),
+    };
   }
 }

@@ -17,9 +17,9 @@ model User {
   authId                  String                     @map("auth_id") @db.Uuid
   aktif                   Boolean                    @default(true)
   mustChangePassword      Boolean                    @default(false) @map("must_change_password")
-  lastPasswordChange      DateTime? @db.Timestamptz(3)                  @map("last_password_change")
-  createdAt               DateTime @db.Timestamptz(3)                   @default(now()) @map("created_at")
-  updatedAt               DateTime @db.Timestamptz(3)                   @updatedAt @map("updated_at")
+  lastPasswordChange      DateTime?                  @map("last_password_change") @db.Timestamptz(3)
+  createdAt               DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
   isAdmin                 Boolean                    @default(false) @map("is_admin")
   username                String?                    @unique
   deleted_at              DateTime?                  @db.Timestamptz(6)
@@ -35,6 +35,7 @@ model User {
   passwordResetTokens     PasswordResetToken[]
   pembayaranDikonfirmasi  PembayaranSiswa[]          @relation("PembayaranDikonfirmasi")
   verifikasiPendaftaran   Pendaftaran[]              @relation("VerifiedBy")
+  verifikasiEmailManual   Pendaftaran[]              @relation("EmailVerifiedManuallyBy")
   penilaianTugas          PengumpulanTugas[]         @relation("TugasDinilaiOleh")
   penilaianUjianManual    PengerjaanUjian[]          @relation("PengerjaanDinilaiOleh")
   pengumumans             pengumumans[]
@@ -58,8 +59,8 @@ model Guru {
   nip          String?           @unique
   jabatan      String?
   noHp         String?           @map("no_hp")
-  createdAt    DateTime @db.Timestamptz(3)          @default(now()) @map("created_at")
-  updatedAt    DateTime @db.Timestamptz(3)          @updatedAt @map("updated_at")
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
   jenisKelamin JenisKelamin?     @map("jenis_kelamin")
   deleted_at   DateTime?         @db.Timestamptz(6)
   catatanRapor CatatanRapor[]
@@ -79,14 +80,14 @@ model Siswa {
   nis               String?             @unique
   agama             String?
   tempatLahir       String?             @map("tempat_lahir")
-  tanggalLahir      DateTime? @db.Timestamptz(3)           @map("tanggal_lahir")
+  tanggalLahir      DateTime?           @map("tanggal_lahir") @db.Timestamptz(3)
   jenisKelamin      JenisKelamin        @map("jenis_kelamin")
   alamat            String?
   kelasId           String?             @map("kelas_id")
   pendaftaranId     String?             @unique @map("pendaftaran_id")
   sppKhusus         Decimal?            @map("spp_khusus") @db.Decimal(12, 2)
-  createdAt         DateTime @db.Timestamptz(3)            @default(now()) @map("created_at")
-  updatedAt         DateTime @db.Timestamptz(3)            @updatedAt @map("updated_at")
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
   noHpSiswa         String?             @map("no_hp_siswa")
   namaAyahKandung   String?             @map("nama_ayah_kandung")
   statusAyahKandung StatusOrangTua?     @map("status_ayah_kandung")
@@ -129,8 +130,8 @@ model OrangTua {
   userId     String          @unique @map("user_id")
   noHp       String?         @map("no_hp")
   alamat     String?
-  createdAt  DateTime @db.Timestamptz(3)        @default(now()) @map("created_at")
-  updatedAt  DateTime @db.Timestamptz(3)        @updatedAt @map("updated_at")
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
   deleted_at DateTime?       @db.Timestamptz(6)
   user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   siswa      ParentStudent[]
@@ -144,7 +145,7 @@ model ParentStudent {
   orangTuaId String   @map("orang_tua_id")
   siswaId    String   @map("siswa_id")
   hubungan   String   @default("Orang Tua")
-  createdAt  DateTime @db.Timestamptz(3) @default(now()) @map("created_at")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   orangTua   OrangTua @relation(fields: [orangTuaId], references: [id], onDelete: Cascade)
   siswa      Siswa    @relation(fields: [siswaId], references: [id], onDelete: Cascade)
 
@@ -156,22 +157,22 @@ model ParentStudent {
 }
 
 model MataPelajaran {
-  id         String               @id @default(cuid())
-  kode       String               @unique
-  nama       String
-  kelompok   String?
-  aktif      Boolean              @default(true)
-  createdAt  DateTime @db.Timestamptz(3)             @default(now()) @map("created_at")
-  updatedAt  DateTime @db.Timestamptz(3)             @updatedAt @map("updated_at")
-  jenjangId  String?              @map("jenjang_id")
-  jenisKelamin JenisKelamin?      @map("jenis_kelamin")
-  guruKelas  GuruKelas[]
-  mapelKelas MapelKelas[]
-  jenjang    Jenjang?             @relation(fields: [jenjangId], references: [id])
-  materi     MateriPembelajaran[]
-  nilaiRapor NilaiRapor[]
-  tugas      Tugas[]
-  ujian      Ujian[]
+  id           String               @id @default(cuid())
+  kode         String               @unique
+  nama         String
+  kelompok     String?
+  aktif        Boolean              @default(true)
+  createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  jenjangId    String?              @map("jenjang_id")
+  jenisKelamin JenisKelamin?        @map("jenis_kelamin")
+  guruKelas    GuruKelas[]
+  mapelKelas   MapelKelas[]
+  jenjang      Jenjang?             @relation(fields: [jenjangId], references: [id])
+  materi       MateriPembelajaran[]
+  nilaiRapor   NilaiRapor[]
+  tugas        Tugas[]
+  ujian        Ujian[]
 
   @@index([jenjangId])
   @@index([jenjangId], map: "idx_mapel_jenjang")
@@ -179,20 +180,20 @@ model MataPelajaran {
 }
 
 model Jenjang {
-  id              String          @id @default(cuid())
-  nama            String          @unique
-  urutan          Int             @unique
-  aktif           Boolean         @default(true)
-  tarifSppBulanan Decimal?        @map("tarif_spp_bulanan") @db.Decimal(12, 2)
+  id                   String          @id @default(cuid())
+  nama                 String          @unique
+  urutan               Int             @unique
+  aktif                Boolean         @default(true)
+  tarifSppBulanan      Decimal?        @map("tarif_spp_bulanan") @db.Decimal(12, 2)
   // Biaya PPDB per jenjang (diatur admin). null = pakai default (lihat src/lib/biaya-ppdb.ts).
-  biayaPendaftaranPPDB Decimal?   @map("biaya_pendaftaran_ppdb") @db.Decimal(12, 2)
-  biayaUangGedung      Decimal?   @map("biaya_uang_gedung") @db.Decimal(12, 2)
-  biayaSarpras         Decimal?   @map("biaya_sarpras") @db.Decimal(12, 2)
-  createdAt       DateTime @db.Timestamptz(3)        @default(now()) @map("created_at")
-  updatedAt       DateTime @db.Timestamptz(3)        @updatedAt @map("updated_at")
-  kelas           Kelas[]
-  mataPelajaran   MataPelajaran[]
-  pendaftaran     Pendaftaran[]
+  biayaPendaftaranPPDB Decimal?        @map("biaya_pendaftaran_ppdb") @db.Decimal(12, 2)
+  biayaUangGedung      Decimal?        @map("biaya_uang_gedung") @db.Decimal(12, 2)
+  biayaSarpras         Decimal?        @map("biaya_sarpras") @db.Decimal(12, 2)
+  createdAt            DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  kelas                Kelas[]
+  mataPelajaran        MataPelajaran[]
+  pendaftaran          Pendaftaran[]
 
   @@map("jenjangs")
 }
@@ -200,14 +201,14 @@ model Jenjang {
 // Pengaturan global biaya PPDB: rekening tujuan transfer & kontak konfirmasi WA.
 // Satu baris tunggal (id = 1). Diatur admin via /dashboard/biaya-ppdb.
 model PengaturanPPDB {
-  id            Int      @id @default(1)
-  bankNama      String   @default("BRI") @map("bank_nama")
-  bankNoRekening String  @default("321301015889536") @map("bank_no_rekening")
-  bankAtasNama  String   @default("Sadiman") @map("bank_atas_nama")
-  kontakWa      String   @default("6285702854133") @map("kontak_wa")
-  namaKontakWa  String   @default("Ust. Abu Wafidah") @map("nama_kontak_wa")
-  createdAt     DateTime @db.Timestamptz(3) @default(now()) @map("created_at")
-  updatedAt     DateTime @db.Timestamptz(3) @updatedAt @map("updated_at")
+  id             Int      @id @default(1)
+  bankNama       String   @default("BRI") @map("bank_nama")
+  bankNoRekening String   @default("321301015889536") @map("bank_no_rekening")
+  bankAtasNama   String   @default("Sadiman") @map("bank_atas_nama")
+  kontakWa       String   @default("6285702854133") @map("kontak_wa")
+  namaKontakWa   String   @default("Ust. Abu Wafidah") @map("nama_kontak_wa")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@map("pengaturan_ppdb")
 }
@@ -219,8 +220,8 @@ model Kelas {
   waliKelasId             String?              @map("wali_kelas_id")
   kapasitas               Int                  @default(30)
   aktif                   Boolean              @default(true)
-  createdAt               DateTime @db.Timestamptz(3)             @default(now()) @map("created_at")
-  updatedAt               DateTime @db.Timestamptz(3)             @updatedAt @map("updated_at")
+  createdAt               DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
   jenisKelamin            JenisKelamin?        @map("jenis_kelamin")
   absensi                 Absensi[]
   guruMengajar            GuruKelas[]
@@ -249,13 +250,13 @@ model PeriodeAjaran {
   nama           String               @unique
   tahunAjaran    String               @map("tahun_ajaran")
   semester       String
-  tanggalMulai   DateTime @db.Timestamptz(3)             @map("tanggal_mulai")
-  tanggalSelesai DateTime @db.Timestamptz(3)             @map("tanggal_selesai")
+  tanggalMulai   DateTime             @map("tanggal_mulai") @db.Timestamptz(3)
+  tanggalSelesai DateTime             @map("tanggal_selesai") @db.Timestamptz(3)
   aktif          Boolean              @default(false)
   // Tanggal pembuatan rapor akhir semester — diatur oleh admin (opsional).
-  tanggalRapor   DateTime? @db.Timestamptz(3)             @map("tanggal_rapor")
-  createdAt      DateTime @db.Timestamptz(3)             @default(now()) @map("created_at")
-  updatedAt      DateTime @db.Timestamptz(3)             @updatedAt @map("updated_at")
+  tanggalRapor   DateTime?            @map("tanggal_rapor") @db.Timestamptz(3)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
   absensi        Absensi[]
   anggotaEkskul  AnggotaEkskul[]
   catatanRapor   CatatanRapor[]
@@ -275,7 +276,7 @@ model GuruKelas {
   guruId          String        @map("guru_id")
   kelasId         String        @map("kelas_id")
   mataPelajaranId String        @map("mata_pelajaran_id")
-  createdAt       DateTime @db.Timestamptz(3)      @default(now()) @map("created_at")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   guru            Guru          @relation(fields: [guruId], references: [id], onDelete: Cascade)
   kelas           Kelas         @relation(fields: [kelasId], references: [id], onDelete: Cascade)
   mataPelajaran   MataPelajaran @relation(fields: [mataPelajaranId], references: [id], onDelete: Cascade)
@@ -293,7 +294,7 @@ model MapelKelas {
   id            String        @id @default(cuid())
   mapelId       String        @map("mapel_id")
   kelasId       String        @map("kelas_id")
-  createdAt     DateTime @db.Timestamptz(3)      @default(now()) @map("created_at")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   kelas         Kelas         @relation(fields: [kelasId], references: [id], onDelete: Cascade)
   mataPelajaran MataPelajaran @relation(fields: [mapelId], references: [id], onDelete: Cascade)
 
@@ -304,66 +305,155 @@ model MapelKelas {
 }
 
 model Pendaftaran {
-  id                 String                     @id @default(cuid())
-  nomorPendaftaran   String                     @unique @map("nomor_pendaftaran")
-  tokenAkses         String                     @unique @map("token_akses")
-  namaLengkap        String                     @map("nama_lengkap")
-  tempatLahir        String                     @map("tempat_lahir")
-  tanggalLahir       DateTime @db.Timestamptz(3)                   @map("tanggal_lahir")
-  jenisKelamin       JenisKelamin               @map("jenis_kelamin")
-  alamatSiswa        String                     @map("alamat_siswa")
-  nisn               String?
-  namaOrangTua       String                     @map("nama_orang_tua")
-  noHpOrangTua       String                     @map("no_hp_orang_tua")
-  emailOrangTua      String                     @map("email_orang_tua")
-  alamatOrangTua     String?                    @map("alamat_orang_tua")
-  jenjangTujuanId    String                     @map("jenjang_tujuan_id")
-  kelasTujuanId      String?                    @map("kelas_tujuan_id")
-  dokKartuKeluarga   String?                    @map("dok_kartu_keluarga")
-  dokAkteLahir       String?                    @map("dok_akte_lahir")
-  dokFoto            String?                    @map("dok_foto")
-  dokLainnya         String[]                   @default([]) @map("dok_lainnya")
-  status             StatusPendaftaran          @default(MENUNGGU_PEMBAYARAN)
+  id                                    String                     @id @default(cuid())
+  nomorPendaftaran                      String                     @unique @map("nomor_pendaftaran")
+  // Kredensial upload publik disimpan sebagai SHA-256, bukan plaintext, supaya
+  // bocornya dump database tidak langsung berarti kredensial valid. Token
+  // aslinya hanya ada satu kali di respon pendaftaran (localStorage klien).
+  // NULL = belum di-backfill (baris rusak) -> fail-closed saat verifikasi.
+  tokenAksesHash                        String?                    @unique @map("token_akses_hash")
+  // Batas akhir token akses. Setelah lewat, pemilik tidak lagi bisa mengunggah
+  // bukti transfer/dokumen lewat alur publik — dilengkapi dari dashboard setelah
+  // pendaftaran diterima. NULL = dianggap kedaluwarsa (fail-closed).
+  // `@db.Timestamptz(3)` WAJIB: kolom di DB bertipe timestamptz. Tanpa
+  // anotasi ini Prisma membacanya sebagai timestamp tanpa timezone, dan
+  // `migrate dev` lalu menulis ALTER COLUMN SET DATA TYPE tanpa diminta — hilangnya
+  // zona waktu, sekaligus membuat drift yang sulit dilacak.
+  // Tanpa `@default` dengan sengaja. Default pernah ada (90 hari dari
+  // now()), tapi bertentangan dengan prinsip fail-closed: kalau ada insert
+  // yang lupa mengisinya, NULL lebih baik daripada 90 hari akses diam-diam —
+  // `isTokenAksesBelumKedaluwarsa(null)` mengembalikan FALSE, jadi NULL
+  // langsung berarti kedaluwarsa dan kesalahannya ketahuan.
+  //
+  // `createPendaftaran` selalu mengirim nilainya secara eksplisit
+  // (`hitungTokenAksesExpiraAt()`), jadi tidak ada jalur yang bergantung pada
+  // default. Baris lama sudah di-backfill di migration 20260928000000.
+  tokenAksesExpiraAt                    DateTime?                  @map("token_akses_expira_at") @db.Timestamptz(3)
+  namaLengkap                           String                     @map("nama_lengkap")
+  tempatLahir                           String                     @map("tempat_lahir")
+  tanggalLahir                          DateTime                   @map("tanggal_lahir") @db.Timestamptz(3)
+  jenisKelamin                          JenisKelamin               @map("jenis_kelamin")
+  alamatSiswa                           String                     @map("alamat_siswa")
+  nisn                                  String?
+  namaOrangTua                          String                     @map("nama_orang_tua")
+  noHpOrangTua                          String                     @map("no_hp_orang_tua")
+  emailOrangTua                         String                     @map("email_orang_tua")
+  // Waktu email orang tua berhasil diverifikasi lewat OTP. Sampai terisi,
+  // alur publik (unggah dokumen & bukti transfer) masih terkunci supaya tidak
+  // ada pendaftaran fiktif yang menyusul ke meja panitia.
+  // NULL = belum diverifikasi. Pendaftaran lama di-backfill migration agar
+  // tidak terkunci (grandfathering).
+  emailOrangTuaTerverifikasiAt          DateTime?                  @map("email_orang_tua_terverifikasi_at") @db.Timestamptz(3)
+  // Bukti NYATA bahwa pemilik email selesai memasukkan kode OTP. Dibedakan
+  // dari `emailOrangTuaTerverifikasiAt` yang hanya menandai "gerbang terbuka".
+  //
+  // Kenapa perlu dua kolom? Kolom pertama pernah diisi untuk pendaftaran lama
+  // saat grandfathering, tanpa ada bukti apa pun. Kalau cuma ada satu kolom,
+  // committee tidak bisa membedakan "sudah terverifikasi beneran" dari
+  // "cuma warisan" — dan mewajibkan verifikasi tidak akan berlaku ke data
+  // lama karena semuanya sudah terisi.
+  //
+  // NULL = belum pernah selesai OTP (termasuk semua baris grandfather).
+  // Tidak ada default, dan sengaja tidak di-backfill — justru itu tujuannya.
+  emailOrangTuaDiverifikasiOtpAt        DateTime?                  @map("email_orang_tua_diverifikasi_otp_at") @db.Timestamptz(3)
+  // Jejak verifikasi MANUAL committee, terpisah dari `catatanAdmin`.
+  //
+  // Kenapa kolom sendiri? `catatanAdmin` ditimpa setiap kali ada approval /
+  // penolakan (`catatanAdmin: catatanAdmin || null`). Kalau jejak manual ikut
+  // menumpang di sana, begitu panitia menyetujui pendaftaran, bukti bahwa email
+  // ini diverifikasi manual hilang permanen dan tidak bisa direkonstruksi
+  // dari kolom mana pun.
+  //
+  // Tiga kolom, bukan satu: kapan (audit), siapa (akuntabilitas), dan alasan
+  // (konteks) — ketiganya wajib ada bersama, jadi dipisah agar tidak ada
+  // keadaan setengah seperti "waktu terisi tapi alasan kosong".
+  //
+  // NULL = tidak diverifikasi manual (mungkin via OTP, mungkin belum sama
+  // sekali).
+  emailOrangTuaDiverifikasiManualAt     DateTime?                  @map("email_orang_tua_diverifikasi_manual_at") @db.Timestamptz(3)
+  emailOrangTuaDiverifikasiManualOlehId String?                    @map("email_orang_tua_diverifikasi_manual_oleh_id")
+  emailOrangTuaDiverifikasiManualOleh   User?                      @relation("EmailVerifiedManuallyBy", fields: [emailOrangTuaDiverifikasiManualOlehId], references: [id], onDelete: Restrict)
+  alasanVerifikasiEmailManual           String?                    @map("alasan_verifikasi_email_manual")
+  alamatOrangTua                        String?                    @map("alamat_orang_tua")
+  jenjangTujuanId                       String                     @map("jenjang_tujuan_id")
+  kelasTujuanId                         String?                    @map("kelas_tujuan_id")
+  dokKartuKeluarga                      String?                    @map("dok_kartu_keluarga")
+  dokAkteLahir                          String?                    @map("dok_akte_lahir")
+  dokFoto                               String?                    @map("dok_foto")
+  dokLainnya                            String[]                   @default([]) @map("dok_lainnya")
+  status                                StatusPendaftaran          @default(MENUNGGU_PEMBAYARAN)
   // Snapshot nominal per komponen saat pendaftaran dibuat (kebal perubahan tarif).
-  biayaPendaftaran   Decimal                    @map("biaya_pendaftaran") @db.Decimal(12, 2)
-  biayaUangGedung    Decimal                    @default(0) @map("biaya_uang_gedung") @db.Decimal(12, 2)
-  biayaSarpras       Decimal                    @default(0) @map("biaya_sarpras") @db.Decimal(12, 2)
+  biayaPendaftaran                      Decimal                    @map("biaya_pendaftaran") @db.Decimal(12, 2)
+  biayaUangGedung                       Decimal                    @default(0) @map("biaya_uang_gedung") @db.Decimal(12, 2)
+  biayaSarpras                          Decimal                    @default(0) @map("biaya_sarpras") @db.Decimal(12, 2)
   // Rekening & kontak WA efektif saat pendaftaran dibuat (bila null, tampilkan nilai berlaku saat itu).
-  bankNama           String?                    @map("bank_nama")
-  bankNoRekening     String?                    @map("bank_no_rekening")
-  bankAtasNama       String?                    @map("bank_atas_nama")
-  kontakWa           String?                    @map("kontak_wa")
-  catatanAdmin       String?                    @map("catatan_admin")
-  alasanPenolakan    String?                    @map("alasan_penolakan")
-  diverifikasiOlehId String?                    @map("diverifikasi_oleh_id")
-  waktuVerifikasi    DateTime? @db.Timestamptz(3)                  @map("waktu_verifikasi")
-  createdAt          DateTime @db.Timestamptz(3)                   @default(now()) @map("created_at")
-  updatedAt          DateTime @db.Timestamptz(3)                   @updatedAt @map("updated_at")
-  agama              String?
-  noHpSiswa          String?                    @map("no_hp_siswa")
-  namaAyahKandung    String?                    @map("nama_ayah_kandung")
-  statusAyahKandung  StatusOrangTua?            @map("status_ayah_kandung")
-  nikAyah            String?                    @map("nik_ayah")
-  namaIbuKandung     String?                    @map("nama_ibu_kandung")
-  statusIbuKandung   StatusOrangTua?            @map("status_ibu_kandung")
-  nikIbu             String?                    @map("nik_ibu")
-  statusWali         StatusWali?                @map("status_wali")
-  namaWali           String?                    @map("nama_wali")
-  kewarganegaraan    Kewarganegaraan?           @default(WNI)
-  kitas              String?
-  asalNegara         String?                    @map("asal_negara")
-  deleted_at         DateTime?                  @db.Timestamptz(6)
-  buktiTransfer      BuktiTransferPendaftaran[]
-  diverifikasiOleh   User?                      @relation("VerifiedBy", fields: [diverifikasiOlehId], references: [id])
-  jenjangTujuan      Jenjang                    @relation(fields: [jenjangTujuanId], references: [id])
-  kelasTujuan        Kelas?                     @relation(fields: [kelasTujuanId], references: [id])
-  siswa              Siswa?
+  bankNama                              String?                    @map("bank_nama")
+  bankNoRekening                        String?                    @map("bank_no_rekening")
+  bankAtasNama                          String?                    @map("bank_atas_nama")
+  kontakWa                              String?                    @map("kontak_wa")
+  catatanAdmin                          String?                    @map("catatan_admin")
+  alasanPenolakan                       String?                    @map("alasan_penolakan")
+  diverifikasiOlehId                    String?                    @map("diverifikasi_oleh_id")
+  waktuVerifikasi                       DateTime?                  @map("waktu_verifikasi") @db.Timestamptz(3)
+  createdAt                             DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                             DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  agama                                 String?
+  noHpSiswa                             String?                    @map("no_hp_siswa")
+  namaAyahKandung                       String?                    @map("nama_ayah_kandung")
+  statusAyahKandung                     StatusOrangTua?            @map("status_ayah_kandung")
+  nikAyah                               String?                    @map("nik_ayah")
+  namaIbuKandung                        String?                    @map("nama_ibu_kandung")
+  statusIbuKandung                      StatusOrangTua?            @map("status_ibu_kandung")
+  nikIbu                                String?                    @map("nik_ibu")
+  statusWali                            StatusWali?                @map("status_wali")
+  namaWali                              String?                    @map("nama_wali")
+  kewarganegaraan                       Kewarganegaraan?           @default(WNI)
+  kitas                                 String?
+  asalNegara                            String?                    @map("asal_negara")
+  deleted_at                            DateTime?                  @db.Timestamptz(6)
+  buktiTransfer                         BuktiTransferPendaftaran[]
+  diverifikasiOleh                      User?                      @relation("VerifiedBy", fields: [diverifikasiOlehId], references: [id])
+  jenjangTujuan                         Jenjang                    @relation(fields: [jenjangTujuanId], references: [id])
+  kelasTujuan                           Kelas?                     @relation(fields: [kelasTujuanId], references: [id])
+  siswa                                 Siswa?
+  otpVerifikasiEmail                    OtpVerifikasiEmail[]
 
   @@index([status])
   @@index([createdAt(sort: Desc)], map: "idx_pendaftaran_created")
   @@index([jenjangTujuanId], map: "idx_pendaftaran_jenjang")
   @@index([status], map: "idx_pendaftaran_status")
+  // Dua index di bawah dibuat lewat SQL mentah di migrasi. Kalau tidak
+  // didaftarkan di sini, `migrate dev` akan menganggapnya drift dan
+  // menghapusnya tanpa tanya. Prisma 6.19 belum mendukung klausa `WHERE`
+  // pada `@@index`, jadi index parsial hanya bisa hidup lewat SQL mentah —
+  // dan justru karena itu WAJIB dicatat di sini agar selamat.
+  @@index([emailOrangTuaDiverifikasiOtpAt], map: "idx_pendaftarans_email_otp")
+  @@index([emailOrangTuaDiverifikasiManualAt], map: "pendaftaran_email_manual_idx")
   @@map("pendaftarans")
+}
+
+// OTP verifikasi kepemilikan email orang tua saat pendaftaran.
+//
+// Berbeda dari PasswordResetToken: ini bukan pemulihan akun, melainkan
+// gerbang "apakah orang yang mengisi formulir benar-benar menguasai email
+// yang dicantumkan". Kode disimpan sebagai bcrypt hash, tidak pernah plaintext.
+// Satu pendaftaran hanya boleh punya satu OTP aktif (index gabungan di bawah),
+// sehingga cooldown resend cukup dijaga lewat satu baris terbaru.
+model OtpVerifikasiEmail {
+  id            String   @id @default(cuid())
+  pendaftaranId String   @map("pendaftaran_id")
+  email         String
+  kodeOtpHash   String   @map("kode_otp_hash")
+  expiredAt     DateTime @map("expired_at") @db.Timestamptz(3)
+  digunakan     Boolean  @default(false)
+  jumlahGagal   Int      @default(0) @map("jumlah_gagal")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  pendaftaran Pendaftaran @relation(fields: [pendaftaranId], references: [id], onDelete: Cascade)
+
+  @@index([pendaftaranId, digunakan], map: "idx_otp_email_pendaftaran_aktif")
+  @@index([expiredAt], map: "idx_otp_email_expired")
+  @@map("otp_verifikasi_email")
 }
 
 model BuktiTransferPendaftaran {
@@ -375,8 +465,8 @@ model BuktiTransferPendaftaran {
   status             StatusVerifikasiBukti @default(PENDING)
   catatanVerifikasi  String?               @map("catatan_verifikasi")
   diverifikasiOlehId String?               @map("diverifikasi_oleh_id")
-  waktuVerifikasi    DateTime? @db.Timestamptz(3)             @map("waktu_verifikasi")
-  waktuUpload        DateTime @db.Timestamptz(3)              @default(now()) @map("waktu_upload")
+  waktuVerifikasi    DateTime?             @map("waktu_verifikasi") @db.Timestamptz(3)
+  waktuUpload        DateTime              @default(now()) @map("waktu_upload") @db.Timestamptz(3)
   diverifikasiOleh   User?                 @relation("VerifiedBy", fields: [diverifikasiOlehId], references: [id])
   pendaftaran        Pendaftaran           @relation(fields: [pendaftaranId], references: [id], onDelete: Cascade)
 
@@ -389,12 +479,12 @@ model PasswordResetToken {
   id          String   @id @default(cuid())
   userId      String   @map("user_id")
   kodeOtpHash String   @map("kode_otp_hash")
-  expiredAt   DateTime @db.Timestamptz(3) @map("expired_at")
+  expiredAt   DateTime @map("expired_at") @db.Timestamptz(3)
   digunakan   Boolean  @default(false)
   jumlahGagal Int      @default(0) @map("jumlah_gagal")
   ipAddress   String?  @map("ip_address")
   userAgent   String?  @map("user_agent")
-  createdAt   DateTime @db.Timestamptz(3) @default(now()) @map("created_at")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, digunakan])
@@ -415,8 +505,8 @@ model MateriPembelajaran {
   targetGender    JenisKelamin? @map("target_gender")
   periodeAjaranId String        @map("periode_ajaran_id")
   diunggahOlehId  String        @map("diunggah_oleh_id")
-  createdAt       DateTime @db.Timestamptz(3)      @default(now()) @map("created_at")
-  updatedAt       DateTime @db.Timestamptz(3)      @updatedAt @map("updated_at")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
   diunggahOleh    User          @relation("MateriDiunggahOleh", fields: [diunggahOlehId], references: [id])
   kelas           Kelas         @relation(fields: [kelasId], references: [id])
   mataPelajaran   MataPelajaran @relation(fields: [mataPelajaranId], references: [id])
@@ -438,8 +528,8 @@ model Ujian {
   kelasId         String            @map("kelas_id")
   targetGender    JenisKelamin?     @map("target_gender")
   periodeAjaranId String            @map("periode_ajaran_id")
-  waktuMulai      DateTime @db.Timestamptz(3)          @map("waktu_mulai")
-  waktuSelesai    DateTime @db.Timestamptz(3)          @map("waktu_selesai")
+  waktuMulai      DateTime          @map("waktu_mulai") @db.Timestamptz(3)
+  waktuSelesai    DateTime          @map("waktu_selesai") @db.Timestamptz(3)
   durasiMenit     Int               @map("durasi_menit")
   status          StatusUjian       @default(DRAFT)
   // Nomor urut ujian per kelas+mapel+periode (hanya untuk ULANGAN_HARIAN).
@@ -449,8 +539,8 @@ model Ujian {
   jenisUjian      JenisUjian        @default(ULANGAN_HARIAN) @map("jenis_ujian")
   inputManual     Boolean           @default(false) @map("input_manual")
   dibuatOlehId    String            @map("dibuat_oleh_id")
-  createdAt       DateTime @db.Timestamptz(3)          @default(now()) @map("created_at")
-  updatedAt       DateTime @db.Timestamptz(3)          @updatedAt @map("updated_at")
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
   pengerjaan      PengerjaanUjian[]
   soal            SoalUjian[]
   dibuatOleh      User              @relation("UjianDibuatOleh", fields: [dibuatOlehId], references: [id])
@@ -458,13 +548,13 @@ model Ujian {
   mataPelajaran   MataPelajaran     @relation(fields: [mataPelajaranId], references: [id])
   periodeAjaran   PeriodeAjaran     @relation(fields: [periodeAjaranId], references: [id])
 
+  @@unique([kelasId, mataPelajaranId, periodeAjaranId, nomorUjian], map: "uq_ujian_nomor")
   @@index([kelasId, status])
   @@index([periodeAjaranId])
   @@index([kelasId], map: "idx_ujian_kelas")
   @@index([mataPelajaranId], map: "idx_ujian_mapel")
   @@index([periodeAjaranId], map: "idx_ujian_periode")
   @@index([status], map: "idx_ujian_status")
-  @@unique([kelasId, mataPelajaranId, periodeAjaranId, nomorUjian], map: "uq_ujian_nomor")
   @@map("ujians")
 }
 
@@ -477,8 +567,8 @@ model SoalUjian {
   bobot        Int            @default(1)
   kunciEsai    String?        @map("kunci_esai")
   gambarUrl    String?        @map("gambar_url")
-  createdAt    DateTime @db.Timestamptz(3)       @default(now()) @map("created_at")
-  updatedAt    DateTime @db.Timestamptz(3)       @updatedAt @map("updated_at")
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
   jawabanSiswa JawabanSiswa[]
   opsi         OpsiJawaban[]
   ujian        Ujian          @relation(fields: [ujianId], references: [id], onDelete: Cascade)
@@ -507,16 +597,16 @@ model PengerjaanUjian {
   id              String           @id @default(cuid())
   ujianId         String           @map("ujian_id")
   siswaId         String           @map("siswa_id")
-  waktuMulai      DateTime @db.Timestamptz(3)         @default(now()) @map("waktu_mulai")
-  waktuSubmit     DateTime? @db.Timestamptz(3)        @map("waktu_submit")
+  waktuMulai      DateTime         @default(now()) @map("waktu_mulai") @db.Timestamptz(3)
+  waktuSubmit     DateTime?        @map("waktu_submit") @db.Timestamptz(3)
   status          StatusPengerjaan @default(SEDANG_MENGERJAKAN)
   nilaiTotal      Decimal?         @map("nilai_total") @db.Decimal(6, 2)
   nilaiPg         Decimal?         @map("nilai_pg") @db.Decimal(6, 2)
   nilaiEsai       Decimal?         @map("nilai_esai") @db.Decimal(6, 2)
   submitTerlambat Boolean          @default(false) @map("submit_terlambat")
   dinilaiOlehId   String?          @map("dinilai_oleh_id")
-  createdAt       DateTime @db.Timestamptz(3)         @default(now()) @map("created_at")
-  updatedAt       DateTime @db.Timestamptz(3)         @updatedAt @map("updated_at")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
   jawaban         JawabanSiswa[]
   dinilaiOleh     User?            @relation("PengerjaanDinilaiOleh", fields: [dinilaiOlehId], references: [id])
   siswa           Siswa            @relation(fields: [siswaId], references: [id], onDelete: Cascade)
@@ -542,9 +632,9 @@ model JawabanSiswa {
   benar          Boolean?
   catatanGuru    String?         @map("catatan_guru")
   dinilaiOlehId  String?         @map("dinilai_oleh_id")
-  waktuPenilaian DateTime? @db.Timestamptz(3)       @map("waktu_penilaian")
-  createdAt      DateTime @db.Timestamptz(3)        @default(now()) @map("created_at")
-  updatedAt      DateTime @db.Timestamptz(3)        @updatedAt @map("updated_at")
+  waktuPenilaian DateTime?       @map("waktu_penilaian") @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
   dinilaiOleh    User?           @relation("EsaiDinilaiOleh", fields: [dinilaiOlehId], references: [id])
   pengerjaan     PengerjaanUjian @relation(fields: [pengerjaanId], references: [id], onDelete: Cascade)
   soal           SoalUjian       @relation(fields: [soalId], references: [id])
@@ -565,27 +655,27 @@ model Tugas {
   kelasId         String             @map("kelas_id")
   targetGender    JenisKelamin?      @map("target_gender")
   periodeAjaranId String             @map("periode_ajaran_id")
-  deadline        DateTime @db.Timestamptz(3)
+  deadline        DateTime           @db.Timestamptz(3)
   lampiranUrl     String?            @map("lampiran_url")
   // Nomor urut tugas per kelas+mapel+periode (Tugas 1, Tugas 2, ...).
   nomorTugas      Int?               @map("nomor_tugas")
   // Tugas offline (dikerjakan di luar aplikasi); nilai diinput manual oleh guru.
   inputManual     Boolean            @default(false) @map("input_manual")
   dibuatOlehId    String             @map("dibuat_oleh_id")
-  createdAt       DateTime @db.Timestamptz(3)           @default(now()) @map("created_at")
-  updatedAt       DateTime @db.Timestamptz(3)           @updatedAt @map("updated_at")
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
   pengumpulan     PengumpulanTugas[]
   dibuatOleh      User               @relation("TugasDibuatOleh", fields: [dibuatOlehId], references: [id])
   kelas           Kelas              @relation(fields: [kelasId], references: [id])
   mataPelajaran   MataPelajaran      @relation(fields: [mataPelajaranId], references: [id])
   periodeAjaran   PeriodeAjaran      @relation(fields: [periodeAjaranId], references: [id])
 
+  @@unique([kelasId, mataPelajaranId, periodeAjaranId, nomorTugas], map: "uq_tugas_nomor")
   @@index([kelasId, deadline])
   @@index([periodeAjaranId])
   @@index([deadline], map: "idx_tugas_deadline")
   @@index([kelasId], map: "idx_tugas_kelas")
   @@index([mataPelajaranId], map: "idx_tugas_mapel")
-  @@unique([kelasId, mataPelajaranId, periodeAjaranId, nomorTugas], map: "uq_tugas_nomor")
   @@map("tugas")
 }
 
@@ -596,15 +686,15 @@ model PengumpulanTugas {
   urlFile        String                    @map("url_file")
   namaFile       String                    @map("nama_file")
   ukuranFile     Int?                      @map("ukuran_file")
-  waktuKumpul    DateTime @db.Timestamptz(3)                  @default(now()) @map("waktu_kumpul")
+  waktuKumpul    DateTime                  @default(now()) @map("waktu_kumpul") @db.Timestamptz(3)
   status         StatusPengumpulan         @default(TEPAT_WAKTU)
   nilai          Decimal?                  @db.Decimal(6, 2)
   feedback       String?
   jumlahRevisi   Int                       @default(0) @map("jumlah_revisi")
   dinilaiOlehId  String?                   @map("dinilai_oleh_id")
-  waktuPenilaian DateTime? @db.Timestamptz(3)                 @map("waktu_penilaian")
-  createdAt      DateTime @db.Timestamptz(3)                  @default(now()) @map("created_at")
-  updatedAt      DateTime @db.Timestamptz(3)                  @updatedAt @map("updated_at")
+  waktuPenilaian DateTime?                 @map("waktu_penilaian") @db.Timestamptz(3)
+  createdAt      DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
   dinilaiOleh    User?                     @relation("TugasDinilaiOleh", fields: [dinilaiOlehId], references: [id])
   siswa          Siswa                     @relation(fields: [siswaId], references: [id], onDelete: Cascade)
   tugas          Tugas                     @relation(fields: [tugasId], references: [id], onDelete: Cascade)
@@ -625,9 +715,9 @@ model RiwayatPengumpulanTugas {
   pengumpulanId String            @map("pengumpulan_id")
   urlFile       String            @map("url_file")
   namaFile      String            @map("nama_file")
-  waktuKumpul   DateTime @db.Timestamptz(3)          @map("waktu_kumpul")
+  waktuKumpul   DateTime          @map("waktu_kumpul") @db.Timestamptz(3)
   status        StatusPengumpulan
-  createdAt     DateTime @db.Timestamptz(3)          @default(now()) @map("created_at")
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   pengumpulan   PengumpulanTugas  @relation(fields: [pengumpulanId], references: [id], onDelete: Cascade)
 
   @@index([pengumpulanId])
@@ -643,8 +733,8 @@ model Absensi {
   status          StatusAbsensi
   keterangan      String?
   diinputOlehId   String        @map("diinput_oleh_id")
-  createdAt       DateTime @db.Timestamptz(3)      @default(now()) @map("created_at")
-  updatedAt       DateTime @db.Timestamptz(3)      @updatedAt @map("updated_at")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
   diinputOleh     User          @relation("AbsensiDiinputOleh", fields: [diinputOlehId], references: [id])
   kelas           Kelas         @relation(fields: [kelasId], references: [id])
   periodeAjaran   PeriodeAjaran @relation(fields: [periodeAjaranId], references: [id])
@@ -675,8 +765,8 @@ model NilaiRapor {
   predikatKeterampilan  String?       @map("predikat_keterampilan")
   deskripsiKeterampilan String?       @map("deskripsi_keterampilan")
   diinputOlehId         String        @map("diinput_oleh_id")
-  createdAt             DateTime @db.Timestamptz(3)      @default(now()) @map("created_at")
-  updatedAt             DateTime @db.Timestamptz(3)      @updatedAt @map("updated_at")
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
   diinputOleh           User          @relation("NilaiRaporDiinputOleh", fields: [diinputOlehId], references: [id])
   kelas                 Kelas         @relation(fields: [kelasId], references: [id])
   mataPelajaran         MataPelajaran @relation(fields: [mataPelajaranId], references: [id])
@@ -708,8 +798,8 @@ model CatatanRapor {
   tingkahLaku     String?       @map("tingkah_laku")
   prestasi        String?       @map("prestasi")
   dibuatOlehId    String        @map("dibuat_oleh_id")
-  createdAt       DateTime @db.Timestamptz(3)      @default(now()) @map("created_at")
-  updatedAt       DateTime @db.Timestamptz(3)      @updatedAt @map("updated_at")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
   dibuatOleh      User          @relation("CatatanRaporOleh", fields: [dibuatOlehId], references: [id])
   periodeAjaran   PeriodeAjaran @relation(fields: [periodeAjaranId], references: [id])
   siswa           Siswa         @relation(fields: [siswaId], references: [id], onDelete: Cascade)
@@ -727,7 +817,7 @@ model Ekstrakurikuler {
   deskripsi String?
   pembinaId String?         @map("pembina_id")
   aktif     Boolean         @default(true)
-  createdAt DateTime @db.Timestamptz(3)        @default(now()) @map("created_at")
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   anggota   AnggotaEkskul[]
   pembina   Guru?           @relation("EkskulPembina", fields: [pembinaId], references: [id])
 
@@ -757,14 +847,14 @@ model TagihanSiswa {
   bulan            Int?
   tahun            Int?
   nominal          Decimal           @db.Decimal(12, 2)
-  jatuhTempo       DateTime @db.Timestamptz(3)          @map("jatuh_tempo")
+  jatuhTempo       DateTime          @map("jatuh_tempo") @db.Timestamptz(3)
   status           StatusTagihan     @default(BELUM_BAYAR)
   totalTerbayar    Decimal?          @map("total_terbayar") @db.Decimal(12, 2)
   alasanPembatalan String?           @map("alasan_pembatalan")
   dibatalkanOlehId String?           @map("dibatalkan_oleh_id")
-  waktuPembatalan  DateTime? @db.Timestamptz(3)         @map("waktu_pembatalan")
-  createdAt        DateTime @db.Timestamptz(3)          @default(now()) @map("created_at")
-  updatedAt        DateTime @db.Timestamptz(3)          @updatedAt @map("updated_at")
+  waktuPembatalan  DateTime?         @map("waktu_pembatalan") @db.Timestamptz(3)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
   deleted_at       DateTime?         @db.Timestamptz(6)
   pembayaran       PembayaranSiswa[]
   dibatalkanOleh   User?             @relation("TagihanDibatalkan", fields: [dibatalkanOlehId], references: [id])
@@ -784,7 +874,7 @@ model PembayaranSiswa {
   id                 String           @id @default(cuid())
   tagihanId          String           @map("tagihan_id")
   nominalDibayar     Decimal          @map("nominal_dibayar") @db.Decimal(12, 2)
-  tanggalBayar       DateTime @db.Timestamptz(3)         @map("tanggal_bayar")
+  tanggalBayar       DateTime         @map("tanggal_bayar") @db.Timestamptz(3)
   metodeBayar        String           @map("metode_bayar")
   urlBukti           String?          @map("url_bukti")
   namaBukti          String?          @map("nama_bukti")
@@ -792,9 +882,9 @@ model PembayaranSiswa {
   statusPembayaran   StatusPembayaran @default(PENDING) @map("status_pembayaran")
   alasanPenolakan    String?          @map("alasan_penolakan")
   dikonfirmasiOlehId String?          @map("dikonfirmasi_oleh_id")
-  waktuKonfirmasi    DateTime? @db.Timestamptz(3)        @map("waktu_konfirmasi")
-  createdAt          DateTime @db.Timestamptz(3)         @default(now()) @map("created_at")
-  updatedAt          DateTime @db.Timestamptz(3)         @updatedAt @map("updated_at")
+  waktuKonfirmasi    DateTime?        @map("waktu_konfirmasi") @db.Timestamptz(3)
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
   dikonfirmasiOleh   User?            @relation("PembayaranDikonfirmasi", fields: [dikonfirmasiOlehId], references: [id])
   tagihan            TagihanSiswa     @relation(fields: [tagihanId], references: [id], onDelete: Cascade)
 
@@ -812,8 +902,8 @@ model KategoriTransaksi {
   tipe      TipeTransaksi
   aktif     Boolean             @default(true)
   deskripsi String?
-  createdAt DateTime @db.Timestamptz(3)            @default(now()) @map("created_at")
-  updatedAt DateTime @db.Timestamptz(3)            @updatedAt @map("updated_at")
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
   transaksi TransaksiKeuangan[]
 
   @@index([tipe, aktif])
@@ -826,16 +916,16 @@ model TransaksiKeuangan {
   tipe             TipeTransaksi
   nominal          Decimal           @db.Decimal(12, 2)
   deskripsi        String
-  tanggal          DateTime @db.Timestamptz(3)
+  tanggal          DateTime          @db.Timestamptz(3)
   urlBukti         String?           @map("url_bukti")
   namaBukti        String?           @map("nama_bukti")
   status           StatusTransaksi   @default(AKTIF)
   dibuatOlehId     String            @map("dibuat_oleh_id")
   alasanPembatalan String?           @map("alasan_pembatalan")
   dibatalkanOlehId String?           @map("dibatalkan_oleh_id")
-  waktuPembatalan  DateTime? @db.Timestamptz(3)         @map("waktu_pembatalan")
-  createdAt        DateTime @db.Timestamptz(3)          @default(now()) @map("created_at")
-  updatedAt        DateTime @db.Timestamptz(3)          @updatedAt @map("updated_at")
+  waktuPembatalan  DateTime?         @map("waktu_pembatalan") @db.Timestamptz(3)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
   deleted_at       DateTime?         @db.Timestamptz(6)
   dibatalkanOleh   User?             @relation("TransaksiDibatalkanOleh", fields: [dibatalkanOlehId], references: [id])
   dibuatOleh       User              @relation("TransaksiDibuatOleh", fields: [dibuatOlehId], references: [id])
@@ -858,7 +948,7 @@ model LoginAudit {
   userAgent String?  @map("user_agent")
   status    String
   reason    String?
-  createdAt DateTime @db.Timestamptz(3) @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([email, createdAt])
   @@index([ip, createdAt])
@@ -875,7 +965,7 @@ model RiwayatKelasSiswa {
   kelasId         String        @map("kelas_id")
   periodeAjaranId String        @map("periode_ajaran_id")
   kelasAsalId     String?       @map("kelas_asal_id")
-  createdAt       DateTime @db.Timestamptz(3)      @default(now()) @map("created_at")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   kelasAsal       Kelas?        @relation("RiwayatKelasSiswaAsal", fields: [kelasAsalId], references: [id])
   kelas           Kelas         @relation("RiwayatKelasSiswa", fields: [kelasId], references: [id])
   periodeAjaran   PeriodeAjaran @relation(fields: [periodeAjaranId], references: [id])
@@ -1041,4 +1131,4 @@ enum StatusWali {
 enum Kewarganegaraan {
   WNI
   WNA
-} 
+}

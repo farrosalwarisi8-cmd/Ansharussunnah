@@ -1,23 +1,23 @@
 // src/actions/guru.ts
 
-"use server"
+"use server";
 
-import prisma from "@/lib/prisma"
-import { deriveUniqueUsername } from "@/lib/username"
-import { requireGuru, requireGuruAdmin } from "@/lib/auth"
-import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { generateSecurePassword } from "@/lib/password"
-import { sendEmail, buildKredensialGuruEmail } from "@/lib/email"
-import { guruCocokKelas } from "@/lib/guru-kelas-gender"
+import prisma from "@/lib/prisma";
+import { deriveUniqueUsername } from "@/lib/username";
+import { requireGuru, requireGuruAdmin } from "@/lib/auth";
+import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { generateSecurePassword } from "@/lib/password";
+import { sendEmail, buildKredensialGuruEmail } from "@/lib/email";
+import { guruCocokKelas } from "@/lib/guru-kelas-gender";
 import {
   createAkunGuruSchema,
   updateAkunGuruSchema,
   type CreateAkunGuruValues,
   type UpdateAkunGuruValues,
-} from "@/lib/validations/guru"
-import type { ActionResponse } from "@/types"
-import { Role } from "@prisma/client"
-import { revalidatePath } from "next/cache"
+} from "@/lib/validations/guru";
+import type { ActionResponse } from "@/types";
+import { Role } from "@prisma/client";
+import { revalidatePath } from "next/cache";
 
 // ========================================================
 // 1. CRUD AKUN GURU
@@ -33,33 +33,39 @@ import { revalidatePath } from "next/cache"
  * - Kirim kredensial via email
  */
 export async function createAkunGuru(
-  payload: CreateAkunGuruValues
+  payload: CreateAkunGuruValues,
 ): Promise<ActionResponse<{ userId: string }>> {
   try {
-    await requireGuruAdmin()
+    await requireGuruAdmin();
 
-    const validated = createAkunGuruSchema.safeParse(payload)
+    const validated = createAkunGuruSchema.safeParse(payload);
     if (!validated.success) {
       return {
         success: false,
         message: "Data guru tidak valid",
         errors: validated.error.flatten().fieldErrors,
-      }
+      };
     }
 
-    const { nama, email, nip, jabatan, noHp, jenisKelamin, isAdmin } = validated.data
+    const { nama, email, nip, jabatan, noHp, jenisKelamin, isAdmin } =
+      validated.data;
 
     // Cek duplikasi email untuk role yang sama
-    const existingEmail = await prisma.user.findFirst({ where: { email, role: Role.GURU } })
+    const existingEmail = await prisma.user.findFirst({
+      where: { email, role: Role.GURU },
+    });
     if (existingEmail) {
-      return { success: false, message: "Email sudah terdaftar untuk role Guru" }
+      return {
+        success: false,
+        message: "Email sudah terdaftar untuk role Guru",
+      };
     }
 
     // Cek duplikasi NIP jika diisi
     if (nip) {
-      const existingNip = await prisma.guru.findUnique({ where: { nip } })
+      const existingNip = await prisma.guru.findUnique({ where: { nip } });
       if (existingNip) {
-        return { success: false, message: "NIP sudah terdaftar dalam sistem" }
+        return { success: false, message: "NIP sudah terdaftar dalam sistem" };
       }
     }
 
@@ -68,7 +74,8 @@ export async function createAkunGuru(
     // Jika gender guru diisi, kelas yang ditugaskan difilter hanya yang sesuai gender
     // (Ikhwan → kelas Ikhwan/Campuran, Akhwat → kelas Akhwat/Campuran).
     // Untuk guru admin tidak perlu — hak isAdmin sudah membuka akses semua kelas & mapel.
-    let penugasanDefault: Array<{ kelasId: string; mataPelajaranId: string }> = []
+    let penugasanDefault: Array<{ kelasId: string; mataPelajaranId: string }> =
+      [];
     if (!isAdmin) {
       const [mapelAktif, kelasAktif] = await Promise.all([
         prisma.mataPelajaran.findMany({
@@ -79,22 +86,22 @@ export async function createAkunGuru(
           where: { aktif: true },
           select: { id: true, jenisKelamin: true },
         }),
-      ])
+      ]);
       const kelasTerfilter = kelasAktif.filter((k) =>
-        guruCocokKelas(jenisKelamin ?? null, k.jenisKelamin)
-      )
+        guruCocokKelas(jenisKelamin ?? null, k.jenisKelamin),
+      );
       penugasanDefault = mapelAktif.flatMap((m) =>
-        kelasTerfilter.map((k) => ({ kelasId: k.id, mataPelajaranId: m.id }))
-      )
+        kelasTerfilter.map((k) => ({ kelasId: k.id, mataPelajaranId: m.id })),
+      );
     }
 
     // Generate password random aman
-    const password = generateSecurePassword(14)
+    const password = generateSecurePassword(14);
 
     // Buat user di Supabase Auth
-    const supabaseAdmin = createSupabaseAdmin()
-    let authId: string
-    let authUserBaruDibuat = false
+    const supabaseAdmin = createSupabaseAdmin();
+    let authId: string;
+    let authUserBaruDibuat = false;
 
     const { data: authData, error: authError } =
       await supabaseAdmin.auth.admin.createUser({
@@ -105,79 +112,89 @@ export async function createAkunGuru(
           nama,
           role: "GURU",
         },
-      })
+      });
 
     if (authError) {
       if (authError.message.includes("already been registered")) {
         // Email ini sudah punya akun Supabase Auth (dari role lain).
         // REUSE authId supaya identitas login tetap sama.
-        const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
-          perPage: 1000,
-        })
-        const matched = existingUsers.users.find((u) => u.email === email)
-        if (!matched) throw new Error("Gagal memetakan akun auth guru yang sudah ada")
-        authId = matched.id
+        const { data: existingUsers } =
+          await supabaseAdmin.auth.admin.listUsers({
+            perPage: 1000,
+          });
+        const matched = existingUsers.users.find((u) => u.email === email);
+        if (!matched)
+          throw new Error("Gagal memetakan akun auth guru yang sudah ada");
+        authId = matched.id;
       } else {
-        console.error("Supabase auth error:", authError)
-        return { success: false, message: `Gagal membuat akun auth: ${authError.message}` }
+        console.error("Supabase auth error:", authError);
+        return {
+          success: false,
+          message: `Gagal membuat akun auth: ${authError.message}`,
+        };
       }
     } else {
-      authId = authData.user!.id
-      authUserBaruDibuat = true
+      authId = authData.user!.id;
+      authUserBaruDibuat = true;
     }
 
     // Buat record User + Guru dalam transaction
-    let result: { userId: string; guruId: string }
+    let result: { userId: string; guruId: string };
     try {
       result = await prisma.$transaction(
         async (tx) => {
-        const user = await tx.user.create({
-          data: {
-            email,
-            username: await deriveUniqueUsername(tx, email),
-            nama,
-            role: "GURU",
-            authId,
-            mustChangePassword: true,
-            aktif: true,
-            isAdmin: isAdmin ?? false,
-          },
-        })
+          const user = await tx.user.create({
+            data: {
+              email,
+              username: await deriveUniqueUsername(tx, email),
+              nama,
+              role: "GURU",
+              authId,
+              mustChangePassword: true,
+              aktif: true,
+              isAdmin: isAdmin ?? false,
+            },
+          });
 
-        const guru = await tx.guru.create({
-          data: {
-            userId: user.id,
-            nip: nip || null,
-            jabatan: jabatan || null,
-            noHp: noHp || null,
-            jenisKelamin: jenisKelamin ?? null,
-          },
-        })
+          const guru = await tx.guru.create({
+            data: {
+              userId: user.id,
+              nip: nip || null,
+              jabatan: jabatan || null,
+              noHp: noHp || null,
+              jenisKelamin: jenisKelamin ?? null,
+            },
+          });
 
-        // Tugaskan otomatis ke semua mapel aktif di semua kelas aktif
-        if (penugasanDefault.length > 0) {
-          await tx.guruKelas.createMany({
-            data: penugasanDefault.map((p) => ({
-              guruId: guru.id,
-              kelasId: p.kelasId,
-              mataPelajaranId: p.mataPelajaranId,
-            })),
-            skipDuplicates: true,
-          })
-        }
+          // Tugaskan otomatis ke semua mapel aktif di semua kelas aktif
+          if (penugasanDefault.length > 0) {
+            await tx.guruKelas.createMany({
+              data: penugasanDefault.map((p) => ({
+                guruId: guru.id,
+                kelasId: p.kelasId,
+                mataPelajaranId: p.mataPelajaranId,
+              })),
+              skipDuplicates: true,
+            });
+          }
 
-        return { userId: user.id, guruId: guru.id }
+          return { userId: user.id, guruId: guru.id };
         },
-        { timeout: 10000, maxWait: 3000 }
-      )
+        { timeout: 10000, maxWait: 3000 },
+      );
     } catch (txError) {
       // Rollback: hapus auth user baru jika transaction gagal
       if (authUserBaruDibuat) {
-        await supabaseAdmin.auth.admin.deleteUser(authId).catch((cleanupErr) => {
-          console.error("Gagal cleanup auth user setelah transaction gagal:", cleanupErr)
-        })
+        await supabaseAdmin.auth.admin
+          .deleteUser(authId)
+          .catch((cleanupErr) => {
+            console.error(
+              "Gagal cleanup auth user setelah transaction gagal:",
+              cleanupErr,
+            );
+          });
       }
-      throw txError
+      throw txError;
     }
 
     // Kirim kredensial via email (fire-and-forget, jangan block response)
@@ -189,23 +206,26 @@ export async function createAkunGuru(
         email,
         password,
       }),
-    }).catch((err) => console.error("Gagal mengirim email kredensial guru:", err))
+    }).catch((err) =>
+      console.error("Gagal mengirim email kredensial guru:", err),
+    );
 
-    revalidatePath("/dashboard/guru")
+    revalidatePath("/dashboard/guru");
     const infoPenugasan =
       !isAdmin && penugasanDefault.length > 0
         ? ` Guru otomatis ditugaskan ke mapel aktif di kelas aktif yang sesuai gender guru (${jenisKelamin ? (jenisKelamin === "LAKI_LAKI" ? "Ikhwan" : "Akhwat") : "semua gender"}).`
-        : ""
+        : "";
     return {
       success: true,
       message: `Akun guru "${nama}" berhasil dibuat. Kredensial telah dikirim ke ${email}.${infoPenugasan}`,
       data: { userId: result.userId },
-    }
+    };
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal membuat akun guru",
-    }
+      message:
+        error instanceof Error ? error.message : "Gagal membuat akun guru",
+    };
   }
 }
 
@@ -214,82 +234,96 @@ export async function createAkunGuru(
  */
 export async function updateAkunGuru(
   userId: string,
-  payload: UpdateAkunGuruValues
+  payload: UpdateAkunGuruValues,
 ): Promise<ActionResponse> {
   try {
-    const currentUser = await requireGuru()
+    const currentUser = await requireGuru();
 
     // Otorisasi: hanya boleh edit profil sendiri atau guru admin boleh edit siapa saja
     if (currentUser.id !== userId && !currentUser.isAdmin) {
       return {
         success: false,
         message: "Akses ditolak: Anda hanya bisa mengedit profil sendiri",
-      }
+      };
     }
 
-    const validated = updateAkunGuruSchema.safeParse(payload)
+    const validated = updateAkunGuruSchema.safeParse(payload);
     if (!validated.success) {
       return {
         success: false,
         message: "Data update tidak valid",
         errors: validated.error.flatten().fieldErrors,
-      }
+      };
     }
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { guru: true },
-    })
+    });
 
     if (!user || user.role !== "GURU") {
-      return { success: false, message: "Akun guru tidak ditemukan" }
+      return { success: false, message: "Akun guru tidak ditemukan" };
     }
 
     if (!user.guru) {
-      return { success: false, message: "Profil guru tidak ditemukan" }
+      return { success: false, message: "Profil guru tidak ditemukan" };
     }
 
     // Cek duplikasi NIP jika diubah
     if (validated.data.nip && validated.data.nip !== user.guru.nip) {
       const existingNip = await prisma.guru.findUnique({
         where: { nip: validated.data.nip },
-      })
+      });
       if (existingNip) {
-        return { success: false, message: "NIP sudah digunakan oleh guru lain" }
+        return {
+          success: false,
+          message: "NIP sudah digunakan oleh guru lain",
+        };
       }
     }
 
     await prisma.$transaction(
       async (tx) => {
-      // Update nama di User jika diubah
-      if (validated.data.nama) {
-        await tx.user.update({
-          where: { id: userId },
-          data: { nama: validated.data.nama },
-        })
-      }
+        // Update nama di User jika diubah
+        if (validated.data.nama) {
+          await tx.user.update({
+            where: { id: userId },
+            data: { nama: validated.data.nama },
+          });
+        }
 
-      // Update data Guru
-      await tx.guru.update({
-        where: { id: user.guru!.id },
-        data: {
-          nip: validated.data.nip !== undefined ? validated.data.nip : undefined,
-          jabatan: validated.data.jabatan !== undefined ? validated.data.jabatan : undefined,
-          noHp: validated.data.noHp !== undefined ? validated.data.noHp : undefined,
-          jenisKelamin: validated.data.jenisKelamin !== undefined ? validated.data.jenisKelamin : undefined,
-        },
-      })
+        // Update data Guru
+        await tx.guru.update({
+          where: { id: user.guru!.id },
+          data: {
+            nip:
+              validated.data.nip !== undefined ? validated.data.nip : undefined,
+            jabatan:
+              validated.data.jabatan !== undefined
+                ? validated.data.jabatan
+                : undefined,
+            noHp:
+              validated.data.noHp !== undefined
+                ? validated.data.noHp
+                : undefined,
+            jenisKelamin:
+              validated.data.jenisKelamin !== undefined
+                ? validated.data.jenisKelamin
+                : undefined,
+          },
+        });
       },
-      { timeout: 10000, maxWait: 3000 }
-    )
+      { timeout: 10000, maxWait: 3000 },
+    );
 
-    revalidatePath("/dashboard/guru")
-    return { success: true, message: "Data guru berhasil diperbarui" }
+    revalidatePath("/dashboard/guru");
+    return { success: true, message: "Data guru berhasil diperbarui" };
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memperbarui data guru",
-    }
+      message:
+        error instanceof Error ? error.message : "Gagal memperbarui data guru",
+    };
   }
 }
 
@@ -299,49 +333,55 @@ export async function updateAkunGuru(
  * Juga melakukan ban di Supabase Auth agar login benar-benar diblokir.
  */
 export async function nonaktifkanAkunGuru(
-  userId: string
+  userId: string,
 ): Promise<ActionResponse> {
   try {
-    await requireGuruAdmin()
+    await requireGuruAdmin();
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { guru: true },
-    })
+    });
 
     if (!user || user.role !== "GURU") {
-      return { success: false, message: "Akun guru tidak ditemukan" }
+      return { success: false, message: "Akun guru tidak ditemukan" };
     }
 
     if (!user.aktif) {
-      return { success: false, message: "Akun guru sudah nonaktif" }
+      return { success: false, message: "Akun guru sudah nonaktif" };
     }
 
     // Nonaktifkan user di Supabase Auth juga
     // ban_duration "876000h" = 100 tahun = effectively permanent ban
-    const supabaseAdmin = createSupabaseAdmin()
+    const supabaseAdmin = createSupabaseAdmin();
     const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
       user.authId,
-      { ban_duration: "876000h" }
-    )
+      { ban_duration: "876000h" },
+    );
 
     if (authError) {
-      console.error("Supabase auth ban error:", authError)
+      console.error("Supabase auth ban error:", authError);
       // Lanjutkan meskipun gagal di Supabase — tetap nonaktifkan di DB
     }
 
     await prisma.user.update({
       where: { id: userId },
       data: { aktif: false },
-    })
+    });
 
-    revalidatePath("/dashboard/guru")
-    return { success: true, message: `Akun guru "${user.nama}" berhasil dinonaktifkan` }
+    revalidatePath("/dashboard/guru");
+    return {
+      success: true,
+      message: `Akun guru "${user.nama}" berhasil dinonaktifkan`,
+    };
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menonaktifkan akun guru",
-    }
+      message:
+        error instanceof Error
+          ? error.message
+          : "Gagal menonaktifkan akun guru",
+    };
   }
 }
 
@@ -350,48 +390,54 @@ export async function nonaktifkanAkunGuru(
  * Mencabut ban di Supabase Auth dan mengembalikan field aktif: true.
  */
 export async function aktifkanKembaliAkunGuru(
-  userId: string
+  userId: string,
 ): Promise<ActionResponse> {
   try {
-    await requireGuruAdmin()
+    await requireGuruAdmin();
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { guru: true },
-    })
+    });
 
     if (!user || user.role !== "GURU") {
-      return { success: false, message: "Akun guru tidak ditemukan" }
+      return { success: false, message: "Akun guru tidak ditemukan" };
     }
 
     if (user.aktif) {
-      return { success: false, message: "Akun guru sudah aktif" }
+      return { success: false, message: "Akun guru sudah aktif" };
     }
 
     // Cabut ban di Supabase Auth
-    const supabaseAdmin = createSupabaseAdmin()
+    const supabaseAdmin = createSupabaseAdmin();
     const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
       user.authId,
-      { ban_duration: "none" }
-    )
+      { ban_duration: "none" },
+    );
 
     if (authError) {
-      console.error("Supabase auth unban error:", authError)
+      console.error("Supabase auth unban error:", authError);
       // Lanjutkan meskipun gagal di Supabase — tetap aktifkan di DB
     }
 
     await prisma.user.update({
       where: { id: userId },
       data: { aktif: true },
-    })
+    });
 
-    revalidatePath("/dashboard/guru")
-    return { success: true, message: `Akun guru "${user.nama}" berhasil diaktifkan kembali` }
+    revalidatePath("/dashboard/guru");
+    return {
+      success: true,
+      message: `Akun guru "${user.nama}" berhasil diaktifkan kembali`,
+    };
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal mengaktifkan kembali akun guru",
-    }
+      message:
+        error instanceof Error
+          ? error.message
+          : "Gagal mengaktifkan kembali akun guru",
+    };
   }
 }
 
@@ -401,42 +447,48 @@ export async function aktifkanKembaliAkunGuru(
  */
 export async function setGuruAdmin(
   userId: string,
-  isAdmin: boolean
+  isAdmin: boolean,
 ): Promise<ActionResponse> {
   try {
-    await requireGuruAdmin()
+    await requireGuruAdmin();
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { guru: true },
-    })
+    });
 
     if (!user || user.role !== "GURU") {
-      return { success: false, message: "Akun guru tidak ditemukan" }
+      return { success: false, message: "Akun guru tidak ditemukan" };
     }
 
     // Tidak boleh mengubah status admin diri sendiri
-    const currentUser = await requireGuruAdmin()
+    const currentUser = await requireGuruAdmin();
     if (currentUser.id === userId) {
-      return { success: false, message: "Tidak dapat mengubah status admin diri sendiri" }
+      return {
+        success: false,
+        message: "Tidak dapat mengubah status admin diri sendiri",
+      };
     }
 
     await prisma.user.update({
       where: { id: userId },
       data: { isAdmin },
-    })
+    });
 
-    const action = isAdmin ? "diangkat menjadi admin" : "diturunkan dari admin"
-    revalidatePath("/dashboard/guru")
+    const action = isAdmin ? "diangkat menjadi admin" : "diturunkan dari admin";
+    revalidatePath("/dashboard/guru");
     return {
       success: true,
       message: `Guru "${user.nama}" berhasil ${action}`,
-    }
+    };
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal mengubah status admin guru",
-    }
+      message:
+        error instanceof Error
+          ? error.message
+          : "Gagal mengubah status admin guru",
+    };
   }
 }
 
@@ -454,10 +506,10 @@ export async function setGuruAdmin(
  * historis tetap tersimpan.
  */
 export async function hapusAkunGuruPermanent(
-  userId: string
+  userId: string,
 ): Promise<ActionResponse> {
   try {
-    const currentUser = await requireGuruAdmin()
+    const currentUser = await requireGuruAdmin();
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -485,101 +537,112 @@ export async function hapusAkunGuruPermanent(
             transaksiDibatalkan: true,
             pembayaranDikonfirmasi: true,
             verifikasiPendaftaran: true,
+            verifikasiEmailManual: true,
           },
         },
       },
-    })
+    });
 
     if (!user || user.role !== Role.GURU) {
-      return { success: false, message: "Akun guru tidak ditemukan" }
+      return { success: false, message: "Akun guru tidak ditemukan" };
     }
 
     if (!user.guru) {
-      return { success: false, message: "Data guru tidak ditemukan" }
+      return { success: false, message: "Data guru tidak ditemukan" };
     }
 
     if (currentUser.id === userId) {
       return {
         success: false,
         message: "Tidak dapat menghapus akun diri sendiri",
-      }
+      };
     }
 
-    const permintaanHapusDitolak: string[] = []
+    const permintaanHapusDitolak: string[] = [];
 
     if (user.guru._count.waliKelas > 0) {
-      permintaanHapusDitolak.push("menjadi wali kelas")
+      permintaanHapusDitolak.push("menjadi wali kelas");
     }
     if (user.guru._count.catatanRapor > 0) {
-      permintaanHapusDitolak.push("memiliki catatan rapor")
+      permintaanHapusDitolak.push("memiliki catatan rapor");
     }
     if (user.guru._count.ekskulDibina > 0) {
-      permintaanHapusDitolak.push("membina ekstrakurikuler")
+      permintaanHapusDitolak.push("membina ekstrakurikuler");
     }
     if (user._count.ujianDibuat > 0) {
-      permintaanHapusDitolak.push("membuat ujian")
+      permintaanHapusDitolak.push("membuat ujian");
     }
     if (user._count.tugasDibuat > 0) {
-      permintaanHapusDitolak.push("membuat tugas")
+      permintaanHapusDitolak.push("membuat tugas");
     }
     if (user._count.materiDiunggah > 0) {
-      permintaanHapusDitolak.push("mengunggah materi")
+      permintaanHapusDitolak.push("mengunggah materi");
     }
     if (user._count.absensiDiinput > 0) {
-      permintaanHapusDitolak.push("mengisi absensi")
+      permintaanHapusDitolak.push("mengisi absensi");
     }
     if (user._count.nilaiRaporDiinput > 0) {
-      permintaanHapusDitolak.push("menginput nilai rapor")
+      permintaanHapusDitolak.push("menginput nilai rapor");
     }
     if (user._count.catatanRaporDibuat > 0) {
-      permintaanHapusDitolak.push("menginput catatan rapor")
+      permintaanHapusDitolak.push("menginput catatan rapor");
     }
-    if (user._count.transaksiDibuat > 0 || user._count.transaksiDibatalkan > 0) {
-      permintaanHapusDitolak.push("memproses transaksi keuangan")
+    if (
+      user._count.transaksiDibuat > 0 ||
+      user._count.transaksiDibatalkan > 0
+    ) {
+      permintaanHapusDitolak.push("memproses transaksi keuangan");
     }
     if (user._count.pembayaranDikonfirmasi > 0) {
-      permintaanHapusDitolak.push("mengkonfirmasi pembayaran")
+      permintaanHapusDitolak.push("mengkonfirmasi pembayaran");
     }
     if (user._count.verifikasiPendaftaran > 0) {
-      permintaanHapusDitolak.push("memverifikasi pendaftaran")
+      permintaanHapusDitolak.push("memverifikasi pendaftaran");
+    }
+    // Jejak verifikasi email manual menunjuk ke User lewat FK, jadi guru yang
+    // pernah melakukan verifikasi manual tidak boleh dihapus permanen —
+    // accountable-nya ikut hilang. "Nonaktifkan" tetap tersedia.
+    if (user._count.verifikasiEmailManual > 0) {
+      permintaanHapusDitolak.push("melakukan verifikasi email manual");
     }
 
     if (permintaanHapusDitolak.length > 0) {
       return {
         success: false,
         message: `Tidak dapat menghapus guru "${user.nama}" secara permanen karena masih memiliki riwayat: ${permintaanHapusDitolak.join(", ")}. Gunakan fitur "Nonaktifkan" untuk menonaktifkan akun tanpa menghapus data historis.`,
-      }
+      };
     }
 
     // Hapus Supabase Auth hanya jika authId tidak dipakai role lain (multi-role)
     const otherUsersWithAuth = await prisma.user.count({
       where: { authId: user.authId, id: { not: user.id } },
-    })
+    });
 
     if (otherUsersWithAuth === 0) {
-      const supabaseAdmin = createSupabaseAdmin()
+      const supabaseAdmin = createSupabaseAdmin();
       const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
-        user.authId
-      )
+        user.authId,
+      );
       if (authError) {
-        console.error("Supabase auth delete user error:", authError)
+        console.error("Supabase auth delete user error:", authError);
       }
     }
 
     // Hapus User -> cascade ke Guru, GuruKelas, dll
-    await prisma.user.delete({ where: { id: user.id } })
+    await prisma.user.delete({ where: { id: user.id } });
 
-    revalidatePath("/dashboard/guru")
+    revalidatePath("/dashboard/guru");
     return {
       success: true,
       message: `Akun guru "${user.nama}" berhasil dihapus secara permanen.`,
-    }
+    };
   } catch (error: unknown) {
-    console.error("Error hapus guru:", error)
+    console.error("Error hapus guru:", error);
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menghapus akun guru",
-    }
+      message:
+        error instanceof Error ? error.message : "Gagal menghapus akun guru",
+    };
   }
 }
 
@@ -588,7 +651,7 @@ export async function hapusAkunGuruPermanent(
  */
 export async function getDaftarGuru(): Promise<ActionResponse> {
   try {
-    await requireGuru()
+    await requireGuru();
 
     const guruList = await prisma.guru.findMany({
       include: {
@@ -614,7 +677,7 @@ export async function getDaftarGuru(): Promise<ActionResponse> {
         },
       },
       orderBy: { user: { nama: "asc" } },
-    })
+    });
 
     const formatted = guruList.map((g) => ({
       id: g.id,
@@ -631,17 +694,18 @@ export async function getDaftarGuru(): Promise<ActionResponse> {
       createdAt: g.user.createdAt,
       waliKelas: g.waliKelas.map((k) => k.nama),
       jumlahMengajar: g.mengajar.length,
-    }))
+    }));
 
     return {
       success: true,
       message: "Daftar guru berhasil dimuat",
       data: formatted,
-    }
+    };
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar guru",
-    }
+      message:
+        error instanceof Error ? error.message : "Gagal memuat daftar guru",
+    };
   }
 }

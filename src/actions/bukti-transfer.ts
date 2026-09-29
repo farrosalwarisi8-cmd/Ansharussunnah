@@ -9,6 +9,7 @@ import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import {
   isPendaftaranTokenValid,
   isTokenAksesBentukValid,
+  isTokenAksesBelumKedaluwarsa,
 } from "@/lib/pendaftaran-token"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
@@ -116,12 +117,35 @@ export async function uploadBuktiTransferPendaftaran(
       }
     }
 
-    // KEAMANAN: verifikasi token pemilik (timing-safe). Dicek SEBELUM status
-    // agar pemegang token salah tidak bisa melihat/menebak status pendaftaran.
-    if (!isPendaftaranTokenValid(pendaftaran.tokenAkses, tokenAkses)) {
+    // KEAMANAN: verifikasi token pemilik terhadap hash yang tersimpan
+    // (timing-safe). Dicek SEBELUM status agar pemegang token salah tidak bisa
+    // melihat/menebak status pendaftaran.
+    if (!isPendaftaranTokenValid(pendaftaran.tokenAksesHash, tokenAkses)) {
       return {
         success: false,
         message: "Kredensial akses pendaftaran tidak valid",
+      }
+    }
+
+    // Masa berlaku token: 90 hari sejak pendaftaran dibuat. Setelah lewat,
+    // alur publik mengunci dan pemilik diarahkan menghubungi panitia.
+    if (!isTokenAksesBelumKedaluwarsa(pendaftaran.tokenAksesExpiraAt)) {
+      return {
+        success: false,
+        message:
+          "Masa berlaku akses pendaftaran sudah habis (90 hari). Silakan hubungi panitia PPDB.",
+      }
+    }
+
+    // Gerbang verifikasi email: bukti transfer hanya bermakna kalau email
+    // orang tua sudah dikonfirmasi, supaya pendaftaran fiktif tidak
+    // menghasilkan transaksi palsu bagi panitia. Dicek SESUDAH token agar
+    // pesan kredensial tetap sama untuk penyerang tanpa token.
+    if (!pendaftaran.emailOrangTuaTerverifikasiAt) {
+      return {
+        success: false,
+        message:
+          "Email orang tua belum diverifikasi. Periksa email Anda untuk kode verifikasi terlebih dahulu.",
       }
     }
 

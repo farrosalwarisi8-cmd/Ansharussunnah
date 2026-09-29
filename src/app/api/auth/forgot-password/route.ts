@@ -7,6 +7,11 @@ import { rateLimitAsync, getClientIp } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
   try {
+    // Limiter kedua (bucket `api-forgot-password`) TIDAK boleh digabung dengan
+    // limiter di dalam `requestPasswordReset` (`request-password-reset`):
+    // keduanya batasnya sama, jadi satu bucket akan menghabiskan kuota 2x per
+    // panggilan. Bucket ini hanya untuk memberi status HTTP 429 ke klien API;
+    // proteksi untuk Server Component tetap datang dari dalam action.
     const ip = getClientIp(request)
     const limiter = await rateLimitAsync(`api-forgot-password:${ip}`, {
       maxRequests: 3,

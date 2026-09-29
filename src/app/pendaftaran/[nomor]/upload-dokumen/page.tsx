@@ -1,34 +1,63 @@
 // src/app/pendaftaran/[nomor]/upload-dokumen/page.tsx
 
-import Image from "next/image"
-import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
-import prisma from "@/lib/prisma"
-import { notFound } from "next/navigation"
-import { UploadDokumenForm } from "@/components/pendaftaran/upload-dokumen-form"
+import Image from "next/image";
+import Link from "next/link";
+import { ArrowLeft, Lock } from "lucide-react";
+import prisma from "@/lib/prisma";
+import { notFound } from "next/navigation";
+import { isTokenAksesBelumKedaluwarsa } from "@/lib/pendaftaran-token";
+import { UploadDokumenForm } from "@/components/pendaftaran/upload-dokumen-form";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface UploadDokumenPageProps {
-  params: Promise<{ nomor: string }>
+  params: Promise<{ nomor: string }>;
 }
 
 export default async function UploadDokumenPage({
   params,
 }: UploadDokumenPageProps) {
-  const { nomor } = await params
+  const { nomor } = await params;
 
   const pendaftaran = await prisma.pendaftaran.findUnique({
     where: { nomorPendaftaran: nomor, deleted_at: null },
     select: {
       nomorPendaftaran: true,
+      status: true,
+      tokenAksesExpiraAt: true,
+      emailOrangTuaTerverifikasiAt: true,
       dokKartuKeluarga: true,
       dokAkteLahir: true,
       dokFoto: true,
     },
-  })
+  });
 
   if (!pendaftaran) {
-    notFound()
+    notFound();
   }
+
+  const statusBolehUpload =
+    pendaftaran.status === "MENUNGGU_PEMBAYARAN" ||
+    pendaftaran.status === "MENUNGGU_VERIFIKASI";
+  const tokenMasihBerlaku = isTokenAksesBelumKedaluwarsa(
+    pendaftaran.tokenAksesExpiraAt,
+  );
+  // Gerbang verifikasi email, sama persis dengan pengecekan di server action
+  // uploadDokumenPendaftaran — di sini hanya untuk tidak menampilkan form yang
+  // pasti ditolak. Penegakan yang sebenarnya ada di sisi server.
+  const emailTerverifikasi = Boolean(pendaftaran.emailOrangTuaTerverifikasiAt);
+  const uploadTerbuka =
+    statusBolehUpload && tokenMasihBerlaku && emailTerverifikasi;
+
+  // Alur publik hanya terbuka selagi pendaftaran belum diterima, token (berlaku
+  // 90 hari) belum habis, dan email orang tua sudah terverifikasi. Setelah
+  // itu, pemilik memakai dashboard wali — sehingga di sini cukup tampilkan
+  // petunjuk, bukan form.
+  const pesanTerkunci = !emailTerverifikasi
+    ? "Email orang tua belum diverifikasi. Buka halaman hasil pendaftaran, masukkan kode verifikasi dari email, lalu kembali ke halaman ini."
+    : statusBolehUpload
+      ? "Masa berlaku akses pendaftaran sudah habis (90 hari). Silakan hubungi panitia PPDB untuk lebih lanjut."
+      : "Pendaftaran sudah diproses panitia, jadi tidak lagi bisa diunggah lewat halaman ini. Jika ada berkas yang kurang, lengkapi dari dashboard wali setelah pendaftaran diterima.";
 
   return (
     <div className="min-h-screen batik-light">
@@ -67,15 +96,38 @@ export default async function UploadDokumenPage({
           </p>
         </div>
 
-        <UploadDokumenForm
-          nomorPendaftaran={pendaftaran.nomorPendaftaran}
-          sudahAda={{
-            kartuKeluarga: Boolean(pendaftaran.dokKartuKeluarga),
-            akteLahir: Boolean(pendaftaran.dokAkteLahir),
-            foto: Boolean(pendaftaran.dokFoto),
-          }}
-        />
+        {uploadTerbuka ? (
+          <UploadDokumenForm
+            nomorPendaftaran={pendaftaran.nomorPendaftaran}
+            sudahAda={{
+              kartuKeluarga: Boolean(pendaftaran.dokKartuKeluarga),
+              akteLahir: Boolean(pendaftaran.dokAkteLahir),
+              foto: Boolean(pendaftaran.dokFoto),
+            }}
+          />
+        ) : (
+          <Card>
+            <CardContent className="p-8 text-center space-y-4">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-amber-50 text-amber-600">
+                <Lock className="h-6 w-6" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">
+                Unggah Dokumen Sudah Ditutup
+              </h2>
+              <p className="text-sm text-gray-500 leading-relaxed">
+                {pesanTerkunci}
+              </p>
+              <Button asChild variant="outline" className="w-full">
+                <Link
+                  href={`/pendaftaran/sukses?nomor=${pendaftaran.nomorPendaftaran}`}
+                >
+                  Kembali ke Halaman Pendaftaran
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
-  )
+  );
 }

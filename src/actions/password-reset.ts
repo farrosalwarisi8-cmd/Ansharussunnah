@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { createOtpWithHash, verifyOtp } from "@/lib/otp"
 import { sendEmail, buildOtpEmail } from "@/lib/email"
+import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
 
@@ -15,10 +16,36 @@ const OTP_RESEND_COOLDOWN_SECONDS = parseInt(
   process.env.OTP_RESEND_COOLDOWN_SECONDS || "60"
 )
 
+// Batas per-IP. Diterapkan DI DALAM ACTION (bukan hanya di route API) karena
+// aksi ini juga dipanggil langsung dari Server Component
+// (`app/lupa-password/*`), yang tidak melewati route API. Route API tetap punya
+// limiter sendiri dengan bucket berbeda — jangan disatukan menjadi satu bucket,
+// jika tidak satu panggilan API akan memakai kuota dua kali.
+const RATE_LIMIT_REQUEST_PER_IP = { maxRequests: 3, windowMs: 5 * 60 * 1000 }
+const RATE_LIMIT_VERIFY_PER_IP = { maxRequests: 5, windowMs: 60 * 1000 }
+// `resetPassword` tidak dipanggil lewat route API sama sekali, jadi tanpa
+// limiter di sini endpoint ini bebas dihammer dari luar. Token hasil OTP sudah
+// invalidated setelah dipakai sekali, tapi limiter tetap menahan percobaan
+// berulang dari penyerang yang sempat memperoleh tokenId-nya.
+const RATE_LIMIT_RESET_PER_IP = { maxRequests: 10, windowMs: 5 * 60 * 1000 }
+
 export async function requestPasswordReset(
   email: string
 ): Promise<ActionResponse> {
   try {
+    const ip = await getClientIpFromHeaders()
+    const limiter = await rateLimitAsync(
+      `request-password-reset:${ip}`,
+      RATE_LIMIT_REQUEST_PER_IP
+    )
+    if (!limiter.success) {
+      return {
+        success: false,
+        message:
+          "Terlalu banyak permintaan. Silakan coba lagi dalam 5 menit.",
+      }
+    }
+
     const normalizedEmail = email.toLowerCase().trim()
 
     if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
@@ -101,6 +128,18 @@ export async function verifyResetOtp(
   otp: string
 ): Promise<ActionResponse<{ resetToken: string }>> {
   try {
+    const ip = await getClientIpFromHeaders()
+    const limiter = await rateLimitAsync(
+      `verify-reset-otp:${ip}`,
+      RATE_LIMIT_VERIFY_PER_IP
+    )
+    if (!limiter.success) {
+      return {
+        success: false,
+        message: "Terlalu banyak percobaan. Silakan coba lagi dalam 1 menit.",
+      }
+    }
+
     const normalizedEmail = email.toLowerCase().trim()
 
     if (!otp || !/^\d{6}$/.test(otp)) {
@@ -176,6 +215,19 @@ export async function resetPassword(
   confirmPassword: string
 ): Promise<ActionResponse> {
   try {
+    const ip = await getClientIpFromHeaders()
+    const limiter = await rateLimitAsync(
+      `reset-password:${ip}`,
+      RATE_LIMIT_RESET_PER_IP
+    )
+    if (!limiter.success) {
+      return {
+        success: false,
+        message:
+          "Terlalu banyak percobaan. Silakan coba lagi dalam 5 menit.",
+      }
+    }
+
     const normalizedEmail = email.toLowerCase().trim()
 
     if (newPassword.length < 8) {

@@ -1,6 +1,6 @@
 // src/actions/upload-dokumen.test.ts
 
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ========================================================
 // Mocks — di-hoist agar tersedia sebelum import modul
@@ -24,7 +24,7 @@ const {
   mockRateLimitAsync: vi.fn(),
   mockGetClientIp: vi.fn(),
   mockRevalidatePath: vi.fn(),
-}))
+}));
 
 vi.mock("@/lib/prisma", () => ({
   default: {
@@ -33,7 +33,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     $transaction: (...args: unknown[]) => mockPrismaTransaction(...args),
   },
-}))
+}));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdmin: () => ({
@@ -44,57 +44,64 @@ vi.mock("@/lib/supabase/admin", () => ({
       }),
     },
   }),
-}))
+}));
 
 vi.mock("@/lib/storage", () => ({
   validateFile: (...args: unknown[]) => mockValidateFile(...args),
-}))
+}));
 
 vi.mock("@/lib/rate-limit", () => ({
   rateLimitAsync: (...args: unknown[]) => mockRateLimitAsync(...args),
-  getClientIpFromHeaders: (...args: unknown[]) =>
-    mockGetClientIp(...args),
-}))
+  getClientIpFromHeaders: (...args: unknown[]) => mockGetClientIp(...args),
+}));
 
 vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
-}))
+}));
 
 // ========================================================
 // Import setelah semua vi.mock() terdaftar
 // ========================================================
 
-import { uploadDokumenPendaftaran } from "@/actions/upload-dokumen"
+import { uploadDokumenPendaftaran } from "@/actions/upload-dokumen";
+import { hashTokenAkses } from "@/lib/pendaftaran-token";
 
 // ========================================================
 // Data dummy
 // ========================================================
 
+const TOKEN_PLAIN = "71W2jdYzzAV0FR0DUUPXD2X1seYJfY4Z";
+
 const mockPendaftaran = {
   id: "pend-1",
   nomorPendaftaran: "REG-2026-00001",
-  tokenAkses: "71W2jdYzzAV0FR0DUUPXD2X1seYJfY4Z",
+  tokenAksesHash: hashTokenAkses(TOKEN_PLAIN),
+  // Default test: pendaftaran masih berjalan & token masih berlaku, supaya
+  // test fokus pada perilaku yang diuji. Test status/expiry menimpanya.
+  status: "MENUNGGU_VERIFIKASI",
+  tokenAksesExpiraAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  // Default test: gerbang verifikasi email sudah dilewati, supaya test lain
+  // fokus pada perilaku yang diuji. Test gerbang menimpanya dengan null.
+  emailOrangTuaTerverifikasiAt: new Date("2026-01-01"),
   dokKartuKeluarga: null,
   dokAkteLahir: "dokumen-pendaftaran/pendaftaran/pend-1/lama.pdf",
   dokFoto: null,
-}
+};
 
-const VALID_TOKEN = mockPendaftaran.tokenAkses
+const VALID_TOKEN = TOKEN_PLAIN;
 
 function makeFile(name: string, type: string): File {
-  return new File(["dummy-content"], name, { type })
+  return new File(["dummy-content"], name, { type });
 }
 
-function makeFormData(
-  overrides: Record<string, File | string> = {}
-): FormData {
-  const fd = new FormData()
-  fd.set("nomorPendaftaran", "REG-2026-00001")
-  fd.set("tokenAkses", VALID_TOKEN)
+function makeFormData(overrides: Record<string, File | string> = {}): FormData {
+  const fd = new FormData();
+  fd.set("nomorPendaftaran", "REG-2026-00001");
+  fd.set("tokenAkses", VALID_TOKEN);
   for (const [key, value] of Object.entries(overrides)) {
-    fd.set(key, value)
+    fd.set(key, value);
   }
-  return fd
+  return fd;
 }
 
 // ========================================================
@@ -102,28 +109,28 @@ function makeFormData(
 // ========================================================
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.clearAllMocks();
 
   // Default: rate limit lolos
-  mockRateLimitAsync.mockResolvedValue({ success: true })
-  mockGetClientIp.mockResolvedValue("127.0.0.1")
+  mockRateLimitAsync.mockResolvedValue({ success: true });
+  mockGetClientIp.mockResolvedValue("127.0.0.1");
 
   // Default: pendaftaran ditemukan
-  mockPendaftaranFindUnique.mockResolvedValue(mockPendaftaran)
+  mockPendaftaranFindUnique.mockResolvedValue(mockPendaftaran);
 
   // Default: validasi file lolos & upload storage sukses
-  mockValidateFile.mockResolvedValue({ valid: true })
-  mockStorageUpload.mockResolvedValue({ error: null })
-  mockStorageRemove.mockResolvedValue({ error: null })
+  mockValidateFile.mockResolvedValue({ valid: true });
+  mockStorageUpload.mockResolvedValue({ error: null });
+  mockStorageRemove.mockResolvedValue({ error: null });
 
   // Default: transaction sukses — eksekusi callback dengan tx mock
   mockPrismaTransaction.mockImplementation(async (cb: unknown) => {
     if (typeof cb === "function") {
-      return cb({ pendaftaran: { update: vi.fn().mockResolvedValue({}) } })
+      return cb({ pendaftaran: { update: vi.fn().mockResolvedValue({}) } });
     }
-    return undefined
-  })
-})
+    return undefined;
+  });
+});
 
 // ========================================================
 // 1. Validasi Input
@@ -131,110 +138,110 @@ beforeEach(() => {
 
 describe("uploadDokumenPendaftaran — Validasi Input", () => {
   it("harus menolak tanpa nomor pendaftaran", async () => {
-    const fd = new FormData()
-    fd.set("kartuKeluarga", makeFile("kk.jpg", "image/jpeg"))
+    const fd = new FormData();
+    fd.set("kartuKeluarga", makeFile("kk.jpg", "image/jpeg"));
 
-    const result = await uploadDokumenPendaftaran(fd)
+    const result = await uploadDokumenPendaftaran(fd);
 
-    expect(result.success).toBe(false)
-    expect(result.message).toContain("Nomor pendaftaran wajib diisi")
-  })
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Nomor pendaftaran wajib diisi");
+  });
 
   it("harus menolak jika tidak ada berkas yang dikirim", async () => {
-    const result = await uploadDokumenPendaftaran(makeFormData())
+    const result = await uploadDokumenPendaftaran(makeFormData());
 
-    expect(result.success).toBe(false)
-    expect(result.message).toContain(
-      "Pilih minimal satu berkas"
-    )
-  })
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Pilih minimal satu berkas");
+  });
 
   it("harus menolak file yang tidak lolos validasi (magic bytes/ukuran)", async () => {
     mockValidateFile.mockResolvedValue({
       valid: false,
       error: "Format berkas tidak valid",
-    })
+    });
 
     const result = await uploadDokumenPendaftaran(
-      makeFormData({ kartuKeluarga: makeFile("kk.exe", "application/octet-stream") })
-    )
+      makeFormData({
+        kartuKeluarga: makeFile("kk.exe", "application/octet-stream"),
+      }),
+    );
 
-    expect(result.success).toBe(false)
-    expect(result.message).toContain("Format berkas tidak valid")
-    expect(mockStorageUpload).not.toHaveBeenCalled()
-  })
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Format berkas tidak valid");
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
 
   it("harus menolak ekstensi yang tidak diizinkan", async () => {
     const result = await uploadDokumenPendaftaran(
-      makeFormData({ kartuKeluarga: makeFile("kk.txt", "text/plain") })
-    )
+      makeFormData({ kartuKeluarga: makeFile("kk.txt", "text/plain") }),
+    );
 
-    expect(result.success).toBe(false)
-    expect(result.message).toContain("format berkas tidak valid")
-    expect(mockStorageUpload).not.toHaveBeenCalled()
-  })
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("format berkas tidak valid");
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
 
   it("harus menolak jika nomor pendaftaran tidak ditemukan", async () => {
-    mockPendaftaranFindUnique.mockResolvedValue(null)
+    mockPendaftaranFindUnique.mockResolvedValue(null);
 
     const result = await uploadDokumenPendaftaran(
-      makeFormData({ foto: makeFile("foto.png", "image/png") })
-    )
+      makeFormData({ foto: makeFile("foto.png", "image/png") }),
+    );
 
-    expect(result.success).toBe(false)
-    expect(result.message).toContain("Nomor pendaftaran tidak ditemukan")
-    expect(mockStorageUpload).not.toHaveBeenCalled()
-  })
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Nomor pendaftaran tidak ditemukan");
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
 
   it("harus menolak tanpa token akses (IDOR tulis)", async () => {
-    const fd = makeFormData({ foto: makeFile("foto.png", "image/png") })
-    fd.delete("tokenAkses")
+    const fd = makeFormData({ foto: makeFile("foto.png", "image/png") });
+    fd.delete("tokenAkses");
 
-    const result = await uploadDokumenPendaftaran(fd)
+    const result = await uploadDokumenPendaftaran(fd);
 
-    expect(result.success).toBe(false)
-    expect(result.message).toContain("Kredensial akses")
-    expect(mockStorageUpload).not.toHaveBeenCalled()
-  })
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Kredensial akses");
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
 
   it("harus menolak token akses yang salah walaupun nomor benar", async () => {
     const result = await uploadDokumenPendaftaran(
       makeFormData({
         foto: makeFile("foto.png", "image/png"),
         tokenAkses: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      })
-    )
+      }),
+    );
 
-    expect(result.success).toBe(false)
-    expect(result.message).toContain("Kredensial akses")
-    expect(mockStorageUpload).not.toHaveBeenCalled()
-  })
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Kredensial akses");
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
 
   it("harus menolak token akses yang bentuknya tidak valid", async () => {
     const result = await uploadDokumenPendaftaran(
       makeFormData({
         foto: makeFile("foto.png", "image/png"),
         tokenAkses: "cnbc://token-snippet",
-      })
-    )
+      }),
+    );
 
-    expect(result.success).toBe(false)
-    expect(result.message).toContain("Kredensial akses")
-    expect(mockStorageUpload).not.toHaveBeenCalled()
-  })
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Kredensial akses");
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
 
   it("harus terkena rate limit", async () => {
-    mockRateLimitAsync.mockResolvedValue({ success: false })
+    mockRateLimitAsync.mockResolvedValue({ success: false });
 
     const result = await uploadDokumenPendaftaran(
-      makeFormData({ foto: makeFile("foto.jpg", "image/jpeg") })
-    )
+      makeFormData({ foto: makeFile("foto.jpg", "image/jpeg") }),
+    );
 
-    expect(result.success).toBe(false)
-    expect(result.message).toContain("Terlalu banyak")
-    expect(mockStorageUpload).not.toHaveBeenCalled()
-  })
-})
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Terlalu banyak");
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
+});
 
 // ========================================================
 // 2. Kasus Sukses
@@ -243,25 +250,25 @@ describe("uploadDokumenPendaftaran — Validasi Input", () => {
 describe("uploadDokumenPendaftaran — Kasus Sukses", () => {
   it("harus berhasil mengunggah satu dokumen baru", async () => {
     const result = await uploadDokumenPendaftaran(
-      makeFormData({ kartuKeluarga: makeFile("kk.jpg", "image/jpeg") })
-    )
+      makeFormData({ kartuKeluarga: makeFile("kk.jpg", "image/jpeg") }),
+    );
 
-    expect(result.success).toBe(true)
-    expect(mockStorageUpload).toHaveBeenCalledOnce()
+    expect(result.success).toBe(true);
+    expect(mockStorageUpload).toHaveBeenCalledOnce();
 
     // Path file ditentukan SERVER (folder per pendaftaran), bukan dari klien
-    const [path, , options] = mockStorageUpload.mock.calls[0]
-    expect(path).toMatch(/^dokumen-pendaftaran\/pendaftaran\/pend-1\//)
-    expect(path.endsWith(".jpg")).toBe(true)
-    expect(options.upsert).toBe(false)
+    const [path, , options] = mockStorageUpload.mock.calls[0];
+    expect(path).toMatch(/^dokumen-pendaftaran\/pendaftaran\/pend-1\//);
+    expect(path.endsWith(".jpg")).toBe(true);
+    expect(options.upsert).toBe(false);
 
     // Update record via transaction memakai path server
-    const txCb = mockPrismaTransaction.mock.calls[0][0]
-    const txMock = { pendaftaran: { update: vi.fn().mockResolvedValue({}) } }
-    await txCb(txMock)
-    const updatedData = txMock.pendaftaran.update.mock.calls[0][0].data
-    expect(updatedData.dokKartuKeluarga).toBe(path)
-  })
+    const txCb = mockPrismaTransaction.mock.calls[0][0];
+    const txMock = { pendaftaran: { update: vi.fn().mockResolvedValue({}) } };
+    await txCb(txMock);
+    const updatedData = txMock.pendaftaran.update.mock.calls[0][0].data;
+    expect(updatedData.dokKartuKeluarga).toBe(path);
+  });
 
   it("harus berhasil mengunggah banyak dokumen sekaligus", async () => {
     const result = await uploadDokumenPendaftaran(
@@ -269,68 +276,215 @@ describe("uploadDokumenPendaftaran — Kasus Sukses", () => {
         kartuKeluarga: makeFile("kk.jpg", "image/jpeg"),
         akteLahir: makeFile("akte.pdf", "application/pdf"),
         foto: makeFile("foto.png", "image/png"),
-      })
-    )
+      }),
+    );
 
-    expect(result.success).toBe(true)
-    expect(mockStorageUpload).toHaveBeenCalledTimes(3)
-  })
+    expect(result.success).toBe(true);
+    expect(mockStorageUpload).toHaveBeenCalledTimes(3);
+  });
 
   it("harus menghapus dokumen lama yang diganti secara best-effort", async () => {
     const result = await uploadDokumenPendaftaran(
-      makeFormData({ akteLahir: makeFile("akte-baru.pdf", "application/pdf") })
-    )
+      makeFormData({ akteLahir: makeFile("akte-baru.pdf", "application/pdf") }),
+    );
 
-    expect(result.success).toBe(true)
-    expect(mockStorageRemove).toHaveBeenCalled()
-    const [removedPaths] = mockStorageRemove.mock.calls[0]
+    expect(result.success).toBe(true);
+    expect(mockStorageRemove).toHaveBeenCalled();
+    const [removedPaths] = mockStorageRemove.mock.calls[0];
     expect(removedPaths).toContain(
-      "dokumen-pendaftaran/pendaftaran/pend-1/lama.pdf"
-    )
-  })
+      "dokumen-pendaftaran/pendaftaran/pend-1/lama.pdf",
+    );
+  });
 
   it("tidak menghapus dokumen apa pun jika tidak ada yang diganti", async () => {
     const result = await uploadDokumenPendaftaran(
-      makeFormData({ foto: makeFile("foto.png", "image/png") })
-    )
+      makeFormData({ foto: makeFile("foto.png", "image/png") }),
+    );
 
-    expect(result.success).toBe(true)
-    expect(mockStorageRemove).not.toHaveBeenCalled()
-  })
-})
+    expect(result.success).toBe(true);
+    expect(mockStorageRemove).not.toHaveBeenCalled();
+  });
+});
 
 // ========================================================
-// 3. Kegagalan & Rollback
+// 4. Status Pendaftaran & Masa Berlaku Token
+// ========================================================
+
+describe("uploadDokumenPendaftaran — Status & Masa Berlaku Token", () => {
+  it("harus menolak status DITERIMA (alur publik tertutup setelah diterima)", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue({
+      ...mockPendaftaran,
+      status: "DITERIMA",
+    });
+
+    const result = await uploadDokumenPendaftaran(
+      makeFormData({ kartuKeluarga: makeFile("kk.jpg", "image/jpeg") }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("DITERIMA");
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
+
+  it("harus menolak status DITOLAK", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue({
+      ...mockPendaftaran,
+      status: "DITOLAK",
+    });
+
+    const result = await uploadDokumenPendaftaran(
+      makeFormData({ kartuKeluarga: makeFile("kk.jpg", "image/jpeg") }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("DITOLAK");
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
+
+  it("harus mengizinkan MENUNGGU_PEMBAYARAN", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue({
+      ...mockPendaftaran,
+      status: "MENUNGGU_PEMBAYARAN",
+    });
+
+    const result = await uploadDokumenPendaftaran(
+      makeFormData({ kartuKeluarga: makeFile("kk.jpg", "image/jpeg") }),
+    );
+
+    expect(result.success).toBe(true);
+  });
+
+  it("harus menolak token yang sudah lewat 90 hari", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue({
+      ...mockPendaftaran,
+      tokenAksesExpiraAt: new Date(Date.now() - 1000),
+    });
+
+    const result = await uploadDokumenPendaftaran(
+      makeFormData({ kartuKeluarga: makeFile("kk.jpg", "image/jpeg") }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("90 hari");
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
+
+  it("harus menolak token dengan expiry NULL (fail-closed)", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue({
+      ...mockPendaftaran,
+      tokenAksesExpiraAt: null,
+    });
+
+    const result = await uploadDokumenPendaftaran(
+      makeFormData({ kartuKeluarga: makeFile("kk.jpg", "image/jpeg") }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("90 hari");
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
+
+  it("harus mengecek token sebelum status, agar token salah tidak membocorkan status", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue({
+      ...mockPendaftaran,
+      status: "DITERIMA",
+    });
+
+    const result = await uploadDokumenPendaftaran(
+      makeFormData({
+        foto: makeFile("foto.png", "image/png"),
+        tokenAkses: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Kredensial akses");
+    expect(result.message).not.toContain("DITERIMA");
+  });
+});
+
+// ========================================================
+// 5. Kegagalan & Rollback
 // ========================================================
 
 describe("uploadDokumenPendaftaran — Kegagalan & Rollback", () => {
   it("harus membersihkan file yang sudah terupload jika salah satu upload gagal", async () => {
     mockStorageUpload
       .mockResolvedValueOnce({ error: null }) // KK sukses
-      .mockResolvedValueOnce({ error: { message: "quota" } }) // Akte gagal
+      .mockResolvedValueOnce({ error: { message: "quota" } }); // Akte gagal
 
     const result = await uploadDokumenPendaftaran(
       makeFormData({
         kartuKeluarga: makeFile("kk.jpg", "image/jpeg"),
         akteLahir: makeFile("akte.pdf", "application/pdf"),
-      })
-    )
+      }),
+    );
 
-    expect(result.success).toBe(false)
-    expect(result.message).toContain("Akta Kelahiran")
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Akta Kelahiran");
     // File KK yang sudah terupload dibersihkan
-    expect(mockStorageRemove).toHaveBeenCalled()
-    expect(mockPrismaTransaction).not.toHaveBeenCalled()
-  })
+    expect(mockStorageRemove).toHaveBeenCalled();
+    expect(mockPrismaTransaction).not.toHaveBeenCalled();
+  });
 
   it("harus membersihkan file jika transaction DB gagal", async () => {
-    mockPrismaTransaction.mockRejectedValue(new Error("db down"))
+    mockPrismaTransaction.mockRejectedValue(new Error("db down"));
 
     const result = await uploadDokumenPendaftaran(
-      makeFormData({ kartuKeluarga: makeFile("kk.jpg", "image/jpeg") })
-    )
+      makeFormData({ kartuKeluarga: makeFile("kk.jpg", "image/jpeg") }),
+    );
 
-    expect(result.success).toBe(false)
-    expect(mockStorageRemove).toHaveBeenCalled()
-  })
-})
+    expect(result.success).toBe(false);
+    expect(mockStorageRemove).toHaveBeenCalled();
+  });
+});
+// ========================================================
+// Gerbang verifikasi email
+// ========================================================
+
+describe("uploadDokumenPendaftaran — Gerbang Verifikasi Email", () => {
+  it("menolak upload jika email orang tua belum diverifikasi", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue({
+      ...mockPendaftaran,
+      emailOrangTuaTerverifikasiAt: null,
+    } as never);
+
+    const hasil = await uploadDokumenPendaftaran(
+      makeFormData({ kartuKeluarga: makeFile("kk.jpg", "image/jpeg") }),
+    );
+
+    expect(hasil.success).toBe(false);
+    expect(hasil.message).toContain("belum diverifikasi");
+    // Tidak boleh ada file yang sempat terunggah ke storage.
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+  });
+
+  it("meneruskan upload ketika email sudah terverifikasi", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue({
+      ...mockPendaftaran,
+      emailOrangTuaTerverifikasiAt: new Date("2026-01-01"),
+    } as never);
+
+    const hasil = await uploadDokumenPendaftaran(
+      makeFormData({ kartuKeluarga: makeFile("kk.jpg", "image/jpeg") }),
+    );
+
+    expect(hasil.success).toBe(true);
+  });
+
+  it("menolak lebih dulu karena token salah, bukan karena email (tidak membocorkan status)", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue({
+      ...mockPendaftaran,
+      emailOrangTuaTerverifikasiAt: null,
+    } as never);
+
+    const hasil = await uploadDokumenPendaftaran(
+      makeFormData({
+        tokenAkses: "Z".repeat(32),
+        kartuKeluarga: makeFile("kk.jpg", "image/jpeg"),
+      }),
+    );
+
+    expect(hasil.message).toBe("Kredensial akses pendaftaran tidak valid");
+  });
+});

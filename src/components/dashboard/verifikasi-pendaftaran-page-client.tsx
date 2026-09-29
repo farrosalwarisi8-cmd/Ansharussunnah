@@ -1,48 +1,148 @@
-"use client"
+"use client";
 
+import * as React from "react";
+import Image from "next/image";
+import { createPortal } from "react-dom";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import {
+  getPendaftaranList,
+  getPendaftaranDetail,
+  verifikasiPendaftaran,
+} from "@/actions/verifikasi";
+import { tandaiEmailPendaftaranTerverifikasi } from "@/actions/verifikasi-email-manual";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import dynamic from "next/dynamic";
+const Dialog = dynamic(
+  () => import("@/components/ui/dialog").then((m) => m.Dialog),
+  { ssr: false },
+);
+const DialogContent = dynamic(
+  () => import("@/components/ui/dialog").then((m) => m.DialogContent),
+  { ssr: false },
+);
+const DialogHeader = dynamic(
+  () => import("@/components/ui/dialog").then((m) => m.DialogHeader),
+  { ssr: false },
+);
+const DialogTitle = dynamic(
+  () => import("@/components/ui/dialog").then((m) => m.DialogTitle),
+  { ssr: false },
+);
+const DialogFooter = dynamic(
+  () => import("@/components/ui/dialog").then((m) => m.DialogFooter),
+  { ssr: false },
+);
+const ConfirmDialog = dynamic(
+  () => import("@/components/ui/confirm-dialog").then((m) => m.ConfirmDialog),
+  { ssr: false },
+);
+import {
+  CheckCircle2,
+  XCircle,
+  ExternalLink,
+  Loader2,
+  Search,
+  RefreshCw,
+  FileX,
+  ArrowUpDown,
+  Printer,
+  MailWarning,
+  ShieldQuestion,
+  UserCheck,
+} from "lucide-react";
+import type { PendaftaranWithRelations } from "@/types";
 
+/**
+ * Tiga kondisi, dibedakan karena ketiganya berarti hal berbeda bagi committee:
+ *
+ *   belum terverifikasi    → tidak bisa disetujui sama sekali. Menahan di sini
+ *                            lebih baik daripada membiarkan approval gagal
+ *                            belakangan setelah akun terlanjur dibuat.
+ *   terverifikasi, tapi    → grandfathering. Gerbangnya terbuka tapi tidak ada
+ *     tanpa bukti OTP        bukti kepemilikan email. Boleh disetujui, tapi
+ *                            perlu dicurigai.
+ *   terverifikasi + OTP    → ada bukti nyata. Aman.
+ */
+function EmailVerifikasiBadge({
+  terverifikasi,
+  adaBuktiOtp,
+  manual,
+}: {
+  terverifikasi: boolean;
+  adaBuktiOtp: boolean;
+  manual?: boolean;
+}) {
+  if (!terverifikasi) {
+    return (
+      <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 rounded-lg px-1.5 py-0.5">
+        <MailWarning className="h-3 w-3" />
+        Email belum diverifikasi
+      </div>
+    );
+  }
 
-import * as React from "react"
-import Image from "next/image"
-import { createPortal } from "react-dom"
-import { DashboardHeader } from "@/components/dashboard/dashboard-header"
-import { getPendaftaranList, getPendaftaranDetail, verifikasiPendaftaran } from "@/actions/verifikasi"
-import { useToast } from "@/hooks/use-toast"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { StatusBadge } from "@/components/ui/status-badge"
-import { EmptyState } from "@/components/ui/empty-state"
-import dynamic from "next/dynamic"
-const Dialog = dynamic(() => import("@/components/ui/dialog").then(m => m.Dialog), { ssr: false })
-const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogContent), { ssr: false })
-const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogHeader), { ssr: false })
-const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
-const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
-const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
-import { CheckCircle2, XCircle, ExternalLink, Loader2, Search, RefreshCw, FileX, ArrowUpDown, Printer } from "lucide-react"
-import type { PendaftaranWithRelations } from "@/types"
+  // Dibedakan dari "warisan" karena LEGITIMAT: ada admin yang dikonfirmasi
+  // langsung ke orang tua, dan jejaknya tercatat permanen di
+  // `emailOrangTuaDiverifikasiManualAt`. Warisan tidak punya siapa pun dan
+  // tidak punya alasan — itu bedanya.
+  if (manual) {
+    return (
+      <div
+        className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-1.5 py-0.5"
+        title="Diverifikasi manual oleh panitia lewat konfirmasi langsung ke orang tua. Tidak ada bukti OTP, tapi alasannya tercatat permanen."
+      >
+        <UserCheck className="h-3 w-3" />
+        Verifikasi manual
+      </div>
+    );
+  }
+
+  if (!adaBuktiOtp) {
+    return (
+      <div
+        className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-300 rounded-lg px-1.5 py-0.5"
+        title="Gerbang terbuka dari grandfathering — tidak ada bukti OTP. Boleh disetujui, tapi pertimbangkan konfirmasi langsung ke orang tua."
+      >
+        <ShieldQuestion className="h-3 w-3" />
+        Verifikasi warisan
+      </div>
+    );
+  }
+
+  return null;
+}
 
 // Helper: Format label from enum value
 function formatStatusOrangTua(val?: string | null): string {
-  if (!val) return "-"
+  if (!val) return "-";
   const map: Record<string, string> = {
     MASIH_HIDUP: "Masih Hidup",
     SUDAH_MENINGGAL: "Sudah Meninggal",
     TIDAK_DIKETAHUI: "Tidak Diketahui",
-  }
-  return map[val] || val
+  };
+  return map[val] || val;
 }
 
 function formatStatusWali(val?: string | null): string {
-  if (!val) return "-"
+  if (!val) return "-";
   const map: Record<string, string> = {
     SAMA_DENGAN_AYAH: "Sama dengan Ayah",
     SAMA_DENGAN_IBU: "Sama dengan Ibu",
     LAINNYA: "Lainnya",
-  }
-  return map[val] || val
+  };
+  return map[val] || val;
 }
 
 function formatDate(date: Date | string): string {
@@ -50,20 +150,20 @@ function formatDate(date: Date | string): string {
     day: "numeric",
     month: "long",
     year: "numeric",
-  })
+  });
 }
 
 type PendaftaranDetail = PendaftaranWithRelations;
 
 type DetailData = {
-  pendaftaran: PendaftaranWithRelations
+  pendaftaran: PendaftaranWithRelations;
   signedUrls: {
-    kartuKeluarga?: string | null
-    akteLahir?: string | null
-    foto?: string | null
-    buktiTransfer: Array<{ id: string; url: string | null }>
-  }
-}
+    kartuKeluarga?: string | null;
+    akteLahir?: string | null;
+    foto?: string | null;
+    buktiTransfer: Array<{ id: string; url: string | null }>;
+  };
+};
 
 const STATUS_FILTERS = [
   { value: "ALL", label: "Semua" },
@@ -74,11 +174,12 @@ const STATUS_FILTERS = [
 
 function statusText(status?: string | null): string {
   const map: Record<string, string> = {
+    MENUNGGU_PEMBAYARAN: "Menunggu Pembayaran",
     MENUNGGU_VERIFIKASI: "Menunggu Verifikasi",
     DITERIMA: "Diterima",
     DITOLAK: "Ditolak",
-  }
-  return (status && map[status]) || status || "-"
+  };
+  return (status && map[status]) || status || "-";
 }
 
 // Style sel tabel untuk dokumen cetak.
@@ -86,11 +187,11 @@ const cellStyle: React.CSSProperties = {
   border: "1px solid #cbd5e1",
   padding: "8px 10px",
   verticalAlign: "top",
-}
+};
 
 // Ikutkan print CSS (body.print-mode) lalu bersihkan setelah dialog print ditutup.
 function cleanupPrintMode() {
-  document.body.classList.remove("print-mode")
+  document.body.classList.remove("print-mode");
 }
 
 // Menunggu pratinjau gambar/PDF di container print termuat sebelum memanggil
@@ -98,13 +199,13 @@ function cleanupPrintMode() {
 // sehingga browser belum tentu selesai men-download berkas — tanpa penungguan
 // ini pratinjau KK/akta/foto bisa tampil kosong saat di-print / Save as PDF.
 async function activatePrintMode() {
-  document.body.classList.add("print-mode")
+  document.body.classList.add("print-mode");
 
-  const printRoot = document.querySelector(".print-only")
+  const printRoot = document.querySelector(".print-only");
   if (printRoot) {
     const resources = Array.from(
-      printRoot.querySelectorAll("img, iframe")
-    ) as Array<HTMLImageElement | HTMLIFrameElement>
+      printRoot.querySelectorAll("img, iframe"),
+    ) as Array<HTMLImageElement | HTMLIFrameElement>;
 
     if (resources.length > 0) {
       await Promise.race([
@@ -113,28 +214,34 @@ async function activatePrintMode() {
             const ready =
               el instanceof HTMLImageElement
                 ? el.complete
-                : el.contentDocument !== null || el.src.startsWith("about:")
-            if (ready) return Promise.resolve()
+                : el.contentDocument !== null || el.src.startsWith("about:");
+            if (ready) return Promise.resolve();
             return new Promise<void>((resolve) => {
-              el.addEventListener("load", () => resolve(), { once: true })
-              el.addEventListener("error", () => resolve(), { once: true })
-            })
-          })
+              el.addEventListener("load", () => resolve(), { once: true });
+              el.addEventListener("error", () => resolve(), { once: true });
+            });
+          }),
         ),
         new Promise<void>((resolve) => setTimeout(resolve, 4000)),
-      ])
+      ]);
     }
   }
 
-  window.addEventListener("afterprint", cleanupPrintMode, { once: true })
-  window.print()
-  window.setTimeout(cleanupPrintMode, 5000)
+  window.addEventListener("afterprint", cleanupPrintMode, { once: true });
+  window.print();
+  window.setTimeout(cleanupPrintMode, 5000);
 }
 
 /* ========================================================================= */
 /* PRINT HELPER COMPONENTS (digunakan dalam portal .print-only)              */
 /* ========================================================================= */
-function PrintSection({ title, children }: { title: string; children: React.ReactNode }) {
+function PrintSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div style={{ marginBottom: "1.25rem" }}>
       <h2
@@ -151,11 +258,13 @@ function PrintSection({ title, children }: { title: string; children: React.Reac
       >
         {title}
       </h2>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+      <table
+        style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}
+      >
         <tbody>{children}</tbody>
       </table>
     </div>
-  )
+  );
 }
 
 function PrintRow({ label, value }: { label: string; value?: string | null }) {
@@ -171,15 +280,22 @@ function PrintRow({ label, value }: { label: string; value?: string | null }) {
       >
         {label}
       </td>
-      <td style={{ padding: "5px 0", fontWeight: 600, color: "#1e293b", verticalAlign: "top" }}>
+      <td
+        style={{
+          padding: "5px 0",
+          fontWeight: 600,
+          color: "#1e293b",
+          verticalAlign: "top",
+        }}
+      >
         {value || "-"}
       </td>
     </tr>
-  )
+  );
 }
 
 function isPdfUrl(url?: string | null): boolean {
-  return !!url && /\.pdf(\?|#|$)/i.test(url)
+  return !!url && /\.pdf(\?|#|$)/i.test(url);
 }
 
 // Pratinjau dokumen terlampir (KK, akta, pas foto, bukti transfer) di layout
@@ -232,15 +348,15 @@ function PrintDocument({ label, url }: { label: string; url?: string | null }) {
         )}
       </td>
     </tr>
-  )
+  );
 }
 
 function PrintHeader({
   subtitle,
   rightInfo,
 }: {
-  subtitle: string
-  rightInfo: React.ReactNode
+  subtitle: string;
+  rightInfo: React.ReactNode;
 }) {
   return (
     <div className="flex items-start justify-between border-b-2 border-slate-800 pb-4 mb-6">
@@ -259,188 +375,281 @@ function PrintHeader({
           <p className="text-sm font-semibold text-slate-700">{subtitle}</p>
         </div>
       </div>
-      <div className="text-right text-xs text-slate-600 space-y-0.5">{rightInfo}</div>
+      <div className="text-right text-xs text-slate-600 space-y-0.5">
+        {rightInfo}
+      </div>
     </div>
-  )
+  );
 }
 
 export default function VerifikasiPendaftaranPage() {
-  const { toast } = useToast()
+  const { toast } = useToast();
 
   // List state
-  const [pendaftaranList, setPendaftaranList] = React.useState<PendaftaranDetail[]>([])
-  const [loading, setLoading] = React.useState(true)
-  const [totalItems, setTotalItems] = React.useState(0)
-  const [currentPage, setCurrentPage] = React.useState(1)
-  const [totalPages, setTotalPages] = React.useState(1)
+  const [pendaftaranList, setPendaftaranList] = React.useState<
+    PendaftaranDetail[]
+  >([]);
+  const [loading, setLoading] = React.useState(true);
+  const [totalItems, setTotalItems] = React.useState(0);
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [totalPages, setTotalPages] = React.useState(1);
 
   // Filter & search
-  const [search, setSearch] = React.useState("")
-  const [debouncedSearch, setDebouncedSearch] = React.useState("")
-  const [statusFilter, setStatusFilter] = React.useState<string>("ALL")
-  const [sortBy, setSortBy] = React.useState<"newest" | "oldest">("newest")
+  const [search, setSearch] = React.useState("");
+  const [debouncedSearch, setDebouncedSearch] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<string>("ALL");
+  const [sortBy, setSortBy] = React.useState<"newest" | "oldest">("newest");
 
   // Detail modal
-  const [selectedId, setSelectedId] = React.useState<string | null>(null)
-  const [detailData, setDetailData] = React.useState<DetailData | null>(null)
-  const [loadingDetail, setLoadingDetail] = React.useState(false)
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [detailData, setDetailData] = React.useState<DetailData | null>(null);
+  const [loadingDetail, setLoadingDetail] = React.useState(false);
 
   // Action states
-  const [alasanPenolakan, setAlasanPenolakan] = React.useState("Berkas Akta Kelahiran dan foto bukti transfer buram/tidak terbaca.")
-  const [isRejectDialogOpen, setIsRejectDialogOpen] = React.useState(false)
-  const [isApproveConfirmOpen, setIsApproveConfirmOpen] = React.useState(false)
-  const [processing, setProcessing] = React.useState(false)
-  const [selectedKelasTujuanId, setSelectedKelasTujuanId] = React.useState("")
+  const [alasanPenolakan, setAlasanPenolakan] = React.useState(
+    "Berkas Akta Kelahiran dan foto bukti transfer buram/tidak terbaca.",
+  );
+  const [isRejectDialogOpen, setIsRejectDialogOpen] = React.useState(false);
+  const [isManualVerifyOpen, setIsManualVerifyOpen] = React.useState(false);
+  const [alasanVerifikasiManual, setAlasanVerifikasiManual] =
+    React.useState("");
+  const [isMemprosesVerifikasiManual, setIsMemprosesVerifikasiManual] =
+    React.useState(false);
+  const [isApproveConfirmOpen, setIsApproveConfirmOpen] = React.useState(false);
+  const [processing, setProcessing] = React.useState(false);
+  const [selectedKelasTujuanId, setSelectedKelasTujuanId] = React.useState("");
 
   // Hanya render portal print setelah mount di client (document.body belum ada saat SSR).
-  const [mounted, setMounted] = React.useState(false)
+  const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => {
-    setMounted(true)
-  }, [])
+    setMounted(true);
+  }, []);
 
   // Debounce search
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(search)
+      setDebouncedSearch(search);
       setCurrentPage(1);
-    }, 400)
-    return () => clearTimeout(timer)
-  }, [search])
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Fetch list
   const fetchList = React.useCallback(async () => {
-    setLoading(true)
+    setLoading(true);
     try {
-      const statusParam = statusFilter === "ALL" ? undefined : statusFilter as "MENUNGGU_VERIFIKASI" | "DITERIMA" | "DITOLAK"
+      const statusParam =
+        statusFilter === "ALL"
+          ? undefined
+          : (statusFilter as "MENUNGGU_VERIFIKASI" | "DITERIMA" | "DITOLAK");
       const result = await getPendaftaranList({
         status: statusParam,
         search: debouncedSearch || undefined,
         page: currentPage,
         limit: 10,
         sortBy,
-      })
+      });
       if (result.success && result.data) {
-        setPendaftaranList(result.data.items)
-        setTotalItems(result.data.total)
-        setTotalPages(result.data.totalPages)
+        setPendaftaranList(result.data.items);
+        setTotalItems(result.data.total);
+        setTotalPages(result.data.totalPages);
       } else {
-        toast({ title: "Gagal memuat data", description: result.message, variant: "destructive" as never })
+        toast({
+          title: "Gagal memuat data",
+          description: result.message,
+          variant: "destructive" as never,
+        });
       }
     } catch {
-      toast({ title: "Error", description: "Gagal menghubungi server", variant: "destructive" as never })
+      toast({
+        title: "Error",
+        description: "Gagal menghubungi server",
+        variant: "destructive" as never,
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [statusFilter, debouncedSearch, currentPage, sortBy, toast])
+  }, [statusFilter, debouncedSearch, currentPage, sortBy, toast]);
 
   React.useEffect(() => {
-    fetchList()
-  }, [fetchList])
+    fetchList();
+  }, [fetchList]);
 
   // Fetch detail when clicking "Periksa Berkas"
   const handleOpenDetail = async (id: string) => {
-    setSelectedId(id)
-    setLoadingDetail(true)
-    setDetailData(null)
-    setSelectedKelasTujuanId("")
+    setSelectedId(id);
+    setLoadingDetail(true);
+    setDetailData(null);
+    setSelectedKelasTujuanId("");
     try {
-      const result = await getPendaftaranDetail(id)
+      const result = await getPendaftaranDetail(id);
       if (result.success && result.data) {
-        setDetailData(result.data)
+        setDetailData(result.data);
       } else {
-        toast({ title: "Gagal memuat detail", description: result.message, variant: "destructive" as never })
-        setSelectedId(null)
+        toast({
+          title: "Gagal memuat detail",
+          description: result.message,
+          variant: "destructive" as never,
+        });
+        setSelectedId(null);
       }
     } catch {
-      toast({ title: "Error", description: "Gagal menghubungi server", variant: "destructive" as never })
-      setSelectedId(null)
+      toast({
+        title: "Error",
+        description: "Gagal menghubungi server",
+        variant: "destructive" as never,
+      });
+      setSelectedId(null);
     } finally {
-      setLoadingDetail(false)
+      setLoadingDetail(false);
     }
-  }
+  };
 
   const handleCloseDetail = () => {
-    setSelectedId(null)
-    setDetailData(null)
-  }
+    setSelectedId(null);
+    setDetailData(null);
+  };
 
   // Approve
   const handleApprove = async () => {
-    if (!detailData) return
-    setProcessing(true)
+    if (!detailData) return;
+    setProcessing(true);
     try {
       const result = await verifikasiPendaftaran({
         pendaftaranId: detailData.pendaftaran.id,
         status: "DITERIMA",
         kelasTujuanId: selectedKelasTujuanId || undefined,
-      })
+      });
       if (result.success) {
-        toast({ title: "Pendaftaran Disetujui!", description: result.message })
+        toast({ title: "Pendaftaran Disetujui!", description: result.message });
       } else {
-        toast({ title: "Gagal", description: result.message, variant: "destructive" as never })
+        toast({
+          title: "Gagal",
+          description: result.message,
+          variant: "destructive" as never,
+        });
       }
-      handleCloseDetail()
-      setIsApproveConfirmOpen(false)
-      fetchList()
+      handleCloseDetail();
+      setIsApproveConfirmOpen(false);
+      fetchList();
     } catch {
-      toast({ title: "Error", description: "Gagal memproses verifikasi", variant: "destructive" as never })
+      toast({
+        title: "Error",
+        description: "Gagal memproses verifikasi",
+        variant: "destructive" as never,
+      });
     } finally {
-      setProcessing(false)
+      setProcessing(false);
     }
-  }
+  };
 
   // Reject
   const handleReject = async () => {
-    if (!detailData) return
-    setProcessing(true)
+    if (!detailData) return;
+    setProcessing(true);
     try {
       const result = await verifikasiPendaftaran({
         pendaftaranId: detailData.pendaftaran.id,
         status: "DITOLAK",
         alasanPenolakan,
-      })
+      });
       if (result.success) {
-        toast({ title: "Pendaftaran Ditolak", description: result.message })
+        toast({ title: "Pendaftaran Ditolak", description: result.message });
       } else {
-        toast({ title: "Gagal", description: result.message, variant: "destructive" as never })
+        toast({
+          title: "Gagal",
+          description: result.message,
+          variant: "destructive" as never,
+        });
       }
-      handleCloseDetail()
-      setIsRejectDialogOpen(false)
-      fetchList()
+      handleCloseDetail();
+      setIsRejectDialogOpen(false);
+      fetchList();
     } catch {
-      toast({ title: "Error", description: "Gagal memproses verifikasi", variant: "destructive" as never })
+      toast({
+        title: "Error",
+        description: "Gagal memproses verifikasi",
+        variant: "destructive" as never,
+      });
     } finally {
-      setProcessing(false)
+      setProcessing(false);
     }
-  }
+  };
 
-  const pendaftar = detailData?.pendaftaran
-  const signedUrls = detailData?.signedUrls
+  // Verifikasi email manual (tanpa OTP).
+  //
+  // Tombol ini muncul justru saat pendaftaran TERTAHAN: tanpa gerbang email,
+  // approval ditolak (lihat verifikasiPendaftaran). Konfirmasi ke orang tua
+  // lewat telepon dulu, baru isi alasannya di sini.
+  const handleVerifikasiManual = async () => {
+    if (!detailData) return;
+    setIsMemprosesVerifikasiManual(true);
+    try {
+      const result = await tandaiEmailPendaftaranTerverifikasi(
+        detailData.pendaftaran.id,
+        alasanVerifikasiManual,
+      );
+      if (result.success) {
+        toast({
+          title: "Email Ditandai Terverifikasi",
+          description: result.message,
+        });
+        setIsManualVerifyOpen(false);
+        setAlasanVerifikasiManual("");
+        // Detail di-refresh supaya badge ikut berubah, dialog tetap terbuka.
+        await handleOpenDetail(detailData.pendaftaran.id);
+        fetchList();
+      } else {
+        toast({
+          title: "Gagal",
+          description: result.message,
+          variant: "destructive" as never,
+        });
+      }
+    } catch {
+      toast({
+        title: "Error",
+        description: "Gagal menandai email sebagai terverifikasi",
+        variant: "destructive" as never,
+      });
+    } finally {
+      setIsMemprosesVerifikasiManual(false);
+    }
+  };
+
+  const pendaftar = detailData?.pendaftaran;
+  const signedUrls = detailData?.signedUrls;
 
   const statusFilterLabel =
-    STATUS_FILTERS.find((f) => f.value === statusFilter)?.label || statusFilter
+    STATUS_FILTERS.find((f) => f.value === statusFilter)?.label || statusFilter;
 
-  const buktiTransferPrintUrls = signedUrls?.buktiTransfer ?? []
+  const buktiTransferPrintUrls = signedUrls?.buktiTransfer ?? [];
 
   // Kelas calon santri yang bisa dipilih saat approve (sesuai jenis kelamin),
   // dipakai ketika pendaftar mendaftar tanpa kelas tujuan.
   const kelasCocokPendaftar = React.useMemo(() => {
-    if (!pendaftar) return []
+    if (!pendaftar) return [];
     return (pendaftar.jenjangTujuan?.kelas ?? []).filter(
       (k) =>
         !k.jenisKelamin ||
         !pendaftar.jenisKelamin ||
-        k.jenisKelamin === pendaftar.jenisKelamin
-    )
-  }, [pendaftar])
+        k.jenisKelamin === pendaftar.jenisKelamin,
+    );
+  }, [pendaftar]);
 
   // DetailRow helper
-  const DetailRow = ({ label, value }: { label: string; value?: string | null }) => (
+  const DetailRow = ({
+    label,
+    value,
+  }: {
+    label: string;
+    value?: string | null;
+  }) => (
     <div>
       <span className="text-slate-400">{label}: </span>
       <strong className="text-slate-800">{value || "-"}</strong>
     </div>
-  )
+  );
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -466,7 +675,9 @@ export default function VerifikasiPendaftaranPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setSortBy(sortBy === "newest" ? "oldest" : "newest")}
+                onClick={() =>
+                  setSortBy(sortBy === "newest" ? "oldest" : "newest")
+                }
                 className="rounded-xl gap-1.5"
               >
                 <ArrowUpDown className="h-3.5 w-3.5" />
@@ -482,7 +693,13 @@ export default function VerifikasiPendaftaranPage() {
                 <Printer className="h-3.5 w-3.5" />
                 Cetak
               </Button>
-              <Button variant="outline" size="sm" onClick={fetchList} className="rounded-xl" aria-label="Muat Ulang">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchList}
+                className="rounded-xl"
+                aria-label="Muat Ulang"
+              >
                 <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                 Muat Ulang
               </Button>
@@ -499,7 +716,10 @@ export default function VerifikasiPendaftaranPage() {
             <button
               key={f.value}
               type="button"
-              onClick={() => { setStatusFilter(f.value); setCurrentPage(1); }}
+              onClick={() => {
+                setStatusFilter(f.value);
+                setCurrentPage(1);
+              }}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
                 statusFilter === f.value
                   ? "bg-primary text-primary-foreground"
@@ -523,7 +743,9 @@ export default function VerifikasiPendaftaranPage() {
           {loading && (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-3 text-sm text-slate-500">Memuat data pendaftaran...</span>
+              <span className="ml-3 text-sm text-slate-500">
+                Memuat data pendaftaran...
+              </span>
             </div>
           )}
           {!loading && pendaftaranList.length === 0 && (
@@ -531,7 +753,11 @@ export default function VerifikasiPendaftaranPage() {
               <EmptyState
                 icon={FileX}
                 title="Tidak ada data pendaftaran"
-                description={search ? "Tidak ditemukan hasil pencarian. Coba kata kunci lain." : "Belum ada pendaftaran yang masuk."}
+                description={
+                  search
+                    ? "Tidak ditemukan hasil pencarian. Coba kata kunci lain."
+                    : "Belum ada pendaftaran yang masuk."
+                }
               />
             </div>
           )}
@@ -554,22 +780,46 @@ export default function VerifikasiPendaftaranPage() {
                       <tr key={p.id} className="hover:bg-slate-50/80">
                         <td className="p-4 pl-6 font-mono font-bold text-yellow-700 text-xs">
                           {p.nomorPendaftaran}
-                          <div className="text-[10px] text-slate-400 font-sans font-normal">{formatDate(p.createdAt)}</div>
+                          <div className="text-[10px] text-slate-400 font-sans font-normal">
+                            {formatDate(p.createdAt)}
+                          </div>
                         </td>
                         <td className="p-4">
-                          <div className="font-bold text-slate-800">{p.namaLengkap}</div>
-                          <div className="text-xs text-slate-400 font-mono">NISN: {p.nisn || "-"}</div>
+                          <div className="font-bold text-slate-800">
+                            {p.namaLengkap}
+                          </div>
+                          <div className="text-xs text-slate-400 font-mono">
+                            NISN: {p.nisn || "-"}
+                          </div>
                         </td>
                         <td className="p-4 text-xs font-semibold text-slate-700">
                           {p.jenjangTujuan.nama}
-                          {p.kelasTujuan && <span className="text-slate-400 font-normal"> / {p.kelasTujuan.nama}</span>}
+                          {p.kelasTujuan && (
+                            <span className="text-slate-400 font-normal">
+                              {" "}
+                              / {p.kelasTujuan.nama}
+                            </span>
+                          )}
                         </td>
                         <td className="p-4 text-xs text-slate-600">
-                          <div className="font-bold text-slate-800">{p.namaOrangTua}</div>
+                          <div className="font-bold text-slate-800">
+                            {p.namaOrangTua}
+                          </div>
                           <div className="text-slate-400">{p.noHpOrangTua}</div>
                         </td>
                         <td className="p-4">
                           <StatusBadge status={p.status} />
+                          <EmailVerifikasiBadge
+                            terverifikasi={Boolean(
+                              p.emailOrangTuaTerverifikasiAt,
+                            )}
+                            adaBuktiOtp={Boolean(
+                              p.emailOrangTuaDiverifikasiOtpAt,
+                            )}
+                            manual={Boolean(
+                              p.emailOrangTuaDiverifikasiManualAt,
+                            )}
+                          />
                         </td>
                         <td className="p-4 pr-6 text-right">
                           <Button
@@ -588,19 +838,34 @@ export default function VerifikasiPendaftaranPage() {
 
               <div className="md:hidden p-4 space-y-3">
                 {pendaftaranList.map((p) => (
-                  <div key={p.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                  <div
+                    key={p.id}
+                    className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5"
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <span className="font-mono text-xs font-bold text-yellow-700 block">
                           {p.nomorPendaftaran}
                         </span>
-                        <div className="font-bold text-slate-800 text-sm mt-0.5">{p.namaLengkap}</div>
+                        <div className="font-bold text-slate-800 text-sm mt-0.5">
+                          {p.namaLengkap}
+                        </div>
                       </div>
                       <StatusBadge status={p.status} size="sm" />
                     </div>
+                    <EmailVerifikasiBadge
+                      terverifikasi={Boolean(p.emailOrangTuaTerverifikasiAt)}
+                      adaBuktiOtp={Boolean(p.emailOrangTuaDiverifikasiOtpAt)}
+                      manual={Boolean(p.emailOrangTuaDiverifikasiManualAt)}
+                    />
                     <div className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-100 space-y-1">
-                      <div>Jenjang: <strong>{p.jenjangTujuan.nama}</strong></div>
-                      <div>Orang Tua: <strong>{p.namaOrangTua}</strong> ({p.noHpOrangTua})</div>
+                      <div>
+                        Jenjang: <strong>{p.jenjangTujuan.nama}</strong>
+                      </div>
+                      <div>
+                        Orang Tua: <strong>{p.namaOrangTua}</strong> (
+                        {p.noHpOrangTua})
+                      </div>
                     </div>
                     <Button
                       size="sm"
@@ -629,7 +894,9 @@ export default function VerifikasiPendaftaranPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage((c) => Math.min(totalPages, c + 1))}
+                    onClick={() =>
+                      setCurrentPage((c) => Math.min(totalPages, c + 1))
+                    }
                     disabled={currentPage === totalPages}
                     className="rounded-xl text-xs"
                   >
@@ -643,12 +910,17 @@ export default function VerifikasiPendaftaranPage() {
       </Card>
 
       {/* Modal Review Berkas & Verifikasi */}
-      <Dialog open={!!selectedId} onOpenChange={(open) => !open && handleCloseDetail()}>
+      <Dialog
+        open={!!selectedId}
+        onOpenChange={(open) => !open && handleCloseDetail()}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {loadingDetail && (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-3 text-sm text-slate-500">Memuat detail berkas...</span>
+              <span className="ml-3 text-sm text-slate-500">
+                Memuat detail berkas...
+              </span>
             </div>
           )}
 
@@ -660,22 +932,47 @@ export default function VerifikasiPendaftaranPage() {
                 </DialogTitle>
                 <p className="text-xs text-slate-500 font-mono">
                   {pendaftar.nomorPendaftaran} • {pendaftar.jenjangTujuan.nama}
-                  {pendaftar.kelasTujuan && (" • " + pendaftar.kelasTujuan.nama)}
+                  {pendaftar.kelasTujuan && " • " + pendaftar.kelasTujuan.nama}
                 </p>
               </DialogHeader>
 
               <div className="space-y-4 py-2 text-xs sm:text-sm">
                 {/* ---- DATA CALON SISWA ---- */}
                 <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 space-y-2">
-                  <h3 className="font-bold text-blue-900 uppercase text-xs">Data Calon Siswa</h3>
+                  <h3 className="font-bold text-blue-900 uppercase text-xs">
+                    Data Calon Siswa
+                  </h3>
                   <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
-                    <DetailRow label="Nama Lengkap" value={pendaftar.namaLengkap} />
-                    <DetailRow label="Jenis Kelamin" value={pendaftar.jenisKelamin === "LAKI_LAKI" ? "Laki-laki" : "Perempuan"} />
-                    <DetailRow label="Tempat Lahir" value={pendaftar.tempatLahir} />
-                    <DetailRow label="Tanggal Lahir" value={pendaftar.tanggalLahir ? formatDate(pendaftar.tanggalLahir) : null} />
+                    <DetailRow
+                      label="Nama Lengkap"
+                      value={pendaftar.namaLengkap}
+                    />
+                    <DetailRow
+                      label="Jenis Kelamin"
+                      value={
+                        pendaftar.jenisKelamin === "LAKI_LAKI"
+                          ? "Laki-laki"
+                          : "Perempuan"
+                      }
+                    />
+                    <DetailRow
+                      label="Tempat Lahir"
+                      value={pendaftar.tempatLahir}
+                    />
+                    <DetailRow
+                      label="Tanggal Lahir"
+                      value={
+                        pendaftar.tanggalLahir
+                          ? formatDate(pendaftar.tanggalLahir)
+                          : null
+                      }
+                    />
                     <DetailRow label="NISN" value={pendaftar.nisn} />
                     <DetailRow label="Agama" value={pendaftar.agama} />
-                    <DetailRow label="No. HP Siswa" value={pendaftar.noHpSiswa} />
+                    <DetailRow
+                      label="No. HP Siswa"
+                      value={pendaftar.noHpSiswa}
+                    />
                     <div className="col-span-2">
                       <DetailRow label="Alamat" value={pendaftar.alamatSiswa} />
                     </div>
@@ -684,16 +981,27 @@ export default function VerifikasiPendaftaranPage() {
 
                 {/* ---- DATA KONTAK ORANG TUA ---- */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                  <h3 className="font-bold text-slate-800 uppercase text-xs">Data Kontak Orang Tua</h3>
+                  <h3 className="font-bold text-slate-800 uppercase text-xs">
+                    Data Kontak Orang Tua
+                  </h3>
                   <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
                     <DetailRow label="Nama" value={pendaftar.namaOrangTua} />
-                    <DetailRow label="No. HP / WA" value={pendaftar.noHpOrangTua} />
+                    <DetailRow
+                      label="No. HP / WA"
+                      value={pendaftar.noHpOrangTua}
+                    />
                     <div className="col-span-2">
-                      <DetailRow label="Email" value={pendaftar.emailOrangTua} />
+                      <DetailRow
+                        label="Email"
+                        value={pendaftar.emailOrangTua}
+                      />
                     </div>
                     {pendaftar.alamatOrangTua && (
                       <div className="col-span-2">
-                        <DetailRow label="Alamat" value={pendaftar.alamatOrangTua} />
+                        <DetailRow
+                          label="Alamat"
+                          value={pendaftar.alamatOrangTua}
+                        />
                       </div>
                     )}
                   </div>
@@ -702,13 +1010,24 @@ export default function VerifikasiPendaftaranPage() {
                 {/* ---- DATA AYAH KANDUNG ---- */}
                 {(pendaftar.namaAyahKandung || pendaftar.statusAyahKandung) && (
                   <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-2">
-                    <h3 className="font-bold text-amber-900 uppercase text-xs">Data Ayah Kandung</h3>
+                    <h3 className="font-bold text-amber-900 uppercase text-xs">
+                      Data Ayah Kandung
+                    </h3>
                     <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
-                      <DetailRow label="Nama" value={pendaftar.namaAyahKandung} />
-                      <DetailRow label="Status" value={formatStatusOrangTua(pendaftar.statusAyahKandung)} />
-                      {pendaftar.statusAyahKandung === "MASIH_HIDUP" && pendaftar.nikAyah && (
-                        <DetailRow label="NIK" value={pendaftar.nikAyah} />
-                      )}
+                      <DetailRow
+                        label="Nama"
+                        value={pendaftar.namaAyahKandung}
+                      />
+                      <DetailRow
+                        label="Status"
+                        value={formatStatusOrangTua(
+                          pendaftar.statusAyahKandung,
+                        )}
+                      />
+                      {pendaftar.statusAyahKandung === "MASIH_HIDUP" &&
+                        pendaftar.nikAyah && (
+                          <DetailRow label="NIK" value={pendaftar.nikAyah} />
+                        )}
                     </div>
                   </div>
                 )}
@@ -716,13 +1035,22 @@ export default function VerifikasiPendaftaranPage() {
                 {/* ---- DATA IBU KANDUNG ---- */}
                 {(pendaftar.namaIbuKandung || pendaftar.statusIbuKandung) && (
                   <div className="p-4 rounded-2xl bg-pink-50 border border-pink-200 space-y-2">
-                    <h3 className="font-bold text-pink-900 uppercase text-xs">Data Ibu Kandung</h3>
+                    <h3 className="font-bold text-pink-900 uppercase text-xs">
+                      Data Ibu Kandung
+                    </h3>
                     <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
-                      <DetailRow label="Nama" value={pendaftar.namaIbuKandung} />
-                      <DetailRow label="Status" value={formatStatusOrangTua(pendaftar.statusIbuKandung)} />
-                      {pendaftar.statusIbuKandung === "MASIH_HIDUP" && pendaftar.nikIbu && (
-                        <DetailRow label="NIK" value={pendaftar.nikIbu} />
-                      )}
+                      <DetailRow
+                        label="Nama"
+                        value={pendaftar.namaIbuKandung}
+                      />
+                      <DetailRow
+                        label="Status"
+                        value={formatStatusOrangTua(pendaftar.statusIbuKandung)}
+                      />
+                      {pendaftar.statusIbuKandung === "MASIH_HIDUP" &&
+                        pendaftar.nikIbu && (
+                          <DetailRow label="NIK" value={pendaftar.nikIbu} />
+                        )}
                     </div>
                   </div>
                 )}
@@ -730,35 +1058,58 @@ export default function VerifikasiPendaftaranPage() {
                 {/* ---- DATA WALI ---- */}
                 {pendaftar.statusWali && (
                   <div className="p-4 rounded-2xl bg-violet-50 border border-violet-200 space-y-2">
-                    <h3 className="font-bold text-violet-900 uppercase text-xs">Data Wali</h3>
+                    <h3 className="font-bold text-violet-900 uppercase text-xs">
+                      Data Wali
+                    </h3>
                     <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
-                      <DetailRow label="Status" value={formatStatusWali(pendaftar.statusWali)} />
-                      {pendaftar.statusWali === "LAINNYA" && pendaftar.namaWali && (
-                        <DetailRow label="Nama Wali" value={pendaftar.namaWali} />
-                      )}
+                      <DetailRow
+                        label="Status"
+                        value={formatStatusWali(pendaftar.statusWali)}
+                      />
+                      {pendaftar.statusWali === "LAINNYA" &&
+                        pendaftar.namaWali && (
+                          <DetailRow
+                            label="Nama Wali"
+                            value={pendaftar.namaWali}
+                          />
+                        )}
                     </div>
                   </div>
                 )}
 
                 {/* ---- KEWARGANEGARAAN ---- */}
-                {pendaftar.kewarganegaraan && pendaftar.kewarganegaraan !== "WNI" && (
-                  <div className="p-4 rounded-2xl bg-teal-50 border border-teal-200 space-y-2">
-                    <h3 className="font-bold text-teal-900 uppercase text-xs">Kewarganegaraan</h3>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
-                      <DetailRow label="Kewarganegaraan" value={pendaftar.kewarganegaraan} />
-                      {pendaftar.kitas && (
-                        <DetailRow label="No. KITAS" value={pendaftar.kitas} />
-                      )}
-                      {pendaftar.asalNegara && (
-                        <DetailRow label="Asal Negara" value={pendaftar.asalNegara} />
-                      )}
+                {pendaftar.kewarganegaraan &&
+                  pendaftar.kewarganegaraan !== "WNI" && (
+                    <div className="p-4 rounded-2xl bg-teal-50 border border-teal-200 space-y-2">
+                      <h3 className="font-bold text-teal-900 uppercase text-xs">
+                        Kewarganegaraan
+                      </h3>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
+                        <DetailRow
+                          label="Kewarganegaraan"
+                          value={pendaftar.kewarganegaraan}
+                        />
+                        {pendaftar.kitas && (
+                          <DetailRow
+                            label="No. KITAS"
+                            value={pendaftar.kitas}
+                          />
+                        )}
+                        {pendaftar.asalNegara && (
+                          <DetailRow
+                            label="Asal Negara"
+                            value={pendaftar.asalNegara}
+                          />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {/* ---- DOKUMEN TERLAMPIR ---- */}
                 <div className="space-y-2">
-                  <h3 className="font-bold text-slate-800 uppercase text-xs">Dokumen Terlampir:</h3>
+                  <h3 className="font-bold text-slate-800 uppercase text-xs">
+                    Dokumen Terlampir:
+                  </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {signedUrls?.buktiTransfer?.map((bt) => (
                       <a
@@ -813,11 +1164,14 @@ export default function VerifikasiPendaftaranPage() {
                 !pendaftar.kelasTujuan &&
                 pendaftar.status === "MENUNGGU_VERIFIKASI" && (
                   <div className="p-4 rounded-2xl bg-sky-50 border border-sky-200 space-y-2">
-                    <h3 className="font-bold text-sky-900 uppercase text-xs">Kelas Tujuan</h3>
+                    <h3 className="font-bold text-sky-900 uppercase text-xs">
+                      Kelas Tujuan
+                    </h3>
                     <p className="text-xs text-slate-600">
-                      Pendaftar ini mendaftar tanpa kelas tujuan. Pilih kelas agar santri langsung masuk
-                      kelas saat diterima — atau biarkan kosong dan pendaftaran tetap dapat diproses
-                      (kelas diatur kemudian).
+                      Pendaftar ini mendaftar tanpa kelas tujuan. Pilih kelas
+                      agar santri langsung masuk kelas saat diterima — atau
+                      biarkan kosong dan pendaftaran tetap dapat diproses (kelas
+                      diatur kemudian).
                     </p>
                     <Select
                       value={selectedKelasTujuanId || undefined}
@@ -848,25 +1202,111 @@ export default function VerifikasiPendaftaranPage() {
                   </div>
                 )}
 
+              {/* ---- VERIFIKASI EMAIL (hanya saat belum terverifikasi) ---- */}
+              {/*
+                Syaratnya BUKAN "MENUNGGU_VERIFIKASI". Audit state machine
+                menunjukkan MENUNGGU_VERIFIKASI mustahil punya gerbang tertutup:
+                satu-satunya jalan ke sana adalah uploadBuktiTransfer, dan
+                action itu mewajibkan gerbang email. Kalau panel ini dipatok di
+                status itu, ia tidak akan pernah muncul — dead UI.
+
+                Yang bisa tersangkut adalah MENUNGGU_PEMBAYARAN: orang tua tidak
+                bisa membayar karena bukti transfer ditolak tanpa gerbang.
+                Panel ini muncul di status mana pun selama belum final.
+
+                DITOLAK ikut ditampilkan: saat ini tidak terjangkau lewat alur
+                normal, tapi kalau nanti alurnya berubah, panel ini sudah siap
+                dan tidak diam-diam hilang.
+              */}
+              {!!pendaftar &&
+                !pendaftar.emailOrangTuaTerverifikasiAt &&
+                pendaftar.status !== "DITERIMA" && (
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 space-y-3">
+                    <div className="flex items-start gap-2">
+                      <MailWarning className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+                      <div>
+                        <h3 className="font-bold text-amber-900 uppercase text-xs">
+                          Email Belum Terverifikasi
+                        </h3>
+                        <p className="text-xs text-amber-900 mt-1 m-0">
+                          Pendaftaran ini <strong>tidak bisa disetujui</strong>{" "}
+                          sampai email orang tua terverifikasi. Jalur paling
+                          umum: minta orang tua membuka link OTP di halaman
+                          hasil pendaftaran — token aksesnya masih berlaku 90
+                          hari sejak pendaftaran dibuat.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-white border border-amber-200 p-3 space-y-1">
+                      <p className="text-[11px] font-bold text-slate-700 m-0">
+                        Cara memverifikasi:
+                      </p>
+                      <ol className="text-[11px] text-slate-600 m-0 pl-4 list-decimal space-y-0.5">
+                        <li>
+                          Minta orang tua membuka email{" "}
+                          <span className="font-mono">
+                            {pendaftar.emailOrangTua}
+                          </span>
+                        </li>
+                        <li>
+                          Minta kode OTP 6 digit, atau konfirmasi langsung lewat
+                          telepon {pendaftar.noHpOrangTua}
+                        </li>
+                        <li>
+                          Bila tidak bisa, gunakan tombol di bawah sebagai jalan
+                          terakhir
+                        </li>
+                      </ol>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsManualVerifyOpen(true)}
+                      className="w-full rounded-xl border-amber-400 text-amber-900 hover:bg-amber-100 font-bold text-xs min-h-[40px]"
+                    >
+                      <ShieldQuestion className="h-4 w-4 mr-1.5" />
+                      Tandai Email Terverifikasi Manual
+                    </Button>
+                  </div>
+                )}
+
               <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t border-slate-100">
-                <Button type="button" variant="outline" onClick={activatePrintMode} className="rounded-xl min-h-[44px] text-xs font-bold">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={activatePrintMode}
+                  className="rounded-xl min-h-[44px] text-xs font-bold"
+                >
                   <Printer className="h-4 w-4 mr-1.5" />
                   Cetak / Download PDF
                 </Button>
                 {detailData?.pendaftaran.status === "MENUNGGU_VERIFIKASI" ? (
                   <>
-                    <Button type="button" variant="destructive" onClick={() => setIsRejectDialogOpen(true)} className="rounded-xl min-h-[44px] text-xs font-bold">
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => setIsRejectDialogOpen(true)}
+                      className="rounded-xl min-h-[44px] text-xs font-bold"
+                    >
                       <XCircle className="h-4 w-4 mr-1.5" />
                       Tolak Pendaftaran
                     </Button>
-                    <Button type="button" onClick={() => setIsApproveConfirmOpen(true)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px] text-xs px-6">
+                    <Button
+                      type="button"
+                      onClick={() => setIsApproveConfirmOpen(true)}
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px] text-xs px-6"
+                    >
                       <CheckCircle2 className="h-4 w-4 mr-1.5" />
                       Terima Santri &amp; Terbitkan Akun
                     </Button>
                   </>
                 ) : (
                   <p className="text-xs font-medium text-slate-500 py-2">
-                    Pendaftaran ini sudah berstatus <StatusBadge status={detailData?.pendaftaran.status ?? ""} /> dan tidak dapat diverifikasi ulang.
+                    Pendaftaran ini sudah berstatus{" "}
+                    <StatusBadge
+                      status={detailData?.pendaftaran.status ?? ""}
+                    />{" "}
+                    dan tidak dapat diverifikasi ulang.
                   </p>
                 )}
               </DialogFooter>
@@ -882,17 +1322,97 @@ export default function VerifikasiPendaftaranPage() {
             <DialogTitle className="text-base font-bold text-rose-700">
               Tolak Berkas Pendaftaran
             </DialogTitle>
-            <p className="text-xs text-slate-500">Tuliskan alasan penolakan secara jelas agar orang tua calon santri dapat memperbaiki berkas</p>
+            <p className="text-xs text-slate-500">
+              Tuliskan alasan penolakan secara jelas agar orang tua calon santri
+              dapat memperbaiki berkas
+            </p>
           </DialogHeader>
           <div className="py-2 space-y-2">
-            <label className="text-xs font-semibold text-slate-700">Alasan Penolakan:</label>
-            <Input value={alasanPenolakan} onChange={(e) => setAlasanPenolakan(e.target.value)} className="h-11 rounded-xl text-sm" required />
+            <label className="text-xs font-semibold text-slate-700">
+              Alasan Penolakan:
+            </label>
+            <Input
+              value={alasanPenolakan}
+              onChange={(e) => setAlasanPenolakan(e.target.value)}
+              className="h-11 rounded-xl text-sm"
+              required
+            />
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setIsRejectDialogOpen(false)} className="rounded-xl min-h-[40px]">Batal</Button>
-            <Button variant="destructive" onClick={handleReject} disabled={processing} className="rounded-xl min-h-[40px] font-bold">
-              {processing ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+            <Button
+              variant="outline"
+              onClick={() => setIsRejectDialogOpen(false)}
+              className="rounded-xl min-h-[40px]"
+            >
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleReject}
+              disabled={processing}
+              className="rounded-xl min-h-[40px] font-bold"
+            >
+              {processing ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+              ) : null}
               Konfirmasi Tolak
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Verifikasi Email Manual */}
+      <Dialog open={isManualVerifyOpen} onOpenChange={setIsManualVerifyOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-amber-700">
+              Tandai Email Terverifikasi Manual
+            </DialogTitle>
+            <p className="text-xs text-slate-500">
+              Jalur terakhir tanpa OTP. Hanya untuk committee yang sudah
+              mengonfirmasi langsung ke orang tua. Alasan, nama, dan waktu
+              disimpan permanen di berkas pendaftaran.
+            </p>
+          </DialogHeader>
+          <div className="py-2 space-y-2">
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-3">
+              <p className="text-[11px] text-amber-900 m-0">
+                Tindakan ini <strong>tidak</strong> menghasilkan bukti OTP, jadi
+                status pendaftaran tetap ditandai &quot;Verifikasi warisan&quot;
+                dan alasan ini tersimpan permanen di catatan panitia.
+              </p>
+            </div>
+            <label className="text-xs font-semibold text-slate-700">
+              Alasan (wajib, minimal 10 karakter):
+            </label>
+            <Input
+              value={alasanVerifikasiManual}
+              onChange={(e) => setAlasanVerifikasiManual(e.target.value)}
+              className="h-11 rounded-xl text-sm"
+              placeholder="mis. Konfirmasi telepon ke 0812xxxx pada 12/03/2026, nama penyebut cocok"
+              required
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setIsManualVerifyOpen(false)}
+              className="rounded-xl min-h-[40px]"
+            >
+              Batal
+            </Button>
+            <Button
+              onClick={handleVerifikasiManual}
+              disabled={
+                isMemprosesVerifikasiManual ||
+                alasanVerifikasiManual.trim().length < 10
+              }
+              className="rounded-xl min-h-[40px] font-bold bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {isMemprosesVerifikasiManual ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+              ) : null}
+              Konfirmasi
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -903,7 +1423,11 @@ export default function VerifikasiPendaftaranPage() {
         open={isApproveConfirmOpen}
         onOpenChange={setIsApproveConfirmOpen}
         title="Terima Calon Santri Baru?"
-        description={"Apakah Anda yakin ingin menyetujui pendaftaran " + (pendaftar?.namaLengkap || "") + "? Akun login santri dan orang tua akan otomatis di-generate oleh sistem."}
+        description={
+          "Apakah Anda yakin ingin menyetujui pendaftaran " +
+          (pendaftar?.namaLengkap || "") +
+          "? Akun login santri dan orang tua akan otomatis di-generate oleh sistem."
+        }
         confirmText="Ya, Terima Santri"
         variant="default"
         isLoading={processing}
@@ -915,7 +1439,8 @@ export default function VerifikasiPendaftaranPage() {
       {/* Dirender via portal ke <body> agar aktif saat print, tapi tampil      */}
       {/* hanya ketika modal detail tertutup (tidak duplikat dengan berkas).    */}
       {/* ===================================================================== */}
-      {mounted && !selectedId &&
+      {mounted &&
+        !selectedId &&
         createPortal(
           <div className="print-only">
             <div style={{ padding: "2.5rem 2rem", color: "#1e293b" }}>
@@ -935,10 +1460,20 @@ export default function VerifikasiPendaftaranPage() {
                   </>
                 }
               />
-              <p className="mb-3" style={{ fontSize: "13px", color: "#475569" }}>
-                Menampilkan {pendaftaranList.length} data (halaman {currentPage} dari {totalPages}).
+              <p
+                className="mb-3"
+                style={{ fontSize: "13px", color: "#475569" }}
+              >
+                Menampilkan {pendaftaranList.length} data (halaman {currentPage}{" "}
+                dari {totalPages}).
               </p>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  fontSize: "12px",
+                }}
+              >
                 <thead>
                   <tr>
                     {[
@@ -973,10 +1508,18 @@ export default function VerifikasiPendaftaranPage() {
                   {pendaftaranList.map((p, idx) => (
                     <tr key={p.id}>
                       <td style={cellStyle}>{idx + 1}</td>
-                      <td style={{ ...cellStyle, fontFamily: "monospace", fontSize: "11px" }}>
+                      <td
+                        style={{
+                          ...cellStyle,
+                          fontFamily: "monospace",
+                          fontSize: "11px",
+                        }}
+                      >
                         {p.nomorPendaftaran}
                       </td>
-                      <td style={{ ...cellStyle, fontWeight: 600 }}>{p.namaLengkap}</td>
+                      <td style={{ ...cellStyle, fontWeight: 600 }}>
+                        {p.namaLengkap}
+                      </td>
                       <td style={cellStyle}>{p.nisn || "-"}</td>
                       <td style={cellStyle}>
                         {p.jenjangTujuan?.nama || "-"}
@@ -984,7 +1527,9 @@ export default function VerifikasiPendaftaranPage() {
                       </td>
                       <td style={cellStyle}>
                         <div>{p.namaOrangTua || "-"}</div>
-                        <div style={{ fontSize: "11px", color: "#475569" }}>{p.noHpOrangTua || ""}</div>
+                        <div style={{ fontSize: "11px", color: "#475569" }}>
+                          {p.noHpOrangTua || ""}
+                        </div>
                       </td>
                       <td style={cellStyle}>{statusText(p.status)}</td>
                       <td style={cellStyle}>{formatDate(p.createdAt)}</td>
@@ -992,18 +1537,26 @@ export default function VerifikasiPendaftaranPage() {
                   ))}
                 </tbody>
               </table>
-              <p style={{ marginTop: "1.25rem", fontSize: "11px", color: "#64748b" }}>
-                Dokumen ini dicetak melalui sistem pendaftaran online Pondok Pesantren &amp; Sekolah Islam Terpadu Anshorussunnah.
+              <p
+                style={{
+                  marginTop: "1.25rem",
+                  fontSize: "11px",
+                  color: "#64748b",
+                }}
+              >
+                Dokumen ini dicetak melalui sistem pendaftaran online Pondok
+                Pesantren &amp; Sekolah Islam Terpadu Anshorussunnah.
               </p>
             </div>
           </div>,
-          document.body
+          document.body,
         )}
 
       {/* ===================================================================== */}
       {/* PRINT PORTAL: DETAIL BERKAS SANTRI (modal "Periksa Berkas")           */}
       {/* ===================================================================== */}
-      {mounted && !!pendaftar &&
+      {mounted &&
+        !!pendaftar &&
         createPortal(
           <div className="print-only">
             <div style={{ padding: "2.5rem 2rem", color: "#1e293b" }}>
@@ -1012,7 +1565,8 @@ export default function VerifikasiPendaftaranPage() {
                 rightInfo={
                   <>
                     <p>
-                      <strong>No. Pendaftaran:</strong> {pendaftar.nomorPendaftaran}
+                      <strong>No. Pendaftaran:</strong>{" "}
+                      {pendaftar.nomorPendaftaran}
                     </p>
                     <p>
                       <strong>Status:</strong> {statusText(pendaftar.status)}
@@ -1028,9 +1582,14 @@ export default function VerifikasiPendaftaranPage() {
                 <PrintRow label="Nama Lengkap" value={pendaftar.namaLengkap} />
                 <PrintRow
                   label="Jenis Kelamin"
-                  value={pendaftar.jenisKelamin === "LAKI_LAKI" ? "Laki-laki" : "Perempuan"}
+                  value={
+                    pendaftar.jenisKelamin === "LAKI_LAKI"
+                      ? "Laki-laki"
+                      : "Perempuan"
+                  }
                 />
-                <PrintRow label="Tempat, Tanggal Lahir"
+                <PrintRow
+                  label="Tempat, Tanggal Lahir"
                   value={`${pendaftar.tempatLahir || "-"}, ${pendaftar.tanggalLahir ? formatDate(pendaftar.tanggalLahir) : "-"}`}
                 />
                 <PrintRow label="NISN" value={pendaftar.nisn} />
@@ -1049,7 +1608,10 @@ export default function VerifikasiPendaftaranPage() {
               {(pendaftar.namaAyahKandung || pendaftar.statusAyahKandung) && (
                 <PrintSection title="Data Ayah Kandung">
                   <PrintRow label="Nama" value={pendaftar.namaAyahKandung} />
-                  <PrintRow label="Status" value={formatStatusOrangTua(pendaftar.statusAyahKandung)} />
+                  <PrintRow
+                    label="Status"
+                    value={formatStatusOrangTua(pendaftar.statusAyahKandung)}
+                  />
                   {pendaftar.statusAyahKandung === "MASIH_HIDUP" && (
                     <PrintRow label="NIK" value={pendaftar.nikAyah} />
                   )}
@@ -1059,7 +1621,10 @@ export default function VerifikasiPendaftaranPage() {
               {(pendaftar.namaIbuKandung || pendaftar.statusIbuKandung) && (
                 <PrintSection title="Data Ibu Kandung">
                   <PrintRow label="Nama" value={pendaftar.namaIbuKandung} />
-                  <PrintRow label="Status" value={formatStatusOrangTua(pendaftar.statusIbuKandung)} />
+                  <PrintRow
+                    label="Status"
+                    value={formatStatusOrangTua(pendaftar.statusIbuKandung)}
+                  />
                   {pendaftar.statusIbuKandung === "MASIH_HIDUP" && (
                     <PrintRow label="NIK" value={pendaftar.nikIbu} />
                   )}
@@ -1068,24 +1633,40 @@ export default function VerifikasiPendaftaranPage() {
 
               {pendaftar.statusWali && (
                 <PrintSection title="Data Wali">
-                  <PrintRow label="Status" value={formatStatusWali(pendaftar.statusWali)} />
+                  <PrintRow
+                    label="Status"
+                    value={formatStatusWali(pendaftar.statusWali)}
+                  />
                   {pendaftar.statusWali === "LAINNYA" && (
                     <PrintRow label="Nama Wali" value={pendaftar.namaWali} />
                   )}
                 </PrintSection>
               )}
 
-              {pendaftar.kewarganegaraan && pendaftar.kewarganegaraan !== "WNI" && (
-                <PrintSection title="Kewarganegaraan">
-                  <PrintRow label="Kewarganegaraan" value={pendaftar.kewarganegaraan} />
-                  <PrintRow label="No. KITAS" value={pendaftar.kitas} />
-                  <PrintRow label="Asal Negara" value={pendaftar.asalNegara} />
-                </PrintSection>
-              )}
+              {pendaftar.kewarganegaraan &&
+                pendaftar.kewarganegaraan !== "WNI" && (
+                  <PrintSection title="Kewarganegaraan">
+                    <PrintRow
+                      label="Kewarganegaraan"
+                      value={pendaftar.kewarganegaraan}
+                    />
+                    <PrintRow label="No. KITAS" value={pendaftar.kitas} />
+                    <PrintRow
+                      label="Asal Negara"
+                      value={pendaftar.asalNegara}
+                    />
+                  </PrintSection>
+                )}
 
               <PrintSection title="Dokumen Terlampir">
-                <PrintDocument label="Kartu Keluarga (KK)" url={signedUrls?.kartuKeluarga} />
-                <PrintDocument label="Akta Kelahiran" url={signedUrls?.akteLahir} />
+                <PrintDocument
+                  label="Kartu Keluarga (KK)"
+                  url={signedUrls?.kartuKeluarga}
+                />
+                <PrintDocument
+                  label="Akta Kelahiran"
+                  url={signedUrls?.akteLahir}
+                />
                 <PrintDocument label="Pas Foto" url={signedUrls?.foto} />
                 {buktiTransferPrintUrls.length > 0 ? (
                   buktiTransferPrintUrls.map((bt, idx) => (
@@ -1104,23 +1685,59 @@ export default function VerifikasiPendaftaranPage() {
                 )}
               </PrintSection>
 
-              {(pendaftar.diverifikasiOleh || pendaftar.waktuVerifikasi) && (
-                <PrintSection title="Info Verifikasi">
-                  <PrintRow label="Verifikator" value={pendaftar.diverifikasiOleh?.nama} />
+              {/* Jejak verifikasi email manual. Dicetak bersama berkas karena
+                  committee sering butuh bukti "ini bukan via OTP", dan alasan
+                  di catatan admin bisa sudah tertimpa approval. */}
+              {pendaftar.emailOrangTuaDiverifikasiManualAt && (
+                <PrintSection title="Verifikasi Email Manual">
                   <PrintRow
-                    label="Waktu Verifikasi"
-                    value={pendaftar.waktuVerifikasi ? formatDate(pendaftar.waktuVerifikasi) : null}
+                    label="Diverifikasi Oleh"
+                    value={pendaftar.emailOrangTuaDiverifikasiManualOleh?.nama}
+                  />
+                  <PrintRow
+                    label="Waktu"
+                    value={formatDate(
+                      pendaftar.emailOrangTuaDiverifikasiManualAt,
+                    )}
+                  />
+                  <PrintRow
+                    label="Alasan"
+                    value={pendaftar.alasanVerifikasiEmailManual}
                   />
                 </PrintSection>
               )}
 
-              <p style={{ marginTop: "1.5rem", fontSize: "11px", color: "#64748b" }}>
-                Dokumen ini dicetak melalui sistem pendaftaran online Pondok Pesantren &amp; Sekolah Islam Terpadu Anshorussunnah.
+              {(pendaftar.diverifikasiOleh || pendaftar.waktuVerifikasi) && (
+                <PrintSection title="Info Verifikasi">
+                  <PrintRow
+                    label="Verifikator"
+                    value={pendaftar.diverifikasiOleh?.nama}
+                  />
+                  <PrintRow
+                    label="Waktu Verifikasi"
+                    value={
+                      pendaftar.waktuVerifikasi
+                        ? formatDate(pendaftar.waktuVerifikasi)
+                        : null
+                    }
+                  />
+                </PrintSection>
+              )}
+
+              <p
+                style={{
+                  marginTop: "1.5rem",
+                  fontSize: "11px",
+                  color: "#64748b",
+                }}
+              >
+                Dokumen ini dicetak melalui sistem pendaftaran online Pondok
+                Pesantren &amp; Sekolah Islam Terpadu Anshorussunnah.
               </p>
             </div>
           </div>,
-          document.body
+          document.body,
         )}
     </div>
-  )
+  );
 }

@@ -94,6 +94,10 @@ export async function GET(request: NextRequest) {
           // alasanPenolakan dipertahankan: ini data milik pendaftar sendiri
           // saat mengecek kenapa pendaftarannya ditolak (fitur cek-status).
           alasanPenolakan: pendaftaran.alasanPenolakan,
+          // Hanya boolean, bukan timestamp: endpoint ini publik dan tidak
+          // perlu membocorkan kapan email diverifikasi. Dipakai UI untuk
+          // menyembunyikan link upload yang pasti ditolak server.
+          emailTerverifikasi: Boolean(pendaftaran.emailOrangTuaTerverifikasiAt),
           createdAt: pendaftaran.createdAt,
         },
       },

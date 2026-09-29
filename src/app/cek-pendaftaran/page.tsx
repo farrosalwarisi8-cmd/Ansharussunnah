@@ -1,55 +1,63 @@
 // src/app/cek-pendaftaran/page.tsx
 
-"use client"
+"use client";
 
-import * as React from "react"
-import { Search, ArrowLeft, Loader2, FileText } from "lucide-react"
-import Link from "next/link"
-import Image from "next/image"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { StatusBadge } from "@/components/ui/status-badge"
+import * as React from "react";
+import { Search, ArrowLeft, Loader2, FileText } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { KEMAMPUAN_BY_STATUS } from "./kemampuan-status";
 
 export default function CekPendaftaranPage() {
-  const [nomor, setNomor] = React.useState("")
-  const [loading, setLoading] = React.useState(false)
-  const [searched, setSearched] = React.useState(false)
+  const [nomor, setNomor] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [searched, setSearched] = React.useState(false);
   const [result, setResult] = React.useState<{
-    found: boolean
+    found: boolean;
     data?: {
-      nomorPendaftaran: string
-      namaLengkap: string
-      status: string
-      jenjangTujuan: string
-      alasanPenolakan?: string | null
-    }
-  } | null>(null)
+      nomorPendaftaran: string;
+      namaLengkap: string;
+      status: string;
+      jenjangTujuan: string;
+      alasanPenolakan?: string | null;
+      emailTerverifikasi?: boolean;
+    };
+  } | null>(null);
 
   const handleSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
-    if (!nomor.trim()) return
-    setLoading(true)
-    setSearched(true)
-    setResult(null)
+    if (e) e.preventDefault();
+    if (!nomor.trim()) return;
+    setLoading(true);
+    setSearched(true);
+    setResult(null);
 
     try {
       const res = await fetch(
-        `/api/cek-pendaftaran?nomor=${encodeURIComponent(nomor.trim())}`
-      )
-      const data = await res.json()
+        `/api/cek-pendaftaran?nomor=${encodeURIComponent(nomor.trim())}`,
+      );
+      const data = await res.json();
 
       if (data.success && data.data) {
-        setResult({ found: true, data: data.data })
+        setResult({ found: true, data: data.data });
       } else {
-        setResult({ found: false })
+        setResult({ found: false });
       }
     } catch {
-      setResult({ found: false })
+      setResult({ found: false });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between">
@@ -58,9 +66,18 @@ export default function CekPendaftaranPage() {
         <div className="container mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl overflow-hidden relative">
-              <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="36px" className="object-contain" priority />
+              <Image
+                src="/anshorussunnah-logo.webp"
+                alt="Logo Anshorussunnah"
+                fill
+                sizes="36px"
+                className="object-contain"
+                priority
+              />
             </div>
-            <span className="font-extrabold text-base text-slate-800">Anshorussunnah</span>
+            <span className="font-extrabold text-base text-slate-800">
+              Anshorussunnah
+            </span>
           </Link>
           <Link
             href="/"
@@ -83,12 +100,16 @@ export default function CekPendaftaranPage() {
               Cek Status Pendaftaran
             </CardTitle>
             <CardDescription className="text-slate-500 text-xs sm:text-sm max-w-md mx-auto">
-              Masukkan Nomor Pendaftaran resmi yang Anda terima saat mendaftar (contoh: REG-2024-00001-A1B2).
+              Masukkan Nomor Pendaftaran resmi yang Anda terima saat mendaftar
+              (contoh: REG-2024-00001-A1B2).
             </CardDescription>
           </CardHeader>
 
           <CardContent className="p-6 sm:p-8 pt-2 space-y-6">
-            <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2.5">
+            <form
+              onSubmit={handleSearch}
+              className="flex flex-col sm:flex-row gap-2.5"
+            >
               <Input
                 placeholder="REG-2024-00001-A1B2"
                 value={nomor}
@@ -115,9 +136,12 @@ export default function CekPendaftaranPage() {
             {/* Not Found State */}
             {searched && result && !result.found && (
               <div className="p-6 rounded-2xl bg-rose-50 border border-rose-200 text-center space-y-2 animate-in fade-in">
-                <p className="font-bold text-rose-900 text-sm">Nomor Pendaftaran Tidak Ditemukan</p>
+                <p className="font-bold text-rose-900 text-sm">
+                  Nomor Pendaftaran Tidak Ditemukan
+                </p>
                 <p className="text-xs text-rose-600 leading-relaxed">
-                  Mohon pastikan nomor yang Anda ketik sesuai dengan bukti pendaftaran Anda. Hubungi panitia jika mengalami kendala.
+                  Mohon pastikan nomor yang Anda ketik sesuai dengan bukti
+                  pendaftaran Anda. Hubungi panitia jika mengalami kendala.
                 </p>
               </div>
             )}
@@ -135,42 +159,114 @@ export default function CekPendaftaranPage() {
                 </div>
 
                 <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
-                  <span className="text-xs font-semibold text-slate-500">Nama Calon Santri</span>
-                  <span className="font-bold text-slate-800 text-sm">{result.data.namaLengkap}</span>
+                  <span className="text-xs font-semibold text-slate-500">
+                    Nama Calon Santri
+                  </span>
+                  <span className="font-bold text-slate-800 text-sm">
+                    {result.data.namaLengkap}
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
-                  <span className="text-xs font-semibold text-slate-500">Jenjang Tujuan</span>
-                  <span className="font-semibold text-slate-700 text-sm">{result.data.jenjangTujuan}</span>
+                  <span className="text-xs font-semibold text-slate-500">
+                    Jenjang Tujuan
+                  </span>
+                  <span className="font-semibold text-slate-700 text-sm">
+                    {result.data.jenjangTujuan}
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-xs font-semibold text-slate-500">Status Pendaftaran</span>
-                  <StatusBadge status={result.data.status as "MENUNGGU_VERIFIKASI" | "DITERIMA" | "DITOLAK"} size="lg" />
+                  <span className="text-xs font-semibold text-slate-500">
+                    Status Pendaftaran
+                  </span>
+                  <StatusBadge
+                    status={
+                      result.data.status as
+                        "MENUNGGU_VERIFIKASI" | "DITERIMA" | "DITOLAK"
+                    }
+                    size="lg"
+                  />
                 </div>
 
-                {result.data.status === "DITOLAK" && result.data.alasanPenolakan && (
-                  <div className="p-3.5 rounded-xl bg-rose-100 border border-rose-200 text-rose-900 text-xs">
-                    <span className="font-bold block mb-1">Catatan Panitia:</span>
-                    <p>{result.data.alasanPenolakan}</p>
-                  </div>
-                )}
+                {result.data.status === "DITOLAK" &&
+                  result.data.alasanPenolakan && (
+                    <div className="p-3.5 rounded-xl bg-rose-100 border border-rose-200 text-rose-900 text-xs">
+                      <span className="font-bold block mb-1">
+                        Catatan Panitia:
+                      </span>
+                      <p>{result.data.alasanPenolakan}</p>
+                    </div>
+                  )}
 
-                {(result.data.status === "MENUNGGU_PEMBAYARAN" || result.data.status === "DITOLAK") && (
-                  <Button asChild className="w-full h-11 rounded-xl bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-sm mt-2">
-                    <Link href={`/pendaftaran/${result.data.nomorPendaftaran}/upload-bukti`}>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Unggah Bukti Pembayaran
-                    </Link>
-                  </Button>
-                )}
+                {(() => {
+                  const k = KEMAMPUAN_BY_STATUS[result.data.status];
+                  // Status di luar peta berarti enum berubah tanpa halaman ini
+                  // diperbarui. Sembunyikan aksinya daripada menampilkan
+                  // tombol yang pasti ditolak server.
+                  if (!k) return null;
+                  return (
+                    <div className="space-y-3">
+                      <div
+                        className={`p-3.5 rounded-xl border text-xs ${k.panelClass}`}
+                      >
+                        <span className="font-bold block mb-1">{k.judul}</span>
+                        <p className="m-0">{k.penjelasan}</p>
+                      </div>
 
-                <Button asChild variant="outline" className="w-full h-11 rounded-xl text-slate-700 border-slate-300 font-semibold text-sm mt-2">
-                  <Link href={`/pendaftaran/${result.data.nomorPendaftaran}/upload-dokumen`}>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Unggah / Lengkapi Dokumen
-                  </Link>
-                </Button>
+                      {k.bolehBukti &&
+                        (result.data.emailTerverifikasi ? (
+                          <Button
+                            asChild
+                            className="w-full h-11 rounded-xl bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-sm"
+                          >
+                            <Link
+                              href={`/pendaftaran/${result.data.nomorPendaftaran}/upload-bukti`}
+                            >
+                              <FileText className="h-4 w-4 mr-2" />
+                              Unggah Bukti Pembayaran
+                            </Link>
+                          </Button>
+                        ) : (
+                          // Server menolak upload sebelum email terverifikasi,
+                          // jadi tombolnya disembunyikan — bukan mengandalkan
+                          // error setelah pengguna terlanjur mengisi form.
+                          <div className="p-3.5 rounded-xl bg-amber-100 border border-amber-200 text-amber-900 text-xs">
+                            <span className="font-bold block mb-1">
+                              Verifikasi Email Dulu
+                            </span>
+                            <p className="m-0">
+                              Kode verifikasi belum dimasukkan. Buka halaman
+                              hasil pendaftaran untuk memasukkan kode, setelah
+                              itu tombol unggah bukti pembayaran akan muncul di
+                              sini.
+                            </p>
+                          </div>
+                        ))}
+
+                      {k.bolehBerkas && (
+                        <Button
+                          asChild
+                          variant="outline"
+                          className="w-full h-11 rounded-xl text-slate-700 border-slate-300 font-semibold text-sm"
+                        >
+                          <Link
+                            href={`/pendaftaran/${result.data.nomorPendaftaran}/upload-dokumen`}
+                          >
+                            <FileText className="h-4 w-4 mr-2" />
+                            Unggah / Lengkapi Dokumen
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Halaman ini hanya menampilkan status. Untuk mengunggah berkas
+                  atau bukti transfer, buka halaman unggah dengan nomor dan
+                  token akses pendaftaran Anda.
+                </p>
               </div>
             )}
           </CardContent>
@@ -181,5 +277,5 @@ export default function CekPendaftaranPage() {
         &copy; {new Date().getFullYear()} Anshorussunnah
       </footer>
     </div>
-  )
+  );
 }
