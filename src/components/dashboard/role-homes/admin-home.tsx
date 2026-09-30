@@ -33,12 +33,13 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { StatCard } from "@/components/ui/stat-card"
 import { DashboardHeader } from "../dashboard-header"
 import { getRangkumanAdminHome, type RangkumanAdmin } from "@/actions/dashboard"
-import { getPendaftaranList } from "@/actions/verifikasi"
-import type { StatusPendaftaran } from "@prisma/client"
+import { getPendaftaranRincianStatus } from "@/actions/verifikasi"
 
 /**
- * Rincian status pendaftar + kelengkapan berkasnya. Dihitung di client dari
- * `getPendaftaranList` (action yang sudah ada) — tanpa menambah action baru.
+ * Rincian status pendaftar + kelengkapan berkasnya. Diambil dari SATU action
+ * agregasi `getPendaftaranRincianStatus` (count/groupBy di database) — sebelumnya
+ * 4 pemanggilan getPendaftaranList paralel dengan include besar hanya untuk
+ * membaca angka.
  */
 interface RincianPendaftar {
   menungguPembayaran: number
@@ -46,7 +47,6 @@ interface RincianPendaftar {
   diterima: number
   ditolak: number
   berkasBelumLengkap: number
-  berkasDiperiksa: number
 }
 
 const QUICK_ACTIONS: Array<{
@@ -126,58 +126,20 @@ export function AdminDashboardHome() {
     }
   }, [])
 
-  // Rincian status pendaftar — 4 pemanggilan paralel (read-only) ke action
-  // getPendaftaranList yang sudah ada. Dua status menunggu diambil beserta
-  // barisnya supaya kelengkapan berkas bisa dihitung tanpa action baru.
+  // Rincian status pendaftar — SATU action agregasi (count/groupBy di DB).
+  // Gagal memuat tidak boleh menjatuhkan seluruh dashboard.
   React.useEffect(() => {
     let mounted = true
 
     async function fetchPendaftar() {
       try {
-        const BATAS_BARIS = 100
-        const [bayar, verifikasi, diterima, ditolak] = await Promise.all([
-          getPendaftaranList({
-            status: "MENUNGGU_PEMBAYARAN" as StatusPendaftaran,
-            limit: BATAS_BARIS,
-          }),
-          getPendaftaranList({
-            status: "MENUNGGU_VERIFIKASI" as StatusPendaftaran,
-            limit: BATAS_BARIS,
-          }),
-          getPendaftaranList({
-            status: "DITERIMA" as StatusPendaftaran,
-            limit: 1,
-          }),
-          getPendaftaranList({
-            status: "DITOLAK" as StatusPendaftaran,
-            limit: 1,
-          }),
-        ])
-
+        const result = await getPendaftaranRincianStatus()
         if (!mounted) return
-        if (!bayar.success || !verifikasi.success || !diterima.success || !ditolak.success) {
-          setLoadingPendaftar(false)
-          return
+        if (result.success && result.data) {
+          setPendaftar(result.data)
         }
-
-        const barisMenunggu = [
-          ...(bayar.data?.items ?? []),
-          ...(verifikasi.data?.items ?? []),
-        ]
-        const belumLengkap = barisMenunggu.filter(
-          (p) => !p.dokKartuKeluarga || !p.dokAkteLahir || !p.dokFoto
-        ).length
-
-        setPendaftar({
-          menungguPembayaran: bayar.data?.total ?? 0,
-          menungguVerifikasi: verifikasi.data?.total ?? 0,
-          diterima: diterima.data?.total ?? 0,
-          ditolak: ditolak.data?.total ?? 0,
-          berkasBelumLengkap: belumLengkap,
-          berkasDiperiksa: barisMenunggu.length,
-        })
       } catch {
-        // Gagal memuat rincian tidak boleh menjatuhkan seluruh dashboard.
+        // diabaikan — kartu menampilkan pesan gagal muat
       } finally {
         if (mounted) setLoadingPendaftar(false)
       }
@@ -353,8 +315,8 @@ export function AdminDashboardHome() {
                         Berkas belum lengkap: {pendaftar.berkasBelumLengkap} pendaftar
                       </p>
                       <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
-                        Dihitung dari {pendaftar.berkasDiperiksa} pendaftar yang sedang
-                        menunggu (KK, akta lahir, atau pas foto belum lengkap).
+                        Pendaftar yang sedang menunggu dengan KK, akta lahir, atau
+                        pas foto belum lengkap.
                       </p>
                     </div>
                     <Button asChild size="sm" className="shrink-0">

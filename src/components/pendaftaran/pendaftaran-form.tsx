@@ -294,7 +294,18 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
   const [tokenManualInfo, setTokenManualInfo] = React.useState<string | null>(null)
   const [memuatDraft, setMemuatDraft] = React.useState(false)
   const [panelTokenBuka, setPanelTokenBuka] = React.useState(false)
+  // Indikator status penyimpanan draft (C3): "menyimpan" | "tersimpan" | "gagal".
+  // Ditampilkan di dekat form supaya pengguna tahu datanya aman sebelum
+  // menutup browser — bukan hanya "terakhir disimpan jam berapa".
+  const [statusSimpan, setStatusSimpan] = React.useState<
+    "menyimpan" | "tersimpan" | "gagal"
+  | null>(null)
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Guard race save draft (C3): nomor urut setiap permintaan save. Response dari
+  // request lama tidak boleh menimpa status dari request yang lebih baru
+  // (out-of-order response), dan hanya save TERBARU yang boleh menentukan
+  // indikator akhir.
+  const saveSeqRef = React.useRef(0)
   const draftReadyRef = React.useRef(false)
   // Cermin token dalam ref. State bersifat async, jadi debounce bisa membaca
   // token yang belum sempat ter-set dan membuat draft server kedua sebelum
@@ -425,17 +436,39 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
       })
       setLastSavedAt(hasilLokal.lastSavedAt)
 
-      // Server draft: buat sekali, lalu update. Gagal senyap — lapisan lokal
-      // tetap melindungi; banner hanya menampilkan info penyimpanan.
+      // Server draft: buat sekali, lalu update. Gagal TIDAK lagi sepenuhnya
+      // senyap: indikator berubah "Gagal menyimpan" (C3) — lapisan lokal tetap
+      // melindungi data, jadi pengguna tidak kehilangan input, tapi tahu bahwa
+      // sinkronisasi lintas perangkat belum berhasil.
       //
       // Token dibaca dari ref, bukan state: debounce bisa berjalan lagi
       // sebelum state ter-update, dan tanpa guard itu tiap perubahan membuat satu
       // draft server orfa.
       const token = draftTokenRef.current
       if (!token) {
+        setStatusSimpan("menyimpan")
         void ensureDraftServer(formValues, currentStep)
+          .then((created) => {
+            if (created) {
+              setStatusSimpan("tersimpan")
+            } else {
+              setStatusSimpan("gagal")
+            }
+          })
+          .catch(() => setStatusSimpan("gagal"))
       } else {
-        void savePendaftaranDraft(token, formValues, currentStep)
+        // Race guard: tandai nomor urut request ini. Response request lama
+        // yang datang belakangan TIDAK boleh menimpa status request baru.
+        const seq = ++saveSeqRef.current
+        setStatusSimpan("menyimpan")
+        savePendaftaranDraft(token, formValues, currentStep)
+          .then((res) => {
+            if (seq !== saveSeqRef.current) return
+            setStatusSimpan(res.success ? "tersimpan" : "gagal")
+          })
+          .catch(() => {
+            if (seq === saveSeqRef.current) setStatusSimpan("gagal")
+          })
       }
     }, 800)
 
@@ -854,8 +887,30 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
         </div>
       )}
 
-      {/* Indikator "tersimpan otomatis" + token untuk dipindah ke perangkat lain */}
-      {lastSavedAt && !draftBanner && (
+      {/* Indikator status penyimpanan draft (C3): Menyimpan... / Tersimpan /
+          Gagal menyimpan. Data lokal tetap dipertahankan saat gagal — pengguna
+          hanya diberi tahu bahwa sinkronisasi server belum berhasil. */}
+      {statusSimpan && !draftBanner && (
+        <p
+          className={
+            "text-xs text-right m-0 " +
+            (statusSimpan === "gagal"
+              ? "text-amber-600"
+              : "text-muted-foreground")
+          }
+          role="status"
+          aria-live="polite"
+        >
+          {statusSimpan === "menyimpan" && "Menyimpan..."}
+          {statusSimpan === "tersimpan" &&
+            `Tersimpan${lastSavedAt ? ` ${new Date(lastSavedAt).toLocaleTimeString("id-ID")}` : ""}`}
+          {statusSimpan === "gagal" &&
+            "Gagal menyimpan ke server — data tetap aman di perangkat ini."}
+        </p>
+      )}
+
+      {/* Token untuk dipindah ke perangkat lain */}
+      {lastSavedAt && !draftBanner && !statusSimpan && (
         <p className="text-xs text-muted-foreground text-right m-0">
           Draft tersimpan otomatis {new Date(lastSavedAt).toLocaleTimeString("id-ID")}
         </p>

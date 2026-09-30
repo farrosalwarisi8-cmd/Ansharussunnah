@@ -2,7 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { validateFile, getSignedUrls } from "@/lib/storage"
+import { validateFile, kanonikEkstensiDariFile, getSignedUrls } from "@/lib/storage"
 import { toUserFriendlyError } from "@/lib/prisma-error"
 import { hitungStatusBerkas, type StatusBerkas } from "@/lib/status-berkas"
 import type { ActionResponse } from "@/types"
@@ -179,8 +179,9 @@ export async function writeBerkasSiswa(
       }
     }
 
-    const fileExt = (file.name.split(".").pop() || "").toLowerCase()
-    if (!ALLOWED_EXTENSIONS.has(fileExt)) {
+    // Ekstensi kanonik dari magic bytes (D2) — bukan dari file.name klien.
+    const fileExt = await kanonikEkstensiDariFile(file, validation)
+    if (!fileExt || !ALLOWED_EXTENSIONS.has(fileExt)) {
       return {
         success: false,
         message:

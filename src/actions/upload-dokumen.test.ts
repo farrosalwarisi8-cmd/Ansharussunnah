@@ -48,6 +48,13 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/storage", () => ({
   validateFile: (...args: unknown[]) => mockValidateFile(...args),
+  // kanonikEkstensiDariFile dipakai action untuk menentukan ekstensi object dari
+  // hasil magic bytes. Mock mengembalikan "pdf" bila validasi valid — cukup
+  // untuk memverifikasi jalur upload; deteksi magic bytes asli dites di storage.
+  kanonikEkstensiDariFile: async (
+    _file: unknown,
+    validasi?: { valid: boolean }
+  ) => (validasi?.valid ?? true ? "pdf" : null),
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
@@ -172,12 +179,21 @@ describe("uploadDokumenPendaftaran — Validasi Input", () => {
   });
 
   it("harus menolak ekstensi yang tidak diizinkan", async () => {
+    // D2: ekstensi tidak lagi dibaca dari file.name — yang dipakai adalah tipe
+    // hasil magic bytes. "kk.txt" dengan mock validasi valid menghasilkan tipe
+    // "application/pdf" (default mock kanonik -> "pdf"), jadi untuk menolak,
+    // cukup buat validasi gagal: format teks polos tidak lolos magic bytes.
+    mockValidateFile.mockResolvedValue({
+      valid: false,
+      error: "Format berkas tidak valid",
+    });
+
     const result = await uploadDokumenPendaftaran(
       makeFormData({ kartuKeluarga: makeFile("kk.txt", "text/plain") }),
     );
 
     expect(result.success).toBe(false);
-    expect(result.message).toContain("format berkas tidak valid");
+    expect(result.message).toContain("tidak valid");
     expect(mockStorageUpload).not.toHaveBeenCalled();
   });
 
@@ -256,10 +272,11 @@ describe("uploadDokumenPendaftaran — Kasus Sukses", () => {
     expect(result.success).toBe(true);
     expect(mockStorageUpload).toHaveBeenCalledOnce();
 
-    // Path file ditentukan SERVER (folder per pendaftaran), bukan dari klien
+    // Path file ditentukan SERVER (folder per pendaftaran), bukan dari klien.
+    // Ekstensi dari magic bytes (mock kanonik -> "pdf"), bukan file.name.
     const [path, , options] = mockStorageUpload.mock.calls[0];
     expect(path).toMatch(/^dokumen-pendaftaran\/pendaftaran\/pend-1\//);
-    expect(path.endsWith(".jpg")).toBe(true);
+    expect(path.endsWith(".pdf")).toBe(true);
     expect(options.upsert).toBe(false);
 
     // Update record via transaction memakai path server

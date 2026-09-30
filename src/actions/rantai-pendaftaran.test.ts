@@ -183,6 +183,12 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/storage", () => ({
   validateFile: (...a: unknown[]) => mocks.validateFile(...a),
+  // kanonikEkstensiDariFile: ekstensi object dari magic bytes (D2). "pdf" cukup
+  // untuk jalur upload di test rantai; deteksi asli dites di storage.
+  kanonikEkstensiDariFile: async (
+    _file: unknown,
+    validasi?: { valid: boolean }
+  ) => (validasi?.valid ?? true ? "pdf" : null),
 }));
 
 vi.mock("@/lib/rate-limit", () => ({

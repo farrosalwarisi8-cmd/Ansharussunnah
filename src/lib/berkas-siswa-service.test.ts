@@ -31,6 +31,9 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/storage", () => ({
   validateFile: vi.fn().mockResolvedValue({ valid: true }),
+  // kanonikEkstensiDariFile dipakai service untuk ekstensi object dari magic
+  // bytes; "pdf" cukup untuk jalur upload, deteksi asli dites di storage.
+  kanonikEkstensiDariFile: vi.fn().mockResolvedValue("pdf"),
   getSignedUrls: (...args: unknown[]) => mockGetSignedUrls(...args),
 }))
 

@@ -454,11 +454,20 @@ model Pendaftaran {
   @@index([createdAt(sort: Desc)], map: "idx_pendaftaran_created")
   @@index([jenjangTujuanId], map: "idx_pendaftaran_jenjang")
   @@index([status], map: "idx_pendaftaran_status")
+  // Komposit untuk daftar pendaftaran: filter status + sort createdAt (GET
+  // /dashboard pendaftaran & halaman verifikasi). Tanpa ini Postgres memakai
+  // satu index status lalu sort in-memory, atau sebaliknya.
+  @@index([status, createdAt(sort: Desc)], map: "idx_pendaftaran_status_created")
   // Dua index di bawah dibuat lewat SQL mentah di migrasi. Kalau tidak
   // didaftarkan di sini, `migrate dev` akan menganggapnya drift dan
   // menghapusnya tanpa tanya. Prisma 6.19 belum mendukung klausa `WHERE`
   // pada `@@index`, jadi index parsial hanya bisa hidup lewat SQL mentah —
   // dan justru karena itu WAJIB dicatat di sini agar selamat.
+  //
+  // Index parsial "menunggu + berkas kurang" (idx_pendaftaran_menunggu_berkas_kurang)
+  // juga SQL mentah (migration 20260930120000) dan sengaja TIDAK didaftarkan di
+  // sini karena bentuknya parsial — kalau didaftarkan sebagai index biasa,
+  // migrate dev akan mencoba membuat ulang versi non-parsialnya.
   @@index([emailOrangTuaDiverifikasiOtpAt], map: "idx_pendaftarans_email_otp")
   @@index([emailOrangTuaDiverifikasiManualAt], map: "pendaftaran_email_manual_idx")
   @@index([kontakWaliDikonfirmasiOlehId], map: "idx_pendaftaran_kontak_wali_oleh")
