@@ -107,6 +107,86 @@ export async function getPendaftaranList(options?: {
   }
 }
 
+/**
+ * Rincian jumlah pendaftar per status + hitung berkas belum lengkap — SEMUA di
+ * database via count/groupBy, tanpa menarik baris ke server.
+ *
+ * Dipakai kartu "Rincian Status Pendaftar" di dashboard admin. Sebelumnya kartu
+ * ini memanggil getPendaftaranList 4x paralel (masing-masing include besar dan
+ * hingga 100 baris) hanya untuk membaca angka total — boros query, memori, dan
+ * payload. Sekarang: 2 query ringkas (groupBy + count).
+ *
+ * Return selalu success dengan angka (0 saat gagal agregasi lanjutan) supaya
+ * dashboard tidak perlu menangani bentuk error berbeda dari angka.
+ */
+export async function getPendaftaranRincianStatus(): Promise<
+  ActionResponse<{
+    menungguPembayaran: number;
+    menungguVerifikasi: number;
+    diterima: number;
+    ditolak: number;
+    berkasBelumLengkap: number;
+  }>
+> {
+  try {
+    await requireGuruAdmin();
+
+    // Satu groupBy menghasilkan jumlah per status sekaligus.
+    const perStatus = await prisma.pendaftaran.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+      where: { deleted_at: null },
+    });
+
+    const jumlah = (status: StatusPendaftaran): number =>
+      perStatus.find((r) => r.status === status)?._count._all ?? 0;
+
+    // Berkas belum lengkap dihitung DB-side: pendaftar yang sedang menunggu
+    // (belum diproses) dengan salah satu berkas utama kosong. Dulu dihitung
+    // client dari 100 baris pertama — sekarang akurat tanpa batas baris.
+    const berkasBelumLengkap = await prisma.pendaftaran.count({
+      where: {
+        deleted_at: null,
+        status: {
+          in: [
+            StatusPendaftaran.MENUNGGU_PEMBAYARAN,
+            StatusPendaftaran.MENUNGGU_VERIFIKASI,
+          ],
+        },
+        OR: [
+          { dokKartuKeluarga: null },
+          { dokKartuKeluarga: "" },
+          { dokAkteLahir: null },
+          { dokAkteLahir: "" },
+          { dokFoto: null },
+          { dokFoto: "" },
+        ],
+      },
+    });
+
+    return {
+      success: true,
+      message: "Rincian pendaftar berhasil diambil",
+      data: {
+        menungguPembayaran: jumlah(StatusPendaftaran.MENUNGGU_PEMBAYARAN),
+        menungguVerifikasi: jumlah(StatusPendaftaran.MENUNGGU_VERIFIKASI),
+        diterima: jumlah(StatusPendaftaran.DITERIMA),
+        ditolak: jumlah(StatusPendaftaran.DITOLAK),
+        berkasBelumLengkap,
+      },
+    };
+  } catch (error: unknown) {
+    console.error("Error getPendaftaranRincianStatus:", error);
+    return {
+      success: false,
+      message: toUserFriendlyError(
+        error,
+        "Gagal memuat rincian pendaftar. Silakan coba lagi atau hubungi admin.",
+      ),
+    };
+  }
+}
+
 export async function getPendaftaranDetail(pendaftaranId: string): Promise<
   ActionResponse<{
     pendaftaran: PendaftaranWithRelations;
@@ -830,30 +910,59 @@ export async function verifikasiPendaftaran(
       // Jika peran ORANG_TUA benar-benar BARU ditambahkan ke akun yang sudah ada
       // (sebelumnya email ini hanya punya role lain, dan record ORANG_TUA baru
       // diciptakan), kirim juga pemberitahuan role baru — TANPA password.
-      await sendEmail({
-        to: emailOrtu,
-        subject: ortuAlreadyExisted
-          ? `Santri Baru Diterima — ${pendaftaran.nomorPendaftaran}`
-          : `Pendaftaran Disetujui — ${pendaftaran.nomorPendaftaran}`,
-        html: ortuAlreadyExisted
-          ? buildKredensialEmailAnakKedua({
-              namaOrangTua: pendaftaran.namaOrangTua,
-              emailOrangTua: emailOrtu,
-              namaSiswa: pendaftaran.namaLengkap,
-              emailSiswa,
-              passwordSiswa,
-              nomorPendaftaran: pendaftaran.nomorPendaftaran,
-            })
-          : buildKredensialEmail({
-              namaOrangTua: pendaftaran.namaOrangTua,
-              emailOrangTua: emailOrtu,
-              passwordOrangTua,
-              namaSiswa: pendaftaran.namaLengkap,
-              emailSiswa,
-              passwordSiswa,
-              nomorPendaftaran: pendaftaran.nomorPendaftaran,
-            }),
-      });
+      //
+      // F1 — status parsial yang jujur: email dikirim SETELAH transaksi commit,
+      // jadi kegagalan email BUKAN kegagalan approval. Status DB sudah final
+      // (DITERIMA, akun dibuat); mengulang aksi tidak mungkin (guard transisi
+      // status) dan tidak boleh — cukup laporkan bahwa email gagal supaya
+      // panitia menyampaikan kredensial secara manual.
+      let emailKredensialTerkirim = true;
+      let emailKredensialError: string | null = null;
+      try {
+        const hasilEmail = await sendEmail({
+          to: emailOrtu,
+          subject: ortuAlreadyExisted
+            ? `Santri Baru Diterima — ${pendaftaran.nomorPendaftaran}`
+            : `Pendaftaran Disetujui — ${pendaftaran.nomorPendaftaran}`,
+          html: ortuAlreadyExisted
+            ? buildKredensialEmailAnakKedua({
+                namaOrangTua: pendaftaran.namaOrangTua,
+                emailOrangTua: emailOrtu,
+                namaSiswa: pendaftaran.namaLengkap,
+                emailSiswa,
+                passwordSiswa,
+                nomorPendaftaran: pendaftaran.nomorPendaftaran,
+              })
+            : buildKredensialEmail({
+                namaOrangTua: pendaftaran.namaOrangTua,
+                emailOrangTua: emailOrtu,
+                passwordOrangTua,
+                namaSiswa: pendaftaran.namaLengkap,
+                emailSiswa,
+                passwordSiswa,
+                nomorPendaftaran: pendaftaran.nomorPendaftaran,
+              }),
+        });
+        emailKredensialTerkirim = hasilEmail.success;
+        if (!hasilEmail.success) {
+          emailKredensialError =
+            typeof hasilEmail.error === "string" && hasilEmail.error.length > 0
+              ? hasilEmail.error
+              : "tidak diketahui";
+          console.error(
+            `[email] Email kredensial ${pendaftaran.nomorPendaftaran} gagal:`,
+            hasilEmail.error,
+          );
+        }
+      } catch (error) {
+        emailKredensialTerkirim = false;
+        emailKredensialError =
+          error instanceof Error ? error.message : String(error);
+        console.error(
+          `[email] Error tak terduga saat mengirim email kredensial ${pendaftaran.nomorPendaftaran}:`,
+          error,
+        );
+      }
 
       if (ortuAlreadyExisted && ortuRecordBaruDibuat) {
         await sendEmail({
@@ -870,12 +979,28 @@ export async function verifikasiPendaftaran(
       revalidatePath("/dashboard/pendaftaran");
       revalidatePath("/dashboard/siswa");
       revalidatePath("/dashboard/berkas");
+
+      // F1 — status parsial yang jujur dalam SATU pesan: approval sudah commit
+      // (tidak bisa dibatalkan), tapi admin harus tahu apa yang belum beres:
+      // email kredensial gagal, dan/atau sebagian dokumen gagal disalin.
+      const catatanParsial: string[] = [];
+      if (!emailKredensialTerkirim) {
+        catatanParsial.push(
+          `EMAIL KREDENSIAL GAGAL terkirim ke ${emailOrtu}${emailKredensialError ? ` (${emailKredensialError})` : ""}. Sampaikan kredensial login secara manual — jangan mengulang aksi "Terima" karena status sudah final.`,
+        );
+      }
+      if (dokumenGagalDisalin > 0) {
+        catatanParsial.push(
+          `${dokumenGagalDisalin} dokumen gagal disalin ke berkas siswa — wali dapat mengunggah ulang dari dashboard.`,
+        );
+      }
+
       return {
         success: true,
         message:
           `Pendaftaran ${pendaftaran.nomorPendaftaran} DITERIMA. Akun login telah dikirimkan ke ${emailOrtu}.` +
-          (dokumenGagalDisalin > 0
-            ? ` ${dokumenGagalDisalin} dokumen gagal disalin ke berkas siswa — wali dapat mengunggah ulang dari dashboard.`
+          (catatanParsial.length > 0
+            ? ` CATATAN: ${catatanParsial.join(" ")} Sekaligus periksa panel berkas di dashboard wali.`
             : ""),
       };
     }

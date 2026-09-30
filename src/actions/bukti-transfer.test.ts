@@ -51,6 +51,13 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/storage", () => ({
   validateFile: (...args: unknown[]) => mockValidateFile(...args),
+  // kanonikEkstensiDariFile dipakai action untuk menentukan ekstensi object dari
+  // hasil magic bytes. Mock mengembalikan "pdf" bila validasi valid — cukup
+  // untuk memverifikasi jalur upload; deteksi magic bytes asli dites di storage.
+  kanonikEkstensiDariFile: async (
+    _file: unknown,
+    validasi?: { valid: boolean }
+  ) => (validasi?.valid ?? true ? "pdf" : null),
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
@@ -197,7 +204,10 @@ describe("uploadBuktiTransferPendaftaran — Status & Token", () => {
     expect(result.success).toBe(true);
     const [path, , options] = mockStorageUpload.mock.calls[0];
     expect(path).toMatch(/^transfer\/REG-2026-00001\//);
-    expect(path.endsWith(".jpg")).toBe(true);
+    // Ekstensi object dari magic bytes (mock kanonikEkstensiDariFile -> "pdf"),
+    // BUKAN dari nama file klien "bukti.jpg" — kalau masih ".jpg" berarti
+    // action memakai file.name dan itu yang justru harus dibasmi.
+    expect(path.endsWith(".pdf")).toBe(true);
     expect(options.upsert).toBe(false);
   });
 

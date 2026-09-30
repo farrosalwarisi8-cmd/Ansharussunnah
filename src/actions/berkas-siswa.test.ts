@@ -50,6 +50,12 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/storage", () => ({
   validateFile: (...args: unknown[]) => mockValidateFile(...args),
+  // kanonikEkstensiDariFile dipakai service untuk ekstensi object dari magic
+  // bytes; "pdf" cukup untuk jalur upload, deteksi asli dites di storage.
+  kanonikEkstensiDariFile: async (
+    _file: unknown,
+    validasi?: { valid: boolean }
+  ) => (validasi?.valid ?? true ? "pdf" : null),
   getSignedUrls: (...args: unknown[]) => mockGetSignedUrls(...args),
 }))
 
@@ -234,6 +240,12 @@ describe("uploadBerkasSiswa", () => {
   })
 
   it("harus menolak ekstensi yang tidak diizinkan", async () => {
+    // D2: ekstensi tidak lagi dibaca dari file.name — tipe hasil magic bytes
+    // yang dipakai. Teks polos tidak lolos magic bytes, jadi buat validasi gagal.
+    mockValidateFile.mockResolvedValue({
+      valid: false,
+      error: "Format berkas tidak valid",
+    })
     const result = await uploadBerkasSiswa(
       "siswa-1",
       "foto",
@@ -263,10 +275,12 @@ describe("uploadBerkasSiswa", () => {
     expect(result.success).toBe(true)
     expect(mockStorageUpload).toHaveBeenCalledOnce()
 
-    // Path dibuat server-side (foldername siswaId+kategori), bukan dari nama file klien
+    // Path dibuat server-side (foldername siswaId+kategori), bukan dari nama
+    // file klien. Ekstensi dari magic bytes (mock kanonik -> "pdf"), bukan
+    // ekstensi "kk.png" dari klien.
     const [path, , options] = mockStorageUpload.mock.calls[0]
     expect(path).toMatch(/^berkas-siswa\/siswa-1\/kartuKeluarga\//)
-    expect(path.endsWith(".png")).toBe(true)
+    expect(path.endsWith(".pdf")).toBe(true)
     expect(options.upsert).toBe(false)
 
     // Kolom dok* di DB diisi path server

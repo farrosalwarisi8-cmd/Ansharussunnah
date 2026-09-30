@@ -4,7 +4,7 @@
 
 import prisma from "@/lib/prisma"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { validateFile } from "@/lib/storage"
+import { validateFile, kanonikEkstensiDariFile } from "@/lib/storage"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import {
   isPendaftaranTokenValid,
@@ -129,7 +129,9 @@ export async function uploadDokumenPendaftaran(
       }
     }
 
-    // Validasi magic bytes + ukuran file (server-side, bukan hanya klien)
+    // Validasi magic bytes + ukuran file (server-side, bukan hanya klien).
+    // Ekstensi kanonik diambil dari HASIL magic bytes (D2), bukan dari
+    // file.name klien — nama bisa dipalsukan atau berisi path traversal.
     for (const entry of fileEntries) {
       const validation = await validateFile(entry.file!)
       if (!validation.valid) {
@@ -139,8 +141,8 @@ export async function uploadDokumenPendaftaran(
         }
       }
 
-      const fileExt = (entry.file!.name.split(".").pop() || "").toLowerCase()
-      if (!ALLOWED_EXTENSIONS.has(fileExt)) {
+      const ext = await kanonikEkstensiDariFile(entry.file!, validation)
+      if (!ext || !ALLOWED_EXTENSIONS.has(ext)) {
         return {
           success: false,
           message: `${entry.label}: format berkas tidak valid (gunakan JPG, PNG, WEBP, atau PDF)`,
@@ -212,7 +214,14 @@ export async function uploadDokumenPendaftaran(
 
     for (const entry of fileEntries) {
       const file = entry.file!
-      const fileExt = (file.name.split(".").pop() || "").toLowerCase()
+      // Ekstensi dari magic bytes — konsisten dengan whitelist di atas.
+      const fileExt = await kanonikEkstensiDariFile(file)
+      if (!fileExt) {
+        return {
+          success: false,
+          message: `${entry.label}: format berkas tidak valid (gunakan JPG, PNG, WEBP, atau PDF)`,
+        }
+      }
       const generatedName = `${nanoid(12)}.${fileExt}`
       const filePath = `dokumen-pendaftaran/pendaftaran/${pendaftaran.id}/${generatedName}`
 

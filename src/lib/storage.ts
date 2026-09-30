@@ -97,14 +97,30 @@ export async function validateFile(
   return { valid: true, detectedType: magicCheck.detectedType }
 }
 
-// Ekstensi kanonik per tipe yang terdeteksi dari magic bytes. Memakai nilai
-// ini (bukan ekstensi dari file.name klien) mencegah path traversal pada
-// object key, karena "ekstensi" dari nama file klien bisa berisi "/".
-const EXTENSION_BY_DETECTED_TYPE: Record<string, string> = {
+// Ekstensi kanonik per tipe yang terdeteksi dari magic bytes. Sumber kebenaran
+// TUNGGAL untuk semua titik upload (server action & service): nama file klien
+// tidak pernah dipakai untuk membentuk object key — namanya bisa memuat "/"
+// (mis. "x.png/../../evil") yang merupakan path traversal, atau ekstensi yang
+// tidak cocok dengan isi berkas sebenarnya.
+export const EXTENSION_BY_DETECTED_TYPE: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
   "application/pdf": "pdf",
+}
+
+/**
+ * Ekstensi kanonik untuk sebuah File: diturunkan dari magic bytes (isi berkas),
+ * bukan dari `file.name` klien. Memanggil `validateFile` bila validasi belum
+ * dijalankan. Dipakai semua server action upload sebelum menyusun object path.
+ */
+export async function kanonikEkstensiDariFile(
+  file: File,
+  validasi?: Awaited<ReturnType<typeof validateFile>>
+): Promise<string | null> {
+  const validation = validasi ?? (await validateFile(file))
+  if (!validation.valid || !validation.detectedType) return null
+  return EXTENSION_BY_DETECTED_TYPE[validation.detectedType] ?? null
 }
 
 export async function uploadFileToStorage(
