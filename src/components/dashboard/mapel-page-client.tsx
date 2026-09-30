@@ -318,7 +318,7 @@ export default function MapelPage() {
         <DashboardHeader title="Mata Pelajaran" subtitle="Kelola daftar mata pelajaran pada program pembelajaran." />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Card key={i} className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+            <Card key={i} className="overflow-hidden">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="h-6 w-20 bg-slate-200 rounded-full animate-pulse" />
@@ -364,7 +364,7 @@ export default function MapelPage() {
 
       {/* Empty State */}
       {mapelList.length === 0 ? (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <Card className="overflow-hidden">
           <CardContent className="p-12 text-center">
             <BookOpen className="h-12 w-12 text-slate-300 mx-auto mb-3" />
             <p className="text-sm font-medium text-slate-500">
@@ -376,7 +376,7 @@ export default function MapelPage() {
           </CardContent>
         </Card>
       ) : filtered.length === 0 ? (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <Card className="overflow-hidden">
           <CardContent className="p-12 text-center">
             <Search className="h-12 w-12 text-slate-300 mx-auto mb-3" />
             <p className="text-sm font-medium text-slate-500">
@@ -389,9 +389,7 @@ export default function MapelPage() {
           {filtered.map((m) => (
             <Card
               key={m.id}
-              className={`rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden transition-all ${
-                !m.aktif ? "opacity-70" : ""
-              }`}
+              className={`overflow-hidden transition-all ${!m.aktif ? "opacity-70" : ""}`}
             >
               <CardHeader className="p-5 pb-3 flex flex-row items-start justify-between gap-2">
                 <div className="flex items-center gap-3">

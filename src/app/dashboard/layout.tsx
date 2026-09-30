@@ -55,8 +55,10 @@ export default async function DashboardLayout({
   const user = await getCurrentUser()
 
   // Defense-in-depth: jangan pernah menyediakan akun default bila sesi tidak aktif.
+  // Parameter `sesi=berakhir` dipakai halaman login untuk menampilkan state
+  // "Sesi berakhir" (hanya tampilan — proses login tetap sama).
   if (!user) {
-    redirect("/login")
+    redirect("/login?sesi=berakhir")
   }
 
   // Page-level role guard — jalur peran yang BUKAN admin akademik/admin keuangan
@@ -70,11 +72,14 @@ export default async function DashboardLayout({
     const isGuruAdmin = user.role === Role.GURU && user.isAdmin
 
     if (isAdminManagementRoute(pathname) && !isAcademicAdmin && !isGuruAdmin) {
-      redirect("/dashboard")
+      // Aturan permission tidak berubah — pengguna tetap dijauhkan dari route,
+      // hanya tujuan redirect ditandai agar beranda menampilkan banner
+      // "Akses ditolak" yang sudah didesain.
+      redirect("/dashboard?akses=ditolak")
     }
 
     if (isKeuanganRoute(pathname) && user.role !== Role.ADMIN_KEUANGAN) {
-      if (!isAcademicAdmin) redirect("/dashboard")
+      if (!isAcademicAdmin) redirect("/dashboard?akses=ditolak")
     }
   } catch {
     // Jika header tidak tersedia, lanjutkan — action server tetap mengamankan.
@@ -144,9 +149,9 @@ export default async function DashboardLayout({
 
   return (
     <DashboardProvider user={dashboardUser}>
-      <div className="min-h-screen bg-slate-50/60 flex flex-col screen-app">
+      <div className="screen-app flex min-h-screen flex-col bg-slate-50 transition-[padding] duration-300 lg:pl-[var(--sidebar-w,16rem)]">
         <DashboardNavWrapper />
-        <main className="lg:pl-64 xl:pl-72 flex-1 pb-24 lg:pb-12 pt-4 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full transition-all">
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-24 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pb-12">
           {children}
         </main>
       </div>

@@ -77,6 +77,9 @@ export async function getPendaftaranList(options?: {
           kelasTujuan: true,
           buktiTransfer: { orderBy: { waktuUpload: "desc" } },
           diverifikasiOleh: true,
+          // Jejak konfirmasi kontak wali (pengganti OTP) — panel admin
+          // menampilkan siapa/kapan, dan itu juga yang membuka gerbang DITERIMA.
+          kontakWaliDikonfirmasiOleh: true,
         },
       }),
       prisma.pendaftaran.count({ where: whereCondition }),
@@ -125,6 +128,9 @@ export async function getPendaftaranDetail(pendaftaranId: string): Promise<
         kelasTujuan: true,
         buktiTransfer: { orderBy: { waktuUpload: "desc" } },
         diverifikasiOleh: true,
+        // Jejak konfirmasi kontak wali (pengganti OTP) — panel admin
+        // menampilkan siapa/kapan, dan itu juga yang membuka gerbang DITERIMA.
+        kontakWaliDikonfirmasiOleh: true,
       },
     });
 
@@ -252,9 +258,15 @@ export async function verifikasiPendaftaran(
     // kontak wali (WhatsApp/telepon/langsung) SEBELUM menyetujui — tombol
     // "Konfirmasi Kontak Wali" di panel verifikasi mencatatnya ke kolom
     // khusus (kontakWaliDikonfirmasiAt + metode + catatan). Bila belum,
-    // approval ditolak dengan pesan yang jelas — BUKAN diam-diam dianggap    // "email sudah terverifikasi".
-    //    // Kolom emailOrangTuaTerverifikasiAt yang lama TIDAK dipakai lagi sebagai    // gerbang: isinya adalah jejak OTP/grandfathering pendaftaran lama, dan    // memakainya untuk approval baru akan mencampur makna audit.
-    //    // Penolakan (DITOLAK) tidak melewati gerbang ini: menolak tidak membuat    // akun apa pun dan harus selalu bisa dilakukan.
+    // approval ditolak dengan pesan yang jelas — BUKAN diam-diam dianggap
+    // "email sudah terverifikasi".
+    //
+    // Kolom emailOrangTuaTerverifikasiAt yang lama TIDAK dipakai lagi sebagai
+    // gerbang: isinya adalah jejak OTP/grandfathering pendaftaran lama, dan
+    // memakainya untuk approval baru akan mencampur makna audit.
+    //
+    // Penolakan (DITOLAK) tidak melewati gerbang ini: menolak tidak membuat
+    // akun apa pun dan harus selalu bisa dilakukan.
     if (
       status === "DITERIMA" &&
       !pendaftaran.kontakWaliDikonfirmasiAt

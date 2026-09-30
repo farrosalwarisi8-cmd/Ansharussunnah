@@ -118,7 +118,7 @@ export default function BuatTugasPage() {
         </div>
       </div>
 
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+      <Card>
         <CardContent className="p-6 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             <DibuatOlehInfo nama={user.nama} />

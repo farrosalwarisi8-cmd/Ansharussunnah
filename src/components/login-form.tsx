@@ -29,6 +29,9 @@ export default function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectedFrom = searchParams.get("redirectedFrom")
+  // State "sesi berakhir" — ditandai oleh dashboard layout saat sesi tidak
+  // aktif. Hanya memengaruhi tampilan pesan, proses login tetap sama.
+  const sesiBerakhir = searchParams.get("sesi") === "berakhir"
   const [showPassword, setShowPassword] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -57,6 +60,20 @@ export default function LoginForm() {
 
   return (
     <>
+      {(sesiBerakhir || redirectedFrom) && !error && (
+        <div
+          role="status"
+          className="mb-5 flex animate-in items-start gap-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-xs text-amber-200 fade-in sm:text-sm"
+        >
+          <span className="shrink-0" aria-hidden="true">🔒</span>
+          <span className="leading-relaxed">
+            {sesiBerakhir
+              ? "Sesi Anda telah berakhir. Silakan masuk kembali untuk melanjutkan."
+              : "Silakan masuk untuk membuka halaman yang Anda minta."}
+          </span>
+        </div>
+      )}
+
       {error && (
         <div className="mb-5 p-3.5 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 text-xs sm:text-sm flex items-start gap-2.5 animate-in fade-in">
           <span className="shrink-0 text-rose-400">⚠️</span>

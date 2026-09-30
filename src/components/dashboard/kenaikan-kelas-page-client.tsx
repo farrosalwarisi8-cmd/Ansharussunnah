@@ -13,7 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import dynamic from "next/dynamic"
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
 import { EmptyState } from "@/components/ui/empty-state"
-import { ArrowUpRight, Loader2, AlertCircle } from "lucide-react"
+import { ArrowUpRight, AlertCircle } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 
 interface KelasTujuan {
   id: string
@@ -300,7 +301,7 @@ export default function KenaikanKelasPage() {
       />
 
       {/* Filter Kelas Asal + Periode */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 sm:p-6">
+      <Card className="p-5 sm:p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
           <div>
             <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">
@@ -381,10 +382,7 @@ export default function KenaikanKelasPage() {
 
       {/* Loading State */}
       {loadingSiswa && (
-        <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-          <span className="ml-3 text-sm text-slate-500">Memuat daftar siswa untuk promosi...</span>
-        </div>
+<PageSkeleton label="Memuat daftar siswa untuk promosi..." />
       )}
 
       {/* Error State */}
@@ -406,7 +404,7 @@ export default function KenaikanKelasPage() {
 
       {/* Santri List with Auto Recommendation */}
       {!loadingSiswa && !siswaError && siswaList.length > 0 && (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <Card className="overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between flex-wrap gap-3">
             <div>
               <CardTitle className="text-base font-bold text-slate-800">
@@ -449,7 +447,7 @@ export default function KenaikanKelasPage() {
           <CardContent className="p-0">
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm text-left">
+              <table className="data-table">
                 <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
                   <tr>
                     <th className="p-4 pl-6">Nama Santri</th>

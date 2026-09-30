@@ -53,13 +53,14 @@ export default function CekPendaftaranPage() {
       status: string;
       jenjangTujuan: string;
       alasanPenolakan?: string | null;
-      emailTerverifikasi?: boolean;
-      // Status kelengkapan dokumen dari API (boolean, tanpa path file).
+      // Status kelengkapan dokumen dari API (boolean, tanpa path file), dihitung
+      // oleh helper yang sama dengan halaman upload/panel admin/dashboard wali.
       dokumen?: {
         kartuKeluarga: boolean;
         akteLahir: boolean;
         foto: boolean;
         lainnya: number;
+        jumlahLengkap: number;
       };
     };
   } | null>(null);
@@ -236,6 +237,13 @@ export default function CekPendaftaranPage() {
                   <div className="p-3.5 rounded-xl bg-white border border-slate-200 text-xs space-y-2">
                     <span className="font-bold block text-slate-700">
                       Status Dokumen Pendukung
+                      {typeof result.data.dokumen.jumlahLengkap === "number" && (
+                        <span className="font-normal text-slate-500">
+                          {" "}
+                          — {result.data.dokumen.jumlahLengkap} dari 3 berkas utama
+                          sudah tercatat
+                        </span>
+                      )}
                     </span>
                     <ul className="space-y-1">
                       <DokumenStatusItem
@@ -257,8 +265,9 @@ export default function CekPendaftaranPage() {
                       </p>
                     )}
                     <p className="m-0 text-slate-400">
-                      Berkas yang belum tercatat masih bisa diunggah melalui
-                      tombol di bawah (jika tersedia).
+                      {result.data.status === "DITERIMA"
+                        ? "Pendaftaran sudah diterima, jadi pelengkapan berkas dilanjutkan dari dashboard wali (butuh login), bukan dari halaman ini."
+                        : "Berkas yang belum tercatat masih bisa diunggah melalui tombol di bawah (jika tersedia)."}
                     </p>
                   </div>
                 )}

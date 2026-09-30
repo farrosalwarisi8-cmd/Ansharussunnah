@@ -19,13 +19,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Tipe di module scope (bukan di dalam vi.hoisted) karena dipakai juga oleh
 // mock prisma di bawah. `vi.hoisted` memindahkan nilai, bukan scope tipe.
 type Bukti = { id: string; status: string };
-type Otp = {
-  id: string;
-  kodeOtpHash: string;
-  expiredAt: Date;
-  jumlahGagal: number;
-  dipakai: boolean;
-};
 
 const { db, mocks } = vi.hoisted(() => {
   // ---------------------------------------------------------------
@@ -38,6 +31,8 @@ const { db, mocks } = vi.hoisted(() => {
       status: "MENUNGGU_PEMBAYARAN",
       tokenAksesHash: "",
       tokenAksesExpiraAt: null as Date | null,
+      // Legacy: tidak lagi dipakai alur mana pun, tapi sengaja ada di fixture
+      // supaya test bisa membuktikan kolom ini tidak membuka gerbang apa pun.
       emailOrangTuaTerverifikasiAt: null as Date | null,
       emailOrangTuaDiverifikasiOtpAt: null as Date | null,
       kontakWaliDikonfirmasiAt: null as Date | null,
@@ -52,7 +47,6 @@ const { db, mocks } = vi.hoisted(() => {
       noHpOrangTua: "081234567890",
       buktiTransfer: [] as Bukti[],
     },
-    otp: null as Otp | null,
   };
 
   const mocks = {
@@ -72,10 +66,6 @@ const { db, mocks } = vi.hoisted(() => {
     revalidate: vi.fn(),
     salinDokumen: vi.fn().mockResolvedValue(undefined),
     sendEmail: vi.fn().mockResolvedValue({ success: true }),
-    verifyOtp: vi.fn().mockReturnValue(true),
-    createOtpWithHash: vi
-      .fn()
-      .mockResolvedValue({ plainOtp: "123456", hashedOtp: "hash" }),
   };
 
   return { db, mocks };
@@ -97,33 +87,6 @@ vi.mock("@/lib/prisma", () => {
       Object.assign(db.pendaftaran, data);
       return { ...db.pendaftaran };
     }),
-  };
-
-  const otpVerifikasiEmail = {
-    findFirst: vi.fn(
-      async (args?: {
-        where?: { dipakai?: boolean; expiredAt?: { gt: Date } };
-      }) => {
-        const t = db.otp;
-        if (!t) return null;
-        // Action mencari OTP yang BELUM dipakai dan BELUM kedaluwarsa. Mock
-        // harus benar-benar memfilter, kalau tidak test-nya berbohong.
-        if (args?.where?.dipakai === false && t.dipakai) return null;
-        if (
-          args?.where?.expiredAt?.gt &&
-          t.expiredAt <= args.where.expiredAt.gt
-        )
-          return null;
-        return { ...t };
-      },
-    ),
-    create: vi.fn(async () => ({})),
-    update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-      if (db.otp) Object.assign(db.otp, data);
-      return {};
-    }),
-    updateMany: vi.fn().mockResolvedValue({ count: 0 }),
-    deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
   };
 
   const buktiTransferPendaftaran = {
@@ -153,7 +116,6 @@ vi.mock("@/lib/prisma", () => {
 
   const tx = {
     pendaftaran,
-    otpVerifikasiEmail,
     buktiTransferPendaftaran,
     user: {
       findUnique: mocks.userFindUnique,
@@ -228,16 +190,8 @@ vi.mock("@/lib/rate-limit", () => ({
   getClientIpFromHeaders: () => mocks.clientIp(),
 }));
 
-vi.mock("@/lib/otp", () => ({
-  createOtpWithHash: (...a: unknown[]) => mocks.createOtpWithHash(...a),
-  verifyOtp: (...a: unknown[]) => mocks.verifyOtp(...a),
-}));
-
 vi.mock("@/lib/email", () => ({
   sendEmail: (...a: unknown[]) => mocks.sendEmail(...a),
-  buildOtpVerifikasiPendaftaranEmail: vi
-    .fn()
-    .mockReturnValue("<html>otp</html>"),
   buildKredensialEmail: vi.fn().mockReturnValue("<html>kred</html>"),
   buildKredensialEmailAnakKedua: vi.fn().mockReturnValue("<html>k2</html>"),
   buildPemberitahuanRoleBaruEmail: vi.fn().mockReturnValue("<html>role</html>"),
@@ -256,10 +210,6 @@ vi.mock("next/cache", () => ({
   revalidatePath: (...a: unknown[]) => mocks.revalidate(...a),
 }));
 
-import {
-  requestOtpVerifikasiEmail,
-  verifyOtpVerifikasiEmail,
-} from "@/actions/verifikasi-email";
 import { uploadBuktiTransferPendaftaran } from "@/actions/bukti-transfer";
 import { uploadDokumenPendaftaran } from "@/actions/upload-dokumen";
 import { verifikasiPendaftaran } from "@/actions/verifikasi";
@@ -282,13 +232,6 @@ function resetDb() {
     catatanAdmin: null,
     buktiTransfer: [],
   });
-  db.otp = {
-    id: "otp-1",
-    kodeOtpHash: "hash",
-    expiredAt: new Date(Date.now() + 10 * 60_000),
-    jumlahGagal: 0,
-    dipakai: false,
-  };
 }
 
 function formData(nama: string, tipe: string) {
@@ -317,7 +260,6 @@ function formDokumen() {
 beforeEach(() => {
   vi.clearAllMocks();
   resetDb();
-  mocks.verifyOtp.mockReturnValue(true);
   mocks.createUser.mockResolvedValue({
     data: { user: { id: "auth-1" } },
     error: null,
@@ -468,74 +410,66 @@ describe("RANTAI 4 — token kedaluwarsa", () => {
   });
 
   /**
-   * Token kedaluwarsa menutup gerbang email juga, bukan hanya upload.
+   * Token kedaluwarsa menutup semua pintu yang memakai token akses, dan tidak
+   * ada efek samping apa pun: status tetap, dokumen tetap kosong, dan kontak
+   * wali tetap belum dikonfirmasi.
    *
-   * Ini yang dulu bolong: `verifyOtpVerifikasiEmail` tidak mengecek expiry
-   * padahal `uploadBuktiTransfer` & `uploadDokumen` mengeceknya. Efeknya
-   * gerbang bisa dibuka dengan token yang sudah mati — tidak bisa dieksploitasi
-   * untuk menyelesaikan pendaftaran, tapi tetap membuka pintu yang seharusnya
-   * sudah terkunci.
-   *
-   * Ketiga action sekarang menolak dengan pesan yang sama, supaya tidak ada
-   * langkah yang memberi jawaban berbeda untuk token yang sama.
+   * Dulu test ini memakai `verifyOtpVerifikasiEmail` sebagai langkah ketiga.
+   * Sekarang gerbang email tidak ada, jadi yang diuji adalah invariants saja.
    */
-  it("menolak OTP, bayar, dan berkas sekaligus", async () => {
+  it("menolak semua langkah dan tidak mengubah apa pun", async () => {
     db.pendaftaran.tokenAksesExpiraAt = new Date(Date.now() - 1000);
 
-    const otp = await verifyOtpVerifikasiEmail(
-      "REG-2026-00001",
-      TOKEN,
-      "123456",
-    );
     const bayar = await uploadBuktiTransferPendaftaran(formBukti());
     const berkas = await uploadDokumenPendaftaran(formDokumen());
 
-    expect(otp.success, `otp: ${otp.message}`).toBe(false);
     expect(bayar.success, `bayar: ${bayar.message}`).toBe(false);
     expect(berkas.success, `berkas: ${berkas.message}`).toBe(false);
 
     // Pesan seragam: tidak ada langkah yang memberi alasan berbeda.
-    expect(otp.message).toBe(bayar.message);
-    expect(berkas.message).toBe(otp.message);
+    expect(berkas.message).toBe(bayar.message);
 
     // Tidak ada efek samping sama sekali.
     expect(db.pendaftaran.status).toBe("MENUNGGU_PEMBAYARAN");
-    expect(db.pendaftaran.emailOrangTuaTerverifikasiAt).toBeNull();
-    expect(db.pendaftaran.emailOrangTuaDiverifikasiOtpAt).toBeNull();
-    // OTP yang sudah terbit tidak ikut hangus, tapi juga tidak terpakai.
-    expect(db.otp?.dipakai).toBe(false);
+    expect(db.pendaftaran.buktiTransfer).toHaveLength(0);
+    expect(db.pendaftaran.kontakWaliDikonfirmasiAt).toBeNull();
   });
 
   /**
-   * Menolak expiry di `verify` saja tidak cukup. Kalau hanya `request` yang
-   * ditolak, penyerang yang sudah memegang OTP lama masih bisa memakainya
-   * selama belum terpakai dan belum kedaluwarsa.
+   * Kontak legacy yang terisi TIDAK boleh membuka gerbang approval.
+   *
+   * Ini kontrak yang paling mudah dilanggar diam-diam: kolom
+   * `emailOrangTuaTerverifikasiAt` masih ada di DB untuk data lama, jadi
+   * mudah suatu saat dipakai lagi sebagai syarat. Test ini mengunci bahwa
+   * satu-satunya gerbang DITERIMA adalah konfirmasi kontak wali.
    */
-  it("menolak OTP yang sudah ada walau request-nya ditolak", async () => {
-    db.pendaftaran.tokenAksesExpiraAt = new Date(Date.now() - 1000);
+  it("email legacy terisi TIDAK membuka gerbang DITERIMA", async () => {
+    db.pendaftaran.emailOrangTuaTerverifikasiAt = new Date();
+    db.pendaftaran.emailOrangTuaDiverifikasiOtpAt = new Date();
+    db.pendaftaran.status = "MENUNGGU_VERIFIKASI";
+    db.pendaftaran.buktiTransfer = [
+      { id: "bukti-1", status: "DIUNGGAH" } as Bukti,
+    ];
 
-    const request = await requestOtpVerifikasiEmail("REG-2026-00001", TOKEN);
-    expect(request.success).toBe(false);
+    const terima = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+      catatanAdmin: "",
+      kelasTujuanId: "kelas-1",
+    });
 
-    // Token kedaluwarsa = akses mati, apa pun yang ada di database.
-    const verify = await verifyOtpVerifikasiEmail(
-      "REG-2026-00001",
-      TOKEN,
-      "123456",
-    );
-    expect(verify.success, `verify: ${verify.message}`).toBe(false);
-    expect(db.pendaftaran.emailOrangTuaTerverifikasiAt).toBeNull();
+    expect(terima.success).toBe(false);
+    expect(terima.message).toContain("Kontak wali belum dikonfirmasi");
+    expect(db.pendaftaran.status).toBe("MENUNGGU_VERIFIKASI");
   });
 
-  it("tetap membuka gerbang tepat sebelum batas 90 hari", async () => {
+  it("tetap membuka pintu tepat sebelum batas 90 hari", async () => {
     // Batasnya inklusif: satu menit sebelum jatuh tempo masih sah.
     db.pendaftaran.tokenAksesExpiraAt = new Date(Date.now() + 60_000);
 
-    const otp = await verifyOtpVerifikasiEmail(
-      "REG-2026-00001",
-      TOKEN,
-      "123456",
-    );
-    expect(otp.success, `otp: ${otp.message}`).toBe(true);
+    const bayar = await uploadBuktiTransferPendaftaran(formBukti());
+
+    expect(bayar.success, `bayar: ${bayar.message}`).toBe(true);
+    expect(db.pendaftaran.status).toBe("MENUNGGU_VERIFIKASI");
   });
 });

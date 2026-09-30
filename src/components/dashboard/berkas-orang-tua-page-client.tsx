@@ -153,8 +153,19 @@ export default function BerkasOrangTuaPage() {
     { kategori: "foto", label: "Pas Foto 3x4", url: data?.berkas.foto },
   ] as const
 
-  const jumlahLengkap =
-    rows.filter((r) => Boolean(r.url)).length + (data?.berkas.lainnya.length ?? 0)
+  // Angka "berapa berkas yang sudah lengkap" DIHITUNG OLEH HELPER YANG SAMA
+  // dengan halaman cek status, upload dokumen, dan panel verifikasi admin.
+  //
+  // Sebelumnya dihitung dari `Boolean(r.url)` + jumlah dokumen lain. Itu
+  // kebiasaan yang salah: kelengkapan berkas adalah fakta "path-nya tercatat di
+  // database", sedangkan `url` hanya hasil penandatanganan sementara. Berkas
+  // yang tercatat tapi gagal ditandatangani akan terlihat belum ada di sini,
+  // padahal sudah lengkap di panel panitia — dua layar menghitung
+  // data yang sama dengan aturan berbeda.
+  const statusBerkas = data?.statusBerkas
+  const jumlahLengkap = statusBerkas
+    ? statusBerkas.jumlahLengkap + statusBerkas.lainnya
+    : 0
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -197,7 +208,7 @@ export default function BerkasOrangTuaPage() {
               <p>
                 {jumlahLengkap === 0
                   ? "Belum ada berkas sama sekali. Silakan unggah minimal Kartu Keluarga dan Akta Kelahiran agar proses verfikasinya tidak tertunda."
-                  : `${jumlahLengkap} berkas sudah tersimpan. Pastikan semua berkas terbaca jelas dan tidak terpotong.`}
+                  : `${statusBerkas?.jumlahLengkap ?? 0} dari 3 berkas utama sudah tersimpan${statusBerkas?.lainnya ? `, ditambah ${statusBerkas.lainnya} dokumen tambahan` : ""}. Pastikan semua berkas terbaca jelas dan tidak terpotong.`}
               </p>
             </div>
           )}

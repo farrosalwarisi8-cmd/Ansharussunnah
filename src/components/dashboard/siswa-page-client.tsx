@@ -699,7 +699,7 @@ export default function KelolaSiswaPage() {
       />
 
       {/* Filter & Search Bar */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+      <Card className="overflow-hidden">
         <CardContent className="p-4 flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -737,7 +737,7 @@ export default function KelolaSiswaPage() {
       </Card>
 
       {/* Students Table / Card List */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+      <Card className="overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-base font-bold text-slate-800">
@@ -768,7 +768,7 @@ export default function KelolaSiswaPage() {
             <>
               {/* Desktop Table */}
               <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-sm text-left">
+                <table className="data-table">
                   <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
                     <tr>
                       <th className="p-4 pl-6">Nama &amp; NIS/NISN</th>

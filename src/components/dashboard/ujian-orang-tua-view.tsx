@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { getDaftarUjianAnak } from "@/actions/ujian"
-import { Loader2 } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
 
@@ -63,10 +63,7 @@ export function OrangTuaUjianView({ selectedChild }: { selectedChild: { id: stri
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-3 text-sm text-slate-500">Memuat data ujian...</span>
-      </div>
+<PageSkeleton label="Memuat data ujian..." />
     )
   }
 
@@ -75,7 +72,7 @@ export function OrangTuaUjianView({ selectedChild }: { selectedChild: { id: stri
   }
 
   return (
-    <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+    <Card>
       <CardHeader className="p-6 pb-4">
         <CardTitle className="text-base font-bold text-slate-800">
           Hasil Ujian &amp; Evaluasi: {selectedChild.nama}

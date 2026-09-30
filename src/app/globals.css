@@ -1,4 +1,9 @@
 /* src/app/globals.css */
+/* ==========================================================================
+   DESIGN TOKEN — Anshorussunnah
+   Gold sebagai warna utama/aksen, Slate sebagai teks & netral, Putih surface.
+   Semua komponen wajib memakai token di sini; hindari hex hardcoded.
+   ========================================================================== */
 
 @tailwind base;
 @tailwind components;
@@ -6,60 +11,87 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 152 20% 10%;
-    --card: 0 0% 100%;
-    --card-foreground: 152 20% 10%;
+    /* Netral / surface */
+    --background: 210 40% 98%; /* #F8FAFC */
+    --foreground: 215 28% 17%; /* #1E293B */
+    --card: 0 0% 100%; /* #FFFFFF */
+    --card-foreground: 215 28% 17%;
     --popover: 0 0% 100%;
-    --popover-foreground: 152 20% 10%;
-    --primary: 48 96% 50%;
-    --primary-foreground: 20 85% 12%;
-    --secondary: 45 80% 96%;
-    --secondary-foreground: 20 40% 15%;
-    --muted: 48 20% 95%;
-    --muted-foreground: 20 10% 40%;
-    --accent: 45 85% 55%;
-    --accent-foreground: 152 40% 12%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 152 65% 32%;
+    --popover-foreground: 215 28% 17%;
+
+    /* Gold — warna primary & aksen utama (nilai HSL hasil konversi tepat dari hex) */
+    --primary: 45 93% 47%; /* #EAB308 */
+    --primary-dark: 42 96% 41%; /* #CA8A04 */
+    --primary-soft: 55 96% 88%; /* #FEF9C3 */
+    --primary-foreground: 215 28% 17%;
+    --gold: 45 93% 47%;
+    --gold-soft: 55 96% 88%;
+    --gold-foreground: 215 28% 17%;
+
+    /* Status */
+    --success: 142 76% 36%; /* #16A34A */
     --success-foreground: 0 0% 100%;
-    --warning: 45 90% 50%;
-    --warning-foreground: 152 40% 12%;
-    --gold: 45 85% 55%;
-    --gold-foreground: 152 40% 12%;
-    --border: 152 15% 90%;
-    --input: 152 15% 90%;
-    --ring: 48 96% 50%;
-    --radius: 0.5rem;
+    --warning: 32 95% 44%; /* #D97706 */
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 74% 51%; /* #DC2626 */
+    --destructive-foreground: 0 0% 100%;
+    --info: 221 83% 53%; /* #2563EB */
+    --info-foreground: 0 0% 100%;
+
+    /* Pendukung */
+    --secondary: 210 40% 96%; /* #F1F5F9 */
+    --secondary-foreground: 215 28% 17%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%; /* #64748B */
+    --accent: 55 96% 88%;
+    --accent-foreground: 215 28% 17%;
+
+    --border: 214 32% 91%; /* #E2E8F0 */
+    --input: 214 32% 91%;
+    --ring: 45 93% 47%;
+
+    --radius: 0.75rem;
+
+    /* Lebar sidebar desktop — ditulis ulang oleh dashboard-nav saat collapse,
+       dipakai layout untuk memberi padding kiri pada <main>. */
+    --sidebar-w: 16rem;
   }
 
   .dark {
-    --background: 152 25% 7%;
-    --foreground: 45 30% 95%;
-    --card: 152 25% 9%;
-    --card-foreground: 45 30% 95%;
-    --popover: 152 25% 9%;
-    --popover-foreground: 45 30% 95%;
-    --primary: 152 60% 40%;
-    --primary-foreground: 152 25% 7%;
-    --secondary: 152 20% 15%;
-    --secondary-foreground: 45 30% 95%;
-    --muted: 152 20% 15%;
-    --muted-foreground: 152 10% 60%;
-    --accent: 45 80% 55%;
-    --accent-foreground: 152 25% 7%;
-    --destructive: 0 62% 40%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 152 60% 45%;
-    --success-foreground: 152 25% 7%;
-    --warning: 45 90% 55%;
-    --warning-foreground: 152 25% 7%;
-    --gold: 45 85% 55%;
-    --gold-foreground: 152 25% 7%;
-    --border: 152 20% 18%;
-    --input: 152 20% 18%;
-    --ring: 152 60% 45%;
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+    --card: 222 40% 11%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 40% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 45 93% 58%;
+    --primary-dark: 45 93% 52%;
+    --primary-soft: 45 60% 18%;
+    --primary-foreground: 222 47% 8%;
+    --gold: 45 93% 58%;
+    --gold-soft: 45 60% 18%;
+    --gold-foreground: 222 47% 8%;
+
+    --success: 142 76% 45%;
+    --success-foreground: 222 47% 8%;
+    --warning: 32 95% 55%;
+    --warning-foreground: 222 47% 8%;
+    --destructive: 0 74% 60%;
+    --destructive-foreground: 222 47% 8%;
+    --info: 221 83% 62%;
+    --info-foreground: 222 47% 8%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 45 60% 18%;
+    --accent-foreground: 210 40% 98%;
+
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 45 93% 58%;
   }
 }
 
@@ -67,12 +99,103 @@
   * {
     @apply border-border;
   }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  /* Focus ring global — keyboard navigation selalu terlihat */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Angka finansial selalu rata & mudah dibandingkan */
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 }
 
 @layer components {
+  /* ---------------------------------------------------------------------
+     KERANGKA HALAMAN
+     --------------------------------------------------------------------- */
+  .page-shell {
+    @apply mx-auto w-full max-w-content px-4 sm:px-6 lg:px-8;
+  }
+
+  .page-section {
+    @apply space-y-4 sm:space-y-5;
+  }
+
+  /* Kartu premium: border tipis + shadow lembut */
+  .surface-card {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-card;
+  }
+
+  .surface-card-hover {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lifted;
+  }
+
+  /* Aksen gold tipis di sisi atas kartu (dipakai ringkasan/CTA) */
+  .surface-card-accent {
+    @apply relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card;
+  }
+  .surface-card-accent::before {
+    content: "";
+    @apply absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600;
+  }
+
+  /* Judul section dalam kartu */
+  .section-title {
+    @apply text-sm font-semibold uppercase tracking-wide text-slate-500;
+  }
+
+  /* Label kecil di atas angka ringkasan */
+  .stat-label {
+    @apply text-xs font-medium uppercase tracking-wide text-slate-500;
+  }
+
+  /* Chip/filter */
+  .chip {
+    @apply inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition-colors hover:border-yellow-300 hover:bg-yellow-50 hover:text-yellow-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+  .chip-active {
+    @apply border-yellow-400 bg-yellow-50 text-yellow-800 shadow-sm;
+  }
+
+  /* Link navigasi breadcrumb */
+  .breadcrumb-link {
+    @apply rounded-md px-1 py-0.5 font-medium text-slate-500 transition-colors hover:text-yellow-700 hover:underline;
+  }
+
+  /* Area data yang aman di layar kecil (scroll horizontal) */
+  .table-scroll {
+    @apply -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0;
+  }
+
+  /* Tabel data mentah yang masih memakai <table> langsung.
+     Memberi kepala tabel, garis, dan hover yang sama dengan komponen Table. */
+  .data-table {
+    @apply w-full min-w-[640px] border-collapse text-left text-sm;
+  }
+  .data-table thead th {
+    @apply sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50/95 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 backdrop-blur;
+  }
+  .data-table tbody td {
+    @apply border-b border-slate-100 px-4 py-3 align-middle text-slate-700;
+  }
+  .data-table tbody tr {
+    @apply transition-colors hover:bg-yellow-50/40;
+  }
+  .data-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
   .skeleton {
     @apply relative overflow-hidden rounded-lg bg-muted;
   }
@@ -81,7 +204,12 @@
     @apply absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer;
   }
   .dark .skeleton::after {
-    background: linear-gradient(to right, transparent, rgba(255,255,255,0.08), transparent);
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(255, 255, 255, 0.08),
+      transparent
+    );
   }
 
   /* ============================================
@@ -90,7 +218,7 @@
   /* Terang: untuk halaman form/publik berlatar putih — satu gambar penuh, tidak berulang */
   .batik-light {
     background-color: #f7f2e7;
-    background-image: url('/batik.webp');
+    background-image: url("/batik.webp");
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -101,7 +229,7 @@
     background-color: #241a12;
     background-image:
       linear-gradient(rgba(30, 21, 14, 0.68), rgba(30, 21, 14, 0.68)),
-      url('/batik.webp');
+      url("/batik.webp");
     background-size: cover, cover;
     background-position: center, center;
     background-repeat: no-repeat, no-repeat;
@@ -115,26 +243,41 @@
    ============================================ */
 @media (max-width: 640px) {
   /* backdrop-blur is GPU-expensive — replace with solid bg */
-  .backdrop-blur-md, .backdrop-blur-xl, .backdrop-blur-sm {
+  .backdrop-blur-md,
+  .backdrop-blur-xl,
+  .backdrop-blur-sm {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
-  .bg-white\/90, .bg-white\/95, .bg-slate-800\/95, .bg-slate-800\/90 {
+  .bg-white\/90,
+  .bg-white\/95,
+  .bg-white\/75 {
     background-color: rgba(255, 255, 255, 0.98) !important;
   }
-  .bg-slate-800\/95 {
+  .bg-slate-800\/95,
+  .bg-slate-800\/90 {
     background-color: rgba(30, 41, 59, 0.98) !important;
   }
-
-  /* Reduce transition durations on mobile */
-  * {
-    transition-duration: 0.15s !important;
-    animation-duration: 0.3s !important;
+  .bg-slate-900\/95,
+  .bg-slate-900 {
+    background-color: #0f172a !important;
   }
 
-  /* Disable expensive CSS animations */
-  .animate-pulse, .animate-spin {
-    animation-iteration-count: 1 !important;
+  /* Reduce motion, TAPI loading indicator tetap boleh berputar */
+  * {
+    transition-duration: 0.15s !important;
+  }
+  .animate-pulse,
+  .animate-pulse-soft {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
+  }
+  .animate-spin {
+    animation-duration: 0.9s !important;
+    animation-iteration-count: infinite !important;
+  }
+  .animate-shimmer {
+    animation-duration: 2s !important;
   }
 }
 
@@ -149,10 +292,13 @@
    REDUCED MOTION for accessibility
    ============================================ */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -160,7 +306,9 @@
    LOW-END PHONE: suppress backdrop-blur globally
    ============================================ */
 @supports not (backdrop-filter: blur(1px)) {
-  .backdrop-blur-md, .backdrop-blur-xl, .backdrop-blur-sm {
+  .backdrop-blur-md,
+  .backdrop-blur-xl,
+  .backdrop-blur-sm {
     background-color: rgba(255, 255, 255, 0.95);
   }
 }

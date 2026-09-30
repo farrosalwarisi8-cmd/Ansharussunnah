@@ -121,9 +121,9 @@ export type PendaftaranWithRelations = Prisma.PendaftaranGetPayload<{
     kelasTujuan: true;
     buktiTransfer: true;
     diverifikasiOleh: true;
-    // Jejak verifikasi email manual — perlu relasi User supaya panel bisa
-    // menampilkan nama admin, bukan cuma id-nya.
-    emailOrangTuaDiverifikasiManualOleh: true;
+    // Relasi User untuk jejak konfirmasi kontak wali — panel menampilkan
+    // nama admin yang mengonfirmasi, bukan cuma id-nya.
+    kontakWaliDikonfirmasiOleh: true;
   };
 }>;
 

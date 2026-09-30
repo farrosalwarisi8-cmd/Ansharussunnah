@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Clock, FileText, BarChart2, Calendar, Loader2, Pencil, Trash2 } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -141,10 +142,7 @@ export function GuruUjianView() {
 
   if (loadingKelas) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-3 text-sm text-slate-500">Memuat daftar kelas...</span>
-      </div>
+<PageSkeleton label="Memuat daftar kelas..." />
     )
   }
 
@@ -159,7 +157,7 @@ export function GuruUjianView() {
 
   return (
     <div className="space-y-6">
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+      <Card>
         <CardContent className="p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
@@ -208,7 +206,7 @@ export function GuruUjianView() {
       {!error && !loading && ujianList.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {ujianList.map((item) => (
-          <Card key={item.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
+          <Card key={item.id} className="hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
             <CardHeader className="p-5 pb-3">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-1.5">

@@ -12,24 +12,9 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const {
-  mockPendaftaranFindUnique,
-  mockPendaftaranUpdate,
-  mockOtpFindFirst,
-  mockOtpCreate,
-  mockOtpUpdateMany,
-  mockOtpUpdate,
-  mockBuktiCreate,
-  mockTransaction,
-} = vi.hoisted(() => ({
+const { mockPendaftaranFindUnique, mockPendaftaranUpdate } = vi.hoisted(() => ({
   mockPendaftaranFindUnique: vi.fn(),
   mockPendaftaranUpdate: vi.fn(),
-  mockOtpFindFirst: vi.fn(),
-  mockOtpCreate: vi.fn(),
-  mockOtpUpdateMany: vi.fn(),
-  mockOtpUpdate: vi.fn(),
-  mockBuktiCreate: vi.fn(),
-  mockTransaction: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -38,14 +23,6 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mockPendaftaranFindUnique,
       update: mockPendaftaranUpdate,
     },
-    otpVerifikasiEmail: {
-      findFirst: mockOtpFindFirst,
-      create: mockOtpCreate,
-      updateMany: mockOtpUpdateMany,
-      update: mockOtpUpdate,
-    },
-    buktiTransferPendaftaran: { create: mockBuktiCreate },
-    $transaction: mockTransaction,
   },
 }));
 
@@ -56,26 +33,11 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/email", () => ({
-  sendEmailOtpVerifikasi: vi.fn().mockResolvedValue({ success: true }),
   sendEmail: vi.fn().mockResolvedValue({ success: true }),
   buildKredensialEmail: vi.fn().mockReturnValue("<html/>"),
   buildKredensialEmailAnakKedua: vi.fn().mockReturnValue("<html/>"),
   buildPemberitahuanRoleBaruEmail: vi.fn().mockReturnValue("<html/>"),
   sendPendaftaranDitolakEmail: vi.fn().mockResolvedValue({ success: true }),
-}));
-
-vi.mock("@/lib/rate-limit", () => ({
-  checkRateLimit: vi.fn().mockResolvedValue({ success: true }),
-  consumeOTP: vi.fn().mockResolvedValue(true),
-  releaseOTP: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock("@/lib/otp", () => ({
-  generateOTP: vi.fn().mockReturnValue("123456"),
-  hashOTP: vi.fn().mockReturnValue("hashed"),
-  verifyOTP: vi.fn().mockReturnValue(true),
-  isOTPExpired: vi.fn().mockReturnValue(false),
-  OTP_EXPIRY_MINUTES: 10,
 }));
 
 vi.mock("@/lib/salin-dokumen-pendaftaran", () => ({
@@ -84,7 +46,10 @@ vi.mock("@/lib/salin-dokumen-pendaftaran", () => ({
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { tandaiEmailPendaftaranTerverifikasi } from "@/actions/verifikasi-email-manual";
+import {
+  konfirmasiKontakWali,
+  batalkanKonfirmasiKontakWali,
+} from "@/actions/konfirmasi-kontak-wali";
 import { KEMAMPUAN_BY_STATUS } from "@/app/cek-pendaftaran/kemampuan-status";
 
 /**
@@ -112,8 +77,6 @@ const STATE_MACHINE = {
 describe("alur pendaftaran end-to-end — invarian gerbang", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockOtpFindFirst.mockResolvedValue(null);
-    mockOtpUpdateMany.mockResolvedValue({ count: 0 });
   });
 
   it("hanya MENUNGGU_PEMBAYARAN yang bisa punya gerbang email tertutup", () => {
@@ -147,7 +110,7 @@ describe("alur pendaftaran end-to-end — invarian gerbang", () => {
   });
 });
 
-describe("alur pendaftaran — verifikasi manual dibutuhkan justru di MENUNGGU_PEMBAYARAN", () => {
+describe("alur pendaftaran — konfirmasi kontak wali menggantikan verifikasi manual email", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPendaftaranUpdate.mockResolvedValue({});
@@ -156,130 +119,99 @@ describe("alur pendaftaran — verifikasi manual dibutuhkan justru di MENUNGGU_P
   const dasar = {
     id: "pend-1",
     nomorPendaftaran: "REG-2026-00001-AAAA",
-    status: "MENUNGGU_PEMBAYARAN",
+    status: "MENUNGGU_VERIFIKASI",
     deleted_at: null,
-    emailOrangTuaTerverifikasiAt: null,
+    kontakWaliDikonfirmasiAt: null,
     catatanAdmin: null,
   };
 
-  it("berhasil membuka gerbang untuk pendaftaran yang tersangkut di MENUNGGU_PEMBAYARAN", async () => {
+  it("mencatat kapan, siapa, lewat apa, dan konteksnya", async () => {
     mockPendaftaranFindUnique.mockResolvedValue(dasar);
 
-    const res = await tandaiEmailPendaftaranTerverifikasi(
+    const res = await konfirmasiKontakWali(
       dasar.id,
-      "Konfirmasi telepon ke 081234567890",
+      "TELEPON",
+      "Dihubungi 081234567890, cocok dengan data formulir",
     );
 
-    expect(res.success).toBe(true);
-    // emailOrangTuaDiverifikasiOtpAt TIDAK ikut terisi.
-    const arg = mockPendaftaranUpdate.mock.calls[0][0].data;
-    expect(arg.emailOrangTuaTerverifikasiAt).toBeInstanceOf(Date);
-    expect(arg.emailOrangTuaDiverifikasiOtpAt).toBeUndefined();
-    expect(arg.catatanAdmin).toContain("Konfirmasi telepon");
+    expect(res.success, res.message).toBe(true);
+    const data = mockPendaftaranUpdate.mock.calls[0][0].data;
+    expect(data.kontakWaliDikonfirmasiAt).toBeInstanceOf(Date);
+    expect(data.kontakWaliDikonfirmasiOlehId).toBe("guru-1");
+    expect(data.metodeKonfirmasiKontak).toBe("TELEPON");
+    expect(data.catatanKonfirmasiKontak).toBe(
+      "Dihubungi 081234567890, cocok dengan data formulir",
+    );
   });
 
-  it("menolak alasan terlalu pendek", async () => {
+  it("menolak catatan yang melebihi batas panjang", async () => {
     mockPendaftaranFindUnique.mockResolvedValue(dasar);
-    const res = await tandaiEmailPendaftaranTerverifikasi(dasar.id, "oke");
+
+    const res = await konfirmasiKontakWali(
+      dasar.id,
+      "WHATSAPP",
+      "x".repeat(501),
+    );
+
     expect(res.success).toBe(false);
-    expect(res.message).toContain("10 karakter");
+    expect(res.message).toContain("tidak valid");
     expect(mockPendaftaranUpdate).not.toHaveBeenCalled();
   });
 
-  it("menolak kalau emailnya sudah terverifikasi", async () => {
+  it("menolak pendaftaran yang kontak walinya sudah dikonfirmasi", async () => {
     mockPendaftaranFindUnique.mockResolvedValue({
       ...dasar,
-      emailOrangTuaTerverifikasiAt: new Date(),
+      kontakWaliDikonfirmasiAt: new Date(),
     });
-    const res = await tandaiEmailPendaftaranTerverifikasi(
-      dasar.id,
-      "Konfirmasi telepon ke 081234567890",
-    );
+
+    const res = await konfirmasiKontakWali(dasar.id, "WHATSAPP", "sudah");
+
     expect(res.success).toBe(false);
+    expect(res.message).toContain("sudah dikonfirmasi");
     expect(mockPendaftaranUpdate).not.toHaveBeenCalled();
   });
 
-  it("tidak menimpa catatan admin yang sudah ada", async () => {
-    mockPendaftaranFindUnique.mockResolvedValue({
-      ...dasar,
-      catatanAdmin: "Catatan lama dari penolakan sebelumnya",
-    });
-
-    await tandaiEmailPendaftaranTerverifikasi(
-      dasar.id,
-      "Konfirmasi telepon ke 081234567890",
-    );
-
-    const catatan = mockPendaftaranUpdate.mock.calls[0][0].data.catatanAdmin;
-    expect(catatan).toContain("Catatan lama");
-    expect(catatan).toContain("Konfirmasi telepon");
-  });
-
-  // ======================================================
-  // Jejak manual harus KEKAL, bukan ikut tenggelam bersama
-  // `catatanAdmin` yang ditimpa setiap approval.
-  // ======================================================
-
-  it("menulis jejak manual ke kolom sendiri: kapan, siapa, dan alasan", async () => {
+  it("TIDAK menulis ke kolom OTP legacy saat konfirmasi kontak", async () => {
     mockPendaftaranFindUnique.mockResolvedValue(dasar);
 
-    await tandaiEmailPendaftaranTerverifikasi(
-      dasar.id,
-      "Konfirmasi telepon ke 081234567890",
-    );
+    await konfirmasiKontakWali(dasar.id, "WHATSAPP", "pesan di balasannya cocok");
 
     const data = mockPendaftaranUpdate.mock.calls[0][0].data;
-    expect(data.emailOrangTuaDiverifikasiManualAt).toBeInstanceOf(Date);
-    expect(data.emailOrangTuaDiverifikasiManualOlehId).toBeTruthy();
-    expect(data.alasanVerifikasiEmailManual).toBe(
-      "Konfirmasi telepon ke 081234567890",
-    );
-  });
-
-  it("waktu gerbang dan waktu jejak manual memakai stempel yang sama", async () => {
-    mockPendaftaranFindUnique.mockResolvedValue(dasar);
-    await tandaiEmailPendaftaranTerverifikasi(
-      dasar.id,
-      "Konfirmasi telepon ke 081234567890",
-    );
-
-    const data = mockPendaftaranUpdate.mock.calls[0][0].data;
-    // Kalau berbeda, panel akan terlihat "diverifikasi manual" padahal
-    // gerbang dibuka beberapa detik sebelum atau sesudahnya.
-    expect(data.emailOrangTuaDiverifikasiManualAt).toEqual(
-      data.emailOrangTuaTerverifikasiAt,
-    );
-  });
-
-  it("alasan manual TIDAK pernah ditulis ke kolom bukti OTP", async () => {
-    mockPendaftaranFindUnique.mockResolvedValue(dasar);
-    await tandaiEmailPendaftaranTerverifikasi(
-      dasar.id,
-      "Konfirmasi telepon ke 081234567890",
-    );
-
-    const data = mockPendaftaranUpdate.mock.calls[0][0].data;
-    // Kalau kolom ini ikut terisi, baris akan terlihat punya bukti OTP dan
-    // committee tidak bisa membedakan manual dari asli.
+    // Kalau kolom legacy ikut terisi, baris akan terlihat punya bukti OTP dan
+    // panitia tidak bisa membedakan konfirmasi kontak dari verifikasi email.
+    expect(data.emailOrangTuaTerverifikasiAt).toBeUndefined();
     expect(data.emailOrangTuaDiverifikasiOtpAt).toBeUndefined();
+    expect(data.alasanVerifikasiEmailManual).toBeUndefined();
+    expect(data.emailOrangTuaDiverifikasiManualAt).toBeUndefined();
   });
 
-  it("menolak manual pada pendaftaran yang sudah punya bukti OTP", async () => {
-    // Gerbang terbuka karena OTP, bukan karena manual. Kalau boleh di-manual
-    // ulang, jejaknya menyatakan "manual" padahal sebenarnya ada bukti kode.
+  it("pembatalan mengosongkan jejak konfirmasi agar bisa diulang", async () => {
     mockPendaftaranFindUnique.mockResolvedValue({
       ...dasar,
-      emailOrangTuaTerverifikasiAt: new Date(),
-      emailOrangTuaDiverifikasiOtpAt: new Date(),
+      kontakWaliDikonfirmasiAt: new Date(),
     });
 
-    const res = await tandaiEmailPendaftaranTerverifikasi(
-      dasar.id,
-      "Konfirmasi telepon ke 081234567890",
-    );
+    const res = await batalkanKonfirmasiKontakWali(dasar.id);
+
+    expect(res.success, res.message).toBe(true);
+    const data = mockPendaftaranUpdate.mock.calls[0][0].data;
+    expect(data.kontakWaliDikonfirmasiAt).toBeNull();
+    expect(data.kontakWaliDikonfirmasiOlehId).toBeNull();
+    expect(data.metodeKonfirmasiKontak).toBeNull();
+    expect(data.catatanKonfirmasiKontak).toBeNull();
+  });
+
+  it("pembatalan ditolak setelah status final", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue({
+      ...dasar,
+      status: "DITERIMA",
+      kontakWaliDikonfirmasiAt: new Date(),
+    });
+
+    const res = await batalkanKonfirmasiKontakWali(dasar.id);
 
     expect(res.success).toBe(false);
-    expect(res.message).toContain("lewat OTP");
+    expect(res.message).toContain("sudah berstatus final");
     expect(mockPendaftaranUpdate).not.toHaveBeenCalled();
   });
 });

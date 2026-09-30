@@ -9,6 +9,7 @@ import { changePassword } from "@/actions/change-password"
 import { getAkunProfil, updateAkunProfil } from "@/actions/profil"
 import { logout } from "@/actions/auth"
 import { useToast } from "@/hooks/use-toast"
+import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -23,6 +24,11 @@ export default function ProfilPage() {
   const [username, setUsername] = React.useState(user.username || "")
   const [email, setEmail] = React.useState(user.email || "")
   const [savingAkun, setSavingAkun] = React.useState(false)
+  // Baseline terakhir yang tersimpan — dipakai mendeteksi perubahan belum disimpan.
+  const [baseline, setBaseline] = React.useState({
+    username: user.username || "",
+    email: user.email || "",
+  })
 
   // Change Password Form State
   const [oldPassword, setOldPassword] = React.useState("")
@@ -36,9 +42,25 @@ export default function ProfilPage() {
       if (result.success && result.data) {
         setUsername(result.data.username || "")
         setEmail(result.data.email || "")
+        setBaseline({
+          username: result.data.username || "",
+          email: result.data.email || "",
+        })
       }
     })
   }, [])
+
+  // Peringatan sebelum meninggalkan halaman bila ada perubahan yang belum disimpan.
+  const adaPerubahanBelumDisimpan =
+    username.trim() !== baseline.username.trim() ||
+    email.trim() !== baseline.email.trim() ||
+    oldPassword.length > 0 ||
+    newPassword.length > 0 ||
+    confirmPassword.length > 0
+  useUnsavedChangesWarning(
+    adaPerubahanBelumDisimpan,
+    "Ada perubahan profil yang belum disimpan. Tinggalkan halaman ini?"
+  )
 
   const handleUpdateAkun = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -50,6 +72,10 @@ export default function ProfilPage() {
       })
 
       if (result.success) {
+        setBaseline({
+          username: username.trim() || "",
+          email: email.trim() || "",
+        })
         toast({
           title: "Akun Berhasil Diperbarui! ✅",
           description: "Username dan email Anda telah tersimpan di database.",
@@ -127,7 +153,7 @@ export default function ProfilPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* User Identity Card */}
-        <Card className="md:col-span-1 rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 text-center space-y-4">
+        <Card className="md:col-span-1 p-6 text-center space-y-4">
           <Avatar className="h-24 w-24 mx-auto border-4 border-yellow-100 shadow-md">
             <AvatarImage src={user.avatar || ""} />
             <AvatarFallback className="bg-yellow-700 text-white font-extrabold text-2xl">
@@ -164,7 +190,7 @@ export default function ProfilPage() {
         {/* Biodata Akun + Change Password */}
         <div className="md:col-span-2 space-y-6">
           {/* Biodata Akun Form Card */}
-          <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 sm:p-8 space-y-6">
+          <Card className="p-6 sm:p-8 space-y-6">
             <div>
               <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
                 <UserRound className="h-4 w-4 text-yellow-500" />
@@ -227,7 +253,7 @@ export default function ProfilPage() {
           </Card>
 
           {/* Change Password Form Card */}
-          <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 sm:p-8 space-y-6">
+          <Card className="p-6 sm:p-8 space-y-6">
           <div>
             <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
               <Lock className="h-4 w-4 text-yellow-500" />

@@ -5,7 +5,7 @@ import { getRiwayatKehadiranAnak } from "@/actions/absensi"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Loader2 } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 
 type RiwayatItem = {
   id: string
@@ -52,10 +52,7 @@ export function OrangTuaAbsensiView({ selectedChild }: { selectedChild: { id: st
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-3 text-sm text-slate-500">Memuat riwayat kehadiran...</span>
-      </div>
+<PageSkeleton label="Memuat riwayat kehadiran..." />
     )
   }
 
@@ -133,7 +130,7 @@ export function OrangTuaAbsensiView({ selectedChild }: { selectedChild: { id: st
       </div>
 
       {/* Riwayat Absensi Table */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+      <Card className="overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100">
           <CardTitle className="text-base font-bold text-slate-800">
             Log Riwayat Kehadiran: {selectedChild.nama}

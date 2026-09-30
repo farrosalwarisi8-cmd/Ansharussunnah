@@ -17,6 +17,10 @@ const {
   mockGetClientIp,
   mockJenjangFindMany,
   mockPengaturanFindUnique,
+  mockDraftFindUnique,
+  mockDraftUpdateMany,
+  mockTransaction,
+  mockTxState,
 } = vi.hoisted(() => ({
   mockPendaftaranCreate: vi.fn(),
   mockPendaftaranFindFirst: vi.fn(),
@@ -28,6 +32,13 @@ const {
   mockGetClientIp: vi.fn(),
   mockJenjangFindMany: vi.fn(),
   mockPengaturanFindUnique: vi.fn(),
+  mockDraftFindUnique: vi.fn(),
+  mockDraftUpdateMany: vi.fn(),
+  mockTransaction: vi.fn(),
+  // Row yang benar-benar tercipta saat transaksi callback. dipakai untuk
+  // membuktikan ROLLBACK: kalau create lalu finalize draft gagal, row create
+  // ikut hilang (tidak boleh ada pendaftaran yatim).
+  mockTxState: { pendaftaranRows: [] as unknown[] },
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -35,6 +46,10 @@ vi.mock("@/lib/prisma", () => ({
     pendaftaran: {
       create: mockPendaftaranCreate,
       findFirst: mockPendaftaranFindFirst,
+    },
+    pendaftaranDraft: {
+      findUnique: mockDraftFindUnique,
+      updateMany: mockDraftUpdateMany,
     },
     jenjang: {
       findUnique: mockJenjangFindUnique,
@@ -49,6 +64,9 @@ vi.mock("@/lib/prisma", () => ({
     pengaturanPPDB: {
       findUnique: mockPengaturanFindUnique,
     },
+    // Bentuk callback: jalan sinkron lalu commit. Kalau callback melempar,
+    // baris yang sempat dibuat dibuang (meniru rollback Prisma).
+    $transaction: (...args: unknown[]) => mockTransaction(...args),
   },
 }))
 
@@ -200,6 +218,45 @@ beforeEach(() => {
 
   // Default: create berhasil
   mockPendaftaranCreate.mockResolvedValue(mockPendaftaranCreated)
+
+  // Default: tidak ada draft sama sekali (submit tanpa draftToken).
+  mockDraftFindUnique.mockResolvedValue(null)
+  mockDraftUpdateMany.mockResolvedValue({ count: 1 })
+  mockTxState.pendaftaranRows = []
+
+  // Bentuk callback: instantiate tx, jalankan callback, lalu commit. Kalau
+  // callback melempar, baris yang dibuat transaksi itu dibuang — meniru
+  // ROLLBACK Prisma (bukan sekadar "tidak jadi").
+  //
+  // Each transaksi punya buffer sendiri supaya dua request paralel tidak saling
+  // menghapus row: di database, request kedua memang tidak pernah melihat
+  // row yang belum di-commit request pertama.
+  mockTransaction.mockImplementation(async (arg: unknown) => {
+    if (Array.isArray(arg)) {
+      await Promise.all(arg)
+      return undefined
+    }
+    if (typeof arg !== "function") return undefined
+
+    const buffer: unknown[] = []
+    const txCreate = (args: unknown) => {
+      const row = mockPendaftaranCreate(args) as Promise<unknown>
+      row.then((created) => buffer.push(created)).catch(() => {})
+      return row
+    }
+
+    const out = await (arg as (tx: unknown) => Promise<unknown>)({
+      pendaftaran: { create: txCreate },
+      pendaftaranDraft: {
+        findUnique: mockDraftFindUnique,
+        updateMany: mockDraftUpdateMany,
+      },
+    })
+
+    // COMMIT: baris hasil create transaksi ini baru ikut "tersimpan" sekarang.
+    mockTxState.pendaftaranRows.push(...buffer)
+    return out
+  })
 })
 
 // ========================================================
@@ -938,5 +995,158 @@ describe("createPendaftaran — Retry Logic", () => {
     expect(result.data?.nomorPendaftaran).toBe("REG-2026-00002")
     expect(mockPendaftaranCreate).toHaveBeenCalledTimes(2)
     expect(mockGenerateNomorPendaftaran).toHaveBeenCalledTimes(2)
+  })
+})
+
+// ========================================================
+// 6. Atomisitas & idempotensi submit (registrasi + finalisasi draft)
+// ========================================================
+
+describe("createPendaftaran — draft & transaksi atomik", () => {
+  const DRAFT_TOKEN = "draft-token-panjang-sekali-1234567890"
+
+  it("membaca dan memfinalisasi draft lewat klien transaksi yang sama", async () => {
+    mockDraftFindUnique.mockResolvedValue({
+      finalizedAt: null,
+      nomorPendaftaran: null,
+    })
+    mockDraftUpdateMany.mockResolvedValue({ count: 1 })
+
+    const formData = makeFormData({ ...baseData, draftToken: DRAFT_TOKEN })
+    const result = await createPendaftaran(formData)
+
+    expect(result.success, result.message).toBe(true)
+
+    // Pembacaan draft HARUS lewat tx: kalau lewat prisma di luar transaksi,
+    // dua request paralel bisa sama-sama melihat "belum final".
+    expect(mockDraftFindUnique).toHaveBeenCalledTimes(1)
+    const whereHash = mockDraftFindUnique.mock.calls[0][0].where.resumeTokenHash
+    expect(whereHash).toBe(hashTokenAkses(DRAFT_TOKEN))
+
+    // Finalisasi bersyarat: hanya draft yang belum finalized.
+    expect(mockDraftUpdateMany).toHaveBeenCalledTimes(1)
+    expect(mockDraftUpdateMany.mock.calls[0][0].where).toEqual({
+      resumeTokenHash: whereHash,
+      finalizedAt: null,
+    })
+    expect(mockDraftUpdateMany.mock.calls[0][0].data.nomorPendaftaran).toBe(
+      "REG-2026-00001"
+    )
+  })
+
+  it("submit ulang setelah draft ter-finalisasi mengembalikan nomor lama tanpa token baru", async () => {
+    mockDraftFindUnique.mockResolvedValue({
+      finalizedAt: new Date(),
+      nomorPendaftaran: "REG-2026-00001",
+    })
+
+    const formData = makeFormData({ ...baseData, draftToken: DRAFT_TOKEN })
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(true)
+    expect(result.message).toContain("sudah dibuat sebelumnya")
+    expect(result.data?.nomorPendaftaran).toBe("REG-2026-00001")
+    // Token hanya ada di percobaan pertama; retry tidak boleh memunculkan
+    // token baru (yang berarti akses pemilik lama tidak akan pernah cocok).
+    expect(result.data?.tokenAkses).toBe("")
+    expect(mockPendaftaranCreate).not.toHaveBeenCalled()
+    expect(mockDraftUpdateMany).not.toHaveBeenCalled()
+  })
+
+  it("ROLLBACK: draft yang sudah difinalisasi request lain membatalkan pembuatan pendaftaran", async () => {
+    // drafts.findUnique (di dalam transaksi) belum final...
+    mockDraftFindUnique.mockResolvedValueOnce({
+      finalizedAt: null,
+      nomorPendaftaran: null,
+    })
+    // ...tapi updateMany dapat 0 row karena request paralel finalize duluan.
+    mockDraftUpdateMany.mockResolvedValue({ count: 0 })
+
+    // Pembacaan di luar transaksi (untukDx-after-rollback) sekarang sudah
+    // melihat hasil finalisasi request lain.
+    mockDraftFindUnique.mockResolvedValue({
+      finalizedAt: new Date(),
+      nomorPendaftaran: "REG-2026-00001",
+    })
+
+    const formData = makeFormData({ ...baseData, draftToken: DRAFT_TOKEN })
+    const result = await createPendaftaran(formData)
+
+    // Hasilnya: nomor yang sama, bukan nomor baru.
+    expect(result.success).toBe(true)
+    expect(result.data?.nomorPendaftaran).toBe("REG-2026-00001")
+    expect(result.data?.tokenAkses).toBe("")
+
+    // Yang penting: tidak ada pendaftaran kedua yang tersisa di database.
+    expect(mockTxState.pendaftaranRows).toHaveLength(0)
+  })
+
+  it("submit paralel dengan draftToken sama menghasilkan satu nomor dan satu pendaftaran", async () => {
+    // Simulasikan dua request yang saling berebut finalisasi draft. Yang
+    // pertama finalize (count=1), yang kedua kena 0 row.
+    // Dua request sama-sama membaca draft sebelum ada yang finalize: itu
+    // race yang harus tertangani di dalam transaksi.
+    mockDraftFindUnique
+      .mockResolvedValueOnce({ finalizedAt: null, nomorPendaftaran: null })
+      .mockResolvedValueOnce({ finalizedAt: null, nomorPendaftaran: null })
+    // Setelah request pertama commit, pembacaan di luar transaksi (untuk
+    // mencari nomor hasil finalisasi) sudah melihat draft final.
+    mockDraftFindUnique.mockResolvedValue({
+      finalizedAt: new Date(),
+      nomorPendaftaran: "REG-2026-00001",
+    })
+    mockDraftUpdateMany.mockImplementation(async () => {
+      if (mockDraftUpdateMany.mock.calls.length === 1) {
+        return { count: 1 }
+      }
+      return { count: 0 }
+    })
+
+    const formData1 = makeFormData({ ...baseData, draftToken: DRAFT_TOKEN })
+    const formData2 = makeFormData({ ...baseData, draftToken: DRAFT_TOKEN })
+    const [a, b] = await Promise.all([
+      createPendaftaran(formData1),
+      createPendaftaran(formData2),
+    ])
+
+    expect(a.success, a.message).toBe(true)
+    expect(b.success, b.message).toBe(true)
+    expect(a.data?.nomorPendaftaran).toBe("REG-2026-00001")
+    expect(b.data?.nomorPendaftaran).toBe("REG-2026-00001")
+    // Tepat satu response yang membawa token akses: hanya request yang
+    // benar-benar membuat record. Kalau keduanya membawa token, salah satu
+    // token jadi tidak pernah berlaku.
+    const tokenTerkirim = [a.data?.tokenAkses, b.data?.tokenAkses].filter(
+      (t) => typeof t === "string" && t.length > 0
+    )
+    expect(tokenTerkirim).toHaveLength(1)
+    expect(mockTxState.pendaftaranRows).toHaveLength(1)
+  })
+
+  it("gagal memfinalisasi draft TIDAK menyisakan pendaftaran tanpa draft", async () => {
+    mockDraftFindUnique.mockResolvedValue({
+      finalizedAt: null,
+      nomorPendaftaran: null,
+    })
+    mockDraftUpdateMany.mockRejectedValue(new Error("koneksi putus di tengah"))
+
+    const formData = makeFormData({ ...baseData, draftToken: DRAFT_TOKEN })
+    const result = await createPendaftaran(formData)
+
+    expect(result.success).toBe(false)
+    // Tidak boleh ada pendaftaran yatim: user bisa submit ulang dengan draft
+    // yang sama tanpa fearing-& creating nomor ganda.
+    expect(mockTxState.pendaftaranRows).toHaveLength(0)
+  })
+
+  it("tanpa draftToken tetap boleh submit dan tidak menyentuh draft sama sekali", async () => {
+    const formData = makeFormData(baseData)
+    const result = await createPendaftaran(formData)
+
+    expect(result.success, result.message).toBe(true)
+    expect(result.data?.tokenAkses).toMatch(/^[A-Za-z0-9_-]{32}$/)
+    expect(mockDraftFindUnique).not.toHaveBeenCalled()
+    expect(mockDraftUpdateMany).not.toHaveBeenCalled()
+    expect(mockTxState.pendaftaranRows).toHaveLength(1)
   })
 })

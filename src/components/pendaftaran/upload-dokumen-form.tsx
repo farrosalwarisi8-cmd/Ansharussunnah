@@ -130,10 +130,10 @@ export function UploadDokumenForm({
           <div className="inline-flex items-center justify-center w-16 h-16 bg-success/10 rounded-full mx-auto">
             <BadgeCheck className="h-8 w-8 text-success" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900">
+          <h2 className="text-xl font-bold text-slate-900">
             Dokumen Berhasil Diupload!
           </h2>
-          <p className="text-gray-500 text-sm">
+          <p className="text-sm leading-relaxed text-slate-500">
             Berkas pendaftaran Anda telah diperbarui dan siap diverifikasi
             panitia. Status terbaru dapat dilihat di halaman cek status.
           </p>
@@ -162,12 +162,15 @@ export function UploadDokumenForm({
       </CardHeader>
       <CardContent className="space-y-6">
         {error && (
-          <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-sm">
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-medium text-rose-700"
+          >
             {error}
           </div>
         )}
 
-        <p className="text-sm text-gray-500">
+        <p className="text-sm leading-relaxed text-slate-600">
           Unggah berkas pendukung yang dibutuhkan untuk melengkapi pendaftaran.
           Berkas yang sudah ada dapat diganti dengan mengunggah yang baru.
         </p>
@@ -182,7 +185,7 @@ export function UploadDokumenForm({
             placeholder="Salin token akses dari halaman 'Pendaftaran Berhasil'"
             className="font-mono"
           />
-          <p className="text-xs text-gray-400">
+          <p className="text-xs leading-relaxed text-slate-500">
             Token otomatis terisi jika Anda mengakses halaman ini langsung dari
             hasil pendaftaran. Diperlukan untuk memastikan berkas hanya bisa
             diunggah pemilik pendaftaran.
@@ -191,30 +194,33 @@ export function UploadDokumenForm({
 
         <FileUpload
           label="Kartu Keluarga (KK)"
-          description={
-            sudahAda.kartuKeluarga ? "sudah diupload" : "opsional, bisa diupload nanti"
-          }
+          description="opsional, bisa diupload nanti"
+          uploaded={sudahAda.kartuKeluarga}
           files={filesKK}
           onFilesChange={setFilesKK}
           accept="image/*,.pdf"
+          status={isUploading ? "uploading" : "idle"}
+          disabled={isUploading}
         />
         <FileUpload
           label="Akta Kelahiran"
-          description={
-            sudahAda.akteLahir ? "sudah diupload" : "opsional, bisa diupload nanti"
-          }
+          description="opsional, bisa diupload nanti"
+          uploaded={sudahAda.akteLahir}
           files={filesAkte}
           onFilesChange={setFilesAkte}
           accept="image/*,.pdf"
+          status={isUploading ? "uploading" : "idle"}
+          disabled={isUploading}
         />
         <FileUpload
           label="Pas Foto 3x4"
-          description={
-            sudahAda.foto ? "sudah diupload" : "opsional, bisa diupload nanti"
-          }
+          description="opsional, bisa diupload nanti"
+          uploaded={sudahAda.foto}
           files={filesFoto}
           onFilesChange={setFilesFoto}
           accept="image/*"
+          status={isUploading ? "uploading" : "idle"}
+          disabled={isUploading}
         />
 
         <Button

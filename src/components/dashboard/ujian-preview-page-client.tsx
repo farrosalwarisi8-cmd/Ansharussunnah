@@ -4,7 +4,8 @@ import * as React from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { getUjianDetail } from "@/actions/ujian"
-import { ArrowLeft, Loader2, AlertCircle, CheckCircle2, FileText } from "lucide-react"
+import { ArrowLeft, AlertCircle, CheckCircle2, FileText } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -61,10 +62,7 @@ export default function UjianPreviewPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-3 text-sm text-slate-500">Memuat pratinjau ujian...</span>
-      </div>
+<PageSkeleton label="Memuat pratinjau ujian..." />
     )
   }
 
@@ -104,7 +102,7 @@ export default function UjianPreviewPage() {
         <StatusBadge status={detail.status as "DRAFT" | "AKTIF" | "SELESAI" | "PUBLISHED"} />
       </div>
 
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6">
+      <Card className="p-6">
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-1">
             <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2.5 py-1 rounded-lg border border-yellow-100">
@@ -124,7 +122,7 @@ export default function UjianPreviewPage() {
       {detail.soal.length > 0 ? (
         <div className="space-y-4">
           {detail.soal.map((soal, idx) => (
-            <Card key={soal.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 space-y-3">
+            <Card key={soal.id} className="p-5 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2 text-xs font-bold">
                   <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">Soal {idx + 1}</span>

@@ -24,6 +24,7 @@ const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.D
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
 import { Plus, ExternalLink, Loader2, Pencil, Trash2, UserCheck } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { getDaftarKelasYangDiajarGuru } from "@/actions/guru-kelas"
 import { peranOptionSuffix, type PeranKelas } from "@/lib/kelas-peran"
 import { PeranKelasBadge, PeranKelasLegend } from "@/components/ui/peran-kelas-badge"
@@ -304,7 +305,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
 
       {/* Class Selector for Guru */}
       {isTeacher && kelasList.length > 1 && (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+        <Card>
           <CardContent className="p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
@@ -334,10 +335,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
 
       {/* Loading State */}
       {fetchingMateri && (
-        <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-          <span className="ml-3 text-sm text-slate-500">Memuat materi pembelajaran...</span>
-        </div>
+<PageSkeleton label="Memuat materi pembelajaran..." />
       )}
 
       {/* Error State */}
@@ -375,7 +373,7 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {filteredMateri.map((mat) => (
-                <Card key={mat.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
+                <Card key={mat.id} className="hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
                   <CardHeader className="p-5 pb-3">
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2.5 py-1 rounded-lg border border-yellow-100">

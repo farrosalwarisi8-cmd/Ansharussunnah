@@ -2,11 +2,14 @@
 "use client"
 
 import * as React from "react"
+import { Alert } from "@/components/ui/alert"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Role } from "@/lib/roles"
 import {
+  ArrowRight,
   GraduationCap,
   Users2,
   Shield,
@@ -24,42 +27,45 @@ interface UserRole {
   isAdmin: boolean
 }
 
-const ROLE_META: Record<Role, { label: string; description: string; icon: React.ElementType; color: string }> = {
+const ROLE_META: Record<
+  Role,
+  { label: string; description: string; icon: React.ElementType; tone: string }
+> = {
   [Role.SUPER_ADMIN]: {
     label: "Super Admin",
     description: "Akses penuh ke seluruh sistem",
     icon: Shield,
-    color: "bg-purple-600",
+    tone: "border-violet-200 bg-violet-50 text-violet-700",
   },
   [Role.ADMIN_AKADEMIK]: {
     label: "Admin Akademik",
     description: "Tata Usaha, Pendaftaran, Jadwal",
     icon: Shield,
-    color: "bg-blue-600",
+    tone: "border-blue-200 bg-blue-50 text-blue-700",
   },
   [Role.ADMIN_KEUANGAN]: {
     label: "Admin Keuangan",
     description: "Kasir, SPP, Akuntansi",
     icon: Wallet,
-    color: "bg-emerald-600",
+    tone: "border-emerald-200 bg-emerald-50 text-emerald-700",
   },
   [Role.GURU]: {
     label: "Guru",
     description: "Pengajar & Manajemen Kelas",
     icon: GraduationCap,
-    color: "bg-yellow-600",
+    tone: "border-yellow-200 bg-yellow-50 text-yellow-700",
   },
   [Role.SISWA]: {
     label: "Santri",
     description: "Portal Pembelajaran Santri",
     icon: Users2,
-    color: "bg-cyan-600",
+    tone: "border-sky-200 bg-sky-50 text-sky-700",
   },
   [Role.ORANG_TUA]: {
     label: "Wali Santri",
     description: "Monitoring Anak & Pembayaran",
     icon: Users2,
-    color: "bg-rose-600",
+    tone: "border-rose-200 bg-rose-50 text-rose-700",
   },
 }
 
@@ -114,9 +120,13 @@ export default function PilihRoleClient() {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-3 text-white">
-        <Loader2 className="h-6 w-6 animate-spin text-yellow-400" />
-        <span className="text-sm">Memuat data akun...</span>
+      <div
+        className="flex flex-col items-center gap-3 text-white"
+        role="status"
+        aria-busy="true"
+      >
+        <Loader2 className="h-7 w-7 animate-spin text-yellow-400" aria-hidden="true" />
+        <span className="text-sm text-slate-300">Memuat data akun…</span>
       </div>
     )
   }
@@ -136,9 +146,9 @@ export default function PilihRoleClient() {
       </div>
 
       {error && (
-        <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 text-xs text-center">
-          ⚠️ {error}
-        </div>
+        <Alert variant="danger" className="border-rose-800/70 bg-rose-950/70 text-rose-200">
+          {error}
+        </Alert>
       )}
 
       <div className="space-y-3">
@@ -154,27 +164,35 @@ export default function PilihRoleClient() {
               onClick={() => !selecting && handleSelectRole(role)}
             >
               <CardContent className="p-4 flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-xl ${meta.color} flex items-center justify-center shrink-0 shadow-lg`}>
+                <span
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border ${meta.tone}`}
+                  aria-hidden="true"
+                >
                   {isSelecting ? (
-                    <Loader2 className="h-6 w-6 text-white animate-spin" />
+                    <Loader2 className="h-6 w-6 animate-spin" />
                   ) : (
-                    <Icon className="h-6 w-6 text-white" />
+                    <Icon className="h-6 w-6" />
                   )}
-                </div>
+                </span>
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-base text-white group-hover:text-yellow-300 transition-colors">
                     {meta.label}
                   </div>
                   <div className="text-xs text-slate-400 mt-0.5">{meta.description}</div>
                   {role.isAdmin && role.role === Role.GURU && (
-                    <div className="text-[10px] font-bold text-yellow-400 bg-yellow-900/50 px-2 py-0.5 rounded inline-block mt-1">
+                    <Badge
+                      variant="soft-gold"
+                      size="sm"
+                      className="mt-1 border-yellow-400/40 bg-yellow-400/15 text-yellow-200"
+                    >
                       Admin
-                    </div>
+                    </Badge>
                   )}
                 </div>
-                <div className="text-slate-600 group-hover:text-yellow-400 transition-colors text-lg font-bold">
-                  →
-                </div>
+                <ArrowRight
+                  className="h-5 w-5 shrink-0 text-slate-600 transition-colors group-hover:text-yellow-400"
+                  aria-hidden="true"
+                />
               </CardContent>
             </Card>
           )
@@ -185,10 +203,10 @@ export default function PilihRoleClient() {
         <form action={logout}>
           <button
             type="submit"
-            className="text-xs text-slate-500 hover:text-rose-400 transition-colors flex items-center gap-1.5 mx-auto"
+            className="mx-auto inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 text-xs text-slate-400 transition-colors hover:text-rose-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
           >
-            <LogOut className="h-3.5 w-3.5" />
-            <span>Keluar & Login Ulang</span>
+            <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Keluar &amp; Login Ulang</span>
           </button>
         </form>
       </div>

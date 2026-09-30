@@ -10,7 +10,9 @@ import {
 import { Role } from "@/lib/roles"
 import { Card, CardContent } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Loader2, Users2 } from "lucide-react"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { Users2 } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 
 type SiswaItem = {
   id: string
@@ -41,12 +43,7 @@ export default function DaftarSiswaKeuanganPage() {
   const isKeuangan = user.role === Role.ADMIN_KEUANGAN || user.role === Role.SUPER_ADMIN
 
   if (!isKeuangan) {
-    return (
-      <EmptyState
-        title="Akses Ditolak"
-        description="Halaman ini hanya untuk Admin Keuangan."
-      />
-    )
+    return <AccessDenied description="Halaman ini hanya dapat diakses oleh Admin Keuangan." />
   }
 
   return <DaftarSiswaKeuanganContent />
@@ -126,7 +123,7 @@ function DaftarSiswaKeuanganContent() {
       />
 
       {/* Filter Jenjang & Kelas */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+      <Card>
         <CardContent className="p-4 sm:p-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -170,10 +167,7 @@ function DaftarSiswaKeuanganContent() {
 
       {/* Loading */}
       {loading && (
-        <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-          <span className="ml-3 text-sm text-slate-500">Memuat daftar siswa...</span>
-        </div>
+<PageSkeleton label="Memuat daftar siswa..." />
       )}
 
       {/* Error */}
@@ -188,9 +182,9 @@ function DaftarSiswaKeuanganContent() {
 
       {/* Table */}
       {!loading && !error && students.length > 0 && (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="data-table">
               <thead className="bg-slate-50/80 border-b border-slate-100">
                 <tr>
                   <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">No</th>

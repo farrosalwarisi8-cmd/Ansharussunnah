@@ -17,6 +17,7 @@ import { TargetGenderSelector } from "@/components/dashboard/target-gender-selec
 import { DibuatOlehInfo } from "@/components/ui/dibuat-oleh-info"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { Plus, Trash2, ArrowLeft, Loader2, Save, X, ImageIcon, PenLine } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 import Link from "next/link"
 import { toDatetimeLocalValue } from "@/lib/datetime-local"
 
@@ -443,10 +444,7 @@ export default function BuatUjianPage() {
             </Link>
           </Button>
         </div>
-        <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-          <span className="ml-3 text-sm text-slate-500">Memuat data ujian...</span>
-        </div>
+<PageSkeleton label="Memuat data ujian..." />
       </div>
     )
   }
@@ -478,7 +476,7 @@ export default function BuatUjianPage() {
 
       {/* Step 1: Form Detail Ujian */}
       {step === 1 && (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+        <Card>
           <CardHeader className="p-6 pb-4 border-b border-slate-100">
             <CardTitle className="text-base font-bold text-slate-800">
               Informasi Umum Ujian
@@ -693,7 +691,7 @@ export default function BuatUjianPage() {
           {/* Question List Cards */}
           <div className="space-y-4">
             {soalList.map((soal, sIdx) => (
-              <Card key={sIdx} className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+              <Card key={sIdx} className="overflow-hidden">
                 <CardHeader className="p-4 sm:p-5 pb-3 bg-slate-50/80 border-b border-slate-100 flex flex-row items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="w-8 h-8 rounded-xl bg-yellow-600 text-white font-black text-sm flex items-center justify-center">

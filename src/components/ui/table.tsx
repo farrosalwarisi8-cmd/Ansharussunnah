@@ -3,16 +3,29 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-const Table = React.forwardRef<
-  HTMLTableElement,
-  React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto rounded-xl border border-gray-200/80 bg-white">
-    <table
-      ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
-      {...props}
-    />
+/**
+ * Table design system.
+ * - Desktop: header sticky, zebra halus, hover, padding nyaman.
+ * - Mobile: dibungkus `.table-scroll` sehingga bisa di-scroll horizontal tanpa
+ *   membuat halaman luapan (overflow yang tidak disengaja).
+ * - Untuk mobile, halaman sebaiknya memakai `DataCardList` (lihat bawah) atau
+ *   menyembunyikan kolom sekunder lewat `className="hidden md:table-cell"`.
+ */
+type TableProps = React.TableHTMLAttributes<HTMLTableElement> & {
+  /** Kelas untuk wrapper luar tabel (default: `w-full`). */
+  containerClassName?: string
+}
+
+const Table = React.forwardRef<HTMLTableElement, TableProps>(
+  ({ className, containerClassName, ...props }, ref) => (
+  <div className={cn("w-full", containerClassName)}>
+    <div className="table-scroll rounded-xl border border-slate-200 bg-white shadow-card">
+      <table
+        ref={ref}
+        className={cn("w-full caption-bottom text-sm", className)}
+        {...props}
+      />
+    </div>
   </div>
 ))
 Table.displayName = "Table"
@@ -23,7 +36,7 @@ const TableHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <thead
     ref={ref}
-    className={cn("[&_tr]:border-b bg-slate-50/80", className)}
+    className={cn("[&_tr]:border-b [&_tr]:border-slate-200 bg-slate-50", className)}
     {...props}
   />
 ))
@@ -35,7 +48,7 @@ const TableBody = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <tbody
     ref={ref}
-    className={cn("[&_tr:last-child]:border-0 divide-y divide-gray-100", className)}
+    className={cn("[&_tr:last-child]:border-0 divide-y divide-slate-100", className)}
     {...props}
   />
 ))
@@ -48,7 +61,7 @@ const TableFooter = React.forwardRef<
   <tfoot
     ref={ref}
     className={cn(
-      "border-t bg-muted/50 font-medium [&>tr]:last:border-b-0",
+      "border-t border-slate-200 bg-slate-50 font-medium [&>tr]:last:border-b-0",
       className
     )}
     {...props}
@@ -63,7 +76,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b transition-colors hover:bg-slate-50/60 data-[state=selected]:bg-muted",
+      "border-b border-slate-100 transition-colors even:bg-slate-50/40 hover:bg-yellow-50/50 data-[state=selected]:bg-yellow-50",
       className
     )}
     {...props}
@@ -77,8 +90,9 @@ const TableHead = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <th
     ref={ref}
+    scope="col"
     className={cn(
-      "h-11 px-4 text-left align-middle text-xs font-semibold text-slate-600 uppercase tracking-wider [&:has([role=checkbox])]:pr-0",
+      "h-11 whitespace-nowrap px-4 text-left align-middle text-xs font-semibold uppercase tracking-wider text-slate-500 [&:has([role=checkbox])]:pr-0",
       className
     )}
     {...props}
@@ -92,7 +106,10 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)}
+    className={cn(
+      "px-4 py-3 align-middle text-slate-700 [&:has([role=checkbox])]:pr-0",
+      className
+    )}
     {...props}
   />
 ))
@@ -109,6 +126,35 @@ const TableCaption = React.forwardRef<
   />
 ))
 TableCaption.displayName = "TableCaption"
+
+/**
+ * DataCardList — padanan tabel untuk layar kecil.
+ *amd children: `{ items, renderItem, keyOf }` dirender sebagai kartu.
+ */
+export function DataCardList<T>({
+  items,
+  renderItem,
+  keyOf,
+  className,
+}: {
+  items: T[]
+  renderItem: (item: T, index: number) => React.ReactNode
+  keyOf: (item: T, index: number) => React.Key
+  className?: string
+}) {
+  return (
+    <ul className={cn("space-y-3", className)}>
+      {items.map((item, i) => (
+        <li
+          key={keyOf(item, i)}
+          className="rounded-xl border border-slate-200 bg-white p-4 shadow-card"
+        >
+          {renderItem(item, i)}
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 export {
   Table,

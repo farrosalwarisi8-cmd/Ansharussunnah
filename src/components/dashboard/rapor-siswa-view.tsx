@@ -6,7 +6,7 @@ import { getDaftarPeriodeAjaran } from "@/actions/periode-ajaran"
 import { Card, CardContent } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
 import Image from "next/image"
-import { Loader2 } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 
 function formatTanggal(dateStr: string | null | undefined): string {
   if (!dateStr) return "-"
@@ -128,10 +128,7 @@ export function SiswaOrangTuaRaporView({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-3 text-sm text-slate-500">Memuat data...</span>
-      </div>
+<PageSkeleton label="Memuat data..." />
     )
   }
 
@@ -142,7 +139,7 @@ export function SiswaOrangTuaRaporView({
   return (
     <div className="space-y-6">
       {/* Period Selector */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-4 sm:p-5">
+      <Card className="p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
             Pilih Periode:
@@ -162,10 +159,7 @@ export function SiswaOrangTuaRaporView({
       </Card>
 
       {fetchingRapor && (
-        <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-          <span className="ml-3 text-sm text-slate-500">Memuat rapor...</span>
-        </div>
+<PageSkeleton label="Memuat rapor..." />
       )}
 
       {!fetchingRapor && error && (
@@ -188,7 +182,7 @@ function DigitalRaporCard({ raporData }: { raporData: RaporData }) {
   const rerata = Number(raporData.rataRataKeseluruhan).toFixed(2)
 
   return (
-    <Card className="rounded-3xl border-slate-200/80 bg-white shadow-xl overflow-hidden print:border-none print:shadow-none">
+    <Card className="shadow-xl overflow-hidden print:border-none print:shadow-none">
       {/* Formal Header */}
       <div className="batik-dark text-white p-6 sm:p-8 text-center border-b border-yellow-500/20">
         <div className="w-12 h-12 rounded-2xl overflow-hidden relative mx-auto mb-3 shadow-md">

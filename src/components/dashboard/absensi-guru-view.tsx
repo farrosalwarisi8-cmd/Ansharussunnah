@@ -9,7 +9,8 @@ import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Check, UserCheck, Save, Loader2, BookOpen } from "lucide-react"
+import { Check, UserCheck, Save, Loader2, CalendarCheck2 } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { toDateLocalValue } from "@/lib/datetime-local"
 import { peranOptionSuffix, type PeranKelas } from "@/lib/kelas-peran"
 import { PeranKelasBadge, PeranKelasLegend } from "@/components/ui/peran-kelas-badge"
@@ -228,10 +229,7 @@ export function GuruAbsensiView() {
 
   if (loadingKelas) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-3 text-sm text-slate-500">Memuat daftar kelas...</span>
-      </div>
+<PageSkeleton label="Memuat daftar kelas..." />
     )
   }
 
@@ -247,7 +245,7 @@ export function GuruAbsensiView() {
   return (
     <div className="space-y-6">
       {/* Filter Card: Kelas, Mapel & Tanggal */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+      <Card>
         <CardContent className="p-4 sm:p-6 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full xl:w-auto">
             <div>
@@ -372,7 +370,7 @@ export function GuruAbsensiView() {
           </div>
 
           {/* Touch-First Attendance List */}
-          <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+          <Card className="overflow-hidden">
             <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
@@ -474,7 +472,7 @@ export function GuruAbsensiView() {
 
           {/* Rekap Kehadiran Section */}
           {showRekap && (
-            <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+            <Card className="overflow-hidden">
               <CardHeader className="p-5 pb-3 border-b border-slate-100">
                 <CardTitle className="text-base font-bold text-slate-800">
                   Rekap Kehadiran Kelas
@@ -485,8 +483,9 @@ export function GuruAbsensiView() {
               </CardHeader>
               <CardContent className="p-0">
                 {rekapData && rekapData.length > 0 ? (
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-sm text-left">
+                  <>
+                    <div className="hidden md:block overflow-x-auto">
+                    <table className="data-table">
                       <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
                         <tr>
                           <th className="p-4 pl-6">Nama Santri</th>
@@ -516,11 +515,57 @@ export function GuruAbsensiView() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                    </div>
+
+                    {/* Mobile: kartu rekap — tabel hanya tampil di layar >= md */}
+                    <div className="space-y-3 p-4 md:hidden">
+                      {rekapData.map((r) => (
+                        <div
+                          key={r.siswaId}
+                          className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-bold text-slate-800">
+                                {r.nama}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                Total {r.totalHari} hari
+                              </div>
+                            </div>
+                            <span className="shrink-0 rounded-lg border border-yellow-200 bg-yellow-50 px-2.5 py-1 text-xs font-extrabold text-yellow-600">
+                              {r.persentaseKehadiran}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-1.5 text-center">
+                            {[
+                              { label: "Hadir", value: r.hadir, cls: "text-yellow-600" },
+                              { label: "Izin", value: r.izin, cls: "text-amber-700" },
+                              { label: "Sakit", value: r.sakit, cls: "text-sky-700" },
+                              { label: "Alpa", value: r.alpha, cls: "text-rose-600" },
+                            ].map((s) => (
+                              <div
+                                key={s.label}
+                                className="rounded-xl border border-slate-200 bg-white py-2"
+                              >
+                                <div className={`text-sm font-bold ${s.cls}`}>{s.value}</div>
+                                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                                  {s.label}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 ) : (
-                  <div className="p-8 text-center text-slate-400 text-sm">
-                    Belum ada data kehadiran untuk periode ini.
-                  </div>
+                  <EmptyState
+                    className="border-slate-200 bg-slate-50/50 py-8"
+                    icon={CalendarCheck2}
+                    title="Belum ada data kehadiran"
+                    description="Pilih periode lain atau isi absensi kelas untuk melihat rekap kehadiran."
+                  />
                 )}
               </CardContent>
             </Card>

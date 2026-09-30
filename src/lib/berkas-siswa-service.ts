@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { validateFile, getSignedUrls } from "@/lib/storage"
 import { toUserFriendlyError } from "@/lib/prisma-error"
+import { hitungStatusBerkas, type StatusBerkas } from "@/lib/status-berkas"
 import type { ActionResponse } from "@/types"
 import { nanoid } from "nanoid"
 
@@ -58,6 +59,17 @@ export type BerkasSiswaData = {
     foto: string | null
     lainnya: Array<{ path: string; url: string | null }>
   }
+  /**
+   * Status kelengkapan dari SATU helper yang sama dengan halaman cek status,
+   * upload dokumen, dan panel verifikasi admin (src/lib/status-berkas.ts).
+   *
+   * Disini sengaja TIDAK dihitung dari `signedMap`: kelengkapan berkas adalah
+   * fakta "path sudah tercatat di database", bukan "signed URL berhasil
+   * dibuat". Kalau dihitung dari URL, berkas yang tercatat tapi gagal
+   * ditandatangani akan terlihat hilang di dashboard wali padahal sudah ada di
+   * panel panitia — dua layar punya angka berbeda untuk data yang sama.
+   */
+  statusBerkas: StatusBerkas
 }
 
 async function loadSiswa(siswaId: string) {
@@ -120,6 +132,7 @@ export async function readBerkasSiswa(siswaId: string): Promise<ActionResponse<B
           url: signedMap.get(p) ?? null,
         })),
       },
+      statusBerkas: hitungStatusBerkas(siswa),
     }
 
     return { success: true, message: "Berkas siswa berhasil dimuat", data }

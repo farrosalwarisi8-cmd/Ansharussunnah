@@ -96,10 +96,10 @@ export function UploadBuktiForm({
             <div className="inline-flex items-center justify-center w-16 h-16 bg-success/10 rounded-full mb-4">
               <Upload className="h-8 w-8 text-success" />
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
+            <h2 className="mb-2 text-xl font-bold text-slate-900">
               Bukti Transfer Berhasil Diupload!
             </h2>
-            <p className="text-gray-500 text-sm">
+            <p className="text-sm leading-relaxed text-slate-500">
               Pendaftaran Anda sedang dalam proses verifikasi. Anda akan
               diarahkan ke halaman cek status.
             </p>
@@ -113,10 +113,10 @@ export function UploadBuktiForm({
     <div className="min-h-screen batik-light">
       <header className="border-b bg-white/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <span className="font-bold text-gray-900">Upload Bukti Transfer</span>
+          <span className="font-bold text-slate-900">Upload Bukti Transfer</span>
           <Link
             href={`/pendaftaran/sukses?nomor=${nomorPendaftaran}`}
-            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-primary"
+            className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-slate-500 hover:text-yellow-700"
           >
             <ArrowLeft className="h-4 w-4" />
             Kembali
@@ -126,8 +126,8 @@ export function UploadBuktiForm({
 
       <main className="container mx-auto px-4 py-8 max-w-lg">
         <div className="mb-6">
-          <p className="text-sm text-gray-500 mb-1">Nomor Pendaftaran</p>
-          <p className="text-xl font-bold font-mono text-primary">
+          <p className="mb-1 text-sm text-slate-500">Nomor Pendaftaran</p>
+          <p className="text-xl font-bold font-mono text-yellow-700">
             {nomorPendaftaran}
           </p>
         </div>
@@ -138,7 +138,10 @@ export function UploadBuktiForm({
           </CardHeader>
           <CardContent className="space-y-6">
             {error && (
-              <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-sm">
+              <div
+                role="alert"
+                className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-medium text-rose-700"
+              >
                 {error}
               </div>
             )}
@@ -153,7 +156,7 @@ export function UploadBuktiForm({
                 placeholder="Salin token akses dari halaman 'Pendaftaran Berhasil'"
                 className="font-mono"
               />
-              <p className="text-xs text-gray-400">
+              <p className="text-xs leading-relaxed text-slate-500">
                 Token otomatis terisi jika Anda datang dari halaman hasil
                 pendaftaran. Diperlukan agar bukti transfer hanya bisa diunggah
                 pemilik pendaftaran.
@@ -166,6 +169,9 @@ export function UploadBuktiForm({
               files={files}
               onFilesChange={setFiles}
               accept="image/*,.pdf"
+              status={isUploading ? "uploading" : "idle"}
+              disabled={isUploading}
+              helperText="Pastikan nominal, tanggal, dan nama pengirim terbaca jelas sebelum mengirim."
             />
 
             <Button

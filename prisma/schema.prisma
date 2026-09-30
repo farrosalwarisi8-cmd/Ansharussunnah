@@ -340,23 +340,27 @@ model Pendaftaran {
   namaOrangTua                          String                     @map("nama_orang_tua")
   noHpOrangTua                          String                     @map("no_hp_orang_tua")
   emailOrangTua                         String                     @map("email_orang_tua")
-  // Waktu email orang tua berhasil diverifikasi lewat OTP. Sampai terisi,
-  // alur publik (unggah dokumen & bukti transfer) masih terkunci supaya tidak
-  // ada pendaftaran fiktif yang menyusul ke meja panitia.
-  // NULL = belum diverifikasi. Pendaftaran lama di-backfill migration agar
-  // tidak terkunci (grandfathering).
+  // ================= KOLOM OTP LEGACY (DEPRECATED) =================
+  // Kedua kolom di bawah milik alur "verifikasi email via OTP" yang SUDAH
+  // DIHAPUS dari pendaftaran. Kolomnya DIPERTAHANKAN, bukan dihapus, karena
+  // baris pendaftaran lama di produksi masih memakainya dan nilainya adalah
+  // bagian dari jejak audit yang tidak boleh ditulis ulang.
+  //
+  // Kontrak yang WAJIB dijaga setelah penghapusan alur OTP:
+  //   1. Tidak boleh dibaca sebagai gerbang alur baru apa pun
+  //      (bukan syarat upload dokumen, upload bukti transfer, maupun approval).
+  //   2. Tidak boleh diisi untuk pendaftaran baru — `createPendaftaran`
+  //      mengirimnya eksplisit `null`.
+  //   3. Tidak ada lagi UI/action yang menambahkannya.
+  // Gerbang approval yang menggantikannya: `kontakWaliDikonfirmasiAt` (lihat
+  // blok di bawahnya).
+  //
+  // `emailOrangTuaTerverifikasiAt`: kapan email pernah terverifikasi OTP.
+  // NULL = belum pernah (termasuk semua pendaftaran baru).
   emailOrangTuaTerverifikasiAt          DateTime?                  @map("email_orang_tua_terverifikasi_at") @db.Timestamptz(3)
-  // Bukti NYATA bahwa pemilik email selesai memasukkan kode OTP. Dibedakan
-  // dari `emailOrangTuaTerverifikasiAt` yang hanya menandai "gerbang terbuka".
-  //
-  // Kenapa perlu dua kolom? Kolom pertama pernah diisi untuk pendaftaran lama
-  // saat grandfathering, tanpa ada bukti apa pun. Kalau cuma ada satu kolom,
-  // committee tidak bisa membedakan "sudah terverifikasi beneran" dari
-  // "cuma warisan" — dan mewajibkan verifikasi tidak akan berlaku ke data
-  // lama karena semuanya sudah terisi.
-  //
-  // NULL = belum pernah selesai OTP (termasuk semua baris grandfather).
-  // Tidak ada default, dan sengaja tidak di-backfill — justru itu tujuannya.
+  // `emailOrangTuaDiverifikasiOtpAt`: bukti NYATA pemilik email selesai
+  // memasukkan kode OTP. NULL = belum pernah selesai OTP (termasuk semua
+  // baris grandfathering yang hanya terisi kolom pertama).
   emailOrangTuaDiverifikasiOtpAt        DateTime?                  @map("email_orang_tua_diverifikasi_otp_at") @db.Timestamptz(3)
   // ============ KONFIRMASI KONTAK WALI (gerbang approval baru) ============
   // Sejak OTP email dihapus dari alur pendaftaran, pemeriksaan "apakah orang
@@ -380,7 +384,13 @@ model Pendaftaran {
 
   // Jejak verifikasi MANUAL committee, terpisah dari `catatanAdmin`.
   //
-  // Kenapa kolom sendiri? `catatanAdmin` ditimpa setiap kali ada approval /
+  // @deprecated Alur verifikasi email (termasuk jalur manual ini) sudah dihapus
+  // dari pendaftaran. Ketiga kolom dipertahankan HANYA sebagai arsip data lama;
+  // tidak ada lagi action/UI yang menulisnya, dan tidak dipakai sebagai gerbang
+  // apa pun. Jejak pemeriksaan kontak yang aktif adalah blok
+  // `kontakWaliDikonfirmasi*` di atas.
+  //
+  // Kenapa kolom sendiri: `catatanAdmin` ditimpa setiap kali ada approval /
   // penolakan (`catatanAdmin: catatanAdmin || null`). Kalau jejak manual ikut
   // menumpang di sana, begitu panitia menyetujui pendaftaran, bukti bahwa email
   // ini diverifikasi manual hilang permanen dan tidak bisa direkonstruksi
@@ -492,13 +502,17 @@ model PendaftaranDraft {
   @@map("pendaftaran_drafts")
 }
 
-// OTP verifikasi kepemilikan email orang tua saat pendaftaran.
-//
-// Berbeda dari PasswordResetToken: ini bukan pemulihan akun, melainkan
-// gerbang "apakah orang yang mengisi formulir benar-benar menguasai email
-// yang dicantumkan". Kode disimpan sebagai bcrypt hash, tidak pernah plaintext.
-// Satu pendaftaran hanya boleh punya satu OTP aktif (index gabungan di bawah),
-// sehingga cooldown resend cukup dijaga lewat satu baris terbaru.
+/// DEPRECATED — tabel OTP verifikasi email pendaftaran.
+///
+/// Tabel ini milik alur yang sudah dihapus: pendaftaran TIDAK lagi mengirim
+/// OTP, dan tidak ada lagi action/UI yang membuat atau memverifikasinya.
+/// Tabelnya TIDAK dihapus dari database produksi karena masih menyimpan baris
+/// pendaftaran lama beserta jejak auditorsinya (kode sudah berupa bcrypt hash,
+/// jadi tidak ada kode OTP yang tersimpan dalam bentuk bisa dipakai lagi).
+///
+/// Yang boleh dilakukan: dibaca untuk audit legacy, dan baris lamanya dibuang
+/// oleh cron /api/cron/bersihkan-token setelah lewat retensi.
+/// Yang TIDAK boleh: membuat baris baru, atau menjadikannya gerbang alur.
 model OtpVerifikasiEmail {
   id            String   @id @default(cuid())
   pendaftaranId String   @map("pendaftaran_id")

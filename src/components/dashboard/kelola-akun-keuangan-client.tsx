@@ -142,7 +142,7 @@ export function KelolaAkunKeuanganClient({ initialAdminList }: Props) {
       />
 
       {/* Admin Keuangan Table / Card List */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+      <Card className="overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-base font-bold text-slate-800">
@@ -166,7 +166,7 @@ export function KelolaAkunKeuanganClient({ initialAdminList }: Props) {
             <>
               {/* Desktop Table */}
               <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-sm text-left">
+                <table className="data-table">
                   <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
                     <tr>
                       <th className="p-4 pl-6">Nama</th>

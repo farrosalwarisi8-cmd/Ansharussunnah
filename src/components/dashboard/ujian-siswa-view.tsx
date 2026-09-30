@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { getDaftarUjianSiswa } from "@/actions/ujian"
-import { Clock, Play, Award, Loader2, CheckCircle2 } from "lucide-react"
+import { Clock, Play, Award, CheckCircle2 } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -53,10 +54,7 @@ export function SiswaUjianView() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-3 text-sm text-slate-500">Memuat data ujian...</span>
-      </div>
+<PageSkeleton label="Memuat data ujian..." />
     )
   }
 
@@ -126,7 +124,7 @@ export function SiswaUjianView() {
           <h3 className="text-base font-bold text-slate-800 mb-3">
             Riwayat Nilai Ujian Sebelumnya
           </h3>
-          <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+          <Card className="overflow-hidden">
             <CardContent className="p-5 divide-y divide-slate-100">
               {finishedExams.map((ex) => (
                 <div key={ex.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-4">

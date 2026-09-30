@@ -72,7 +72,7 @@ export function VerifikasiPembayaranTab() {
   }
 
   return (
-    <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+    <Card className="overflow-hidden">
       <CardHeader className="p-5 pb-3 border-b border-slate-100">
         <div className="flex items-center justify-between">
           <div>

@@ -18,6 +18,7 @@ import {
   simpanDraftLokal,
   hapusDraftLokal,
   draftLebihBaru,
+  DRAFT_SCHEMA_VERSION,
   type LocalDraft,
 } from "@/lib/pendaftaran-draft-client"
 import {
@@ -207,6 +208,40 @@ function AnimatedField({
 // MAIN FORM COMPONENT
 // ============================================
 
+/**
+ * Bentuk draft lokal dari payload draft server.
+ *
+ * Payload server hanya berisi data TEKS (file binary tidak pernah ikut), jadi
+ * bentuk hasilnya tetap LocalDraft supaya `restoreDraft` bisa dipakai untuk
+ * kedua sumber tanpa percabangan. `fileMetaLokal` diteruskan apa adanya:
+ * metadata nama berkas milik perangkat ini dan tidak ada di server — justru
+ * itu yang membuat banner bisa menampilkan "berkas perlu dipilih ulang".
+ */
+function draftDariServer(input: {
+  payload: unknown
+  lastStep: number
+  updatedAt: string
+  resumeToken: string
+  fileMetaLokal: LocalDraft["fileMeta"]
+}): LocalDraft {
+  const formValues: Record<string, string> = {}
+  if (input.payload && typeof input.payload === "object") {
+    for (const [k, v] of Object.entries(input.payload as Record<string, unknown>)) {
+      if (typeof v === "string" && v.length > 0) formValues[k] = v
+    }
+  }
+
+  return {
+    version: DRAFT_SCHEMA_VERSION,
+    draftId: formValues.emailOrangTua || "draft",
+    resumeToken: input.resumeToken,
+    lastStep: input.lastStep,
+    formValues,
+    fileMeta: input.fileMetaLokal,
+    lastSavedAt: input.updatedAt,
+  }
+}
+
 interface PendaftaranFormProps {
   jenjangList: Array<{
     id: string
@@ -238,15 +273,35 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
   // Lapisan 2: server draft bertoken (ketahanan lintas perangkat).
   // File binary TIDAK ikut draft; hanya metadata penanda (lihat
   // pendaftaran-draft-client.ts) yang muncul sebagai "perlu dipilih ulang".
+  // `draft` di banner SELALU draft yang benar-benar akan dipulihkan: kalau
+  // versi server lebih baru, isinya payload server (bukan draft lokal).
+  // `serverUpdatedAt`/`expiresAt` hanya informational untuk ditampilkan.
   const [draftBanner, setDraftBanner] = React.useState<
     | null
-    | { jenis: "lokal"; draft: LocalDraft }
-    | { jenis: "server"; draft: LocalDraft; resumeToken: string; serverUpdatedAt: string }
+    | {
+        jenis: "lokal" | "server"
+        draft: LocalDraft
+        resumeToken: string | null
+        serverUpdatedAt: string | null
+        expiresAt: string | null
+      }
   >(null)
   const [draftResumeToken, setDraftResumeToken] = React.useState<string | null>(null)
   const [lastSavedAt, setLastSavedAt] = React.useState<string | null>(null)
+  // Pilihan A: pindah perangkat tanpa email -> tempel "Token Lanjutkan Draft".
+  const [tokenManual, setTokenManual] = React.useState("")
+  const [tokenManualError, setTokenManualError] = React.useState<string | null>(null)
+  const [tokenManualInfo, setTokenManualInfo] = React.useState<string | null>(null)
+  const [memuatDraft, setMemuatDraft] = React.useState(false)
+  const [panelTokenBuka, setPanelTokenBuka] = React.useState(false)
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const draftReadyRef = React.useRef(false)
+  // Cermin token dalam ref. State bersifat async, jadi debounce bisa membaca
+  // token yang belum sempat ter-set dan membuat draft server kedua sebelum
+  // yang pertama selesai. Ref menutup celah itu.
+  const draftTokenRef = React.useRef<string | null>(null)
+  // Guard in-flight: hanya satu permintaan create draft pada satu waktu.
+  const draftCreateRef = React.useRef<Promise<string | null> | null>(null)
   // =================== AKHIR STATE DRAFT (logic menyusul setelah useForm) ===================
 
   const [availableKelas, setAvailableKelas] = React.useState<
@@ -297,7 +352,7 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
 
     const tawarkanServer = async () => {
       if (!lokal.resumeToken) {
-        setDraftBanner({ jenis: "lokal", draft: lokal })
+        setDraftBanner({ jenis: "lokal", draft: lokal, resumeToken: null, serverUpdatedAt: null, expiresAt: null })
         return
       }
       const res = await resumePendaftaranDraft(lokal.resumeToken)
@@ -305,13 +360,34 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
       if (res.success && res.data) {
         const lebihBaru = draftLebihBaru(lokal, { updatedAt: res.data.updatedAt })
         if (lebihBaru === "server") {
-          setDraftBanner({ jenis: "server", draft: lokal, resumeToken: lokal.resumeToken, serverUpdatedAt: res.data.updatedAt })
+          // Yang dipulihkan WAJIB payload server. Sebelumnya banner tetap
+          // membawa draft lokal, sehingga "versi server lebih baru" cuma
+          //tham-pesan: isinya tetap data lama yang ada di perangkat ini.
+          setDraftBanner({
+            jenis: "server",
+            draft: draftDariServer({
+              payload: res.data.payload,
+              lastStep: res.data.lastStep,
+              updatedAt: res.data.updatedAt,
+              resumeToken: lokal.resumeToken,
+              fileMetaLokal: lokal.fileMeta,
+            }),
+            resumeToken: lokal.resumeToken,
+            serverUpdatedAt: res.data.updatedAt,
+            expiresAt: res.data.expiresAt,
+          })
         } else {
-          setDraftBanner({ jenis: "lokal", draft: lokal })
+          setDraftBanner({
+            jenis: "lokal",
+            draft: lokal,
+            resumeToken: lokal.resumeToken,
+            serverUpdatedAt: res.data.updatedAt,
+            expiresAt: res.data.expiresAt,
+          })
         }
       } else {
         // Server tidak punya (expired/dihapus) — lokal tetap ditawarkan.
-        setDraftBanner({ jenis: "lokal", draft: lokal })
+        setDraftBanner({ jenis: "lokal", draft: lokal, resumeToken: lokal.resumeToken, serverUpdatedAt: null, expiresAt: null })
       }
     }
 
@@ -351,14 +427,15 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
 
       // Server draft: buat sekali, lalu update. Gagal senyap — lapisan lokal
       // tetap melindungi; banner hanya menampilkan info penyimpanan.
-      if (!draftResumeToken) {
-        void createPendaftaranDraft(formValues, currentStep).then((res) => {
-          if (res.success && res.data) {
-            setDraftResumeToken(res.data.resumeToken)
-          }
-        })
+      //
+      // Token dibaca dari ref, bukan state: debounce bisa berjalan lagi
+      // sebelum state ter-update, dan tanpa guard itu tiap perubahan membuat satu
+      // draft server orfa.
+      const token = draftTokenRef.current
+      if (!token) {
+        void ensureDraftServer(formValues, currentStep)
       } else {
-        void savePendaftaranDraft(draftResumeToken, formValues, currentStep)
+        void savePendaftaranDraft(token, formValues, currentStep)
       }
     }, 800)
 
@@ -366,6 +443,36 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     }
   }, [watchAll, currentStep, filesKK, filesAkte, filesFoto, draftResumeToken])
+
+  /**
+   * Buat draft server HANYA kalau belum ada. Beberapa debounce bisa menyalakan
+   * permintaan create sebelum token yang pertama sampai; `draftCreateRef`
+   * menyatukan semuanya ke satu promise sehingga tidak pernah ada dua draft
+   * server untuk satu pengguna (token pertama akan jadi yatim).
+   */
+  const ensureDraftServer = async (
+    formValues: Record<string, string>,
+    step: number
+  ): Promise<string | null> => {
+    const berjalan = draftCreateRef.current
+    if (berjalan) return berjalan
+
+    const permintaan = createPendaftaranDraft(formValues, step)
+      .then((res) => {
+        if (res.success && res.data) {
+          draftTokenRef.current = res.data.resumeToken
+          setDraftResumeToken(res.data.resumeToken)
+          return res.data.resumeToken
+        }
+        return null
+      })
+      .finally(() => {
+        if (draftCreateRef.current === permintaan) draftCreateRef.current = null
+      })
+
+    draftCreateRef.current = permintaan
+    return permintaan
+  }
 
   // 3) Restore: isi form + kembali ke lastStep.
   const restoreDraft = (draft: LocalDraft) => {
@@ -375,17 +482,80 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
     setCurrentStep(Math.min(5, Math.max(1, draft.lastStep)))
     window.scrollTo({ top: 0, behavior: "smooth" })
     setDraftBanner(null)
+    // Token ikut dipertahankan supaya submit berikutnya tetap idempoten dan
+    // draft server yang sama bisa di-update lagi.
+    draftTokenRef.current = draft.resumeToken
+    setDraftResumeToken(draft.resumeToken)
     draftReadyRef.current = true
   }
 
   const mulaiBaruDariDraft = async () => {
     const lokal = bacaDraftLokal()
-    if (lokal?.resumeToken) {
-      await deletePendaftaranDraft(lokal.resumeToken)
+    const token = draftTokenRef.current ?? lokal?.resumeToken
+    if (token) {
+      await deletePendaftaranDraft(token)
     }
     hapusDraftLokal()
+    draftTokenRef.current = null
+    draftCreateRef.current = null
+    setDraftResumeToken(null)
+    setLastSavedAt(null)
     setDraftBanner(null)
     draftReadyRef.current = true
+  }
+
+  /**
+   * Pilihan A: lanjutkan draft di perangkat lain. Pengguna menempel
+   * "Token Lanjutkan Draft" (diberikan saat draft server dibuat); tidak ada
+   * email yang dikirim, jadi ini satu-satunya jalan pulih lintas perangkat.
+   */
+  const lanjutkanDenganToken = async () => {
+    const token = tokenManual.trim()
+    setTokenManualError(null)
+    setTokenManualInfo(null)
+
+    if (!token) {
+      setTokenManualError("Masukkan token draft terlebih dahulu.")
+      return
+    }
+
+    setMemuatDraft(true)
+    try {
+      const res = await resumePendaftaranDraft(token)
+      if (!res.success || !res.data) {
+        setTokenManualError(res.message || "Draft tidak dapat dimuat.")
+        return
+      }
+
+      const draft = draftDariServer({
+        payload: res.data.payload,
+        lastStep: res.data.lastStep,
+        updatedAt: res.data.updatedAt,
+        resumeToken: token,
+        // Metadata berkas tidak ada di server: perangkat ini memang belum
+        // pernah memilih berkas, jadi biarkan kosong.
+        fileMetaLokal: {},
+      })
+
+      restoreDraft(draft)
+      // Simpan juga ke lokal supaya refresh tidak kehilangan
+      // akses ke draft yang sama.
+      simpanDraftLokal({
+        draftId: draft.draftId,
+        resumeToken: token,
+        lastStep: draft.lastStep,
+        formValues: draft.formValues,
+        fileMeta: draft.fileMeta,
+      })
+      setTokenManual("")
+      setTokenManualInfo(
+        `Draft dimuat dari ${new Date(res.data.updatedAt).toLocaleString("id-ID")}, berlaku sampai ${new Date(
+          res.data.expiresAt
+        ).toLocaleDateString("id-ID")}.`
+      )
+    } finally {
+      setMemuatDraft(false)
+    }
   }
   // =================== AKHIR DRAFT OTOMATIS ===================
 
@@ -633,10 +803,38 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
             Ada draft pendaftaran tersimpan
           </p>
           <p className="text-amber-800 m-0">
-            Terakhir disimpan {new Date(draftBanner.draft.lastSavedAt).toLocaleString("id-ID")}
-            {draftBanner.jenis === "server" && " (versi server lebih baru)"}.
-            Lanjutkan dari langkah {draftBanner.draft.lastStep}?
+            {draftBanner.jenis === "server" ? (
+              <>
+                Versi server lebih baru (disimpan{" "}
+                {new Date(draftBanner.serverUpdatedAt ?? draftBanner.draft.lastSavedAt).toLocaleString(
+                  "id-ID"
+                )}
+                ). Lanjutkan dari langkah {draftBanner.draft.lastStep}?
+              </>
+            ) : (
+              <>
+                Terakhir disimpan{" "}
+                {new Date(draftBanner.draft.lastSavedAt).toLocaleString("id-ID")}.{" "}
+                Lanjutkan dari langkah {draftBanner.draft.lastStep}?
+              </>
+            )}
           </p>
+          {draftBanner.expiresAt && (
+            <p className="text-xs text-amber-700 m-0">
+              Draft server berlaku sampai{" "}
+              {new Date(draftBanner.expiresAt).toLocaleDateString("id-ID")}. Setelah
+              itu isinya tidak bisa dipulihkan lagi.
+            </p>
+          )}
+          {draftBanner.resumeToken && (
+            <p className="text-xs text-amber-700 m-0 break-all">
+              Token Lanjutkan Draft:{" "}
+              <code className="font-mono">{draftBanner.resumeToken}</code>
+              <br />
+              Simpan token ini kalau mau melanjutkan dari perangkat lain (tanpa
+              email).
+            </p>
+          )}
           {Object.keys(draftBanner.draft.fileMeta).some(
             (k) => draftBanner.draft.fileMeta[k as keyof typeof draftBanner.draft.fileMeta]
           ) && (
@@ -656,12 +854,73 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
         </div>
       )}
 
-      {/* Indikator "tersimpan otomatis" */}
+      {/* Indikator "tersimpan otomatis" + token untuk dipindah ke perangkat lain */}
       {lastSavedAt && !draftBanner && (
         <p className="text-xs text-muted-foreground text-right m-0">
           Draft tersimpan otomatis {new Date(lastSavedAt).toLocaleTimeString("id-ID")}
         </p>
       )}
+      {draftResumeToken && !draftBanner && (
+        <div className="rounded-xl border border-dashed p-3 text-xs text-muted-foreground space-y-1">
+          <p className="m-0">
+            Simpan <strong>Token Lanjutkan Draft</strong> ini kalau ingin
+            melanjutkan pendaftaran dari perangkat lain:
+          </p>
+          <p className="m-0 font-mono break-all select-all">{draftResumeToken}</p>
+        </div>
+      )}
+
+      {/* Lanjutkan draft di perangkat lain: tempel Token Lanjutkan Draft.
+          Tidak ada email involved, jadi ini jalur pulih lintas perangkat yang
+          resmi. */}
+      <div className="border rounded-xl p-3 text-sm space-y-2">
+        <button
+          type="button"
+          className="text-left font-medium m-0 p-0 border-0 bg-transparent cursor-pointer"
+          onClick={() => setPanelTokenBuka((v) => !v)}
+        >
+          {panelTokenBuka
+            ? "Sembunyikan" : "Pindah perangkat?"}{" "}
+          Lanjutkan draft dengan token
+        </button>
+
+        {panelTokenBuka && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground m-0">
+              Tempel token draft yang sudah kamu simpan. Data teks yang
+              tersimpan akan dimuat ke form ini; berkas tetap perlu dipilih ulang.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input
+                value={tokenManual}
+                onChange={(e) => {
+                  setTokenManual(e.target.value)
+                  setTokenManualError(null)
+                }}
+                placeholder="Token Lanjutkan Draft"
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void lanjutkanDenganToken()}
+                disabled={memuatDraft}
+                className="shrink-0"
+              >
+                {memuatDraft ? "Memuat..." : "Lanjutkan"}
+              </Button>
+            </div>
+            {tokenManualError && (
+              <p className="text-xs text-destructive m-0">{tokenManualError}</p>
+            )}
+            {tokenManualInfo && (
+              <p className="text-xs text-muted-foreground m-0">{tokenManualInfo}</p>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* PROGRESS INDICATOR */}
       <div className="bg-white rounded-xl border p-4 shadow-sm">
@@ -694,7 +953,8 @@ export function PendaftaranForm({ jenjangList, biayaPPDB }: PendaftaranFormProps
                   }
                 }}
                 className={
-                  "flex flex-col items-center gap-1 transition-colors duration-200 " +
+                  // min 44px agar nyaman disentuh di mobile (label hanya tampil >=sm).
+                  "flex min-h-[44px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-xl px-1 transition-colors duration-200 touch-manipulation disabled:cursor-not-allowed disabled:opacity-45 " +
                   (isActive
                     ? "text-primary"
                     : isCompleted

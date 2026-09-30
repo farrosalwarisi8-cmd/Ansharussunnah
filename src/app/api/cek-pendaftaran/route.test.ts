@@ -75,14 +75,17 @@ describe("GET /api/cek-pendaftaran", () => {
       akteLahir: false,
       foto: true,
       lainnya: 1,
+      jumlahLengkap: 2,
     });
   });
 
-  it("memuat status email terverifikasi untuk gerbang tombol upload di UI", async () => {
+  it("TIDAK lagi membocorkan status verifikasi email", async () => {
+    // Verifikasi email tidak lagi jadi gerbang apa pun. Kalau field ini masih
+    // muncul, berarti ada jalur yang diam-diam masih bergantung padanya.
     const res = await GET(makeRequest("REG-2026-00001-A1B2"));
     const body = await res.json();
 
-    expect(body.data.emailTerverifikasi).toBe(true);
+    expect(body.data).not.toHaveProperty("emailTerverifikasi");
   });
 
   it("TIDAK membocorkan path file bucket ke response publik", async () => {
@@ -108,6 +111,7 @@ describe("GET /api/cek-pendaftaran", () => {
       akteLahir: false,
       foto: false,
       lainnya: 0,
+      jumlahLengkap: 0,
     });
   });
 

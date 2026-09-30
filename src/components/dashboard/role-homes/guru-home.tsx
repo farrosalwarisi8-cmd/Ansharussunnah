@@ -1,22 +1,84 @@
+// src/components/dashboard/role-homes/guru-home.tsx
+
 "use client"
 
 import * as React from "react"
 import Link from "next/link"
 import {
-  CalendarCheck2,
-  Award,
-  FileCheck2,
-  Users2,
-  Sparkles,
-  Plus,
-  Loader2,
   AlertCircle,
+  Award,
+  CalendarCheck2,
+  CheckCircle2,
+  FileCheck2,
+  Plus,
+  Sparkles,
+  Users2,
+  type LucideIcon,
 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
+import { StatCard } from "@/components/ui/stat-card"
+import { DashboardHeader } from "../dashboard-header"
 import { getRangkumanGuruHome, type RangkumanGuru } from "@/actions/dashboard"
+
+function GuruSkeleton() {
+  return (
+    <div className="space-y-6" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Memuat ringkasan data Guru…</span>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Card key={i} className="p-5">
+            <Skeleton className="h-3.5 w-24" />
+            <Skeleton className="mt-3 h-8 w-20" />
+            <Skeleton className="mt-3 h-3 w-28" />
+          </Card>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {[0, 1].map((i) => (
+          <Card key={i}>
+            <CardHeader>
+              <Skeleton className="h-4 w-44" />
+              <Skeleton className="h-3 w-32" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Skeleton className="h-14 w-full" />
+              <Skeleton className="h-14 w-full" />
+              <Skeleton className="h-14 w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ExamRow({ item }: { item: { mapel: string; kelas: string; judul: string; status: string } }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="soft-info" size="sm">
+            {item.mapel}
+          </Badge>
+          <span className="text-xs text-slate-500">{item.kelas}</span>
+        </div>
+        <p className="truncate text-sm font-semibold text-slate-800">{item.judul}</p>
+      </div>
+      <StatusBadge status={item.status as "DRAFT" | "AKTIF" | "SELESAI" | "PUBLISHED"} />
+    </div>
+  )
+}
 
 export function GuruDashboardHome() {
   const [data, setData] = React.useState<RangkumanGuru | null>(null)
@@ -46,216 +108,210 @@ export function GuruDashboardHome() {
     }
   }, [])
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-3 text-sm text-slate-500">Memuat rangkuman data...</span>
-      </div>
-    )
-  }
-
-  if (error || !data) {
-    return (
-      <EmptyState
-        icon={AlertCircle}
-        title="Gagal Memuat Rangkuman"
-        description={error || "Data tidak tersedia."}
-      />
-    )
-  }
-
-  const tugasPerluDinilai = data.daftarTugas.filter((t) => t.pending > 0)
+  const tugasPerluDinilai = data?.daftarTugas.filter((t) => t.pending > 0) ?? []
+  const antreanDinilai = tugasPerluDinilai.reduce((total, t) => total + t.pending, 0)
+  const adaAntreanUjian = (data?.ujianPerluDinilai ?? 0) > 0
+  const statItems: Array<{
+    label: string
+    value: string
+    icon: LucideIcon
+    tone: "gold" | "slate" | "success" | "warning" | "info"
+    href: string
+    hint: string
+  }> = data
+    ? [
+        {
+          label: "Kelas Diampu",
+          value: `${data.jumlahKelas} kelas`,
+          icon: Users2,
+          tone: "gold",
+          href: "/dashboard/kelas",
+          hint: `Total ${data.jumlahSantri} Santri`,
+        },
+        {
+          label: "Tugas Perlu Dinilai",
+          value: `${data.tugasPerluDinilai} tugas`,
+          icon: FileCheck2,
+          tone: data.tugasPerluDinilai > 0 ? "warning" : "success",
+          href: "/dashboard/tugas",
+          hint:
+            antreanDinilai > 0 ? `${antreanDinilai} pengumpulan menunggu` : "Semua sudah dinilai",
+        },
+        {
+          label: "Ujian Aktif",
+          value: `${data.ujianAktif} ujian`,
+          icon: Award,
+          tone: data.ujianAktif > 0 ? "info" : "slate",
+          href: "/dashboard/ujian",
+          hint: "Sedang berlangsung",
+        },
+        {
+          label: "Esai Menunggu Koreksi",
+          value: `${data.ujianPerluDinilai} sesi`,
+          icon: CalendarCheck2,
+          tone: adaAntreanUjian ? "warning" : "success",
+          href: "/dashboard/ujian",
+          hint: adaAntreanUjian ? "Menunggu koreksi esai" : "Tidak ada antrean",
+        },
+      ]
+    : []
 
   return (
     <div className="space-y-6">
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm hover:shadow transition-shadow">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Kelas Diampu
-              </span>
-              <div className="p-2 rounded-xl bg-yellow-50 text-yellow-500">
-                <Users2 className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-2">
-              {data.jumlahKelas} Kelas
-            </div>
-            <span className="text-xs text-slate-500 mt-1 block">
-              Total {data.jumlahSantri} Santri
-            </span>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm hover:shadow transition-shadow">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Perlu Dinilai
-              </span>
-              <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
-                <FileCheck2 className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-amber-600 mt-2">
-              {data.tugasPerluDinilai} Tugas
-            </div>
-            <span className="text-xs text-slate-500 mt-1 block">Pengumpulan menunggu nilai</span>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm hover:shadow transition-shadow">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Ujian Aktif
-              </span>
-              <div className="p-2 rounded-xl bg-teal-50 text-teal-600">
-                <Award className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-2">
-              {data.ujianAktif} Ujian
-            </div>
-            <span className="text-xs text-slate-500 mt-1 block">Sedang berlangsung</span>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm hover:shadow transition-shadow">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Sesi Esai Dinilai
-              </span>
-              <div className="p-2 rounded-xl bg-yellow-50 text-yellow-500">
-                <CalendarCheck2 className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-2">
-              {data.ujianPerluDinilai} Sesi
-            </div>
-            <span className="text-xs text-yellow-500 mt-1 block font-medium">
-              Menunggu koreksi esai
-            </span>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Action Banner */}
-      <div className="batik-dark rounded-3xl p-5 sm:p-6 text-white shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-yellow-600/60 text-yellow-200 text-xs font-semibold">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>Aksi Cepat Guru</span>
+      <DashboardHeader
+        title="Dashboard Guru"
+        subtitle="Kelola absensi, tugas, dan penilaian untuk kelas yang Anda ampu."
+        icon={CheckCircle2}
+        action={
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button asChild className="w-full sm:w-auto">
+              <Link href="/dashboard/absensi">
+                <CalendarCheck2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                Absensi Cepat
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full sm:w-auto">
+              <Link href="/dashboard/ujian/buat">
+                <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                Buat Ujian
+              </Link>
+            </Button>
           </div>
-          <h2 className="text-lg sm:text-xl font-bold">Isi Absensi Kelas Hari Ini</h2>
-          <p className="text-xs sm:text-sm text-yellow-200/80 max-w-xl">
-            Pastikan seluruh kehadiran santri tercatat tepat waktu untuk laporan harian wali santri.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2.5 w-full sm:w-auto">
-          <Button asChild className="bg-yellow-400 hover:bg-yellow-300 text-slate-800 font-bold rounded-xl min-h-[44px]">
-            <Link href="/dashboard/absensi">
-              <CalendarCheck2 className="h-4 w-4 mr-1.5" />
-              Buka Absensi Cepat
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-xl min-h-[44px]">
-            <Link href="/dashboard/ujian/buat">
-              <Plus className="h-4 w-4 mr-1.5" />
-              Buat Ujian
-            </Link>
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Two Column Layout on Desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Tugas Perlu Dinilai */}
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
-          <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base font-bold text-slate-800">
-                Tugas Memerlukan Penilaian
-              </CardTitle>
-              <CardDescription className="text-xs text-slate-500">
-                Pengumpulan tugas santri yang belum dinilai
-              </CardDescription>
-            </div>
-            <Button asChild variant="ghost" size="sm" className="text-xs text-yellow-600 hover:text-yellow-700">
-              <Link href="/dashboard/tugas">Lihat Semua</Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="p-5 divide-y divide-slate-100">
-            {tugasPerluDinilai.length > 0 ? (
-              tugasPerluDinilai.map((item) => (
-                <div key={item.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded">
-                        {item.mapel}
-                      </span>
-                      <span className="text-xs text-slate-500">{item.kelas}</span>
-                    </div>
-                    <div className="text-sm font-bold text-slate-800">{item.judul}</div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
-                      {item.pending} Belum Dinilai
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="py-6 text-center text-sm text-slate-400">
-                Tidak ada pengumpulan tugas yang menunggu penilaian.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+      {error ? (
+        <EmptyState
+          variant="error"
+          icon={AlertCircle}
+          title="Gagal Memuat Rangkuman"
+          description={error}
+        />
+      ) : loading ? (
+        <GuruSkeleton />
+      ) : (
+        <>
+          {/* KPI */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+            {statItems.map((item) => (
+              <StatCard
+                key={item.label}
+                label={item.label}
+                value={item.value}
+                icon={item.icon}
+                tone={item.tone}
+                href={item.href}
+                hint={item.hint}
+              />
+            ))}
+          </div>
 
-        {/* Ujian Terbaru */}
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
-          <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base font-bold text-slate-800">
-                Daftar Ujian
-              </CardTitle>
-              <CardDescription className="text-xs text-slate-500">
-                Ujian di kelas yang Anda ampu
-              </CardDescription>
+          {/* Ajakan aksi */}
+          <div className="batik-dark relative overflow-hidden rounded-3xl p-5 text-white shadow-lifted sm:p-6">
+            <div className="relative flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+              <div className="min-w-0 space-y-1.5">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-600/60 px-2.5 py-1 text-xs font-semibold text-yellow-100">
+                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                  Aksi Cepat Guru
+                </span>
+                <h2 className="text-lg font-bold sm:text-xl">Isi Absensi Kelas Hari Ini</h2>
+                <p className="max-w-xl text-xs leading-relaxed text-yellow-100/85 sm:text-sm">
+                  Pastikan seluruh kehadiran santri tercatat tepat waktu untuk laporan harian wali
+                  santri.
+                </p>
+              </div>
+              <Button
+                asChild
+                variant="soft"
+                className="w-full shrink-0 border border-yellow-300/40 bg-yellow-400 text-slate-900 hover:bg-yellow-300 sm:w-auto"
+              >
+                <Link href="/dashboard/absensi">
+                  <CalendarCheck2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Buka Absensi Cepat
+                </Link>
+              </Button>
             </div>
-            <Button asChild variant="ghost" size="sm" className="text-xs text-yellow-600 hover:text-yellow-700">
-              <Link href="/dashboard/ujian">Kelola Ujian</Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="p-5 divide-y divide-slate-100">
-            {data.daftarUjian.length > 0 ? (
-              data.daftarUjian.map((item) => (
-                <div key={item.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
-                        {item.mapel}
-                      </span>
-                      <span className="text-xs text-slate-500">{item.kelas}</span>
-                    </div>
-                    <div className="text-sm font-bold text-slate-800">{item.judul}</div>
-                  </div>
-                  <StatusBadge status={item.status as "DRAFT" | "AKTIF" | "SELESAI" | "PUBLISHED"} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Tugas menunggu penilaian */}
+            <Card>
+              <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+                <div className="min-w-0">
+                  <CardTitle>Tugas Memerlukan Penilaian</CardTitle>
+                  <CardDescription>
+                    Pengumpulan tugas santri yang belum dinilai
+                  </CardDescription>
                 </div>
-              ))
-            ) : (
-              <p className="py-6 text-center text-sm text-slate-400">
-                Belum ada ujian di kelas yang Anda ampu.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                <Button asChild variant="outline" size="sm" className="shrink-0">
+                  <Link href="/dashboard/tugas">Lihat Semua</Link>
+                </Button>
+              </CardHeader>
+              <CardContent className="divide-y divide-slate-100">
+                {tugasPerluDinilai.length > 0 ? (
+                  tugasPerluDinilai.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                    >
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="soft-gold" size="sm">
+                            {item.mapel}
+                          </Badge>
+                          <span className="text-xs text-slate-500">{item.kelas}</span>
+                        </div>
+                        <p className="truncate text-sm font-semibold text-slate-800">{item.judul}</p>
+                      </div>
+                      <Badge variant="soft-warning" className="shrink-0 tabular">
+                        {item.pending} belum dinilai
+                      </Badge>
+                    </div>
+                  ))
+                ) : (
+                  <EmptyState
+                    className="mt-1 border-slate-200 bg-slate-50/50 py-8"
+                    icon={CheckCircle2}
+                    title="Semua tugas sudah dinilai"
+                    description="Tidak ada pengumpulan tugas yang menunggu penilaian saat ini."
+                    actionLabel="Buat Tugas Baru"
+                    actionHref="/dashboard/tugas/buat"
+                  />
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Daftar ujian */}
+            <Card>
+              <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+                <div className="min-w-0">
+                  <CardTitle>Daftar Ujian</CardTitle>
+                  <CardDescription>Ujian di kelas yang Anda ampu</CardDescription>
+                </div>
+                <Button asChild variant="outline" size="sm" className="shrink-0">
+                  <Link href="/dashboard/ujian">Kelola Ujian</Link>
+                </Button>
+              </CardHeader>
+              <CardContent className="divide-y divide-slate-100">
+                {data && data.daftarUjian.length > 0 ? (
+                  data.daftarUjian.map((item) => (
+                    <ExamRow key={item.id} item={item} />
+                  ))
+                ) : (
+                  <EmptyState
+                    className="mt-1 border-slate-200 bg-slate-50/50 py-8"
+                    icon={Award}
+                    title="Belum ada ujian"
+                    description="Buat ujian pertama Anda untuk kelas yang diampu."
+                    actionLabel="Buat Ujian"
+                    actionHref="/dashboard/ujian/buat"
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
     </div>
   )
 }

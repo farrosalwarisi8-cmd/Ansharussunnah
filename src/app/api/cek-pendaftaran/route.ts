@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit"
+import { hitungStatusBerkas } from "@/lib/status-berkas"
 
 export async function GET(request: NextRequest) {
   try {
@@ -81,6 +82,8 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const statusBerkas = hitungStatusBerkas(pendaftaran)
+
     return NextResponse.json(
       {
         success: true,
@@ -94,22 +97,20 @@ export async function GET(request: NextRequest) {
           // alasanPenolakan dipertahankan: ini data milik pendaftar sendiri
           // saat mengecek kenapa pendaftarannya ditolak (fitur cek-status).
           alasanPenolakan: pendaftaran.alasanPenolakan,
-          // Hanya boolean, bukan timestamp: endpoint ini publik dan tidak
-          // perlu membocorkan kapan email diverifikasi. Dipakai UI untuk
-          // menyembunyikan link upload yang pasti ditolak server.
-          emailTerverifikasi: Boolean(pendaftaran.emailOrangTuaTerverifikasiAt),
-          // Status kelengkapan dokumen: hanya BOOLEAN, path file di bucket
-          // TIDAK pernah diekspos di endpoint publik ini. Email konfirmasi
-          // pendaftaran menjanjikan "status berkas tertera di halaman cek
-          // status" — inilah pemenuhan janji tersebut; tanpa ini pendaftar
-          // tidak punya cara tahu apakah dokumennya sudah tercatat.
+          // Status kelengkapan dokumen dihitung OLEH SATU HELPER yang sama
+          // dengan halaman upload, panel admin, dan dashboard wali
+          // (src/lib/status-berkas.ts) supaya tidak berbeda antar halaman.
+          //
+          // Hanya boolean/angka: path file di bucket TIDAK pernah diekspos di
+          // endpoint publik ini. Email konfirmasi pendaftaran menjanjikan
+          // "status berkas tertera di halaman cek status" — inilah pemenuhan
+          // janji tersebut.
           dokumen: {
-            kartuKeluarga: Boolean(pendaftaran.dokKartuKeluarga),
-            akteLahir: Boolean(pendaftaran.dokAkteLahir),
-            foto: Boolean(pendaftaran.dokFoto),
-            lainnya: Array.isArray(pendaftaran.dokLainnya)
-              ? pendaftaran.dokLainnya.length
-              : 0,
+            kartuKeluarga: statusBerkas.kartuKeluarga,
+            akteLahir: statusBerkas.akteLahir,
+            foto: statusBerkas.foto,
+            lainnya: statusBerkas.lainnya,
+            jumlahLengkap: statusBerkas.jumlahLengkap,
           },
           createdAt: pendaftaran.createdAt,
         },

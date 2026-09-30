@@ -269,7 +269,7 @@ export function SppKhususTab() {
       </Card>
 
       {/* Form: periode & filter */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+      <Card>
         <CardContent className="p-5 sm:p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="space-y-1.5">
@@ -377,7 +377,7 @@ export function SppKhususTab() {
       </Card>
 
       {/* Daftar siswa */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+      <Card className="overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between gap-2 flex-wrap">
           <div>
             <CardTitle className="text-base font-bold text-slate-800">Pilih Siswa Penerima Potongan</CardTitle>
@@ -517,7 +517,7 @@ export function SppKhususTab() {
 
       {/* Hasil generate */}
       {hasil && (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <Card className="overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-slate-100">
             <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
@@ -530,7 +530,7 @@ export function SppKhususTab() {
           <CardContent className="p-4 sm:p-5">
             {hasil.rincian.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
+                <table className="data-table">
                   <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
                     <tr>
                       <th className="p-3 pl-4">Siswa</th>

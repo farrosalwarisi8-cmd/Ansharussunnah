@@ -239,7 +239,7 @@ export function BiayaPPDBClient({
     return (
       <div className="space-y-6">
         <DashboardHeader title="Biaya PPDB" subtitle="Pengaturan biaya pendaftaran per jenjang" />
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-8 text-center">
+        <Card className="p-8 text-center">
           <p className="text-sm text-slate-500 mb-4">
             Gagal memuat pengaturan biaya PPDB. Coba muat ulang.
           </p>
@@ -274,7 +274,7 @@ export function BiayaPPDBClient({
       />
 
       {/* Panel: Biaya per jenjang */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 sm:p-8">
+      <Card className="p-6 sm:p-8">
         <CardHeader className="p-0 pb-4">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -295,7 +295,7 @@ export function BiayaPPDBClient({
         </CardHeader>
         <CardContent className="p-0 space-y-3">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
+            <table className="data-table">
               <thead className="bg-slate-50 text-xs uppercase font-bold text-slate-600 border-b border-slate-200">
                 <tr>
                   <th className="p-3 pl-4">Jenjang</th>
@@ -383,7 +383,7 @@ export function BiayaPPDBClient({
       </Card>
 
       {/* Panel: Rekening & kontak WA */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 sm:p-8">
+      <Card className="p-6 sm:p-8">
         <CardHeader className="p-0 pb-4">
           <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
             <Wallet className="h-5 w-5 text-yellow-600" />

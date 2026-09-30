@@ -21,7 +21,8 @@ const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m
 const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogHeader), { ssr: false })
 const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
-import { ArrowLeft, Upload, CheckCircle2, Link as LinkIcon, Loader2, AlertCircle, Download, PenLine } from "lucide-react"
+import { ArrowLeft, Upload, CheckCircle2, Link as LinkIcon, Loader2, AlertCircle, Download, PenLine, FileCheck2 } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 
 interface SubmisiItem {
   siswaId: string
@@ -364,10 +365,7 @@ export default function DetailTugasPage() {
   if (loading) {
     return (
       <div className="space-y-6 max-w-5xl mx-auto">
-        <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-          <span className="ml-3 text-sm text-slate-500">Memuat detail tugas...</span>
-        </div>
+<PageSkeleton label="Memuat detail tugas..." />
       </div>
     )
   }
@@ -440,7 +438,7 @@ export default function DetailTugasPage() {
 
       {/* 1. GURU VIEW: DAFTAR SUBMISI SANTRI */}
       {isTeacher && rekapData && (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <Card className="overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base font-bold text-slate-800">
@@ -466,14 +464,17 @@ export default function DetailTugasPage() {
 
           <CardContent className="p-0">
             {rekapTampil.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-sm">
-                Belum ada data pengumpulan tugas.
-              </div>
+              <EmptyState
+                className="border-slate-200 bg-slate-50/50 py-8"
+                icon={FileCheck2}
+                title="Belum ada pengumpulan"
+                description="Tidak ada tugas yang dikumpulkan untuk kelas ini."
+              />
             ) : (
               <>
                 {/* Desktop Table View */}
                 <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-sm text-left">
+                  <table className="data-table">
                     <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
                       <tr>
                         <th className="p-4 pl-6">Nama Santri</th>
@@ -599,7 +600,7 @@ export default function DetailTugasPage() {
 
       {/* 2. SISWA VIEW: FORM PENGUMPULAN TUGAS */}
       {!isTeacher && (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 sm:p-8 space-y-5">
+        <Card className="p-6 sm:p-8 space-y-5">
           <div className="border-b border-slate-100 pb-3">
             <h3 className="text-base font-bold text-slate-800">
               Formulir Pengumpulan Tugas Santri

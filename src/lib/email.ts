@@ -597,59 +597,8 @@ export function buildOtpEmail(params: {
   `
 }
 
-/**
- * Email OTP verifikasi kepemilikan email orang tua saat pendaftaran.
- *
- * Bedanya dari buildOtpEmail (reset password): ini bukan pemulihan akun,
- * melainkan bukti bahwa pengisi form benar-benar menguasai alamat email yang
- * dicantumkan. Karena itu email ini menyebut nama siswa & nomor pendaftaran,
- * sehingga penerima bisa menilai apakah pendaftaran memang miliknya.
- */
-export function buildOtpVerifikasiPendaftaranEmail(params: {
-  namaOrangTua: string
-  namaSiswa: string
-  nomorPendaftaran: string
-  kodeOtp: string
-  expiryMinutes: number
-}): string {
-  const namaOrangTua = escapeHtml(params.namaOrangTua)
-  const namaSiswa = escapeHtml(params.namaSiswa)
-  const nomorPendaftaran = escapeHtml(params.nomorPendaftaran)
-  const kodeOtp = escapeHtml(params.kodeOtp)
-  const expiryMinutes = params.expiryMinutes
-  return `
-    <!DOCTYPE html>
-    <html lang="id">
-    <head><meta charset="UTF-8"></head>
-    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
-      <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <h2 style="color: #1e40af; margin-top: 0;">📧 Verifikasi Email Pendaftaran</h2>
-        <p>Halo <strong>${namaOrangTua}</strong>,</p>
-        <p>
-          Pendaftaran untuk <strong>${namaSiswa}</strong> dengan nomor
-          <strong>${nomorPendaftaran}</strong> sudah kami terima. Untuk
-          mengaktifkan pendaftaran, mohon konfirmasi bahwa Anda memang
-          pemilik email ini dengan memasukkan kode berikut:
-        </p>
-
-        <div style="text-align: center; margin: 30px 0;">
-          <div style="background: #eff6ff; border: 2px dashed #3b82f6; border-radius: 12px; padding: 24px; display: inline-block;">
-            <p style="margin: 0; font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #1e40af; font-family: monospace;">${kodeOtp}</p>
-          </div>
-        </div>
-
-        <p style="color: #666;">Kode ini berlaku selama <strong>${expiryMinutes} menit</strong> dan hanya bisa dipakai sekali. Jangan bagikan kode ini kepada siapapun.</p>
-
-        <div style="background: #fef2f2; border-radius: 8px; padding: 16px; margin: 16px 0;">
-          <p style="margin: 0; color: #991b1b;">🚨 Jika Anda <strong>TIDAK</strong> recognise pendaftaran ini, abaikan email tersebut dan jangan bagikan kodenya kepada siapa pun. Silakan hubungi panitia PPDB.</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `
-}
-
-function getBaseUrl(): string {  return (
+function getBaseUrl(): string {
+  return (
     process.env.NEXT_PUBLIC_APP_URL || "https://anshorussunnah.com"
   ).replace(/\/+$/, "")
 }

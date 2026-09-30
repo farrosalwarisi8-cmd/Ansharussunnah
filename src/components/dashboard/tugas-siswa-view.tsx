@@ -6,7 +6,8 @@ import { Card } from "@/components/ui/card"
 import { StatusBadge, type StatusType } from "@/components/ui/status-badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Clock, Upload, Loader2 } from "lucide-react"
+import { Clock, Upload } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 import Link from "next/link"
 import { getDaftarTugasSiswa } from "@/actions/tugas"
 
@@ -54,10 +55,7 @@ export function SiswaTugasView() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-3 text-sm text-slate-500">Memuat daftar tugas...</span>
-      </div>
+<PageSkeleton label="Memuat daftar tugas..." />
     )
   }
 
@@ -88,7 +86,7 @@ export function SiswaTugasView() {
             />
           ) : (
             pendingTugas.map((tugas) => (
-              <Card key={tugas.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 sm:p-6 space-y-4">
+              <Card key={tugas.id} className="p-5 sm:p-6 space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-3 py-1 rounded-full">
                     {tugas.mataPelajaran}
@@ -135,7 +133,7 @@ export function SiswaTugasView() {
             />
           ) : (
             submittedTugas.map((tugas) => (
-              <Card key={tugas.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 space-y-3">
+              <Card key={tugas.id} className="p-5 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <span className="text-xs font-semibold text-slate-500">{tugas.mataPelajaran}</span>

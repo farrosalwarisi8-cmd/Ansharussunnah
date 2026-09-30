@@ -146,7 +146,7 @@ export function GenerateSppTab() {
   return (
     <div className="space-y-6">
       {/* Panel: Set Tarif SPP per Jenjang */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 sm:p-8">
+      <Card className="p-6 sm:p-8">
         <CardHeader className="p-0 pb-4">
           <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
             <Settings2 className="h-5 w-5 text-yellow-600" />
@@ -166,7 +166,7 @@ export function GenerateSppTab() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
+              <table className="data-table">
                 <thead className="bg-slate-50 text-xs uppercase font-bold text-slate-600 border-b border-slate-200">
                   <tr>
                     <th className="p-3 pl-4">Jenjang</th>
@@ -221,7 +221,7 @@ export function GenerateSppTab() {
       </Card>
 
       {/* Panel: Penerbitan Tagihan SPP */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6 sm:p-8">
+      <Card className="p-6 sm:p-8">
         <CardHeader className="p-0 pb-4">
           <CardTitle className="text-lg font-bold text-slate-800">Penerbitan Tagihan SPP Bulanan Massal</CardTitle>
           <CardDescription className="text-xs sm:text-sm text-slate-500 leading-relaxed">
@@ -279,7 +279,7 @@ export function GenerateSppTab() {
 
       {/* Laporan Hasil Generate */}
       {laporan && (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <Card className="overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-slate-100">
             <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
               <Download className="h-4 w-4 text-yellow-600" />
@@ -293,7 +293,7 @@ export function GenerateSppTab() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
+              <table className="data-table">
                 <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
                   <tr>
                     <th className="p-3 pl-5">Jenjang</th>

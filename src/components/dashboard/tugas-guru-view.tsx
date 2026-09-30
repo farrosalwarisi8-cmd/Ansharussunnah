@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Clock, Loader2, Trash2, Pencil, PenLine } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
 import dynamic from "next/dynamic"
@@ -162,10 +163,7 @@ export function GuruTugasView() {
 
   if (loadingKelas) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-3 text-sm text-slate-500">Memuat daftar kelas...</span>
-      </div>
+<PageSkeleton label="Memuat daftar kelas..." />
     )
   }
 
@@ -180,7 +178,7 @@ export function GuruTugasView() {
 
   return (
     <div className="space-y-6">
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+      <Card>
         <CardContent className="p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
@@ -224,7 +222,7 @@ export function GuruTugasView() {
       {!loadingTugas && tugasList.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {tugasList.map((item) => (
-            <Card key={item.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
+            <Card key={item.id} className="hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
               <CardHeader className="p-5 pb-3">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-1.5">

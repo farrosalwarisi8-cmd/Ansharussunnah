@@ -28,7 +28,7 @@ export default function HomePage() {
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl relative">
               <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="(max-width: 640px) 48px, 56px" className="object-contain" priority />
             </div>
-            <div>
+            <div className="hidden sm:block">
               <div className="font-extrabold text-base sm:text-lg text-slate-800 tracking-tight flex items-center gap-1.5">
                 <span>Anshorussunnah</span>
                 <span className="hidden sm:inline-block text-xs bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
@@ -39,9 +39,10 @@ export default function HomePage() {
             </div>
           </div>
 
-          <nav className="flex items-center gap-2 sm:gap-3">
+          <nav className="flex items-center gap-1.5 sm:gap-3">
             <Link
               href="/cek-pendaftaran"
+              aria-label="Cek Status"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-600 hover:text-yellow-600 transition-colors min-h-[44px]"
             >
               <Search className="h-4 w-4" />
@@ -49,17 +50,19 @@ export default function HomePage() {
             </Link>
             <Link
               href="/login"
-              className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all min-h-[44px]"
+              aria-label="Portal KBM Online"
+              className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all min-h-[44px]"
             >
               <LogIn className="h-4 w-4 text-slate-500" />
-              <span>Portal KBM Online</span>
+              <span className="hidden sm:inline">Portal KBM Online</span>
             </Link>
             <Link
               href="/pendaftaran"
-              className="hidden sm:inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-yellow-600 hover:bg-yellow-700 rounded-xl transition-all shadow-md shadow-yellow-700/20 min-h-[44px]"
+              className="inline-flex items-center gap-1.5 px-3.5 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-yellow-600 hover:bg-yellow-700 rounded-xl transition-all shadow-md shadow-yellow-700/20 min-h-[44px]"
             >
               <UserPlus className="h-4 w-4" />
-              <span>Daftar Sekarang</span>
+              <span className="hidden sm:inline">Daftar Sekarang</span>
+              <span className="sm:hidden">Daftar</span>
             </Link>
           </nav>
         </div>
@@ -271,7 +274,7 @@ export default function HomePage() {
 
       {/* 5. Footer */}
       <footer className="batik-dark text-slate-200 py-12 border-t border-slate-700">
-        <div className="container mx-auto px-4 sm:px-6 max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div className="container mx-auto px-4 sm:px-6 max-w-5xl flex flex-col lg:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl overflow-hidden relative">
               <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="36px" className="object-contain" />
@@ -282,14 +285,14 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-6 text-xs font-semibold">
-            <Link href="/pendaftaran" className="hover:text-amber-400 transition-colors">
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-xs font-semibold">
+            <Link href="/pendaftaran" className="inline-flex min-h-[36px] items-center hover:text-amber-400 transition-colors">
               Pendaftaran Baru
             </Link>
-            <Link href="/cek-pendaftaran" className="hover:text-amber-400 transition-colors">
+            <Link href="/cek-pendaftaran" className="inline-flex min-h-[36px] items-center hover:text-amber-400 transition-colors">
               Cek Status
             </Link>
-            <Link href="/login" className="hover:text-amber-400 transition-colors">
+            <Link href="/login" className="inline-flex min-h-[36px] items-center hover:text-amber-400 transition-colors">
               Portal KBM Online
             </Link>
           </div>

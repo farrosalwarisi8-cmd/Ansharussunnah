@@ -5,7 +5,7 @@ import { type ChildStudent } from "@/components/dashboard/dashboard-context"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge, type StatusType } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Loader2 } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { getTugasAnak } from "@/actions/tugas"
 
 type TugasItem = {
@@ -66,10 +66,7 @@ export function OrangTuaTugasView({ selectedChild }: { selectedChild: ChildStude
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-3 text-sm text-slate-500">Memuat data tugas...</span>
-      </div>
+<PageSkeleton label="Memuat data tugas..." />
     )
   }
 
@@ -78,7 +75,7 @@ export function OrangTuaTugasView({ selectedChild }: { selectedChild: ChildStude
   }
 
   return (
-    <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+    <Card>
       <CardHeader className="p-6 pb-3">
         <CardTitle className="text-base font-bold text-slate-800">
           Monitoring Tugas Santri: {selectedChild.nama}

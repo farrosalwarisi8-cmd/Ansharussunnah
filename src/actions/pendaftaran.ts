@@ -19,10 +19,22 @@ import {
 import { sendPendaftaranBerhasilEmail } from "@/lib/email"
 import { runAfterResponse } from "@/lib/after-response"
 import { hitungTokenAksesExpiraAt, hashTokenAkses } from "@/lib/pendaftaran-token"
-import { finalizeDraftRow } from "@/actions/pendaftaran-draft"
 import { hashTokenAkses as hashResumeToken } from "@/lib/pendaftaran-token"
 
 const MAX_RETRY = 5
+
+/**
+ * Sentinel internal: lempar di dalam transaksi submit kalau draft sudah
+ * difinalisasi request lain (updateMany dapat 0 row). Sengaja BUKAN subclass
+ * Prisma error supaya tidak tertangkap retry nomor pendaftaran, dan tidak
+ * pernah keluar ke klien sebagai pesan error.
+ */
+class DraftFinalizedBersamaanError extends Error {
+  constructor() {
+    super("Draft sudah difinalisasi oleh request lain")
+    this.name = "DraftFinalizedBersamaanError"
+  }
+}
 
 // Segment folder di dalam bucket "dokumen-pendaftaran" (mis. "temp-<nanoid>").
 const RE_DOKUMEN_SEGMENT = /^[A-Za-z0-9_-]{6,40}$/
@@ -306,7 +318,11 @@ export async function createPendaftaran(
     const dokLainnyaRaw = formData.getAll("dokLainnya") as string[]
     const dokLainnya = dokLainnyaRaw.filter(Boolean)
 
-    // Idempotensi finalisasi draft: klien mengirim draftToken (resume token    // server draft). Dengan token ini, submit ganda / retry setelah timeout    // mengembalikan nomor pendaftaran yang SAMA, bukan membuat record kedua.    // Token dicek sebagai hash — plaintext tidak pernah disimpan.    const draftToken = (formData.get("draftToken") as string | null)?.trim() || null
+    // Idempotensi finalisasi draft: klien mengirim draftToken (resume token
+    // server draft). Dengan token ini, submit ganda / retry setelah timeout
+    // mengembalikan nomor pendaftaran yang SAMA, bukan membuat record kedua.
+    // Token dicek sebagai hash — plaintext tidak pernah disimpan.
+    const draftToken = (formData.get("draftToken") as string | null)?.trim() || null
 
     // KEAMANAN (M2): hanya izinkan path dokumen yang benar-benar dihasilkan
     // form pendaftaran (folder temp). Menolak path dari bucket/storage lain,
@@ -345,97 +361,168 @@ export async function createPendaftaran(
 
     let lastError: Error | null = null
 
-    // ✅ IDEMPOTENSI FINALISASI DRAFT: kalau draft ini sudah pernah difinalisasi    // (submit ganda / retry setelah response hilang), kembalikan nomor yang    // sudah ada — JANGAN membuat pendaftaran kedua.    if (draftToken) {
-      const draftFinal = await prisma.pendaftaranDraft.findUnique({
-        where: { resumeTokenHash: hashResumeToken(draftToken) },
-        select: { nomorPendaftaran: true, finalizedAt: true },
-      })
-      if (draftFinal?.finalizedAt && draftFinal.nomorPendaftaran) {
-        return {
-          success: true,
-          message: "Pendaftaran sudah dibuat sebelumnya",
-          data: {
-            nomorPendaftaran: draftFinal.nomorPendaftaran,
-            // Token akses TIDAK bisa dikembalikan pada retry (hanya hash yang            // tersimpan). Pemilik memakai token dari percobaan pertama yang            // tersimpan di sessionStorage halaman sukses.
-            tokenAkses: "",
-          },
-        }
-      }
-    }
+    // ============================ IDEMPOTENSI SUBMIT ============================
+    //
+    // Bila klien mengirim `draftToken` (resume token draft server), pembuatan
+    // record Pendaftaran dan finalisasi draft terjadi dalam SATU transaksi
+    // database. Sebelumnya keduanya dua operasi terpisah, sehingga kegagalan
+    // di tengah menyisakan pendaftaran yang tidak lagi ter-idempoten-kan:
+    // request ulang dengan token sama akan membuat nomor kedua.
+    //
+    // Catatan soal "aman tanpa draftToken": kalau klien tidak mengirim token
+    // sama sekali (mis. localStorage dibersihkan sebelum submit), tidak ada
+    // draft yang bisa difinalisasi sehingga pembuatan record berdiri sendiri.
+    // Idempotensi pada kasus itu datang dari nomor pendaftaran uniknya dan
+    // cek duplikat email+jenjang di atas - bukan dari draft.
+    const resumeTokenHash = draftToken ? hashResumeToken(draftToken) : null
 
-    // ✅ Handle Race Condition dengan retry logic untuk record nomorPendaftaran unik    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+    type HasilSubmit =
+      | { jenis: "baru"; nomorPendaftaran: string; tokenAkses: string; jenjangNama: string; biaya: { biayaPendaftaran: number; biayaUangGedung: number; biayaSarpras: number } }
+      | { jenis: "sudah-ada"; nomorPendaftaran: string }
+
+    // Handle Race Condition dengan retry logic untuk record nomorPendaftaran unik
+    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
       try {
         const nomorPendaftaran = await generateNomorPendaftaran()
         // Token akses rahasia: kredensial pemilik untuk upload dokumen/bukti
-        // transfer. Hanya dikirim sekali ke klien pada saat pendaftaran dibuat
-        // lalu disimpan klien di localStorage — TIDAK PERNAH disimpan di
-        // database. Yang tersimpan hanya SHA-256-nya, sehingga bocornya dump
-        // database tidak langsung berarti kredensial upload yang valid.
+        // transfer. Hanya dikirim sekali ke klien saat pendaftaran dibuat lalu
+        // disimpan klien di localStorage - TIDAK PERNAH disimpan di database.
+        // Yang tersimpan hanya SHA-256-nya, sehingga bocornya dump database
+        // tidak langsung berarti kredensial upload yang valid.
         const tokenAkses = nanoid(32)
         // Batas berlaku token akses publik: 90 hari sejak pendaftaran dibuat.
         const tokenAksesExpiraAt = hitungTokenAksesExpiraAt()
 
-        const pendaftaran = await prisma.pendaftaran.create({
-          data: {
-            nomorPendaftaran,
-            tokenAksesHash: hashTokenAkses(tokenAkses),
-            tokenAksesExpiraAt,
-            namaLengkap: data.namaLengkap,
-            tempatLahir: data.tempatLahir,
-            tanggalLahir: new Date(data.tanggalLahir),
-            jenisKelamin: data.jenisKelamin as "LAKI_LAKI" | "PEREMPUAN",
-            agama: data.agama || null,
-            alamatSiswa: data.alamatSiswa,
-            nisn: data.nisn,
-            noHpSiswa: data.noHpSiswa || null,
-            namaOrangTua: data.namaOrangTua,
-            noHpOrangTua: data.noHpOrangTua,
-            emailOrangTua: data.emailOrangTua,            // Eksplisit null: OTP sudah DIHAPUS dari alur pendaftaran baru.            // Kolom warisan ini dipertahankan untuk data lama, bukan gerbang.            // Gerbang penerimaan sekarang = konfirmasi kontak wali oleh panitia            // (lihat kontakWaliDikonfirmasiAt + verifikasiPendaftaran).            emailOrangTuaTerverifikasiAt: null,
-            alamatOrangTua: data.alamatOrangTua,
-            namaAyahKandung: data.namaAyahKandung || null,
-            statusAyahKandung: (data.statusAyahKandung as "MASIH_HIDUP" | "SUDAH_MENINGGAL" | "TIDAK_DIKETAHUI") || null,
-            nikAyah: data.nikAyah || null,
-            namaIbuKandung: data.namaIbuKandung || null,
-            statusIbuKandung: (data.statusIbuKandung as "MASIH_HIDUP" | "SUDAH_MENINGGAL" | "TIDAK_DIKETAHUI") || null,
-            nikIbu: data.nikIbu || null,
-            statusWali: (data.statusWali as "SAMA_DENGAN_AYAH" | "SAMA_DENGAN_IBU" | "LAINNYA") || null,
-            namaWali: data.namaWali || null,
-            kewarganegaraan: (data.kewarganegaraan as "WNI" | "WNA") || "WNI",
-            kitas: data.kitas || null,
-            asalNegara: data.asalNegara || null,
-            jenjangTujuanId: data.jenjangTujuanId,
-            kelasTujuanId: data.kelasTujuanId,
-            dokKartuKeluarga: dokKK,
-            dokAkteLahir: dokAkte,
-            dokFoto: dokFoto,
-            dokLainnya: dokLainnya,
-            status: "MENUNGGU_PEMBAYARAN",
-            biayaPendaftaran,
-            biayaUangGedung,
-            biayaSarpras,
-            bankNama: pengaturan.bankNama,
-            bankNoRekening: pengaturan.bankNoRekening,
-            bankAtasNama: pengaturan.bankAtasNama,
-            kontakWa: pengaturan.kontakWa,
+        // Semua penentuan "sudah finalized atau belum" WAJIB lewat `tx`.
+        // Kalau dicek lewat `prisma` di luar transaksi, dua request paralel
+        // sama-sama melihat draft belum final lalu sama-sama membuat record.
+        const hasil = await prisma.$transaction<HasilSubmit>(
+          async (tx): Promise<HasilSubmit> => {
+            if (resumeTokenHash) {
+              const draft = await tx.pendaftaranDraft.findUnique({
+                where: { resumeTokenHash },
+                select: { finalizedAt: true, nomorPendaftaran: true },
+              })
+
+              if (draft?.finalizedAt && draft.nomorPendaftaran) {
+                return { jenis: "sudah-ada", nomorPendaftaran: draft.nomorPendaftaran }
+              }
+            }
+
+            const pendaftaran = await tx.pendaftaran.create({
+              data: {
+                nomorPendaftaran,
+                tokenAksesHash: hashTokenAkses(tokenAkses),
+                tokenAksesExpiraAt,
+                namaLengkap: data.namaLengkap,
+                tempatLahir: data.tempatLahir,
+                tanggalLahir: new Date(data.tanggalLahir),
+                jenisKelamin: data.jenisKelamin as "LAKI_LAKI" | "PEREMPUAN",
+                agama: data.agama || null,
+                alamatSiswa: data.alamatSiswa,
+                nisn: data.nisn,
+                noHpSiswa: data.noHpSiswa || null,
+                namaOrangTua: data.namaOrangTua,
+                noHpOrangTua: data.noHpOrangTua,
+                emailOrangTua: data.emailOrangTua,
+                // Kolom OTP legacy. Pendaftaran BARU tidak pernah mengisinya:
+                // email orang tua hanya data kontak, bukan bukti kepemilikan
+                // akun dan bukan gerbang apa pun. Gerbang penerimaan adalah
+                // konfirmasi kontak wali oleh panitia (kontakWaliDikonfirmasiAt).
+                emailOrangTuaTerverifikasiAt: null,
+                alamatOrangTua: data.alamatOrangTua,
+                namaAyahKandung: data.namaAyahKandung || null,
+                statusAyahKandung:
+                  (data.statusAyahKandung as "MASIH_HIDUP" | "SUDAH_MENINGGAL" | "TIDAK_DIKETAHUI") || null,
+                nikAyah: data.nikAyah || null,
+                namaIbuKandung: data.namaIbuKandung || null,
+                statusIbuKandung:
+                  (data.statusIbuKandung as "MASIH_HIDUP" | "SUDAH_MENINGGAL" | "TIDAK_DIKETAHUI") || null,
+                nikIbu: data.nikIbu || null,
+                statusWali:
+                  (data.statusWali as "SAMA_DENGAN_AYAH" | "SAMA_DENGAN_IBU" | "LAINNYA") || null,
+                namaWali: data.namaWali || null,
+                kewarganegaraan: (data.kewarganegaraan as "WNI" | "WNA") || "WNI",
+                kitas: data.kitas || null,
+                asalNegara: data.asalNegara || null,
+                jenjangTujuanId: data.jenjangTujuanId,
+                kelasTujuanId: data.kelasTujuanId,
+                dokKartuKeluarga: dokKK,
+                dokAkteLahir: dokAkte,
+                dokFoto: dokFoto,
+                dokLainnya: dokLainnya,
+                status: "MENUNGGU_PEMBAYARAN",
+                biayaPendaftaran,
+                biayaUangGedung,
+                biayaSarpras,
+                bankNama: pengaturan.bankNama,
+                bankNoRekening: pengaturan.bankNoRekening,
+                bankAtasNama: pengaturan.bankAtasNama,
+                kontakWa: pengaturan.kontakWa,
+              },
+            })
+
+            if (resumeTokenHash) {
+              // Finalisasi bersyarat: HANYA draft yang belum finalized boleh
+              // di-update. 0 row berarti request paralel sudah finalized
+              // duluan - lempar sentinel supaya transaksi ROLLBACK dan record
+              // yang barusan dibuat ikut hilang. Tanpa rollback, pendaftaran
+              // ganda tetap tercipta meski update-nya "atomik".
+              const updated = await tx.pendaftaranDraft.updateMany({
+                where: { resumeTokenHash, finalizedAt: null },
+                data: {
+                  finalizedAt: new Date(),
+                  nomorPendaftaran: pendaftaran.nomorPendaftaran,
+                },
+              })
+
+              if (updated.count !== 1) {
+                throw new DraftFinalizedBersamaanError()
+              }
+            }
+
+            return {
+              jenis: "baru",
+              nomorPendaftaran: pendaftaran.nomorPendaftaran,
+              tokenAkses,
+              jenjangNama: jenjang.nama,
+              biaya: { biayaPendaftaran, biayaUangGedung, biayaSarpras },
+            }
           },
-        })
+          { timeout: 15000, maxWait: 5000 },
+        )
+
+        if (hasil.jenis === "sudah-ada") {
+          return {
+            success: true,
+            message: "Pendaftaran sudah dibuat sebelumnya",
+            data: {
+              nomorPendaftaran: hasil.nomorPendaftaran,
+              // Token akses TIDAK bisa dikembalikan pada retry (hanya hash yang
+              // tersimpan). Pemilik memakai token dari percobaan pertama yang
+              // tersimpan di sessionStorage halaman sukses.
+              tokenAkses: "",
+            },
+          }
+        }
 
         // Kirim email konfirmasi + instruksi melengkapi pembayaran & dokumen.
-        // Ditunda ke setelah response (after): pendaftaran sudah tersimpan &
-        // nomor sudah dikembalikan, sehingga email tidak boleh menunda atau
-        // menggagalkan pendaftaran — tapi juga tidak boleh hilang begitu
-        // response terkirim (lihat runAfterResponse).
+        // Dijadwalkan ke SETELAH commit: pendaftaran sudah pasti tersimpan, jadi
+        // email tidak boleh menunda atau menggagalkan pendaftaran - tapi juga
+        // tidak boleh hilang begitu response terkirim (lihat runAfterResponse).
+        // Email ini BUKA OTP: tidak ada kode, dan tidak ada gerbang pun yang
+        // bergantung padanya.
         runAfterResponse(async () => {
           try {
-            const hasil = await sendPendaftaranBerhasilEmail({
-            namaOrangTua: data.namaOrangTua,
-            emailOrangTua: data.emailOrangTua,
+            const hasilEmail = await sendPendaftaranBerhasilEmail({
+              namaOrangTua: data.namaOrangTua,
+              emailOrangTua: data.emailOrangTua,
               namaSiswa: data.namaLengkap,
-              jenjangNama: jenjang.nama,
-              nomorPendaftaran: pendaftaran.nomorPendaftaran,
-              biayaPendaftaran,
-              biayaUangGedung,
-              biayaSarpras,
+              jenjangNama: hasil.jenjangNama,
+              nomorPendaftaran: hasil.nomorPendaftaran,
+              biayaPendaftaran: hasil.biaya.biayaPendaftaran,
+              biayaUangGedung: hasil.biaya.biayaUangGedung,
+              biayaSarpras: hasil.biaya.biayaSarpras,
               bankNama: pengaturan.bankNama,
               bankNoRekening: pengaturan.bankNoRekening,
               bankAtasNama: pengaturan.bankAtasNama,
@@ -445,10 +532,10 @@ export async function createPendaftaran(
               sudahUploadAkteLahir: Boolean(dokAkte),
               sudahUploadPasFoto: Boolean(dokFoto),
             })
-            if (!hasil.success) {
+            if (!hasilEmail.success) {
               console.error(
-                `[email] Email konfirmasi pendaftaran ${pendaftaran.nomorPendaftaran} gagal:`,
-                hasil.error
+                `[email] Email konfirmasi pendaftaran ${hasil.nomorPendaftaran} gagal:`,
+                hasilEmail.error
               )
             }
           } catch (error) {
@@ -456,30 +543,45 @@ export async function createPendaftaran(
           }
         })
 
-        // Finalisasi draft: tandai finalized + nomor pendaftaran secara
-        // atomik (updateMany dengan finalizedAt: null). Kegagalan di sini
-        // TIDAK menggagalkan pendaftaran yang sudah dibuat — akibatnya hanya
-        // retry tidak ter-idempoten-kan, bukan data hilang.
-        if (draftToken) {
-          await finalizeDraftRow(
-            prisma as unknown as Parameters<typeof finalizeDraftRow>[0],
-            draftToken,
-            pendaftaran.nomorPendaftaran
-          ).catch(() => false)
-        }
-
         return {
           success: true,
           message: "Pendaftaran berhasil dibuat",
           data: {
-            nomorPendaftaran: pendaftaran.nomorPendaftaran,
+            nomorPendaftaran: hasil.nomorPendaftaran,
             // Token asli (bukan hasil hash) dikembalikan ke klien. Nilai ini
             // hanya hidup di memori server sebentar lalu disimpan di
             // localStorage pengguna; tidak pernah masuk ke email maupun log.
-            tokenAkses,
+            tokenAkses: hasil.tokenAkses,
           },
         }
       } catch (error) {
+        // Request paralel dengan draftToken sama sudah finalized lebih dulu:
+        // transaksi kita rollback, jadi tidak ada pendaftaran kedua. Ambil
+        // nomor hasil finalisasi pertama dan kembalikan yang itu.
+        if (error instanceof DraftFinalizedBersamaanError && resumeTokenHash) {
+          const pemenang = await prisma.pendaftaranDraft.findUnique({
+            where: { resumeTokenHash },
+            select: { nomorPendaftaran: true },
+          })
+
+          if (pemenang?.nomorPendaftaran) {
+            return {
+              success: true,
+              message: "Pendaftaran sudah dibuat sebelumnya",
+              data: {
+                nomorPendaftaran: pemenang.nomorPendaftaran,
+                tokenAkses: "",
+              },
+            }
+          }
+
+          return {
+            success: false,
+            message:
+              "Draft pendaftaran ini sudah dipakai tetapi nomornya belum tersimpan. Muat ulang halaman pendaftaran lalu lanjutkan dari draft.",
+          }
+        }
+
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === "P2002" &&

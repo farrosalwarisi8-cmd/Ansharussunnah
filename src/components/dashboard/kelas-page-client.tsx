@@ -3,6 +3,7 @@
 
 
 import * as React from "react"
+import { EmptyState } from "@/components/ui/empty-state"
 
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import {
@@ -30,7 +31,7 @@ const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.D
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
 import Link from "next/link"
-import { Plus, UserCheck, Loader2, Users, AlertCircle, Pencil, Trash2, GraduationCap } from "lucide-react"
+import { Plus, UserCheck, Loader2, Users, AlertCircle, Pencil, Trash2, GraduationCap, Layers } from "lucide-react"
 
 interface GuruOption {
   id: string
@@ -305,7 +306,7 @@ export default function KelolaKelasPage() {
         />
         <div className="space-y-6">
           {[1, 2].map((i) => (
-            <Card key={i} className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+            <Card key={i} className="overflow-hidden">
               <CardHeader className="p-6 pb-4 bg-slate-50/80 border-b border-slate-100">
                 <div className="h-5 w-48 bg-slate-200 rounded animate-pulse" />
                 <div className="h-8 w-64 bg-slate-200 rounded animate-pulse mt-2" />
@@ -370,7 +371,7 @@ export default function KelolaKelasPage() {
 
       {/* Empty State */}
       {jenjangList.length === 0 ? (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <Card className="overflow-hidden">
           <CardContent className="p-12 text-center">
             <AlertCircle className="h-12 w-12 text-slate-300 mx-auto mb-3" />
             <p className="text-sm font-medium text-slate-500">
@@ -385,7 +386,7 @@ export default function KelolaKelasPage() {
         /* Jenjang Accordion / Cards */
         <div className="space-y-6">
           {jenjangList.map((jenjang) => (
-            <Card key={jenjang.id} className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+            <Card key={jenjang.id} className="overflow-hidden">
               <CardHeader className="p-6 pb-4 bg-slate-50/80 border-b border-slate-100 flex flex-row items-center justify-between">
                 <div>
                   <span className="text-xs font-bold uppercase tracking-wider text-yellow-600 bg-yellow-100 px-2.5 py-0.5 rounded-full">
@@ -445,9 +446,12 @@ export default function KelolaKelasPage() {
 
               <CardContent className="p-6">
                 {jenjang.kelasList.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 text-sm">
-                    Belum ada kelas di jenjang ini.
-                  </div>
+                  <EmptyState
+                    className="border-slate-200 bg-slate-50/50 py-8"
+                    icon={Layers}
+                    title="Belum ada kelas"
+                    description="Tambahkan kelas pertama pada jenjang ini untuk mulai mengelola kelas."
+                  />
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {jenjang.kelasList.map((k) => (

@@ -1,10 +1,11 @@
 "use client"
 
 import * as React from "react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Loader2, RefreshCw } from "lucide-react"
+import { Loader2, RefreshCw, CheckCircle2 } from "lucide-react"
 import { getLaporanKeuangan, getRekapTunggakanSpp, batalkanTagihanSpp } from "@/actions/akuntansi"
 import { StatusBadge, type StatusType } from "@/components/ui/status-badge"
 import dynamic from "next/dynamic"
@@ -87,7 +88,7 @@ export function LaporanTab() {
 
   return (
     <div className="space-y-6">
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-4 sm:p-5">
+      <Card className="p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Periode:</label>
           <select value={String(laporanBulan)} onChange={(e) => setLaporanBulan(parseInt(e.target.value))} className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold">
@@ -134,7 +135,7 @@ export function LaporanTab() {
       )}
 
       {!loadingLaporan && laporanData && laporanData.transaksi.length > 0 && (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <Card className="overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-slate-100">
             <CardTitle className="text-base font-bold text-slate-800">Rincian Transaksi Non-SPP</CardTitle>
           </CardHeader>
@@ -156,7 +157,7 @@ export function LaporanTab() {
       )}
 
       {tunggakanData && (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <Card className="overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-slate-100">
             <CardTitle className="text-base font-bold text-slate-800">Rekap Tunggakan SPP</CardTitle>
             <CardDescription className="text-xs text-slate-500">Daftar siswa yang belum membayar atau membayar sebagian</CardDescription>
@@ -205,7 +206,12 @@ export function LaporanTab() {
               </div>
             )}
             {tunggakanData.tunggakanMurni.length === 0 && tunggakanData.dibayarSebagian.length === 0 && (
-              <div className="p-6 text-center text-slate-400 text-sm">Tidak ada tunggakan SPP untuk periode ini. 🎉</div>
+              <EmptyState
+                className="border-emerald-200 bg-emerald-50/40 py-8"
+                icon={CheckCircle2}
+                title="Tidak ada tunggakan"
+                description="Semua tagihan SPP periode ini sudah lunas."
+              />
             )}
           </CardContent>
         </Card>

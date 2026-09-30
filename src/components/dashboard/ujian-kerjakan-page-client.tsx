@@ -13,7 +13,8 @@ import { Card } from "@/components/ui/card"
 import dynamic from "next/dynamic"
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
 import { EmptyState } from "@/components/ui/empty-state"
-import { Clock, ArrowLeft, ArrowRight, Send, Loader2, AlertCircle } from "lucide-react"
+import { Clock, ArrowLeft, ArrowRight, Send, AlertCircle } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 
 interface OpsiSoal {
   id: string
@@ -199,10 +200,7 @@ export default function KerjakanUjianPage() {
   if (initializing) {
     return (
       <div className="space-y-4 max-w-5xl mx-auto pb-12">
-        <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-          <span className="ml-3 text-sm text-slate-500">Memuat soal ujian...</span>
-        </div>
+<PageSkeleton label="Memuat soal ujian..." />
       </div>
     )
   }
@@ -246,7 +244,8 @@ export default function KerjakanUjianPage() {
   return (
     <div className="space-y-4 max-w-5xl mx-auto pb-12">
       {/* Sticky Exam Top Bar */}
-      <header className="sticky top-0 z-30 bg-slate-800 text-white rounded-2xl p-3.5 sm:p-4 shadow-xl flex items-center justify-between gap-3 backdrop-blur-md">
+      {/* sticky di bawah header global (h-72px) agar tidak menimpanya */}
+      <header className="sticky top-[72px] z-30 bg-slate-800 text-white rounded-2xl p-3.5 sm:p-4 shadow-xl flex items-center justify-between gap-3 backdrop-blur-md">
         <div>
           <h2 className="font-extrabold text-sm sm:text-base tracking-tight truncate max-w-[200px] sm:max-w-md">
             {ujianData.judul}
@@ -284,7 +283,7 @@ export default function KerjakanUjianPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
         {/* Question Panel */}
         <div className="lg:col-span-3 space-y-4">
-          <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 sm:p-7 space-y-6">
+          <Card className="p-5 sm:p-7 space-y-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-yellow-600 bg-yellow-50 px-3 py-1 rounded-lg">
                 Soal Nomor {currentQ.nomor}
@@ -365,7 +364,7 @@ export default function KerjakanUjianPage() {
 
         {/* Sidebar Navigator */}
         <div className="lg:col-span-1">
-          <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm p-4 sticky top-24">
+          <Card className="p-4 sticky top-24">
             <h3 className="text-xs font-bold uppercase text-slate-500 mb-3">Navigasi Soal</h3>
             <div className="grid grid-cols-5 lg:grid-cols-3 gap-2">
               {questions.map((q, idx) => (

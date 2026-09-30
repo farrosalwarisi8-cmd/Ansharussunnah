@@ -1,10 +1,11 @@
 // src/components/dashboard/dashboard-page-client.tsx
 "use client"
 
+import * as React from "react"
 import dynamic from "next/dynamic"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { ChildSelector } from "@/components/dashboard/child-selector"
-import { DashboardHeader } from "@/components/dashboard/dashboard-header"
+import { AccessDeniedBanner } from "@/components/ui/access-denied"
 import { Role } from "@/lib/roles"
 
 // Dynamic import memecah bundle per role — hanya chunk role user yang dimuat.
@@ -28,12 +29,29 @@ const AdminDashboardHome = dynamic(
 export function DashboardPageClient() {
   const { user, selectedChild } = useDashboard()
 
+  // Server menandai pemblokiran route dengan `?akses=ditolak` (guard di
+  // dashboard layout). Banner ini hanya tampil satu kali — param dibersihkan
+  // dari URL agar refresh tidak menampilkan ulang.
+  const [aksesDitolak, setAksesDitolak] = React.useState(false)
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("akses") === "ditolak") {
+      setAksesDitolak(true)
+      params.delete("akses")
+      const qs = params.toString()
+      window.history.replaceState(
+        null,
+        "",
+        window.location.pathname + (qs ? `?${qs}` : "")
+      )
+    }
+  }, [])
+
+  // Kepala halaman (h1 + aksi) dimiliki masing-masing role home supaya judul,
+  // deskripsi, dan tombol aksi sesuai konteks tiap role.
   return (
     <div className="space-y-6">
-      <DashboardHeader
-        title={`Assalamu'alaikum, ${user.nama}`}
-        subtitle="Selamat datang di Portal Akademik & LMS Terpadu Anshorussunnah."
-      />
+      {aksesDitolak && <AccessDeniedBanner />}
 
       {user.role === Role.ORANG_TUA && <ChildSelector />}
 

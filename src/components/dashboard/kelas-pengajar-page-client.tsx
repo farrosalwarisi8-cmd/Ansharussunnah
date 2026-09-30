@@ -28,6 +28,7 @@ const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.D
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 const ConfirmDialog = dynamic(() => import("@/components/ui/confirm-dialog").then(m => m.ConfirmDialog), { ssr: false })
 import { Plus, Trash2, ArrowLeft, Loader2, Users, BookOpen } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 
 interface GuruOption {
   id: string
@@ -243,9 +244,7 @@ export default function PengajarKelasPage() {
   if (loading) {
     return (
       <div className="space-y-6 max-w-6xl mx-auto">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        </div>
+<PageSkeleton label="Memuat data" />
       </div>
     )
   }
@@ -276,7 +275,7 @@ export default function PengajarKelasPage() {
       />
 
       {/* Pengajar Table / Card List */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+      <Card className="overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-base font-bold text-slate-800">
@@ -300,7 +299,7 @@ export default function PengajarKelasPage() {
             <>
               {/* Desktop Table */}
               <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-sm text-left">
+                <table className="data-table">
                   <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
                     <tr>
                       <th className="p-4 pl-6">Guru</th>

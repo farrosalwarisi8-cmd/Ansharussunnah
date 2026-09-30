@@ -1,72 +1,99 @@
+// src/components/dashboard/role-homes/orang-tua-home.tsx
+
 "use client"
 
 import * as React from "react"
 import Link from "next/link"
 import {
-  CalendarCheck2,
   Award,
-  FileCheck2,
+  CalendarCheck2,
   CreditCard,
+  FileCheck2,
   GraduationCap,
+  Receipt,
+  Sparkles,
+  UserRound,
   Users,
-  Loader2,
 } from "lucide-react"
 import { useDashboard, type ChildStudent } from "@/components/dashboard/dashboard-context"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { EmptyState } from "@/components/ui/empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
+import { StatCard } from "@/components/ui/stat-card"
+import { DashboardHeader } from "../dashboard-header"
 import { getRangkumanOrangTuaHome, type RangkumanSiswa } from "@/actions/dashboard"
 
-function ChildCardGrid({ childList, onSelect }: { childList: ChildStudent[]; onSelect: (c: ChildStudent) => void }) {
+function initials(nama: string): string {
+  return (
+    nama
+      .split(" ")
+      .map((n) => n[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?"
+  )
+}
+
+function formatRupiah(n: number): string {
+  return "Rp " + n.toLocaleString("id-ID")
+}
+
+function ChildCardGrid({
+  childList,
+  onSelect,
+}: {
+  childList: ChildStudent[]
+  onSelect: (c: ChildStudent) => void
+}) {
   return (
     <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-yellow-500 text-white shadow-lg mb-2">
-          <Users className="h-7 w-7" />
-        </div>
-        <h2 className="text-xl font-extrabold text-slate-800">Pilih Santri yang Ingin Dipantau</h2>
-        <p className="text-sm text-slate-500 max-w-md mx-auto">
-          Anda memiliki {childList.length} santri terdaftar. Pilih salah satu untuk melihat data akademiknya.
-        </p>
-      </div>
+      <DashboardHeader
+        title="Pilih Santri"
+        subtitle={`Anda memiliki ${childList.length} santri terdaftar. Pilih salah satu untuk melihat data akademiknya.`}
+        icon={Users}
+      />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {childList.map((child) => (
           <button
             key={child.id}
             onClick={() => onSelect(child)}
-            className="group text-left"
+            className="group text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-2xl"
+            aria-label={`Lihat data ${child.nama}`}
           >
-            <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm hover:shadow-md hover:border-yellow-300 transition-all cursor-pointer group-hover:scale-[1.02]">
-              <CardContent className="p-5 flex flex-col items-center text-center space-y-3">
-                <Avatar className="h-16 w-16 border-2 border-yellow-200 ring-4 ring-yellow-50 group-hover:ring-yellow-100 transition-all">
-                  <AvatarImage src={child.avatar || ""} />
-                  <AvatarFallback className="bg-yellow-500 text-white font-bold text-lg">
-                    {child.nama
-                      .split(" ")
-                      .map((n) => n[0])
-                      .slice(0, 2)
-                      .join("")}
+            <Card className="h-full transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-yellow-300 group-hover:shadow-soft">
+              <CardContent className="flex h-full flex-col items-center gap-3 p-5 text-center">
+                <Avatar className="h-16 w-16 border-2 border-yellow-200 ring-4 ring-yellow-50 transition-all group-hover:ring-yellow-100">
+                  <AvatarImage src={child.avatar || ""} alt="" />
+                  <AvatarFallback className="bg-yellow-500 text-lg font-bold text-white">
+                    {initials(child.nama)}
                   </AvatarFallback>
                 </Avatar>
 
-                <div className="space-y-1">
-                  <div className="text-base font-bold text-slate-800 group-hover:text-yellow-700 transition-colors">
+                <div className="min-w-0 space-y-1">
+                  <p className="truncate text-base font-bold text-slate-800 transition-colors group-hover:text-yellow-700">
                     {child.nama}
-                  </div>
-                  <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
-                    <GraduationCap className="h-3.5 w-3.5 text-yellow-500" />
-                    <span>{child.jenjangNama} — {child.kelasNama}</span>
-                  </div>
+                  </p>
+                  <p className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
+                    <GraduationCap className="h-3.5 w-3.5 text-yellow-500" aria-hidden="true" />
+                    {child.jenjangNama} — {child.kelasNama}
+                  </p>
                   {child.nisn && (
-                    <div className="text-[11px] text-slate-400 font-mono">NISN: {child.nisn}</div>
+                    <p className="font-mono text-[11px] text-slate-400">NISN: {child.nisn}</p>
                   )}
                 </div>
 
-                <div className="w-full pt-2 border-t border-slate-100 group-hover:border-yellow-100 transition-colors">
-                  <span className="text-xs font-semibold text-yellow-600 group-hover:text-yellow-700">
+                <div className="mt-auto w-full border-t border-slate-100 pt-3 transition-colors group-hover:border-yellow-100">
+                  <span className="text-xs font-semibold text-yellow-600 transition-colors group-hover:text-yellow-700">
                     Lihat Data &rarr;
                   </span>
                 </div>
@@ -79,12 +106,41 @@ function ChildCardGrid({ childList, onSelect }: { childList: ChildStudent[]; onS
   )
 }
 
-function formatRupiah(n: number): string {
-  return "Rp " + n.toLocaleString("id-ID")
+function ChildSkeleton() {
+  return (
+    <div className="space-y-6" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Memuat data aluno…</span>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Card key={i} className="p-5">
+            <Skeleton className="h-3.5 w-24" />
+            <Skeleton className="mt-3 h-8 w-20" />
+            <Skeleton className="mt-3 h-3 w-28" />
+          </Card>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {[0, 1].map((i) => (
+          <Card key={i}>
+            <CardHeader>
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-3 w-24" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Skeleton className="h-14 w-full" />
+              <Skeleton className="h-14 w-full" />
+              <Skeleton className="h-14 w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function ChildStatsDashboard({ selectedChild }: { selectedChild: ChildStudent }) {
   const childName = selectedChild.nama
+  const firstName = childName.split(" ")[0]
   const childClass = `${selectedChild.jenjangNama} - ${selectedChild.kelasNama}`
 
   const [data, setData] = React.useState<RangkumanSiswa | null>(null)
@@ -116,145 +172,141 @@ function ChildStatsDashboard({ selectedChild }: { selectedChild: ChildStudent })
     }
   }, [selectedChild.id])
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-3 text-sm text-slate-500">Memuat data {childName.split(" ")[0]}...</span>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500">Kehadiran Santri</span>
-              <CalendarCheck2 className="h-4 w-4 text-yellow-500" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-2">
-              {data?.kehadiranPersen ?? "-"}%
-            </div>
-            <span className="text-xs text-slate-500 mt-1 block">
-              {data ? `${data.hadir} hadir dari ${data.totalAbsensi} absensi` : "Bulan ini"}
-            </span>
-          </CardContent>
-        </Card>
+      <DashboardHeader
+        title={`Pantau ${firstName}`}
+        subtitle={`${childName} • ${childClass}`}
+        icon={UserRound}
+        action={
+          <Button asChild variant="outline" className="w-full sm:w-auto">
+            <Link href="/dashboard/berkas">
+              <Receipt className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              Berkas Santri
+            </Link>
+          </Button>
+        }
+      />
 
-        <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500">Tugas Santri</span>
-              <FileCheck2 className="h-4 w-4 text-yellow-500" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-2">
-              {data?.tugasBelumDikirim ?? "-"}
-            </div>
-            <span className="text-xs text-slate-500 mt-1 block">
-              {data && data.tugasBelumDikirim > 0
-                ? "tugas belum dikumpulkan"
-                : "semua tugas dikumpulkan"}
-            </span>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500">Rata-rata Nilai Ujian</span>
-              <Award className="h-4 w-4 text-yellow-500" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-700 mt-2">
-              {data?.rataRataNilai ?? "-"}
-            </div>
-            <span className="text-xs text-slate-500 mt-1 block">
-              dari ujian yang sudah dinilai
-            </span>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500">Tagihan SPP</span>
-              <CreditCard className="h-4 w-4 text-yellow-500" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-yellow-600 mt-2">
-              {data?.spp?.status || "Belum Ada"}
-            </div>
-            <span className="text-xs text-yellow-500 mt-1 block font-medium">
-              {data?.spp ? formatRupiah(data.spp.nominal) : "Bulan berjalan"}
-            </span>
-          </CardContent>
-        </Card>
-      </div>
-
-      {error ? (
+      {loading ? (
+        <ChildSkeleton />
+      ) : error ? (
         <EmptyState
+          variant="error"
           title="Gagal Memuat Data"
-          description={error || "Terjadi kesalahan."}
+          description={error || "Terjadi kesalahan saat memuat data."}
         />
       ) : (
         <>
-          {/* Two Column Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
-              <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-base font-bold text-slate-800">
-                    Perkembangan Belajar {childName.split(" ")[0]}
+          {/* KPI */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+            <StatCard
+              label="Kehadiran Santri"
+              value={`${data?.kehadiranPersen ?? "-"}%`}
+              icon={CalendarCheck2}
+              tone="gold"
+              href="/dashboard/absensi"
+              hint={
+                data ? `${data.hadir} hadir dari ${data.totalAbsensi} absensi` : "Bulan ini"
+              }
+            />
+            <StatCard
+              label="Tugas Belum Dikumpulkan"
+              value={data?.tugasBelumDikirim ?? "-"}
+              icon={FileCheck2}
+              tone={data && data.tugasBelumDikirim > 0 ? "warning" : "success"}
+              href="/dashboard/tugas"
+              hint={
+                data && data.tugasBelumDikirim > 0
+                  ? "tugas belum dikumpulkan"
+                  : "semua tugas dikumpulkan"
+              }
+            />
+            <StatCard
+              label="Rata-rata Nilai Ujian"
+              value={data?.rataRataNilai ?? "-"}
+              icon={Award}
+              tone="info"
+              href="/dashboard/ujian"
+              hint="dari ujian yang sudah dinilai"
+            />
+            <StatCard
+              label="Tagihan SPP"
+              value={data?.spp?.status || "Belum Ada"}
+              icon={CreditCard}
+              tone={data?.spp?.status === "Lunas" ? "success" : "warning"}
+              href="/dashboard/tagihan"
+              hint={data?.spp ? formatRupiah(data.spp.nominal) : "Bulan berjalan"}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Perkembangan belajar */}
+            <Card>
+              <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+                <div className="min-w-0">
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-yellow-500" aria-hidden="true" />
+                    Perkembangan Belajar {firstName}
                   </CardTitle>
-                  <CardDescription className="text-xs text-slate-500">{childClass}</CardDescription>
+                  <CardDescription>{childClass}</CardDescription>
                 </div>
-                <Button asChild variant="ghost" size="sm" className="text-xs text-yellow-600">
+                <Button asChild variant="outline" size="sm" className="shrink-0">
                   <Link href="/dashboard/rapor">Buka Rapor</Link>
                 </Button>
               </CardHeader>
-              <CardContent className="p-5 space-y-3.5">
+              <CardContent className="divide-y divide-slate-100">
                 {data && data.daftarNilai.length > 0 ? (
                   data.daftarNilai.map((n) => (
-                    <div key={n.id} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-3">
-                      <div className="space-y-0.5">
-                        <div className="font-bold text-slate-800 text-sm">{n.mapel}</div>
-                        <div className="text-xs text-slate-500">{n.judul}</div>
+                    <div
+                      key={n.id}
+                      className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="truncate text-sm font-semibold text-slate-800">{n.mapel}</p>
+                        <p className="truncate text-xs text-slate-500">{n.judul}</p>
                       </div>
-                      <div className="text-base font-extrabold text-yellow-600 bg-white px-3 py-1.5 rounded-xl border border-yellow-100 shadow-sm shrink-0">
+                      <span className="tabular shrink-0 rounded-xl border border-yellow-100 bg-yellow-50 px-3 py-1.5 text-base font-extrabold text-yellow-700">
                         {n.nilai}
-                      </div>
+                      </span>
                     </div>
                   ))
                 ) : (
-                  <p className="py-6 text-center text-sm text-slate-400">
-                    Belum ada ujian yang dinilai untuk santri ini.
-                  </p>
+                  <EmptyState
+                    className="mt-1 border-slate-200 bg-slate-50/50 py-8"
+                    icon={Award}
+                    title="Belum ada nilai"
+                    description="Nilai ujian yang sudah dinilai guru akan tampil di sini."
+                    actionLabel="Buka Rapor"
+                    actionHref="/dashboard/rapor"
+                  />
                 )}
               </CardContent>
             </Card>
 
-            <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
-              <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-base font-bold text-slate-800">
+            {/* Administrasi & SPP */}
+            <Card>
+              <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+                <div className="min-w-0">
+                  <CardTitle className="flex items-center gap-2">
+                    <Receipt className="h-4 w-4 text-slate-400" aria-hidden="true" />
                     Administrasi &amp; SPP
                   </CardTitle>
-                  <CardDescription className="text-xs text-slate-500">Status kewajiban SPP santri</CardDescription>
+                  <CardDescription>Status kewajiban SPP {firstName}</CardDescription>
                 </div>
-                <Button asChild variant="ghost" size="sm" className="text-xs text-yellow-600">
+                <Button asChild variant="outline" size="sm" className="shrink-0">
                   <Link href="/dashboard/tagihan">Riwayat SPP</Link>
                 </Button>
               </CardHeader>
-              <CardContent className="p-5 space-y-4">
-                <div className="p-4 rounded-2xl bg-yellow-50 border border-yellow-200/80 flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-semibold text-yellow-700">
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-yellow-200/80 bg-yellow-50 p-4">
+                  <div className="min-w-0">
+                    <span className="block text-xs font-semibold text-yellow-700">
                       {data?.spp?.namaTagihan || "SPP Bulan Ini"}
                     </span>
-                    <div className="text-base font-extrabold text-yellow-800">
+                    <span className="tabular block text-base font-extrabold text-yellow-800">
                       {data?.spp ? formatRupiah(data.spp.nominal) : "-"}
-                    </div>
+                    </span>
                   </div>
                   <StatusBadge
                     status={
@@ -269,9 +321,9 @@ function ChildStatsDashboard({ selectedChild }: { selectedChild: ChildStudent })
                   />
                 </div>
 
-                <Button asChild className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-xl min-h-[44px]">
+                <Button asChild className="w-full">
                   <Link href="/dashboard/tagihan">
-                    <CreditCard className="h-4 w-4 mr-2" />
+                    <CreditCard className="mr-2 h-4 w-4" aria-hidden="true" />
                     Lihat Tagihan &amp; Upload Bukti Transfer
                   </Link>
                 </Button>
@@ -284,15 +336,36 @@ function ChildStatsDashboard({ selectedChild }: { selectedChild: ChildStudent })
   )
 }
 
-export function OrangTuaDashboardHome({ selectedChild }: { selectedChild: ChildStudent | null }) {
+export function OrangTuaDashboardHome({
+  selectedChild,
+}: {
+  selectedChild: ChildStudent | null
+}) {
   const { user, setSelectedChild } = useDashboard()
   const children = user.children || []
 
-  // Belum pilih anak → tampilkan card grid
+  if (children.length === 0) {
+    return (
+      <div className="space-y-6">
+        <DashboardHeader
+          title="Dashboard Wali"
+          subtitle="Belum ada santri yang terhubung dengan akun Anda."
+          icon={UserRound}
+        />
+        <EmptyState
+          icon={Users}
+          title="Belum ada data Santri"
+          description="Hubungi admin sekolah untuk menghubungkan akun wali dengan data Santri."
+        />
+      </div>
+    )
+  }
+
+  // Belum pilih anak -> tampilkan grid pilihan.
   if (!selectedChild) {
     return <ChildCardGrid childList={children} onSelect={setSelectedChild} />
   }
 
-  // Sudah pilih → tampilkan statistik
+  // Sudah pilih -> tampilkan ringkasan monitoring.
   return <ChildStatsDashboard selectedChild={selectedChild} />
 }

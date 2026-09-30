@@ -9,7 +9,13 @@ import {
   getPendaftaranDetail,
   verifikasiPendaftaran,
 } from "@/actions/verifikasi";
-import { tandaiEmailPendaftaranTerverifikasi } from "@/actions/verifikasi-email-manual";
+import {
+  konfirmasiKontakWali,
+  batalkanKonfirmasiKontakWali,
+  METODE_KONFIRMASI,
+  type MetodeKonfirmasi,
+} from "@/actions/konfirmasi-kontak-wali";
+import { hitungStatusBerkas, LABEL_BERKAS_UTAMA } from "@/lib/status-berkas";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,75 +64,69 @@ import {
   FileX,
   ArrowUpDown,
   Printer,
-  MailWarning,
-  ShieldQuestion,
+  PhoneCall,
   UserCheck,
 } from "lucide-react";
 import type { PendaftaranWithRelations } from "@/types";
 
 /**
- * Tiga kondisi, dibedakan karena ketiganya berarti hal berbeda bagi committee:
+ * Badge status konfirmasi kontak wali — SATU-SATUNYA gerbang sebelum
+ * pendaftaran boleh DITERIMA.
  *
- *   belum terverifikasi    → tidak bisa disetujui sama sekali. Menahan di sini
- *                            lebih baik daripada membiarkan approval gagal
- *                            belakangan setelah akun terlanjur dibuat.
- *   terverifikasi, tapi    → grandfathering. Gerbangnya terbuka tapi tidak ada
- *     tanpa bukti OTP        bukti kepemilikan email. Boleh disetujui, tapi
- *                            perlu dicurigai.
- *   terverifikasi + OTP    → ada bukti nyata. Aman.
+ * Alur pendaftaran tidak pernah mengirim OTP email lagi, jadi tidak ada bukti
+ * otomatis "orang ini menguasai kontak yang dicantumkan". Penggantinya adalah
+ * pemeriksaan manual panitia yang dicatat di `kontakWaliDikonfirmasiAt`
+ * (lihat src/actions/konfirmasi-kontak-wali.ts).
+ *
+ * Bedakan dua keadaan, karena artinya bagi panitia berbeda:
+ *
+ *   belum dikonfirmasi → pendaftaran TIDAK bisa disetujui. Menahan di sini
+ *                        lebih baik daripada approval yang gagal belakangan,
+ *                        setelah akun frantically terlanjur dibuat.
+ *   sudah dikonfirmasi → ada jejak siapa/kapan/lewat apa. Boleh disetujui.
+ *
+ * Kolom `emailOrangTuaTerverifikasiAt` yang lama TIDAK dipakai lagi di sini:
+ * isinya jejak OTP masa lalu, dan memakainya sebagai gerbang akan mencampur
+ * makna audit dengan jejak konfirmasi kontak yang aktif.
  */
-function EmailVerifikasiBadge({
-  terverifikasi,
-  adaBuktiOtp,
-  manual,
+function KontakWaliBadge({
+  konfirmasiAt,
+  namaAdmin,
 }: {
-  terverifikasi: boolean;
-  adaBuktiOtp: boolean;
-  manual?: boolean;
+  konfirmasiAt?: Date | string | null;
+  namaAdmin?: string | null;
 }) {
-  if (!terverifikasi) {
+  if (!konfirmasiAt) {
     return (
       <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 rounded-lg px-1.5 py-0.5">
-        <MailWarning className="h-3 w-3" />
-        Email belum diverifikasi
+        <PhoneCall className="h-3 w-3" />
+        Kontak wali belum dikonfirmasi
       </div>
     );
   }
 
-  // Dibedakan dari "warisan" karena LEGITIMAT: ada admin yang dikonfirmasi
-  // langsung ke orang tua, dan jejaknya tercatat permanen di
-  // `emailOrangTuaDiverifikasiManualAt`. Warisan tidak punya siapa pun dan
-  // tidak punya alasan — itu bedanya.
-  if (manual) {
-    return (
-      <div
-        className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-1.5 py-0.5"
-        title="Diverifikasi manual oleh panitia lewat konfirmasi langsung ke orang tua. Tidak ada bukti OTP, tapi alasannya tercatat permanen."
-      >
-        <UserCheck className="h-3 w-3" />
-        Verifikasi manual
-      </div>
-    );
-  }
-
-  if (!adaBuktiOtp) {
-    return (
-      <div
-        className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-300 rounded-lg px-1.5 py-0.5"
-        title="Gerbang terbuka dari grandfathering — tidak ada bukti OTP. Boleh disetujui, tapi pertimbangkan konfirmasi langsung ke orang tua."
-      >
-        <ShieldQuestion className="h-3 w-3" />
-        Verifikasi warisan
-      </div>
-    );
-  }
-
-  return null;
+  return (
+    <div
+      className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-1.5 py-0.5"
+      title={`Dikonfirmasi oleh ${namaAdmin || "panitia"} pada ${new Date(
+        konfirmasiAt,
+      ).toLocaleString("id-ID")}`}
+    >
+      <UserCheck className="h-3 w-3" />
+      Kontak wali dikonfirmasi
+    </div>
+  );
 }
 
+/** Label bahasa-indonesia untuk metode konfirmasi kontak wali. */
+const LABEL_METODE_KONFIRMASI: Record<string, string> = {
+  WHATSAPP: "WhatsApp",
+  TELEPON: "Telepon",
+  LANGSUNG: "Datang Langsung",
+};
+
 // Helper: Format label from enum value
-function formatStatusOrangTua(val?: string | null): string {
-  if (!val) return "-";
+function formatStatusOrangTua(val?: string | null): string {  if (!val) return "-";
   const map: Record<string, string> = {
     MASIH_HIDUP: "Masih Hidup",
     SUDAH_MENINGGAL: "Sudah Meninggal",
@@ -410,10 +410,13 @@ export default function VerifikasiPendaftaranPage() {
     "Berkas Akta Kelahiran dan foto bukti transfer buram/tidak terbaca.",
   );
   const [isRejectDialogOpen, setIsRejectDialogOpen] = React.useState(false);
-  const [isManualVerifyOpen, setIsManualVerifyOpen] = React.useState(false);
-  const [alasanVerifikasiManual, setAlasanVerifikasiManual] =
-    React.useState("");
-  const [isMemprosesVerifikasiManual, setIsMemprosesVerifikasiManual] =
+  // Konfirmasi kontak wali (pengganti OTP email) — wajib sebelum DITERIMA.
+  const [isKonfirmasiDialogOpen, setIsKonfirmasiDialogOpen] =
+    React.useState(false);
+  const [metodeKonfirmasi, setMetodeKonfirmasi] =
+    React.useState<MetodeKonfirmasi>("WHATSAPP");
+  const [catatanKonfirmasi, setCatatanKonfirmasi] = React.useState("");
+  const [isMemprosesKonfirmasi, setIsMemprosesKonfirmasi] =
     React.useState(false);
   const [isApproveConfirmOpen, setIsApproveConfirmOpen] = React.useState(false);
   const [processing, setProcessing] = React.useState(false);
@@ -576,26 +579,27 @@ export default function VerifikasiPendaftaranPage() {
     }
   };
 
-  // Verifikasi email manual (tanpa OTP).
+  // Konfirmasi kontak wali (pengganti OTP email).
   //
-  // Tombol ini muncul justru saat pendaftaran TERTAHAN: tanpa gerbang email,
-  // approval ditolak (lihat verifikasiPendaftaran). Konfirmasi ke orang tua
-  // lewat telepon dulu, baru isi alasannya di sini.
-  const handleVerifikasiManual = async () => {
+  // Tombol ini muncul justru saat pendaftaran TERTAHAN: tanpa gerbang ini,
+  // approval ditolak server (lihat verifikasiPendaftaran). Konfirmasi dulu ke
+  // orang tua lewat WhatsApp/telepon, baru catat metode + waktunya di sini.
+  const handleKonfirmasiKontak = async () => {
     if (!detailData) return;
-    setIsMemprosesVerifikasiManual(true);
+    setIsMemprosesKonfirmasi(true);
     try {
-      const result = await tandaiEmailPendaftaranTerverifikasi(
+      const result = await konfirmasiKontakWali(
         detailData.pendaftaran.id,
-        alasanVerifikasiManual,
+        metodeKonfirmasi,
+        catatanKonfirmasi,
       );
       if (result.success) {
         toast({
-          title: "Email Ditandai Terverifikasi",
+          title: "Kontak Wali Dikonfirmasi",
           description: result.message,
         });
-        setIsManualVerifyOpen(false);
-        setAlasanVerifikasiManual("");
+        setIsKonfirmasiDialogOpen(false);
+        setCatatanKonfirmasi("");
         // Detail di-refresh supaya badge ikut berubah, dialog tetap terbuka.
         await handleOpenDetail(detailData.pendaftaran.id);
         fetchList();
@@ -609,16 +613,47 @@ export default function VerifikasiPendaftaranPage() {
     } catch {
       toast({
         title: "Error",
-        description: "Gagal menandai email sebagai terverifikasi",
+        description: "Gagal menyimpan konfirmasi kontak wali",
         variant: "destructive" as never,
       });
     } finally {
-      setIsMemprosesVerifikasiManual(false);
+      setIsMemprosesKonfirmasi(false);
+    }
+  };
+
+  const handleBatalkanKonfirmasi = async () => {
+    if (!detailData) return;
+    setIsMemprosesKonfirmasi(true);
+    try {
+      const result = await batalkanKonfirmasiKontakWali(
+        detailData.pendaftaran.id,
+      );
+      if (result.success) {
+        toast({
+          title: "Konfirmasi Dibatalkan",
+          description: result.message,
+        });
+        await handleOpenDetail(detailData.pendaftaran.id);
+        fetchList();
+      } else {
+        toast({
+          title: "Gagal",
+          description: result.message,
+          variant: "destructive" as never,
+        });
+      }
+    } finally {
+      setIsMemprosesKonfirmasi(false);
     }
   };
 
   const pendaftar = detailData?.pendaftaran;
   const signedUrls = detailData?.signedUrls;
+
+  // Status kelengkapan berkas dihitung DARI helper terpusat, sama dengan
+  // halaman cek pendaftaran / halaman sukses / dashboard wali. Panel admin
+  // tidak boleh punya cara hitung sendiri.
+  const statusBerkas = hitungStatusBerkas(pendaftar);
 
   const statusFilterLabel =
     STATUS_FILTERS.find((f) => f.value === statusFilter)?.label || statusFilter;
@@ -659,7 +694,7 @@ export default function VerifikasiPendaftaranPage() {
       />
 
       {/* Filter Bar */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-4 sm:p-5">
+      <Card className="p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
           <div className="relative w-full sm:w-80">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -733,7 +768,7 @@ export default function VerifikasiPendaftaranPage() {
       </Card>
 
       {/* Pendaftar List / Table */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+      <Card className="overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100">
           <CardTitle className="text-base font-bold text-slate-800">
             Antrean Calon Santri
@@ -764,7 +799,7 @@ export default function VerifikasiPendaftaranPage() {
           {!loading && pendaftaranList.length > 0 && (
             <>
               <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-sm text-left">
+                <table className="data-table">
                   <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
                     <tr>
                       <th className="p-4 pl-6">No. Pendaftaran</th>
@@ -809,16 +844,9 @@ export default function VerifikasiPendaftaranPage() {
                         </td>
                         <td className="p-4">
                           <StatusBadge status={p.status} />
-                          <EmailVerifikasiBadge
-                            terverifikasi={Boolean(
-                              p.emailOrangTuaTerverifikasiAt,
-                            )}
-                            adaBuktiOtp={Boolean(
-                              p.emailOrangTuaDiverifikasiOtpAt,
-                            )}
-                            manual={Boolean(
-                              p.emailOrangTuaDiverifikasiManualAt,
-                            )}
+                          <KontakWaliBadge
+                            konfirmasiAt={p.kontakWaliDikonfirmasiAt}
+                            namaAdmin={p.kontakWaliDikonfirmasiOleh?.nama}
                           />
                         </td>
                         <td className="p-4 pr-6 text-right">
@@ -853,10 +881,9 @@ export default function VerifikasiPendaftaranPage() {
                       </div>
                       <StatusBadge status={p.status} size="sm" />
                     </div>
-                    <EmailVerifikasiBadge
-                      terverifikasi={Boolean(p.emailOrangTuaTerverifikasiAt)}
-                      adaBuktiOtp={Boolean(p.emailOrangTuaDiverifikasiOtpAt)}
-                      manual={Boolean(p.emailOrangTuaDiverifikasiManualAt)}
+                    <KontakWaliBadge
+                      konfirmasiAt={p.kontakWaliDikonfirmasiAt}
+                      namaAdmin={p.kontakWaliDikonfirmasiOleh?.nama}
                     />
                     <div className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-100 space-y-1">
                       <div>
@@ -1110,6 +1137,50 @@ export default function VerifikasiPendaftaranPage() {
                   <h3 className="font-bold text-slate-800 uppercase text-xs">
                     Dokumen Terlampir:
                   </h3>
+
+                  {/* Checklist kelengkapan berkas — SUMBER YANG SAMA dengan
+                      halaman cek pendaftaran, halaman sukses, dan dashboard
+                      wali (src/lib/status-berkas.ts). Panel admin tidak
+                      menghitung sendiri; kalau cara hitungnya berbeda di satu
+                      titik, panitia dan pendaftar melihat berkas yang
+                      berbeda. */}
+                  <ul className="p-3 rounded-xl bg-white border border-slate-200 text-xs space-y-1">
+                    {(
+                      [
+                        ["kartuKeluarga", statusBerkas.kartuKeluarga],
+                        ["akteLahir", statusBerkas.akteLahir],
+                        ["foto", statusBerkas.foto],
+                      ] as const
+                    ).map(([key, ada]) => (
+                      <li
+                        key={key}
+                        className={
+                          "flex items-center justify-between gap-2 " +
+                          (ada ? "text-emerald-700" : "text-amber-700")
+                        }
+                      >
+                        <span>{LABEL_BERKAS_UTAMA[key]}</span>
+                        <span className="font-semibold">
+                          {ada ? "✔ sudah ada" : "● BELUM ada"}
+                        </span>
+                      </li>
+                    ))}
+                    <li className="flex items-center justify-between gap-2 text-slate-600 border-t border-slate-100 pt-1 mt-1">
+                      <span>Dokumen tambahan</span>
+                      <span className="font-semibold">
+                        {statusBerkas.lainnya} berkas
+                      </span>
+                    </li>
+                  </ul>
+                  {statusBerkas.lainnya > 0 && (
+                    <p className="m-0 text-[11px] text-slate-500">
+                      Dokumen tambahan tidak bisa dibuka dari panel ini. Setelah
+                      pendaftaran diterima, seluruh berkas (termasuk tambahan)
+                      disalin ke berkas anak dan dapat dilihat di Dashboard
+                      Wali.
+                    </p>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {signedUrls?.buktiTransfer?.map((bt) => (
                       <a
@@ -1202,73 +1273,105 @@ export default function VerifikasiPendaftaranPage() {
                   </div>
                 )}
 
-              {/* ---- VERIFIKASI EMAIL (hanya saat belum terverifikasi) ---- */}
+              {/* ---- KONFIRMASI KONTAK WALI (gerbang approval) ---- */}
               {/*
-                Syaratnya BUKAN "MENUNGGU_VERIFIKASI". Audit state machine
-                menunjukkan MENUNGGU_VERIFIKASI mustahil punya gerbang tertutup:
-                satu-satunya jalan ke sana adalah uploadBuktiTransfer, dan
-                action itu mewajibkan gerbang email. Kalau panel ini dipatok di
-                status itu, ia tidak akan pernah muncul — dead UI.
+                Pendaftaran tidak lagi lewat OTP email, jadi tidak ada bukti
+                otomatis kepemilikan kontak. Penggantinya: panitia WAJIB
+                menghubungi wali (WhatsApp/telepon/langsung) dan mencatatnya di
+                sini sebelum menekan "Terima". Server menegakkan hal yang sama —
+                `verifikasiPendaftaran` menolak DITERIMA bila
+                `kontakWaliDikonfirmasiAt` masih kosong — jadi tombol di bawah
+                bukan hiasan, tanpa ini approval mustahil berhasil.
 
-                Yang bisa tersangkut adalah MENUNGGU_PEMBAYARAN: orang tua tidak
-                bisa membayar karena bukti transfer ditolak tanpa gerbang.
-                Panel ini muncul di status mana pun selama belum final.
-
-                DITOLAK ikut ditampilkan: saat ini tidak terjangkau lewat alur
-                normal, tapi kalau nanti alurnya berubah, panel ini sudah siap
-                dan tidak diam-diam hilang.
+                Ditampilkan selama belum final. DITOLAK ikut karena saat ini
+                tidak terjangkau lewat alur normal, tapi kalau alurnya berubah
+                panel ini sudah siap dan tidak diam-diam hilang.
               */}
-              {!!pendaftar &&
-                !pendaftar.emailOrangTuaTerverifikasiAt &&
-                pendaftar.status !== "DITERIMA" && (
-                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 space-y-3">
-                    <div className="flex items-start gap-2">
-                      <MailWarning className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
-                      <div>
-                        <h3 className="font-bold text-amber-900 uppercase text-xs">
-                          Email Belum Terverifikasi
-                        </h3>
+              {!!pendaftar && pendaftar.status !== "DITERIMA" && (
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <PhoneCall className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+                    <div>
+                      <h3 className="font-bold text-amber-900 uppercase text-xs">
+                        {pendaftar.kontakWaliDikonfirmasiAt
+                          ? "Kontak Wali Sudah Dikonfirmasi"
+                          : "Konfirmasi Kontak Wali Belum Dicatat"}
+                      </h3>
+                      {pendaftar.kontakWaliDikonfirmasiAt ? (
+                        <div className="text-xs text-amber-900 mt-1 space-y-0.5">
+                          <p className="m-0">
+                            Dikonfirmasi oleh{" "}
+                            <strong>
+                              {pendaftar.kontakWaliDikonfirmasiOleh?.nama ||
+                                "panitia"}
+                            </strong>{" "}
+                            pada{" "}
+                            <strong>
+                              {new Date(
+                                pendaftar.kontakWaliDikonfirmasiAt,
+                              ).toLocaleString("id-ID")}
+                            </strong>{" "}
+                            via{" "}
+                            <strong>
+                              {
+                                LABEL_METODE_KONFIRMASI[
+                                  pendaftar.metodeKonfirmasiKontak ?? ""
+                                ] ?? pendaftar.metodeKonfirmasiKontak
+                              }
+                            </strong>
+                            .
+                          </p>
+                          {pendaftar.catatanKonfirmasiKontak && (
+                            <p className="m-0 text-amber-800">
+                              Catatan: {pendaftar.catatanKonfirmasiKontak}
+                            </p>
+                          )}
+                          <p className="m-0 text-amber-700">
+                            Pendaftaran ini sekarang boleh disetujui.
+                          </p>
+                        </div>
+                      ) : (
                         <p className="text-xs text-amber-900 mt-1 m-0">
                           Pendaftaran ini <strong>tidak bisa disetujui</strong>{" "}
-                          sampai email orang tua terverifikasi. Jalur paling
-                          umum: minta orang tua membuka link OTP di halaman
-                          hasil pendaftaran — token aksesnya masih berlaku 90
-                          hari sejak pendaftaran dibuat.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="rounded-xl bg-white border border-amber-200 p-3 space-y-1">
-                      <p className="text-[11px] font-bold text-slate-700 m-0">
-                        Cara memverifikasi:
-                      </p>
-                      <ol className="text-[11px] text-slate-600 m-0 pl-4 list-decimal space-y-0.5">
-                        <li>
-                          Minta orang tua membuka email{" "}
-                          <span className="font-mono">
-                            {pendaftar.emailOrangTua}
+                          sampai kontak wali dikonfirmasi. Hubungi orang
+                          tua/wali (WhatsApp/telepon/datang langsung), lalu
+                          catat konfirmasinya di bawah. Nomor WhatsApp wali:{" "}
+                          <span className="font-mono font-bold">
+                            {pendaftar.noHpOrangTua}
                           </span>
-                        </li>
-                        <li>
-                          Minta kode OTP 6 digit, atau konfirmasi langsung lewat
-                          telepon {pendaftar.noHpOrangTua}
-                        </li>
-                        <li>
-                          Bila tidak bisa, gunakan tombol di bawah sebagai jalan
-                          terakhir
-                        </li>
-                      </ol>
+                        </p>
+                      )}
                     </div>
+                  </div>
+
+                  {pendaftar.kontakWaliDikonfirmasiAt ? (
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => setIsManualVerifyOpen(true)}
+                      disabled={isMemprosesKonfirmasi}
+                      onClick={() => void handleBatalkanKonfirmasi()}
                       className="w-full rounded-xl border-amber-400 text-amber-900 hover:bg-amber-100 font-bold text-xs min-h-[40px]"
                     >
-                      <ShieldQuestion className="h-4 w-4 mr-1.5" />
-                      Tandai Email Terverifikasi Manual
+                      {isMemprosesKonfirmasi ? (
+                        <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                      ) : (
+                        <XCircle className="h-4 w-4 mr-1.5" />
+                      )}
+                      Batalkan Konfirmasi
                     </Button>
-                  </div>
-                )}
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsKonfirmasiDialogOpen(true)}
+                      className="w-full rounded-xl border-amber-400 text-amber-900 hover:bg-amber-100 font-bold text-xs min-h-[40px]"
+                    >
+                      <PhoneCall className="h-4 w-4 mr-1.5" />
+                      Konfirmasi Kontak Wali
+                    </Button>
+                  )}
+                </div>
+              )}
 
               <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t border-slate-100">
                 <Button
@@ -1294,7 +1397,17 @@ export default function VerifikasiPendaftaranPage() {
                     <Button
                       type="button"
                       onClick={() => setIsApproveConfirmOpen(true)}
-                      className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px] text-xs px-6"
+                      // UI hanya menampilkan alasannya; PENEGAKANNYA di
+                      // server (verifikasiPendaftaran menolak DITERIMA tanpa
+                      // kontakWaliDikonfirmasiAt). Disable di sini supaya admin
+                      // tidak knock-knock ke server untuk hal yang pasti ditolak.
+                      disabled={!pendaftar?.kontakWaliDikonfirmasiAt}
+                      title={
+                        pendaftar?.kontakWaliDikonfirmasiAt
+                          ? undefined
+                          : "Konfirmasi kontak wali dulu sebelum menerima pendaftaran"
+                      }
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px] text-xs px-6 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <CheckCircle2 className="h-4 w-4 mr-1.5" />
                       Terima Santri &amp; Terbitkan Akun
@@ -1361,58 +1474,86 @@ export default function VerifikasiPendaftaranPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Verifikasi Email Manual */}
-      <Dialog open={isManualVerifyOpen} onOpenChange={setIsManualVerifyOpen}>
+      {/* Dialog Konfirmasi Kontak Wali (pengganti verifikasi email manual) */}
+      <Dialog
+        open={isKonfirmasiDialogOpen}
+        onOpenChange={setIsKonfirmasiDialogOpen}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-amber-700">
-              Tandai Email Terverifikasi Manual
+              Konfirmasi Kontak Wali
             </DialogTitle>
             <p className="text-xs text-slate-500">
-              Jalur terakhir tanpa OTP. Hanya untuk committee yang sudah
-              mengonfirmasi langsung ke orang tua. Alasan, nama, dan waktu
+              Catat bahwa Anda sudah menghubungi orang tua/wali untuk
+              pendaftaran {pendaftar?.nomorPendaftaran} di{" "}
+              {pendaftar?.noHpOrangTua}. Waktu, nama Anda, dan metode
               disimpan permanen di berkas pendaftaran.
             </p>
           </DialogHeader>
-          <div className="py-2 space-y-2">
+          <div className="py-2 space-y-3">
             <div className="rounded-xl bg-amber-50 border border-amber-200 p-3">
               <p className="text-[11px] text-amber-900 m-0">
-                Tindakan ini <strong>tidak</strong> menghasilkan bukti OTP, jadi
-                status pendaftaran tetap ditandai &quot;Verifikasi warisan&quot;
-                dan alasan ini tersimpan permanen di catatan panitia.
+                Konfirmasi dulu ke orang tua — jangan tekan tombol ini sebelum
+                benar-benar menghubungi. Ini satu-satunya pemeriksaan sebelum
+                pendaftaran disetujui dan akun diterbitkan.
               </p>
             </div>
-            <label className="text-xs font-semibold text-slate-700">
-              Alasan (wajib, minimal 10 karakter):
-            </label>
-            <Input
-              value={alasanVerifikasiManual}
-              onChange={(e) => setAlasanVerifikasiManual(e.target.value)}
-              className="h-11 rounded-xl text-sm"
-              placeholder="mis. Konfirmasi telepon ke 0812xxxx pada 12/03/2026, nama penyebut cocok"
-              required
-            />
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">
+                Metode konfirmasi:
+              </label>
+              <Select
+                value={metodeKonfirmasi}
+                onValueChange={(v) =>
+                  setMetodeKonfirmasi(v as MetodeKonfirmasi)
+                }
+              >
+                <SelectTrigger className="h-11 rounded-xl text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {METODE_KONFIRMASI.map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {LABEL_METODE_KONFIRMASI[m]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">
+                Catatan (opsional, maks 500 karakter):
+              </label>
+              <textarea
+                value={catatanKonfirmasi}
+                onChange={(e) => setCatatanKonfirmasi(e.target.value)}
+                maxLength={500}
+                rows={3}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none"
+                placeholder="mis. Dijawab wali 0812xxxx via telepon; nama penyebut cocok dengan nama ayah."
+              />
+            </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
-              onClick={() => setIsManualVerifyOpen(false)}
+              onClick={() => setIsKonfirmasiDialogOpen(false)}
               className="rounded-xl min-h-[40px]"
             >
               Batal
             </Button>
             <Button
-              onClick={handleVerifikasiManual}
-              disabled={
-                isMemprosesVerifikasiManual ||
-                alasanVerifikasiManual.trim().length < 10
-              }
+              onClick={() => void handleKonfirmasiKontak()}
+              disabled={isMemprosesKonfirmasi}
               className="rounded-xl min-h-[40px] font-bold bg-amber-600 hover:bg-amber-700 text-white"
             >
-              {isMemprosesVerifikasiManual ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-              ) : null}
-              Konfirmasi
+              {isMemprosesKonfirmasi ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <PhoneCall className="h-4 w-4 mr-1.5" />
+              )}
+              Simpan Konfirmasi
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1685,24 +1826,31 @@ export default function VerifikasiPendaftaranPage() {
                 )}
               </PrintSection>
 
-              {/* Jejak verifikasi email manual. Dicetak bersama berkas karena
-                  committee sering butuh bukti "ini bukan via OTP", dan alasan
-                  di catatan admin bisa sudah tertimpa approval. */}
-              {pendaftar.emailOrangTuaDiverifikasiManualAt && (
-                <PrintSection title="Verifikasi Email Manual">
+              {/* Jejak konfirmasi kontak wali. Dicetak bersama berkas karena
+                  panitia sering butuh bukti "kontak ini benar-benar dikonfirmasi
+                  manusia", dan alasan di catatan admin bisa sudah tertimpa
+                  approval. */}
+              {pendaftar.kontakWaliDikonfirmasiAt && (
+                <PrintSection title="Konfirmasi Kontak Wali">
                   <PrintRow
-                    label="Diverifikasi Oleh"
-                    value={pendaftar.emailOrangTuaDiverifikasiManualOleh?.nama}
+                    label="Metode"
+                    value={
+                      LABEL_METODE_KONFIRMASI[
+                        pendaftar.metodeKonfirmasiKontak ?? ""
+                      ] ?? pendaftar.metodeKonfirmasiKontak
+                    }
+                  />
+                  <PrintRow
+                    label="Dikonfirmasi Oleh"
+                    value={pendaftar.kontakWaliDikonfirmasiOleh?.nama}
                   />
                   <PrintRow
                     label="Waktu"
-                    value={formatDate(
-                      pendaftar.emailOrangTuaDiverifikasiManualAt,
-                    )}
+                    value={formatDate(pendaftar.kontakWaliDikonfirmasiAt)}
                   />
                   <PrintRow
-                    label="Alasan"
-                    value={pendaftar.alasanVerifikasiEmailManual}
+                    label="Catatan"
+                    value={pendaftar.catatanKonfirmasiKontak}
                   />
                 </PrintSection>
               )}

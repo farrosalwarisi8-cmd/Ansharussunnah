@@ -6,9 +6,10 @@ import * as React from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { useDashboard } from "./dashboard-context"
-import { Role } from "@/lib/roles"
 import {
+  Bell,
+  ChevronDown,
+  ChevronsLeft,
   Home,
   CalendarCheck2,
   GraduationCap,
@@ -28,11 +29,15 @@ import {
   User,
   LogOut,
   Menu,
-  ChevronRight,
   Sparkles,
   RefreshCw,
   BarChart3,
+  ShieldCheck,
+  KeyRound,
+  type LucideIcon,
 } from "lucide-react"
+import { useDashboard } from "./dashboard-context"
+import { Role } from "@/lib/roles"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { logout } from "@/actions/auth"
 import {
@@ -41,22 +46,101 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { GantiAkunDialog } from "./ganti-akun-dialog"
 
-interface NavItem {
+export interface NavItem {
   title: string
   href: string
   icon: React.ElementType
   badge?: string
   isPrimaryMobile?: boolean
   adminOnly?: boolean
+  /** Label pendek untuk bottom-nav mobile (mencegah teks terpotong). */
+  mobileTitle?: string
 }
 
+export interface NavSection {
+  title: string
+  items: NavItem[]
+}
+
+const SIDEBAR_EXPANDED = "16rem"
+const SIDEBAR_COLLAPSED = "4.75rem"
+const SIDEBAR_STORAGE_KEY = "dashboard:sidebar-collapsed"
+
+/** Label halaman untuk header & breadcrumb, diturunkan dari pathname. */
+const PAGE_META: Record<string, { title: string; section?: string }> = {
+  "/dashboard": { title: "Beranda" },
+  "/dashboard/profil": { title: "Profil Pengguna", section: "Pengaturan" },
+  "/dashboard/absensi": { title: "Absensi", section: "Akademik" },
+  "/dashboard/tugas": { title: "Tugas", section: "Akademik" },
+  "/dashboard/tugas/buat": { title: "Buat Tugas", section: "Akademik" },
+  "/dashboard/ujian": { title: "Ujian", section: "Akademik" },
+  "/dashboard/ujian/buat": { title: "Buat Ujian", section: "Akademik" },
+  "/dashboard/materi": { title: "Materi Pembelajaran", section: "Akademik" },
+  "/dashboard/rekap-nilai": { title: "Rekap Nilai", section: "Akademik" },
+  "/dashboard/rapor": { title: "Rapor", section: "Akademik" },
+  "/dashboard/kelas": { title: "Kelas", section: "Siswa & Sekolah" },
+  "/dashboard/siswa": { title: "Data Siswa", section: "Siswa & Sekolah" },
+  "/dashboard/guru": { title: "Guru", section: "Siswa & Sekolah" },
+  "/dashboard/mapel": { title: "Mata Pelajaran", section: "Siswa & Sekolah" },
+  "/dashboard/periode-ajaran": {
+    title: "Periode Ajaran",
+    section: "Siswa & Sekolah",
+  },
+  "/dashboard/kenaikan-kelas": {
+    title: "Kenaikan Kelas",
+    section: "Siswa & Sekolah",
+  },
+  "/dashboard/verifikasi-pendaftaran": {
+    title: "Verifikasi Pendaftaran",
+    section: "Pendaftaran",
+  },
+  "/dashboard/biaya-ppdb": { title: "Biaya PPDB", section: "Pendaftaran" },
+  "/dashboard/berkas": { title: "Berkas Santri", section: "Pendaftaran" },
+  "/dashboard/keuangan": { title: "Keuangan", section: "Keuangan" },
+  "/dashboard/tagihan": { title: "Tagihan", section: "Keuangan" },
+  "/dashboard/daftar-siswa": { title: "Daftar Siswa", section: "Keuangan" },
+  "/dashboard/kelola-akun-keuangan": {
+    title: "Kelola Akun Keuangan",
+    section: "Keuangan",
+  },
+}
+
+const ROLE_LABEL: Record<Role, string> = {
+  [Role.SUPER_ADMIN]: "Super Admin",
+  [Role.ADMIN_AKADEMIK]: "Admin Akademik",
+  [Role.ADMIN_KEUANGAN]: "Admin Keuangan",
+  [Role.GURU]: "Guru Pengajar",
+  [Role.SISWA]: "Santri / Siswa",
+  [Role.ORANG_TUA]: "Wali Santri",
+}
+
+const HOME: NavItem = {
+  title: "Beranda",
+  href: "/dashboard",
+  icon: Home,
+  isPrimaryMobile: true,
+}
+
+/**
+ * Daftar menu per role.
+ * PENTING: daftar href di sini sama persis dengan versi sebelumnya — redesign
+ * tidak boleh menambah/menghapus akses menu, hanya mengelompokkannya.
+ */
 export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
   switch (role) {
-    case Role.GURU:
+    case Role.GURU: {
       const guruItems: NavItem[] = [
-        { title: "Beranda", href: "/dashboard", icon: Home, isPrimaryMobile: true },
+        HOME,
         { title: "Absensi", href: "/dashboard/absensi", icon: CalendarCheck2, isPrimaryMobile: true },
         { title: "Ujian", href: "/dashboard/ujian", icon: Award, isPrimaryMobile: true },
         { title: "Tugas", href: "/dashboard/tugas", icon: FileCheck2, isPrimaryMobile: true },
@@ -71,18 +155,19 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
           { title: "Kelola Kelas", href: "/dashboard/kelas", icon: Layers, adminOnly: true },
           { title: "Mata Pelajaran", href: "/dashboard/mapel", icon: BookMarked, adminOnly: true },
           { title: "Periode Ajaran", href: "/dashboard/periode-ajaran", icon: CalendarDays, adminOnly: true },
-          { title: "Kelola Akun Keuangan", href: "/dashboard/kelola-akun-keuangan", icon: Wallet, adminOnly: true },
           { title: "Kenaikan Kelas", href: "/dashboard/kenaikan-kelas", icon: ArrowUpRight, adminOnly: true },
           { title: "Verifikasi Pendaftar", href: "/dashboard/verifikasi-pendaftaran", icon: UserCheck, adminOnly: true },
-          { title: "Biaya PPDB", href: "/dashboard/biaya-ppdb", icon: Wallet, adminOnly: true }
+          { title: "Biaya PPDB", href: "/dashboard/biaya-ppdb", icon: Wallet, adminOnly: true },
+          { title: "Kelola Akun Keuangan", href: "/dashboard/kelola-akun-keuangan", icon: Wallet, adminOnly: true }
         )
       }
       return guruItems
+    }
 
     case Role.SISWA:
       return [
-        { title: "Beranda", href: "/dashboard", icon: Home, isPrimaryMobile: true },
-        { title: "Absensi Saya", href: "/dashboard/absensi", icon: CalendarCheck2, isPrimaryMobile: true },
+        HOME,
+        { title: "Absensi Saya", href: "/dashboard/absensi", icon: CalendarCheck2, isPrimaryMobile: true, mobileTitle: "Absensi" },
         { title: "Ujian", href: "/dashboard/ujian", icon: Award, isPrimaryMobile: true },
         { title: "Tugas", href: "/dashboard/tugas", icon: FileCheck2, isPrimaryMobile: true },
         { title: "Materi", href: "/dashboard/materi", icon: BookOpen },
@@ -91,10 +176,10 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
 
     case Role.ORANG_TUA:
       return [
-        { title: "Beranda", href: "/dashboard", icon: Home, isPrimaryMobile: true },
-        { title: "Absensi Anak", href: "/dashboard/absensi", icon: CalendarCheck2, isPrimaryMobile: true },
-        { title: "Ujian Anak", href: "/dashboard/ujian", icon: Award, isPrimaryMobile: true },
-        { title: "Tagihan SPP", href: "/dashboard/tagihan", icon: CreditCard, isPrimaryMobile: true },
+        HOME,
+        { title: "Absensi Anak", href: "/dashboard/absensi", icon: CalendarCheck2, isPrimaryMobile: true, mobileTitle: "Absensi" },
+        { title: "Ujian Anak", href: "/dashboard/ujian", icon: Award, isPrimaryMobile: true, mobileTitle: "Ujian" },
+        { title: "Tagihan SPP", href: "/dashboard/tagihan", icon: CreditCard, isPrimaryMobile: true, mobileTitle: "Tagihan" },
         { title: "Berkas Santri", href: "/dashboard/berkas", icon: FileText },
         { title: "Rapor Anak", href: "/dashboard/rapor", icon: GraduationCap },
         { title: "Tugas Anak", href: "/dashboard/tugas", icon: FileCheck2 },
@@ -103,10 +188,10 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
 
     case Role.ADMIN_KEUANGAN:
       return [
-        { title: "Beranda", href: "/dashboard", icon: Home, isPrimaryMobile: true },
-        { title: "Kelola Keuangan", href: "/dashboard/keuangan", icon: DollarSign, isPrimaryMobile: true },
-        { title: "Tagihan Siswa", href: "/dashboard/tagihan", icon: CreditCard, isPrimaryMobile: true },
-        { title: "Daftar Siswa", href: "/dashboard/daftar-siswa", icon: Users2, isPrimaryMobile: true },
+        HOME,
+        { title: "Kelola Keuangan", href: "/dashboard/keuangan", icon: DollarSign, isPrimaryMobile: true, mobileTitle: "Keuangan" },
+        { title: "Tagihan Siswa", href: "/dashboard/tagihan", icon: CreditCard, isPrimaryMobile: true, mobileTitle: "Tagihan" },
+        { title: "Daftar Siswa", href: "/dashboard/daftar-siswa", icon: Users2, isPrimaryMobile: true, mobileTitle: "Siswa" },
         { title: "Biaya PPDB", href: "/dashboard/biaya-ppdb", icon: Wallet },
       ]
 
@@ -114,7 +199,7 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
     case Role.ADMIN_AKADEMIK:
     default:
       return [
-        { title: "Beranda", href: "/dashboard", icon: Home, isPrimaryMobile: true },
+        HOME,
         { title: "Absensi", href: "/dashboard/absensi", icon: CalendarCheck2, isPrimaryMobile: true },
         { title: "Ujian", href: "/dashboard/ujian", icon: Award, isPrimaryMobile: true },
         { title: "Tugas", href: "/dashboard/tugas", icon: FileCheck2, isPrimaryMobile: true },
@@ -127,323 +212,614 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
         { title: "Kelola Kelas", href: "/dashboard/kelas", icon: Layers },
         { title: "Mata Pelajaran", href: "/dashboard/mapel", icon: BookMarked },
         { title: "Periode Ajaran", href: "/dashboard/periode-ajaran", icon: CalendarDays },
-        { title: "Kelola Akun Keuangan", href: "/dashboard/kelola-akun-keuangan", icon: Wallet },
         { title: "Kenaikan Kelas", href: "/dashboard/kenaikan-kelas", icon: ArrowUpRight },
         { title: "Verifikasi Pendaftar", href: "/dashboard/verifikasi-pendaftaran", icon: UserCheck },
         { title: "Biaya PPDB", href: "/dashboard/biaya-ppdb", icon: Wallet },
+        { title: "Kelola Akun Keuangan", href: "/dashboard/kelola-akun-keuangan", icon: Wallet },
       ]
   }
+}
+
+/**
+ * Pengelompokan menu untuk tampilan. Hanya mengubah PRESENTASI —
+ * himpunan item persis sama dengan `getNavItems`.
+ */
+export function getNavSections(role: Role, isAdmin: boolean): NavSection[] {
+  const items = getNavItems(role, isAdmin)
+  const find = (href: string) => items.find((i) => i.href === href)
+
+  const sections: NavSection[] = []
+  const beranda = find("/dashboard")
+  if (beranda) sections.push({ title: "Beranda", items: [beranda] })
+
+  const akademik = items.filter((i) =>
+    [
+      "/dashboard/absensi",
+      "/dashboard/tugas",
+      "/dashboard/ujian",
+      "/dashboard/materi",
+      "/dashboard/rekap-nilai",
+      "/dashboard/rapor",
+    ].some((base) => i.href === base || i.href.startsWith(base + "/"))
+  )
+  if (akademik.length) sections.push({ title: "Akademik", items: akademik })
+
+  const pendaftaran = items.filter((i) =>
+    ["/dashboard/verifikasi-pendaftaran", "/dashboard/biaya-ppdb", "/dashboard/berkas"].some(
+      (base) => i.href === base || i.href.startsWith(base + "/")
+    )
+  )
+  if (pendaftaran.length) sections.push({ title: "Pendaftaran", items: pendaftaran })
+
+  const siswa = items.filter((i) =>
+    [
+      "/dashboard/siswa",
+      "/dashboard/guru",
+      "/dashboard/kelas",
+      "/dashboard/mapel",
+      "/dashboard/periode-ajaran",
+      "/dashboard/kenaikan-kelas",
+      "/dashboard/daftar-siswa",
+    ].some((base) => i.href === base || i.href.startsWith(base + "/"))
+  )
+  if (siswa.length) sections.push({ title: "Siswa & Sekolah", items: siswa })
+
+  const keuangan = items.filter((i) =>
+    ["/dashboard/keuangan", "/dashboard/tagihan", "/dashboard/kelola-akun-keuangan"].some(
+      (base) => i.href === base || i.href.startsWith(base + "/")
+    )
+  )
+  if (keuangan.length) sections.push({ title: "Keuangan", items: keuangan })
+
+  sections.push({
+    title: "Pengaturan",
+    items: [{ title: "Profil Pengguna", href: "/dashboard/profil", icon: User }],
+  })
+
+  return sections
+}
+
+function resolvePageMeta(pathname: string) {
+  if (PAGE_META[pathname]) return { pathname, ...PAGE_META[pathname] }
+
+  const match = Object.keys(PAGE_META)
+    .filter((path) => pathname.startsWith(path + "/"))
+    .sort((a, b) => b.length - a.length)[0]
+
+  if (match) {
+    const base = PAGE_META[match]
+    const rest = pathname.slice(match.length + 1)
+    return {
+      pathname,
+      title: base.title,
+      section: base.section,
+      detail: rest.replace(/-/g, " "),
+    }
+  }
+
+  return { pathname, title: "Dashboard", section: undefined }
+}
+
+function useSidebarCollapsed() {
+  const [collapsed, setCollapsed] = React.useState(false)
+
+  React.useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1")
+    } catch {
+      // localStorage tidak tersedia (mis. mode privat) — tetap expanded.
+    }
+  }, [])
+
+  const toggle = React.useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? "1" : "0")
+      } catch {
+        // diabaikan
+      }
+      return next
+    })
+  }, [])
+
+  React.useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--sidebar-w",
+      collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED
+    )
+  }, [collapsed])
+
+  return { collapsed, toggle }
+}
+
+function NavLink({
+  item,
+  active,
+  collapsed,
+  onNavigate,
+}: {
+  item: NavItem
+  active: boolean
+  collapsed: boolean
+  onNavigate?: () => void
+}) {
+  const Icon = item.icon as LucideIcon
+
+  return (
+    <li className="relative">
+      <Link
+        href={item.href}
+        onClick={onNavigate}
+        aria-current={active ? "page" : undefined}
+        title={collapsed ? item.title : undefined}
+        className={`group relative flex min-h-[44px] items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${
+          collapsed ? "justify-center px-0" : ""
+        } ${
+          active
+            ? "bg-yellow-500/15 text-yellow-300 shadow-sm ring-1 ring-inset ring-yellow-500/30"
+            : "text-slate-300 hover:bg-white/5 hover:text-white"
+        }`}
+      >
+        {active && (
+          <span
+            className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-yellow-400"
+            aria-hidden="true"
+          />
+        )}
+        <Icon
+          className={`h-[18px] w-[18px] shrink-0 transition-colors ${
+            active ? "text-yellow-400" : "text-slate-400 group-hover:text-yellow-300"
+          }`}
+          aria-hidden="true"
+        />
+        {!collapsed && <span className="truncate">{item.title}</span>}
+        {!collapsed && item.adminOnly && (
+          <span className="ml-auto rounded-md border border-yellow-500/30 bg-yellow-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yellow-300">
+            Admin
+          </span>
+        )}
+      </Link>
+
+      {/* Tooltip saat sidebar dic-fold — tetap terbaca meski label tersembunyi. */}
+      {collapsed && (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lifted transition-opacity group-hover:opacity-100 lg:block"
+        >
+          {item.title}
+        </span>
+      )}
+    </li>
+  )
 }
 
 function DashboardNavInner() {
   const pathname = usePathname()
   const { user, isMobileMenuOpen, setIsMobileMenuOpen } = useDashboard()
   const navItems = getNavItems(user.role, user.isAdmin)
+  const sections = getNavSections(user.role, user.isAdmin)
   const [gantiAkunOpen, setGantiAkunOpen] = React.useState(false)
+  const { collapsed, toggle } = useSidebarCollapsed()
 
   const primaryMobileItems = navItems.slice(0, 4)
   const hasMoreItems = navItems.length > 4
 
-  const isCurrentActive = (href: string) => {
-    if (href === "/dashboard") {
-      return pathname === "/dashboard"
-    }
-    return pathname.startsWith(href)
-  }
+  const isCurrentActive = (href: string) =>
+    href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href)
 
-  const roleLabel = {
-    [Role.SUPER_ADMIN]: "Super Admin",
-    [Role.ADMIN_AKADEMIK]: "Admin Akademik",
-    [Role.ADMIN_KEUANGAN]: "Admin Keuangan",
-    [Role.GURU]: user.isAdmin ? "Guru Admin" : "Guru Pengajar",
-    [Role.SISWA]: "Santri / Siswa",
-    [Role.ORANG_TUA]: "Wali Santri",
-  }[user.role]
+  const roleLabel =
+    user.role === Role.GURU && user.isAdmin
+      ? "Guru Admin"
+      : (ROLE_LABEL[user.role] ?? "Pengguna")
+
+  const pageMeta = resolvePageMeta(pathname)
+  const initials =
+    user.nama
+      ?.split(" ")
+      .map((n) => n[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "U"
 
   return (
     <>
-      {/* ========================================================================= */}
-      {/* 1. DESKTOP PERMANENT SIDEBAR (>= 1024px)                                  */}
-      {/* ========================================================================= */}
-      <aside className="hidden lg:flex flex-col w-64 xl:w-72 bg-slate-800 text-slate-200 fixed inset-y-0 left-0 z-40 border-r border-slate-700 selection:bg-yellow-500 selection:text-white">
-        {/* Brand Header */}
-        <div className="h-20 flex items-center px-6 border-b border-slate-700/80 bg-slate-800/40">
-          <Link href="/dashboard" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl relative shadow-md shadow-yellow-800/30 group-hover:scale-105 transition-transform">
-              <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="40px" className="object-contain" />
-            </div>
-            <div>
-              <div className="font-extrabold text-base tracking-tight text-white flex items-center gap-1.5">
-                <span>Anshorussunnah</span>
-                <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-              </div>
-              <span className="text-[11px] font-medium text-amber-400/90 tracking-wide uppercase">
-                LMS & Akademik
-              </span>
-            </div>
-          </Link>
-        </div>
-
-        {/* User Card Mini */}
-        <div className="p-4 mx-3 my-3 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center gap-3">
-          <Avatar className="h-10 w-10 border-2 border-yellow-500/40">
-            <AvatarImage src={user.avatar || ""} />
-            <AvatarFallback className="bg-yellow-700 text-yellow-100 font-bold text-xs">
-              {user.nama
-                ?.split(" ")
-                .map((n) => n[0])
-                .slice(0, 2)
-                .join("") || "U"}
-            </AvatarFallback>
-          </Avatar>
-          <div className="overflow-hidden flex-1">
-            <div className="font-semibold text-sm text-white truncate">
-              {user.nama}
-            </div>
-            <div className="text-[11px] font-medium text-yellow-400 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
-              {roleLabel}
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation Link List */}
-        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-          <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-            Menu Utama
-          </div>
-          {navItems.map((item) => {
-            const active = isCurrentActive(item.href)
-            const Icon = item.icon
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all group ${
-                  active
-                    ? "bg-yellow-500 text-white shadow-md shadow-yellow-800/40 font-semibold"
-                    : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Icon
-                    className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-110 ${
-                      active ? "text-white" : "text-slate-400 group-hover:text-yellow-400"
-                    }`}
-                  />
-                  <span>{item.title}</span>
-                </div>
-                {item.adminOnly && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/80 text-yellow-300 border border-yellow-700/50">
-                    Admin
-                  </span>
-                )}
-                {active && <ChevronRight className="h-4 w-4 text-yellow-200 ml-auto" />}
-              </Link>
-            )
-          })}
-        </div>
-
-        {/* Bottom Profile & Logout */}
-        <div className="p-3 border-t border-slate-700 bg-slate-800/50 space-y-1">
+      {/* ===================================================================== */}
+      {/* DESKTOP SIDEBAR (>= 1024px) — bisa dic-fold                             */}
+      {/* ===================================================================== */}
+      <aside
+        className={`hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col border-r border-slate-800 bg-slate-900 text-slate-200 shadow-sidebar transition-[width] duration-300 ease-out ${
+          collapsed ? "w-sidebar-collapsed" : "w-sidebar"
+        }`}
+        aria-label="Navigasi utama"
+      >
+        {/* Brand */}
+        <div
+          className={`flex h-[72px] shrink-0 items-center border-b border-slate-800 ${
+            collapsed ? "justify-center px-3" : "px-5"
+          }`}
+        >
           <Link
-            href="/dashboard/profil"
-            className="flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            href="/dashboard"
+            className="group flex items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
           >
-            <User className="h-4 w-4" />
-            <span>Profil & Pengaturan</span>
+            <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-white/95 shadow-gold-soft">
+              <Image
+                src="/anshorussunnah-logo.webp"
+                alt="Logo Anshorussunnah"
+                fill
+                sizes="40px"
+                className="object-contain"
+              />
+            </span>
+            {!collapsed && (
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5 text-sm font-extrabold tracking-tight text-white">
+                  Anshorussunnah
+                  <Sparkles className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
+                </span>
+                <span className="block text-[11px] font-medium uppercase tracking-wider text-amber-400/90">
+                  LMS &amp; Akademik
+                </span>
+              </span>
+            )}
           </Link>
+        </div>
+
+        {/* Menu */}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4">
+          {sections.map((section) => (
+            <div key={section.title} className="mb-5 last:mb-0">
+              {!collapsed && (
+                <p className="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  {section.title}
+                </p>
+              )}
+              {collapsed && section.title !== "Beranda" && (
+                <div className="mx-auto mb-2 h-px w-8 bg-slate-800" aria-hidden="true" />
+              )}
+              <ul className="space-y-1">
+                {section.items.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    item={item}
+                    collapsed={collapsed}
+                    active={isCurrentActive(item.href)}
+                  />
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+
+        {/* Collapse toggle + logout */}
+        <div className="space-y-1 border-t border-slate-800 p-3">
           <button
             type="button"
-            onClick={() => setGantiAkunOpen(true)}
-            className="flex items-center gap-3 w-full px-3.5 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors min-h-[38px]"
+            onClick={toggle}
+            aria-label={collapsed ? "Perlebar sidebar" : "Perkecil sidebar"}
+            className={`flex min-h-[40px] w-full items-center gap-3 rounded-xl px-3 py-2 text-xs font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${
+              collapsed ? "justify-center px-0" : ""
+            }`}
           >
-            <RefreshCw className="h-4 w-4" />
-            <span>Ganti Akun</span>
+            <ChevronsLeft
+              className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            />
+            {!collapsed && <span>Perkecil menu</span>}
           </button>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="flex items-center gap-3 w-full px-3.5 py-2 rounded-xl text-xs font-medium text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 transition-colors min-h-[38px]"
-            >
-              <LogOut className="h-4 w-4" />
-              <span>Keluar (Logout)</span>
-            </button>
-          </form>
+
+          {!collapsed && (
+            <form action={logout}>
+              <button
+                type="submit"
+                className="flex min-h-[40px] w-full items-center gap-3 rounded-xl px-3 py-2 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-500/10 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+              >
+                <LogOut className="h-4 w-4" aria-hidden="true" />
+                <span>Keluar</span>
+              </button>
+            </form>
+          )}
         </div>
       </aside>
 
-      {/* ========================================================================= */}
-      {/* 2. MOBILE TOP BAR (< 1024px)                                              */}
-      {/* ========================================================================= */}
-      <header className="lg:hidden sticky top-0 z-40 bg-slate-800/95 backdrop-blur-md text-white border-b border-slate-700 px-4 py-3 flex items-center justify-between shadow-sm">
-        <Link href="/dashboard" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg overflow-hidden relative shadow-sm">
-            <Image src="/anshorussunnah-logo.webp" alt="Logo Anshorussunnah" fill sizes="32px" className="object-contain" />
-          </div>
-          <div>
-            <div className="font-bold text-sm text-white leading-tight">Anshorussunnah</div>
-            <div className="text-[10px] text-amber-400 font-medium">{roleLabel}</div>
-          </div>
-        </Link>
-
-        <div className="flex items-center gap-2">
-          <Link
-            href="/dashboard/profil"
-            className="p-1 rounded-full border border-slate-700 active:scale-95 transition-transform"
-          >
-            <Avatar className="h-7 w-7">
-              <AvatarImage src={user.avatar || ""} />
-              <AvatarFallback className="bg-yellow-700 text-white text-[10px] font-bold">
-                {user.nama?.slice(0, 2).toUpperCase() || "U"}
-              </AvatarFallback>
-            </Avatar>
-          </Link>
-
+      {/* ===================================================================== */}
+      {/* HEADER — sticky, dipakai desktop & mobile                               */}
+      {/* ===================================================================== */}
+      <header
+        className="sticky top-0 z-30 w-full border-b border-slate-200 bg-white/90 backdrop-blur"
+      >
+        <div className="flex h-[72px] items-center gap-3 px-4 sm:px-6 lg:px-8">
+          {/* Mobile: menu + logo */}
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(true)}
-            className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 min-w-[40px] min-h-[40px] flex items-center justify-center active:scale-95 transition-transform"
-            aria-label="Buka Menu Lengkap"
+            className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+            aria-label="Buka menu navigasi"
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
+
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2.5 lg:hidden"
+            aria-label="Beranda Anshorussunnah"
+          >
+            <span className="relative h-8 w-8 overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-200">
+              <Image
+                src="/anshorussunnah-logo.webp"
+                alt=""
+                fill
+                sizes="32px"
+                className="object-contain"
+              />
+            </span>
+            <span className="hidden text-sm font-bold tracking-tight text-slate-900 sm:inline">
+              Anshorussunnah
+            </span>
+          </Link>
+
+          {/* Desktop: collapse toggle + judul halaman */}
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={collapsed ? "Perlebar sidebar" : "Perkecil sidebar"}
+            className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:inline-flex"
+          >
+            <ChevronsLeft
+              className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            />
+          </button>
+
+          <div className="hidden min-w-0 flex-1 lg:block">
+            {pageMeta.section && (
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-yellow-700">
+                {pageMeta.section}
+              </p>
+            )}
+            <p className="truncate text-sm font-semibold text-slate-800 sm:text-base">
+              {pageMeta.title}
+              {pageMeta.detail ? (
+                <span className="ml-1.5 text-sm font-normal capitalize text-slate-500">
+                  {pageMeta.detail}
+                </span>
+              ) : null}
+            </p>
+          </div>
+
+          <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            {/* Role aktif (desktop) */}
+            <span className="hidden items-center gap-1.5 rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1.5 text-xs font-semibold text-yellow-800 xl:inline-flex">
+              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              {roleLabel}
+            </span>
+
+            {/* Notifikasi — empty state yang jujur, tanpa data palsu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="relative flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Notifikasi"
+                >
+                  <Bell className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 p-2">
+                <DropdownMenuLabel className="px-3 py-2 text-sm font-semibold text-slate-800">
+                  Notifikasi
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <div className="px-3 py-6 text-center">
+                  <span className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-400">
+                    <Bell className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <p className="text-sm font-medium text-slate-700">Belum ada notifikasi</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    Pengumuman dari guru dan panitia akan tampil di sini.
+                  </p>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Profile menu / role switcher */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 rounded-xl p-1 pr-1.5 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-2.5 sm:pr-2"
+                  aria-label="Menu profil"
+                >
+                  <Avatar className="h-9 w-9 ring-2 ring-yellow-200">
+                    <AvatarImage src={user.avatar || ""} alt="" />
+                    <AvatarFallback className="bg-yellow-100 text-xs font-bold text-yellow-800">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="hidden min-w-0 text-left md:block">
+                    <span className="block max-w-[10rem] truncate text-sm font-semibold text-slate-800">
+                      {user.nama}
+                    </span>
+                    <span className="block text-xs text-slate-500">{roleLabel}</span>
+                  </span>
+                  <ChevronDown
+                    className="hidden h-4 w-4 text-slate-400 md:block"
+                    aria-hidden="true"
+                  />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64 p-2">
+                <DropdownMenuLabel className="px-3 py-2">
+                  <span className="block truncate text-sm font-semibold text-slate-800">
+                    {user.nama}
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs font-normal text-slate-500">
+                    {user.email}
+                  </span>
+                  <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-yellow-200 bg-yellow-50 px-2 py-0.5 text-[11px] font-semibold text-yellow-800">
+                    <ShieldCheck className="h-3 w-3" aria-hidden="true" />
+                    {roleLabel}
+                  </span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/profil" className="min-h-[40px] gap-2.5">
+                    <User className="h-4 w-4" aria-hidden="true" />
+                    Profil Pengguna
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/ganti-password" className="min-h-[40px] gap-2.5">
+                    <KeyRound className="h-4 w-4" aria-hidden="true" />
+                    Ganti Password
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => setGantiAkunOpen(true)}
+                  className="min-h-[40px] gap-2.5"
+                >
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                  Ganti Akun / Role
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <form action={logout}>
+                  <button
+                    type="submit"
+                    className="flex min-h-[40px] w-full items-center gap-2.5 rounded-lg px-2 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                  >
+                    <LogOut className="h-4 w-4" aria-hidden="true" />
+                    Keluar
+                  </button>
+                </form>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </header>
 
-      {/* ========================================================================= */}
-      {/* 3. MOBILE BOTTOM NAVIGATION BAR (< 1024px)                                */}
-      {/* ========================================================================= */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-2 py-1.5 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] safe-bottom">
-        <div className="grid grid-flow-col auto-cols-fr gap-1 items-center max-w-md mx-auto">
+      {/* ===================================================================== */}
+      {/* MOBILE BOTTOM NAV                                                        */}
+      {/* ===================================================================== */}
+      <nav
+        className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-2 py-1.5 shadow-[0_-4px_20px_rgba(15,23,42,0.06)] backdrop-blur lg:hidden"
+        aria-label="Navigasi utama"
+      >
+        <div className="mx-auto grid max-w-md auto-cols-fr grid-flow-col items-center gap-1">
           {primaryMobileItems.map((item) => {
             const active = isCurrentActive(item.href)
-            const Icon = item.icon
+            const Icon = item.icon as LucideIcon
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all min-h-[48px] min-w-[44px] touch-manipulation ${
+                aria-current={active ? "page" : undefined}
+                className={`flex min-h-[48px] min-w-[44px] touch-manipulation flex-col items-center justify-center rounded-xl px-1 py-1.5 transition-all ${
                   active
-                    ? "text-yellow-600 font-bold bg-yellow-50/80"
-                    : "text-slate-500 hover:text-slate-800 active:bg-slate-100"
+                    ? "bg-yellow-50 font-bold text-yellow-700"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                 }`}
               >
-                <div className="relative">
-                  <Icon className={`h-5 w-5 ${active ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
-                  {active && (
-                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-yellow-500" />
-                  )}
-                </div>
-                <span className="text-[10px] mt-1 tracking-tight truncate max-w-[68px]">
-                  {item.title}
+                <Icon
+                  className={`h-5 w-5 ${active ? "stroke-[2.5]" : "stroke-[1.75]"}`}
+                  aria-hidden="true"
+                />
+                <span className="mt-1 max-w-[68px] truncate text-[10px] tracking-tight">
+                  {item.mobileTitle ?? item.title}
                 </span>
               </Link>
             )
           })}
 
-          {/* Menu Lainnya Button */}
           {hasMoreItems && (
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(true)}
-              className="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-500 hover:text-slate-800 active:bg-slate-100 min-h-[48px] min-w-[44px] touch-manipulation"
+              className="flex min-h-[48px] min-w-[44px] touch-manipulation flex-col items-center justify-center rounded-xl px-1 py-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
             >
-              <Menu className="h-5 w-5 stroke-[1.75]" />
-              <span className="text-[10px] mt-1 tracking-tight">Lainnya</span>
+              <Menu className="h-5 w-5 stroke-[1.75]" aria-hidden="true" />
+              <span className="mt-1 text-[10px] tracking-tight">Lainnya</span>
             </button>
           )}
         </div>
       </nav>
 
-      {/* ========================================================================= */}
-      {/* 4. MOBILE DRAWER SHEET (FULL MENU)                                        */}
-      {/* ========================================================================= */}
+      {/* ===================================================================== */}
+      {/* MOBILE DRAWER — daftar menu lengkap                                     */}
+      {/* ===================================================================== */}
       <Dialog open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-        <DialogContent className="p-0 overflow-hidden bg-slate-800 text-white border-slate-700 max-w-sm rounded-3xl">
-          <DialogHeader className="p-5 border-b border-slate-700 bg-slate-800 flex flex-row items-center justify-between text-left">
-            <div className="flex items-center gap-3">
-              <Avatar className="h-10 w-10 border border-yellow-500/40">
-                <AvatarImage src={user.avatar || ""} />
-                <AvatarFallback className="bg-yellow-700 text-white font-bold text-xs">
-                  {user.nama?.slice(0, 2).toUpperCase() || "U"}
+        <DialogContent className="sm:max-w-sm sm:translate-x-0 sm:translate-y-0 sm:left-auto sm:right-0 sm:top-0 sm:h-full sm:max-h-none sm:rounded-none sm:border-y-0 sm:border-r-0 sm:pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+          <DialogHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-slate-200 bg-white text-left">
+            <div className="flex min-w-0 items-center gap-3">
+              <Avatar className="h-10 w-10 shrink-0 ring-2 ring-yellow-200">
+                <AvatarImage src={user.avatar || ""} alt="" />
+                <AvatarFallback className="bg-yellow-100 text-xs font-bold text-yellow-800">
+                  {initials}
                 </AvatarFallback>
               </Avatar>
-              <div>
-                <DialogTitle className="text-base font-bold text-white truncate max-w-[180px]">
+              <div className="min-w-0">
+                <DialogTitle className="truncate text-sm font-bold text-slate-900">
                   {user.nama}
                 </DialogTitle>
-                <span className="text-xs text-amber-400">{roleLabel}</span>
+                <span className="text-xs font-medium text-yellow-700">{roleLabel}</span>
               </div>
             </div>
           </DialogHeader>
 
-          <div className="p-4 max-h-[60vh] overflow-y-auto space-y-1.5">
-            <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Semua Menu
-            </div>
-            {navItems.map((item) => {
-              const active = isCurrentActive(item.href)
-              const Icon = item.icon
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center justify-between p-3 rounded-xl text-sm font-medium transition-colors min-h-[44px] ${
-                    active
-                      ? "bg-yellow-500 text-white font-semibold shadow-sm"
-                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon className="h-5 w-5 text-slate-400" />
-                    <span>{item.title}</span>
-                  </div>
-                  {item.adminOnly && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900 text-yellow-300 border border-yellow-700">
-                      Admin
-                    </span>
-                  )}
-                </Link>
-              )
-            })}
+          <div className="max-h-[55vh] space-y-5 overflow-y-auto px-4 py-4 sm:max-h-none sm:flex-1">
+            {sections.map((section) => (
+              <div key={section.title}>
+                <p className="mb-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  {section.title}
+                </p>
+                <ul className="space-y-1">
+                  {section.items.map((item) => (
+                    <NavLink
+                      key={item.href}
+                      item={item}
+                      collapsed={false}
+                      active={isCurrentActive(item.href)}
+                      onNavigate={() => setIsMobileMenuOpen(false)}
+                    />
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
 
-          <div className="p-4 border-t border-slate-700 bg-slate-800/80 space-y-2">
-            <Link
-              href="/dashboard/profil"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="flex items-center gap-3 p-3 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white min-h-[44px]"
-            >
-              <User className="h-4 w-4" />
-              <span>Profil Pengguna</span>
-            </Link>
+          <div className="space-y-1 border-t border-slate-200 bg-white px-4 py-4">
             <button
               type="button"
               onClick={() => {
                 setIsMobileMenuOpen(false)
                 setGantiAkunOpen(true)
               }}
-              className="flex items-center gap-3 w-full p-3 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white min-h-[44px]"
+              className="flex min-h-[44px] w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100"
             >
-              <RefreshCw className="h-4 w-4" />
-              <span>Ganti Akun</span>
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              Ganti Akun / Role
             </button>
+            <Link
+              href="/ganti-password"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100"
+            >
+              <KeyRound className="h-4 w-4" aria-hidden="true" />
+              Ganti Password
+            </Link>
             <form action={logout}>
               <button
                 type="submit"
-                className="flex items-center gap-3 w-full p-3 rounded-xl text-sm font-semibold text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 transition-colors min-h-[44px]"
+                className="flex min-h-[44px] w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50"
               >
-                <LogOut className="h-4 w-4" />
-                <span>Keluar dari Akun</span>
+                <LogOut className="h-4 w-4" aria-hidden="true" />
+                Keluar dari Akun
               </button>
             </form>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Ganti Akun */}
       <GantiAkunDialog open={gantiAkunOpen} onOpenChange={setGantiAkunOpen} />
     </>
   )

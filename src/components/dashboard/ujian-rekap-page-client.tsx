@@ -21,6 +21,7 @@ const DialogHeader = dynamic(() => import("@/components/ui/dialog").then(m => m.
 const DialogTitle = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogTitle), { ssr: false })
 const DialogFooter = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogFooter), { ssr: false })
 import { ArrowLeft, FileEdit, CheckCircle2, Loader2, AlertCircle, PenLine } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 
 interface PesertaRekap {
   id: string
@@ -262,10 +263,7 @@ export default function RekapHasilUjianPage() {
   if (loading) {
     return (
       <div className="space-y-6 max-w-5xl mx-auto">
-        <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-          <span className="ml-3 text-sm text-slate-500">Memuat rekap hasil ujian...</span>
-        </div>
+<PageSkeleton label="Memuat rekap hasil ujian..." />
       </div>
     )
   }
@@ -404,7 +402,7 @@ export default function RekapHasilUjianPage() {
       </div>
 
       {/* Student Score Table / Card List (Responsive) */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+      <Card className="overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between gap-3">
           <div>
             <CardTitle className="text-base font-bold text-slate-800">
@@ -441,7 +439,7 @@ export default function RekapHasilUjianPage() {
           {rekapData.peserta.length > 0 && <>
           {/* Desktop Table View */}
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-sm text-left">
+            <table className="data-table">
               <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
                 <tr>
                   <th className="p-4 pl-6">Nama Santri</th>

@@ -11,14 +11,15 @@ import {
 } from "@/actions/siswa-keuangan"
 import { useToast } from "@/hooks/use-toast"
 import { Role } from "@/lib/roles"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
+import { AccessDenied } from "@/components/ui/access-denied"
 import dynamic from "next/dynamic"
-import { Upload, Clock, CheckCircle2, Building2, Copy, Loader2, ShieldX, UserSearch, X } from "lucide-react"
+import { Upload, Clock, CheckCircle2, Building2, Copy, Loader2, UserSearch, X } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 
 // Single dynamic import for all Dialog parts — one chunk instead of five
 const DialogRoot = dynamic(
@@ -172,7 +173,7 @@ function SiswaKeuanganSelector({
   })
 
   return (
-    <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+    <Card>
       <CardContent className="p-4 sm:p-5 space-y-4">
         <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
           <UserSearch className="h-4 w-4 text-yellow-600" />
@@ -277,27 +278,12 @@ function SiswaKeuanganSelector({
 
 export default function TagihanPage() {
   const { user } = useDashboard()
-  const router = useRouter()
 
-  // KEPUTUSAN PRODUK: Siswa TIDAK BOLEH melihat data akuntansi/tagihan SPP
+  // KEPUTUSAN PRODUK: Siswa TIDAK BOLEH melihat data akuntansi/tagihan SPP.
+  // Aturannya tidak berubah — hanya tampilan "Akses Ditolak" yang diseragamkan.
   if (user.role === Role.SISWA) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-        <div className="w-16 h-16 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
-          <ShieldX className="h-8 w-8" />
-        </div>
-        <h1 className="text-xl font-bold text-slate-800 mb-2">Akses Ditolak</h1>
-        <p className="text-sm text-slate-500 max-w-md mb-6">
-          Halaman ini hanya dapat diakses oleh orang tua/wali santri dan admin keuangan.
-          Data tagihan SPP bukan ranah akses siswa.
-        </p>
-        <Button
-          onClick={() => router.push("/dashboard")}
-          className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px]"
-        >
-          Kembali ke Beranda
-        </Button>
-      </div>
+      <AccessDenied description="Halaman ini hanya dapat diakses oleh orang tua/wali santri dan admin keuangan. Data tagihan SPP bukan ranah akses siswa." />
     )
   }
 
@@ -475,10 +461,7 @@ function TagihanContent() {
 
       {/* Loading State */}
       {loading && (
-        <div className="flex items-center justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-          <span className="ml-3 text-sm text-slate-500">Memuat data tagihan...</span>
-        </div>
+<PageSkeleton label="Memuat data tagihan..." />
       )}
 
       {/* Error State */}
@@ -500,7 +483,7 @@ function TagihanContent() {
 
       {/* Tagihan Cards / Table */}
       {!loading && !error && tagihanList.length > 0 && (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <Card className="overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-slate-100">
             <CardTitle className="text-base font-bold text-slate-800">
               Daftar Tagihan SPP Bulanan

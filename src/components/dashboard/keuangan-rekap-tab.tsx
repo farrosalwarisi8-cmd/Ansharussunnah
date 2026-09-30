@@ -94,7 +94,7 @@ export function RekapTab() {
   return (
     <div className="space-y-4">
       {/* Filter Bar */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5">
+      <Card className="p-5">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-700 uppercase">Tampilan:</span>
@@ -122,13 +122,13 @@ export function RekapTab() {
       </Card>
 
       {loadingRekap ? (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-8">
+        <Card className="p-8">
           <div className="text-center text-slate-500 text-sm flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Memuat data rekap...</div>
         </Card>
       ) : rekapView === "kelas" ? (
         <>
           {/* Desktop Table */}
-          <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden hidden md:block">
+          <Card className="overflow-hidden hidden md:block">
             <CardHeader className="p-5 pb-3 border-b border-slate-100">
               <CardTitle className="text-base font-bold text-slate-800">Rekap SPP Per Kelas</CardTitle>
               <CardDescription className="text-xs text-slate-500">Ringkasan tagihan, pembayaran, dan tunggakan SPP untuk setiap kelas aktif</CardDescription>
@@ -166,11 +166,11 @@ export function RekapTab() {
           {/* Mobile Card List */}
           <div className="md:hidden space-y-3">
             {rekapKelasData.length === 0 ? (
-              <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm p-6 text-center text-slate-500 text-sm">Tidak ada data rekap untuk periode ini</Card>
+              <Card className="p-6 text-center text-slate-500 text-sm">Tidak ada data rekap untuk periode ini</Card>
             ) : rekapKelasData.map((item) => {
               const badge = getComplianceBadge(item.persentaseKepatuhan)
               return (
-                <Card key={item.kelasId} className="rounded-2xl border-slate-200/80 bg-white shadow-sm p-4">
+                <Card key={item.kelasId} className="p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div><div className="font-bold text-slate-800 text-sm">{item.namaKelas}</div><div className="text-xs text-slate-500">{item.namaJenjang} &bull; {item.jumlahSiswa} siswa</div></div>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getComplianceColor(item.persentaseKepatuhan)}`}>{item.persentaseKepatuhan}%</span>
@@ -189,7 +189,7 @@ export function RekapTab() {
       ) : (
         <>
           {/* Desktop Table */}
-          <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden hidden md:block">
+          <Card className="overflow-hidden hidden md:block">
             <CardHeader className="p-5 pb-3 border-b border-slate-100">
               <CardTitle className="text-base font-bold text-slate-800">Rekap SPP Per Jenjang</CardTitle>
               <CardDescription className="text-xs text-slate-500">Agregasi tagihan, pembayaran, dan tunggakan SPP untuk setiap jenjang pendidikan</CardDescription>
@@ -227,11 +227,11 @@ export function RekapTab() {
           {/* Mobile Card List */}
           <div className="md:hidden space-y-3">
             {rekapJenjangData.length === 0 ? (
-              <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm p-6 text-center text-slate-500 text-sm">Tidak ada data rekap untuk periode ini</Card>
+              <Card className="p-6 text-center text-slate-500 text-sm">Tidak ada data rekap untuk periode ini</Card>
             ) : rekapJenjangData.map((item) => {
               const badge = getComplianceBadge(item.persentaseKepatuhan)
               return (
-                <Card key={item.jenjangId} className="rounded-2xl border-slate-200/80 bg-white shadow-sm p-4">
+                <Card key={item.jenjangId} className="p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div><div className="font-bold text-slate-800 text-sm">{item.namaJenjang}</div><div className="text-xs text-slate-500">{item.jumlahKelas} kelas &bull; {item.jumlahSiswa} siswa</div></div>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getComplianceColor(item.persentaseKepatuhan)}`}>{item.persentaseKepatuhan}%</span>

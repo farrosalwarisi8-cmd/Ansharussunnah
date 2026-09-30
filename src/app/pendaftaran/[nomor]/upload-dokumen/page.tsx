@@ -25,7 +25,6 @@ export default async function UploadDokumenPage({
       nomorPendaftaran: true,
       status: true,
       tokenAksesExpiraAt: true,
-      emailOrangTuaTerverifikasiAt: true,
       dokKartuKeluarga: true,
       dokAkteLahir: true,
       dokFoto: true,

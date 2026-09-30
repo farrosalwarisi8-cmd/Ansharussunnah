@@ -5,7 +5,7 @@ import { inputAbsensiBulk, getSiswaByKelas } from "@/actions/absensi"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Loader2, Save, CheckCircle2, UserCheck } from "lucide-react"
+import { Loader2, Save, UserCheck } from "lucide-react"
 import dynamic from "next/dynamic"
 import { toDateLocalValue } from "@/lib/datetime-local"
 

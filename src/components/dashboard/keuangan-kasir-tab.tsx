@@ -1,11 +1,12 @@
 "use client"
 
 import * as React from "react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { CheckCircle2, XCircle, Plus, Loader2 } from "lucide-react"
+import { CheckCircle2, XCircle, Plus, Loader2, Receipt } from "lucide-react"
 import {
   createTransaksiKeuangan,
   batalkanTransaksiKeuangan,
@@ -195,7 +196,7 @@ export function KasirTab() {
   return (
     <div className="space-y-6">
       {/* Pembayaran Manual */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6">
+      <Card className="p-6">
         <CardHeader className="p-0 pb-4 border-b border-slate-100">
           <CardTitle className="text-base font-bold text-slate-800">💰 Pembayaran Tunai / Manual (Tanpa Upload Bukti)</CardTitle>
           <CardDescription className="text-xs text-slate-500">Untuk pembayaran yang diterima langsung secara tunai/offline dari santri/orang tua</CardDescription>
@@ -230,7 +231,7 @@ export function KasirTab() {
       </Card>
 
       {/* Form Input Kasir */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-6">
+      <Card className="p-6">
         <CardHeader className="p-0 pb-4 border-b border-slate-100">
           <CardTitle className="text-base font-bold text-slate-800">Pencatatan Kas &amp; Transaksi Non-SPP</CardTitle>
         </CardHeader>
@@ -281,7 +282,7 @@ export function KasirTab() {
       </Card>
 
       {/* List Transaksi */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+      <Card className="overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100">
           <CardTitle className="text-base font-bold text-slate-800">Riwayat Transaksi Terakhir</CardTitle>
         </CardHeader>
@@ -291,9 +292,12 @@ export function KasirTab() {
               <Loader2 className="h-4 w-4 animate-spin mr-2" /> Memuat riwayat transaksi...
             </div>
           ) : transaksiList.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-400">
-              Belum ada transaksi keuangan yang tercatat.
-            </p>
+            <EmptyState
+              className="border-slate-200 bg-slate-50/50 py-8"
+              icon={Receipt}
+              title="Belum ada transaksi"
+              description="Transaksi kas masuk dan kas keluar akan tercatat di sini."
+            />
           ) : (
             transaksiList.map((trx) => (
               <div key={trx.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-4">

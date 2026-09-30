@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Loader2, BarChart2, Save } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 
 type KelasItem = {
   kelasId: string
@@ -293,10 +294,7 @@ export function GuruRaporView() {
 
   if (loadingKelas) {
     return (
-      <div className="flex items-center justify-center p-12 min-h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-3 text-sm text-slate-500">Memuat daftar kelas...</span>
-      </div>
+<PageSkeleton label="Memuat daftar kelas..." />
     )
   }
 
@@ -314,7 +312,7 @@ export function GuruRaporView() {
   return (
     <div className="space-y-6">
       {/* Kelas & Periode Selector */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+      <Card>
         <CardContent className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
           <div className="space-y-1.5">
             <label
@@ -360,7 +358,7 @@ export function GuruRaporView() {
       <PeranKelasLegend />
 
       {/* Student Selector Card */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm p-5 sm:p-6 space-y-4">
+      <Card className="p-5 sm:p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-bold text-slate-800">
@@ -490,7 +488,7 @@ export function GuruRaporView() {
       </Card>
 
       {/* Rekap Rapor Kelas */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm overflow-hidden">
+      <Card className="overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-base font-bold text-slate-800">
@@ -534,7 +532,7 @@ export function GuruRaporView() {
                 : ""}
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
+              <table className="data-table">
                 <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-600">
                   <tr>
                     <th className="p-3 pl-5">Nama</th>

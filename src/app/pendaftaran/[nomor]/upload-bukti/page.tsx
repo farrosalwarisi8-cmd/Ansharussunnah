@@ -26,7 +26,6 @@ export default async function UploadBuktiPage({ params }: UploadBuktiPageProps) 
       nomorPendaftaran: true,
       status: true,
       tokenAksesExpiraAt: true,
-      emailOrangTuaTerverifikasiAt: true,
     },
   })
 
@@ -35,8 +34,8 @@ export default async function UploadBuktiPage({ params }: UploadBuktiPageProps) 
   }
 
   // OTP email dihapus dari alur: gerbang upload = status + masa berlaku token.
-  // (Kolom emailOrangTuaTerverifikasiAt tetap ada di DB untuk audit data lama,
-  // tapi tidak lagi jadi syarat di sini maupun di server action.)
+  // Kolom legacy emailOrangTuaTerverifikasiAt sengaja tidak lagi dipilih di
+  // query ini supaya tidak ada jalur yang diam-diam bergantung padanya.
   const tokenMasihBerlaku = isTokenAksesBelumKedaluwarsa(
     pendaftaran.tokenAksesExpiraAt
   )
