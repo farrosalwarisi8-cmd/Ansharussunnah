@@ -46,6 +46,10 @@ const DialogTitle = dynamic(
   () => import("@/components/ui/dialog").then((m) => m.DialogTitle),
   { ssr: false },
 );
+const DialogDescription = dynamic(
+  () => import("@/components/ui/dialog").then((m) => m.DialogDescription),
+  { ssr: false },
+);
 const DialogFooter = dynamic(
   () => import("@/components/ui/dialog").then((m) => m.DialogFooter),
   { ssr: false },
@@ -957,10 +961,10 @@ export default function VerifikasiPendaftaranPage() {
                 <DialogTitle className="text-lg font-bold text-slate-800">
                   Detail Berkas: {pendaftar.namaLengkap}
                 </DialogTitle>
-                <p className="text-xs text-slate-500 font-mono">
+                <DialogDescription className="text-xs text-slate-500 font-mono">
                   {pendaftar.nomorPendaftaran} • {pendaftar.jenjangTujuan.nama}
                   {pendaftar.kelasTujuan && " • " + pendaftar.kelasTujuan.nama}
-                </p>
+                </DialogDescription>
               </DialogHeader>
 
               <div className="space-y-4 py-2 text-xs sm:text-sm">
@@ -1433,12 +1437,12 @@ export default function VerifikasiPendaftaranPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-rose-700">
-              Tolak Berkas Pendaftaran
+              Tolak Berkas Pendaftaration
             </DialogTitle>
-            <p className="text-xs text-slate-500">
+            <DialogDescription className="text-xs text-slate-500">
               Tuliskan alasan penolakan secara jelas agar orang tua calon santri
               dapat memperbaiki berkas
-            </p>
+            </DialogDescription>
           </DialogHeader>
           <div className="py-2 space-y-2">
             <label className="text-xs font-semibold text-slate-700">
@@ -1484,12 +1488,12 @@ export default function VerifikasiPendaftaranPage() {
             <DialogTitle className="text-base font-bold text-amber-700">
               Konfirmasi Kontak Wali
             </DialogTitle>
-            <p className="text-xs text-slate-500">
+            <DialogDescription className="text-xs text-slate-500">
               Catat bahwa Anda sudah menghubungi orang tua/wali untuk
               pendaftaran {pendaftar?.nomorPendaftaran} di{" "}
               {pendaftar?.noHpOrangTua}. Waktu, nama Anda, dan metode
               disimpan permanen di berkas pendaftaran.
-            </p>
+            </DialogDescription>
           </DialogHeader>
           <div className="py-2 space-y-3">
             <div className="rounded-xl bg-amber-50 border border-amber-200 p-3">

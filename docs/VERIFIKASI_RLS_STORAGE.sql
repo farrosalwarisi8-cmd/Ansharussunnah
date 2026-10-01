@@ -83,6 +83,12 @@ TO anon, authenticated
 WITH CHECK (
   bucket_id = 'dokumen-pendaftaran'
   AND (storage.foldername(name))[1] = 'dokumen-pendaftaran'
+  AND (storage.foldername(name))[2] = 'pendaftaran'
+  AND (
+    (storage.foldername(name))[3] LIKE 'temp-%'
+    OR (storage.foldername(name))[3] ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  )
+  AND array_length(storage.foldername(name), 1) = 4
 );
 
 CREATE POLICY "Guru dapat membaca dokumen pendaftaran"

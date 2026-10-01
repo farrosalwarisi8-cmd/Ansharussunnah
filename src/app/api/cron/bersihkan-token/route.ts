@@ -133,34 +133,52 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // List folder temp di root pendaftaran/.
-      const { data: folders, error: listError } = await supabaseAdmin.storage
-        .from("dokumen-pendaftaran")
-        .list("pendaftaran", { limit: 1000, offset: 0 });
+      // List folder temp di root pendaftaran/ dengan pagination penuh.
+      let offset = 0;
+      const FOLDER_PAGE_SIZE = 1000;
+      const folders: Array<{ name: string; updated_at: string | null }> = [];
 
-      if (!listError && folders) {
-        for (const folder of folders) {
-          if (!folder.name.startsWith("temp-")) continue;
+      while (true) {
+        const { data: page, error: listError } = await supabaseAdmin.storage
+          .from("dokumen-pendaftaran")
+          .list("pendaftaran", { limit: FOLDER_PAGE_SIZE, offset });
 
-          // Umur folder: updatedAt metadata object folder bila tersedia.
-          const dibuat = folder.updated_at ? new Date(folder.updated_at) : null;
-          if (!dibuat || dibuat > cutoffFile) continue;
+        if (listError || !page) break;
+        folders.push(...page);
+        if (page.length < FOLDER_PAGE_SIZE) break;
+        offset += FOLDER_PAGE_SIZE;
+      }
 
-          const { data: files } = await supabaseAdmin.storage
+      for (const folder of folders) {
+        if (!folder.name.startsWith("temp-")) continue;
+
+        const dibuat = folder.updated_at ? new Date(folder.updated_at) : null;
+        if (!dibuat || dibuat > cutoffFile) continue;
+
+        let fileOffset = 0;
+        const FILE_PAGE_SIZE = 1000;
+        const paths: string[] = [];
+
+        while (true) {
+          const { data: files, error: fileListError } = await supabaseAdmin.storage
             .from("dokumen-pendaftaran")
-            .list(`pendaftaran/${folder.name}`, { limit: 100, offset: 0 });
-          if (!files || files.length === 0) continue;
+            .list(`pendaftaran/${folder.name}`, { limit: FILE_PAGE_SIZE, offset: fileOffset });
 
-          const paths = files
-            .map((f) => `pendaftaran/${folder.name}/${f.name}`)
-            .filter((p) => !dipakaiSet.has(p));
-          if (paths.length === 0) continue;
-
-          const { error: removeError } = await supabaseAdmin.storage
-            .from("dokumen-pendaftaran")
-            .remove(paths);
-          if (!removeError) fileTempDihapus += paths.length;
+          if (fileListError || !files) break;
+          for (const f of files) {
+            const p = `pendaftaran/${folder.name}/${f.name}`;
+            if (!dipakaiSet.has(p)) paths.push(p);
+          }
+          if (files.length < FILE_PAGE_SIZE) break;
+          fileOffset += FILE_PAGE_SIZE;
         }
+
+        if (paths.length === 0) continue;
+
+        const { error: removeError } = await supabaseAdmin.storage
+          .from("dokumen-pendaftaran")
+          .remove(paths);
+        if (!removeError) fileTempDihapus += paths.length;
       }
     } catch (storageError) {
       console.error("Cleanup file temp gagal (best-effort):", storageError);

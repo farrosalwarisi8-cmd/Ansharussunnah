@@ -149,21 +149,23 @@ function ChildStatsDashboard({ selectedChild }: { selectedChild: ChildStudent })
 
   React.useEffect(() => {
     let mounted = true
+    const requestId = selectedChild.id
     async function fetchData() {
       setLoading(true)
       setError(null)
       try {
         const result = await getRangkumanOrangTuaHome(selectedChild.id)
         if (!mounted) return
+        if (requestId !== selectedChild.id) return
         if (result.success && result.data) {
           setData(result.data)
         } else {
           setError(result.message || "Gagal memuat rangkuman")
         }
       } catch {
-        if (mounted) setError("Gagal memuat rangkuman dashboard")
+        if (mounted && requestId === selectedChild.id) setError("Gagal memuat rangkuman dashboard")
       } finally {
-        if (mounted) setLoading(false)
+        if (mounted && requestId === selectedChild.id) setLoading(false)
       }
     }
     fetchData()

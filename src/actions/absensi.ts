@@ -115,6 +115,8 @@ export async function inputAbsensiSingle(
         siswaId,
         tanggal: tanggalDate,
         mataPelajaranId: resolvedMapelId,
+        kelasId,
+        periodeAjaranId,
       },
       select: { id: true, diinputOlehId: true },
     })
@@ -245,6 +247,8 @@ export async function inputAbsensiBulk(
         tanggal: tanggalDate,
         siswaId: { in: siswaIds },
         mataPelajaranId: resolvedMapelId,
+        kelasId,
+        periodeAjaranId,
       },
       select: { id: true, siswaId: true, diinputOlehId: true },
     })

@@ -104,16 +104,19 @@ async function loadUserRecord(authUserId: string): Promise<UserWithRelations | n
   let user: UserWithRelations | null = null
 
   if (selectedUserId && selectedRole) {
-    // Try to find the specific user record by ID + role
-    user = (await prisma.user.findFirst({
-      where: {
-        id: selectedUserId,
-        authId: authUserId,
-        role: selectedRole as Role,
-        deleted_at: null,
-      },
-      include: buildUserInclude(selectedRole as Role),
-    })) as UserWithRelations | null
+    const validRole = Object.values(Role).includes(selectedRole as Role)
+    if (validRole) {
+      user = (await prisma.user.findFirst({
+        where: {
+          id: selectedUserId,
+          authId: authUserId,
+          role: selectedRole as Role,
+          deleted_at: null,
+          aktif: true,
+        },
+        include: buildUserInclude(selectedRole as Role),
+      })) as UserWithRelations | null
+    }
   }
 
   // Fallback: find by authId (single role or first match) — sertakan nested kelas
