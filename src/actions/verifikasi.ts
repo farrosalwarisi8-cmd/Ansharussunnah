@@ -275,6 +275,68 @@ export async function getPendaftaranDetail(pendaftaranId: string): Promise<
   }
 }
 
+/**
+ * Batas waktu klaim SEDANG_DIPROSES dianggap stale (menggantung
+ * karena crash/proses mati). Setelah lewat, admin lain boleh
+ * memulihkan pendaftaran ke MENUNGGU_VERIFIKASI dan memproses
+ * ulang dari awal.
+ */
+export const STALE_PROSES_MS = 15 * 60 * 1000;
+
+/**
+ * Batalkan klaim SEDANG_DIPROSES → kembali ke MENUNGGU_VERIFIKASI.
+ * Bersyarat: hanya admin yang mengklaim (diprosesOlehId sama) yang
+ * boleh membatalkan, dan hanya bila status masih SEDANG_DIPROSES.
+ * Dipakai setiap jalur kegagalan setelah claim agar status tidak
+ * menggantung selamanya.
+ */
+async function batalkanKlaimProses(
+  pendaftaranId: string,
+  adminId: string,
+): Promise<void> {
+  await prisma.pendaftaran.updateMany({
+    where: {
+      id: pendaftaranId,
+      status: StatusPendaftaran.SEDANG_DIPROSES,
+      diprosesOlehId: adminId,
+    },
+    data: {
+      status: StatusPendaftaran.MENUNGGU_VERIFIKASI,
+      diprosesOlehId: null,
+      waktuMulaiProses: null,
+    },
+  });
+}
+
+/**
+ * Pulihkan klaim SEDANG_DIPROSES yang STALE (lebih dari
+ * STALE_PROSES_MS lalu, atau waktunya kosong) → kembali ke
+ * MENUNGGU_VERIFIKASI. Mengembalikan true bila baris benar
+ * dipulihkan (hanya satu request yang menang — updateMany
+ * bersyarat).
+ */
+async function pulihkanKlaimStale(
+  pendaftaranId: string,
+): Promise<boolean> {
+  const batas = new Date(Date.now() - STALE_PROSES_MS);
+  const hasil = await prisma.pendaftaran.updateMany({
+    where: {
+      id: pendaftaranId,
+      status: StatusPendaftaran.SEDANG_DIPROSES,
+      OR: [
+        { waktuMulaiProses: null },
+        { waktuMulaiProses: { lte: batas } },
+      ],
+    },
+    data: {
+      status: StatusPendaftaran.MENUNGGU_VERIFIKASI,
+      diprosesOlehId: null,
+      waktuMulaiProses: null,
+    },
+  });
+  return hasil.count > 0;
+}
+
 // Helper untuk menghapus user Supabase Auth jika transaction gagal
 async function cleanupAuthUsers(
   supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
@@ -322,7 +384,7 @@ export async function verifikasiPendaftaran(
       kelasTujuanId,
     } = validated.data;
 
-    const pendaftaran = await prisma.pendaftaran.findUnique({
+    let pendaftaran = await prisma.pendaftaran.findUnique({
       where: { id: pendaftaranId, deleted_at: null },
       include: {
         buktiTransfer: { orderBy: { waktuUpload: "desc" }, take: 1 },
@@ -336,9 +398,54 @@ export async function verifikasiPendaftaran(
     // pendaftaran diambil include penuh; field konfirmasi kontak wali ikut
     // tersedia pada objek ini untuk gerbang di bawah.
 
-    // Guard transisi status: hanya pendaftaran yang masih MENUNGGU_VERIFIKASI
-    // boleh diverifikasi (diterima/ditolak). Mencegah verifikasi ganda yang
-    // bisa membuat akun yatim/berkontradiksi dengan status record.
+    // ============ GUARD STATE MACHINE (anti-race) ============
+    //
+    // MENUNGGU_VERIFIKASI → SEDANG_DIPROSES → DITERIMA
+    // MENUNGGU_VERIFIKASI → DITOLAK
+    //
+    // 1. Approval ulang pendaftaran yang SUDAH DITERIMA bersifat
+    //    idempotent: sukses, tetapi TIDAK membuat akun Auth,
+    //    User, OrangTua, Siswa, atau relasi baru apa pun.
+    // 2. SEDANG_DIPROSES: pendaftaran sedang dipegang admin
+    //    lain (atau klaim menggantung karena crash). Bila klaim
+    //    sudah stale (> 15 menit), pulihkan ke MENUNGGU_VERIFIKASI
+    //    dan proses seperti biasa; bila belum, hentikan.
+    // 3. Status lain (DITOLAK, MENUNGGU_PEMBAYARAN) tidak bisa
+    //    diverifikasi.
+    if (
+      status === "DITERIMA" &&
+      pendaftaran.status === StatusPendaftaran.DITERIMA
+    ) {
+      return {
+        success: true,
+        message: `Pendaftaran ${pendaftaran.nomorPendaftaran} sudah DITERIMA sebelumnya. Tidak ada akun atau relasi baru yang dibuat.`,
+      };
+    }
+
+    if (pendaftaran.status === StatusPendaftaran.SEDANG_DIPROSES) {
+      const dipulihkan = await pulihkanKlaimStale(pendaftaran.id);
+      if (!dipulihkan) {
+        return {
+          success: false,
+          message: `Pendaftaran ${pendaftaran.nomorPendaftaran} sedang diproses admin lain. Tunggu hingga selesai atau refresh halaman.`,
+        };
+      }
+      // Klaim stale berhasil dipulihkan → muat ulang record agar
+      // seluruh pemeriksaan berikutnya (kontak wali, kapasitas,
+      // dst) memakai data terbaru.
+      const segar = await prisma.pendaftaran.findUnique({
+        where: { id: pendaftaranId, deleted_at: null },
+        include: {
+          buktiTransfer: { orderBy: { waktuUpload: "desc" }, take: 1 },
+          jenjangTujuan: true,
+        },
+      });
+      if (!segar) {
+        return { success: false, message: "Data pendaftaran tidak ditemukan" };
+      }
+      pendaftaran = segar;
+    }
+
     if (pendaftaran.status !== StatusPendaftaran.MENUNGGU_VERIFIKASI) {
       return {
         success: false,
@@ -518,6 +625,31 @@ export async function verifikasiPendaftaran(
         }
       }
 
+      // ============ CLAIM ATOMIK (anti-race) ============
+      // Pindahkan status MENUNGGU_VERIFIKASI → SEDANG_DIPROSES
+      // SEBELUM side effect apa pun (Supabase Auth). updateMany
+      // bersyarat menjamin hanya SATU request — dari dua admin
+      // yang menekan "Terima" bersamaan — yang bisa melanjutkan;
+      // request kedua berhenti di sini tanpa membuat akun ganda.
+      const klaimProses = await prisma.pendaftaran.updateMany({
+        where: {
+          id: pendaftaranId,
+          status: StatusPendaftaran.MENUNGGU_VERIFIKASI,
+        },
+        data: {
+          status: StatusPendaftaran.SEDANG_DIPROSES,
+          diprosesOlehId: guruUser.id,
+          waktuMulaiProses: new Date(),
+        },
+      });
+
+      if (klaimProses.count === 0) {
+        return {
+          success: false,
+          message: `Pendaftaran ${pendaftaran.nomorPendaftaran} sedang atau sudah diproses admin lain. Silakan refresh halaman dan coba lagi.`,
+        };
+      }
+
       // Amankan credentials secara random. Password ortu hanya digenerate bila
       // akun ortu benar-benar BARU akan dibuat. Jika email ortu sudah punya akun
       // (reuse authId), password lama tetap dipakai — TIDAK ada password ortu baru.
@@ -537,68 +669,105 @@ export async function verifikasiPendaftaran(
       // dokumen pendaftaran ke bucket berkas-siswa.
       let siswaIdTerverifikasi: string | null = null;
       let ortuRecordBaruDibuat = false;
+      // Akun Auth dibuat/di-reuse secara idempotent. Seluruh bagian
+      // ini dibungkus try/catch: bila Auth gagal, akun yang sudah
+      // sempat dibuat dihapus dan klaim SEDANG_DIPROSES dibatalkan
+      // (kembali ke MENUNGGU_VERIFIKASI) — tidak ada akun yatim dan
+      // tidak ada status menggantung.
+      let authSiswaId: string;
+      try {
+        // Create Supabase Auth Orang Tua
+        passwordOrangTua = generateSecurePassword(14);
+        const { data: authOrtuData, error: authOrtuError } =
+          await supabaseAdmin.auth.admin.createUser({
+            email: emailOrtu,
+            password: passwordOrangTua,
+            email_confirm: true,
+            user_metadata: {
+              nama: pendaftaran.namaOrangTua,
+              role: Role.ORANG_TUA,
+            },
+          });
 
-      // Create Supabase Auth Orang Tua
-      passwordOrangTua = generateSecurePassword(14);
-      const { data: authOrtuData, error: authOrtuError } =
-        await supabaseAdmin.auth.admin.createUser({
-          email: emailOrtu,
-          password: passwordOrangTua,
-          email_confirm: true,
-          user_metadata: {
-            nama: pendaftaran.namaOrangTua,
-            role: Role.ORANG_TUA,
-          },
-        });
-
-      if (authOrtuError) {
-        if (authOrtuError.message.includes("already been registered")) {
-          // Paginate dengan perPage besar agar lookup tidak terbatas pada 50 user
-          // pertama (listUsers default 50). Email orang tua bisa berada di halaman berikutnya.
-          const { data: existingUsers } =
-            await supabaseAdmin.auth.admin.listUsers({
-              perPage: 1000,
-            });
-          const matched = existingUsers.users.find(
-            (u) => u.email === emailOrtu,
-          );
-          if (!matched) throw new Error("Gagal memetakan akun auth orang tua");
-          authOrtuId = matched.id;
-          ortuAlreadyExisted = true;
-          // Akun reuse: password ortu "baru" yang digenerate tidak dipakai
-          // kemana-mana (createUser gagal, akun lama tidak diubah).
-          passwordOrangTua = undefined;
+        if (authOrtuError) {
+          if (authOrtuError.message.includes("already been registered")) {
+            // Akun ortu sudah tersedia (mis. approval sebelumnya
+            // gagal di tengah jalan): REUSE — jangan buat akun
+            // kedua. Paginate dengan perPage besar agar lookup
+            // tidak terbatas pada 50 user pertama (listUsers
+            // default 50).
+            const { data: existingUsers } =
+              await supabaseAdmin.auth.admin.listUsers({
+                perPage: 1000,
+              });
+            const matched = existingUsers.users.find(
+              (u) => u.email === emailOrtu,
+            );
+            if (!matched) throw new Error("Gagal memetakan akun auth orang tua");
+            authOrtuId = matched.id;
+            ortuAlreadyExisted = true;
+            // Akun reuse: password ortu "baru" yang digenerate tidak dipakai
+            // kemana-mana (createUser gagal, akun lama tidak diubah).
+            passwordOrangTua = undefined;
+          } else {
+            throw new Error(
+              `Gagal membuat akun auth orang tua: ${authOrtuError.message}`,
+            );
+          }
         } else {
-          throw new Error(
-            `Gagal membuat akun auth orang tua: ${authOrtuError.message}`,
-          );
+          authOrtuId = authOrtuData.user.id;
+          if (!ortuAlreadyExisted) newlyCreatedAuthIds.push(authOrtuId);
         }
-      } else {
-        authOrtuId = authOrtuData.user.id;
-        if (!ortuAlreadyExisted) newlyCreatedAuthIds.push(authOrtuId);
-      }
 
-      // Create Supabase Auth Siswa
-      const { data: authSiswaData, error: authSiswaError } =
-        await supabaseAdmin.auth.admin.createUser({
-          email: emailSiswa,
-          password: passwordSiswa,
-          email_confirm: true,
-          user_metadata: {
-            nama: pendaftaran.namaLengkap,
-            role: Role.SISWA,
-          },
-        });
+        // Create Supabase Auth Siswa (idempotent: reuse bila email
+        // siswa internal sudah punya akun — mis. approval sebelumnya
+        // gagal setelah akun siswa dibuat).
+        const { data: authSiswaData, error: authSiswaError } =
+          await supabaseAdmin.auth.admin.createUser({
+            email: emailSiswa,
+            password: passwordSiswa,
+            email_confirm: true,
+            user_metadata: {
+              nama: pendaftaran.namaLengkap,
+              role: Role.SISWA,
+            },
+          });
 
-      if (authSiswaError) {
-        await cleanupAuthUsers(supabaseAdmin, newlyCreatedAuthIds);
-        throw new Error(
-          `Gagal membuat akun auth siswa: ${authSiswaError.message}`,
+        if (authSiswaError) {
+          if (authSiswaError.message.includes("already been registered")) {
+            const { data: existingUsers } =
+              await supabaseAdmin.auth.admin.listUsers({
+                perPage: 1000,
+              });
+            const matched = existingUsers.users.find(
+              (u) => u.email === emailSiswa,
+            );
+            if (!matched) throw new Error("Gagal memetakan akun auth siswa");
+            authSiswaId = matched.id;
+          } else {
+            throw new Error(
+              `Gagal membuat akun auth siswa: ${authSiswaError.message}`,
+            );
+          }
+        } else {
+          authSiswaId = authSiswaData.user.id;
+          newlyCreatedAuthIds.push(authSiswaId);
+        }
+      } catch (authError) {
+        // Audit di log server (pesan error provider tidak bocor ke
+        // response — tidak mengandung password/token).
+        console.error(
+          `[verifikasi] Pembuatan akun Auth gagal untuk ${pendaftaran.nomorPendaftaran}:`,
+          authError,
         );
+        await cleanupAuthUsers(supabaseAdmin, newlyCreatedAuthIds);
+        await batalkanKlaimProses(pendaftaranId, guruUser.id);
+        return {
+          success: false,
+          message:
+            "Gagal membuat akun login. Pendaftaran dikembalikan ke antrean verifikasi agar bisa dicoba ulang.",
+        };
       }
-
-      const authSiswaId = authSiswaData.user.id;
-      newlyCreatedAuthIds.push(authSiswaId);
 
       // ✅ Prisma Transaction with strict rollback cleanup
       try {
@@ -848,10 +1017,13 @@ export async function verifikasiPendaftaran(
               });
             }
 
+            // Transisi final state machine: SEDANG_DIPROSES → DITERIMA,
+            // bersyarat record masih dipegah admin ini (status belum
+            // berubah di tengah transaksi).
             const claimed = await tx.pendaftaran.updateMany({
               where: {
                 id: pendaftaranId,
-                status: StatusPendaftaran.MENUNGGU_VERIFIKASI,
+                status: StatusPendaftaran.SEDANG_DIPROSES,
               },
               data: {
                 status: StatusPendaftaran.DITERIMA,
@@ -876,6 +1048,10 @@ export async function verifikasiPendaftaran(
           txError,
         );
         await cleanupAuthUsers(supabaseAdmin, newlyCreatedAuthIds);
+        // Batalkan klaim SEDANG_DIPROSES → MENUNGGU_VERIFIKASI agar
+        // status tidak menggantung (stale recovery adalah fallback
+        // bila pembatalan ini pun gagal).
+        await batalkanKlaimProses(pendaftaranId, guruUser.id);
         throw txError;
       }
 

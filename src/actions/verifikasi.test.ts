@@ -64,7 +64,14 @@ vi.mock("@/lib/prisma", () => ({
   default: {
     pendaftaran: {
       findUnique: mockPendaftaranFindUnique,
+      findFirst: mockPendaftaranFindFirst,
       update: mockPendaftaranUpdate,
+      // Klaim atomik (updateMany) dipakai di luar transaksi:
+      // MENUNGGU_VERIFIKASI → SEDANG_DIPROSES (claim) dan
+      // pemulihan klaim stale. Mock default mengembalikan
+      // { count: 1 } (claim berhasil).
+      updateMany: mockPendaftaranUpdateMany,
+      count: vi.fn().mockResolvedValue(0),
     },
     kelas: {
       findUnique: mockKelasFindUnique,
@@ -274,6 +281,7 @@ function setupTransactionMock() {
         },
         pendaftaran: {
           findFirst: mockPendaftaranFindFirst,
+          findUnique: mockPendaftaranFindUnique,
           update: mockPendaftaranUpdate,
           // Klaim status atomik (MENUNGGU_VERIFIKASI → final). Mock harus
           // mengembalikan { count } — action membaca claimed.count.
@@ -1562,5 +1570,393 @@ describe("verifikasiPendaftaran — Gerbang Konfirmasi Kontak Wali", () => {
 
     // Menolak tidak membuat akun apa pun, jadi tidak perlu melewati gerbang.
     expect(result.success).toBe(true);
+  });
+});
+
+// ========================================================
+// 20. State machine MENUNGGU_VERIFIKASI → SEDANG_DIPROSES → DITERIMA
+//     (claim atomic anti-race, rollback, recovery stale)
+// ========================================================
+
+describe("verifikasiPendaftaran — State Machine (SEDANG_DIPROSES)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+
+  /**
+   * Satu alur approve sukses penuh (claim → auth → tx → salin dokumen).
+   *
+   * Semua mock relevan di-RESET lalu di-set ulang: vi.clearAllMocks()
+   * hanya membersihkan riwayat panggilan, BUKAN implementasi persisten
+   * atau antrean mockResolvedValueOnce. Tanpa reset di sini, implementasi
+   * dari describe sebelumnya (mis. fixture NISN duplikat) bocor ke test
+   * ini dan menggagalkan alur.
+   */
+  function setupFullApprovalFlow(pendaftaran = pendaftaranWithEmis) {
+    mockPendaftaranFindUnique.mockReset().mockResolvedValue(pendaftaran);
+    // Validasi NISN duplikat: tidak ada pendaftaran aktif lain.
+    mockPendaftaranFindFirst.mockReset().mockResolvedValue(null);
+    mockPendaftaranUpdate.mockReset().mockResolvedValue({});
+    // Klaim atomic default: berhasil (count 1).
+    mockPendaftaranUpdateMany.mockReset().mockResolvedValue({ count: 1 });
+    mockCreateUser.mockReset();
+    setupAuthMocks();
+    setupTransactionMock();
+    setupSalinMocks();
+    // 7× findFirst di dalam transaksi (authId/email/username ortu+siswa)
+    // semuanya "tidak ditemukan" kecuali test menimpa dengan Once.
+    mockUserFindUnique.mockReset().mockResolvedValue(null);
+    mockUserCreate.mockReset()
+      .mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA", aktif: true })
+      .mockResolvedValueOnce({ id: "user-siswa-1", role: "SISWA", aktif: true });
+    mockOrangTuaFindUnique.mockReset().mockResolvedValue({ id: "ortu-1" });
+    // Call #1: validasi NISN duplikat. Call #2: ambil siswaRecord.
+    mockSiswaFindUnique.mockReset()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: "siswa-1", userId: "user-siswa-1" });
+    mockParentStudentFindUnique.mockReset().mockResolvedValue(null);
+    mockParentStudentCreate.mockReset().mockResolvedValue({ id: "ps-1" });
+    mockBuktiTransferUpdate.mockReset().mockResolvedValue({});
+    mockSiswaUpdate.mockReset().mockResolvedValue({});
+    mockListUsers.mockReset().mockResolvedValue({
+      data: { users: [] },
+      error: null,
+    });
+    mockDeleteUser.mockReset().mockResolvedValue({ error: null });
+    mockStorageRemove.mockReset().mockResolvedValue({ error: null });
+    mockKelasFindUnique.mockReset().mockResolvedValue({
+      id: "kelas-1",
+      nama: "Kelas 1",
+      kapasitas: 30,
+      _count: { siswa: 5 },
+    });
+  }
+
+  it("dua admin approve paralel: hanya satu request yang dapat melakukan claim", async () => {
+    setupFullApprovalFlow();
+
+    // Hanya updateMany pertama dengan kondisi status=MENUNGGU_VERIFIKASI
+    // (klaim) yang menang; klaim kedua gagal (count=0).
+    let klaimKe = 0;
+    mockPendaftaranUpdateMany.mockImplementation(
+      async (args: { where?: { status?: string } }) => {
+        if (args?.where?.status === "MENUNGGU_VERIFIKASI") {
+          klaimKe += 1;
+          return { count: klaimKe === 1 ? 1 : 0 };
+        }
+        return { count: 1 };
+      },
+    );
+
+    const [r1, r2] = await Promise.all([
+      verifikasiPendaftaran({ pendaftaranId: "pend-1", status: "DITERIMA" }),
+      verifikasiPendaftaran({ pendaftaranId: "pend-1", status: "DITERIMA" }),
+    ]);
+
+    // Tepat satu pemenang, satu pecundang.
+    const hasil = [r1, r2].sort((a, b) => Number(a.success) - Number(b.success));
+    expect(hasil[0].success).toBe(false);
+    expect(hasil[0].message).toContain("sedang atau sudah diproses");
+    expect(hasil[1].success).toBe(true);
+    // Hanya pemenang yang membuat 2 akun Auth (ortu + siswa).
+    expect(mockCreateUser).toHaveBeenCalledTimes(2);
+  });
+
+  it("request kedua (claim gagal) tidak membuat akun Auth kedua", async () => {
+    setupFullApprovalFlow();
+    // Klaim (updateMany pertama, kondisi MENUNGGU_VERIFIKASI) gagal.
+    mockPendaftaranUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("sedang atau sudah diproses");
+    // Tidak ada side effect: tidak ada Auth, tidak ada User, tidak ada email.
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(mockUserCreate).not.toHaveBeenCalled();
+    expect(mockDeleteUser).not.toHaveBeenCalled();
+  });
+
+  it("Auth orang tua sudah tersedia → reuse, tidak membuat akun ortu baru", async () => {
+    setupFullApprovalFlow();
+    // createUser ortu gagal: email sudah terdaftar (approval sebelumnya
+    // gagal di tengah jalan). Lookup listUsers menemukan akun yang ada.
+    // Reset dulu: setupAuthMocks() sudah mengantre 2 respons sukses,
+    // sedangkan antrean Once FIFO — tanpa reset, panggilan pertama
+    // justru mengembalikan sukses.
+    mockCreateUser.mockReset()
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: "User already been registered" },
+      })
+      .mockResolvedValueOnce({ data: { user: { id: "auth-siswa-uuid" } }, error: null });
+    mockListUsers.mockResolvedValue({
+      data: { users: [{ id: "auth-ortu-existing", email: "ortu@example.com" }] },
+      error: null,
+    });
+    // Record ORANG_TUA sudah ada untuk authId tersebut → tidak ada user.create.
+    mockUserFindUnique
+      .mockResolvedValueOnce({ id: "user-ortu-existing", role: "ORANG_TUA", aktif: true })
+      .mockResolvedValue(null);
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(true);
+    // Hanya akun SISWA yang dibuat; akun ortu di-reuse.
+    const createdRoles = mockUserCreate.mock.calls.map((c) => c[0]?.data?.role);
+    expect(createdRoles).toEqual(["SISWA"]);
+    // Akun yang di-reuse tidak dihapus saat cleanup (hanya yang baru).
+  });
+
+  it("Auth siswa sudah tersedia → reuse, tidak membuat akun siswa baru", async () => {
+    setupFullApprovalFlow();
+    // createUser ortu sukses; createUser siswa sudah terdaftar.
+    // Reset dulu antrean Once dari setupAuthMocks (FIFO).
+    mockCreateUser.mockReset()
+      .mockResolvedValueOnce({ data: { user: { id: "auth-ortu-uuid" } }, error: null })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: "User already been registered" },
+      });
+    mockListUsers.mockResolvedValue({
+      data: {
+        users: [
+          {
+            id: "auth-siswa-existing",
+            // emailSiswa = "siswa." + nomorPendaftaran tanpa non-alnum
+            // → siswa.reg202600001@sekolah.internal
+            email: "siswa.reg202600001@sekolah.internal",
+          },
+        ],
+      },
+      error: null,
+    });
+    // Urutan findFirst di transaksi:
+    //  1. ortu by authId → null
+    //  2. ortu by email → null
+    //  3. username ortu (deriveUniqueUsername) → null
+    //  4. siswa by authId → record SISWA sudah ada → reuse,
+    //     tidak ada user.create siswa.
+    mockUserFindUnique.mockReset()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "user-siswa-existing", role: "SISWA", aktif: true });
+    mockUserCreate.mockReset().mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA", aktif: true });
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(true);
+    const createdRoles = mockUserCreate.mock.calls.map((c) => c[0]?.data?.role);
+    expect(createdRoles).toEqual(["ORANG_TUA"]);
+  });
+
+  it("pembuatan Auth gagal → akun dibersihkan, status kembali MENUNGGU_VERIFIKASI", async () => {
+    setupFullApprovalFlow();
+    // createUser ortu gagal dengan error generik (bukan already-registered).
+    // Reset dulu antrean Once dari setupAuthMocks.
+    mockCreateUser.mockReset().mockResolvedValueOnce({
+      data: null,
+      error: { message: "Internal Supabase error" },
+    });
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Gagal membuat akun login");
+    expect(result.message).toContain("antrean verifikasi");
+    // Klaim dibatalkan: updateMany SEDANG_DIPROSES → MENUNGGU_VERIFIKASI.
+    const rollbackCall = mockPendaftaranUpdateMany.mock.calls.find(
+      (c: [{ where?: { status?: string }; data?: { status?: string } }]) =>
+        c[0]?.where?.status === "SEDANG_DIPROSES" &&
+        c[0]?.data?.status === "MENUNGGU_VERIFIKASI",
+    );
+    expect(rollbackCall).toBeDefined();
+  });
+
+  it("transaction database gagal → akun Auth baru dihapus, status dikembalikan", async () => {
+    setupFullApprovalFlow();
+    mockPrismaTransaction.mockRejectedValue(new Error("DB connection lost"));
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(false);
+    // Kedua akun Auth yang baru dibuat (ortu + siswa) dihapus.
+    expect(mockDeleteUser).toHaveBeenCalledTimes(2);
+    expect(mockDeleteUser).toHaveBeenCalledWith("auth-ortu-uuid");
+    expect(mockDeleteUser).toHaveBeenCalledWith("auth-siswa-uuid");
+    // Klaim SEDANG_DIPROSES dibatalkan.
+    const rollbackCall = mockPendaftaranUpdateMany.mock.calls.find(
+      (c: [{ where?: { status?: string }; data?: { status?: string } }]) =>
+        c[0]?.where?.status === "SEDANG_DIPROSES",
+    );
+    expect(rollbackCall).toBeDefined();
+  });
+
+  it("proses copy dokumen gagal → approval tetap final (best-effort) + catatan jujur", async () => {
+    setupFullApprovalFlow();
+    mockSalinDokumen.mockRejectedValue(new Error("Storage unavailable"));
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    // Status sudah final di DB; kegagalan copy dilaporkan, bukan ditutupi.
+    expect(result.success).toBe(true);
+    expect(result.message).toContain("dokumen gagal disalin");
+  });
+
+  it("recovery: klaim SEDANG_DIPROSES yang stale (>15 menit) dipulihkan dan diproses ulang", async () => {
+    const staleAt = new Date(Date.now() - 20 * 60 * 1000);
+    setupFullApprovalFlow();
+    // Panggilan findUnique #1: klaim stale. #2: hasil pemulihan (segar).
+    // Antrean Once dipasang SETELAH setupFullApprovalFlow agar tidak
+    // tertimpa reset-nya.
+    mockPendaftaranFindUnique
+      .mockResolvedValueOnce({
+        ...pendaftaranWithEmis,
+        status: "SEDANG_DIPROSES",
+        diprosesOlehId: "guru-lain",
+        waktuMulaiProses: staleAt,
+      })
+      .mockResolvedValueOnce({ ...pendaftaranWithEmis, status: "MENUNGGU_VERIFIKASI" });
+    // updateMany pemulihan stale (kondisi SEDANG_DIPROSES + waktu lama)
+    // dan klaim ulang keduanya berhasil (default count 1 dari setup).
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(true);
+    // Pemulihan benar-benar memindahkan SEDANG_DIPROSES → MENUNGGU_VERIFIKASI.
+    const recoveryCall = mockPendaftaranUpdateMany.mock.calls.find(
+      (c: [{ where?: { status?: string }; data?: { status?: string } }]) =>
+        c[0]?.where?.status === "SEDANG_DIPROSES" &&
+        c[0]?.data?.status === "MENUNGGU_VERIFIKASI",
+    );
+    expect(recoveryCall).toBeDefined();
+  });
+
+  it("klaim SEDANG_DIPROSES yang BELUM stale → ditolak dengan pesan jelas", async () => {
+    setupFullApprovalFlow();
+    // Klaim SEDANG_DIPROSES yang belum lewat batas 15 menit.
+    mockPendaftaranFindUnique.mockReset().mockResolvedValue({
+      ...pendaftaranWithEmis,
+      status: "SEDANG_DIPROSES",
+      diprosesOlehId: "guru-lain",
+      waktuMulaiProses: new Date(), // baru saja, belum stale
+    });
+    // Pemulihan stale menolak (count 0): klaim belum stale.
+    mockPendaftaranUpdateMany.mockReset().mockImplementation(
+      async (args: { where?: { status?: string } }) => {
+        if (args?.where?.status === "SEDANG_DIPROSES") {
+          return { count: 0 };
+        }
+        return { count: 1 };
+      },
+    );
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("sedang diproses admin lain");
+    // Tidak ada side effect apa pun.
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(mockUserCreate).not.toHaveBeenCalled();
+  });
+
+  it("retry setelah kegagalan tidak membuat data duplikat (idempotent reuse)", async () => {
+    // Simulasi: percobaan pertama membuat Auth ortu lalu gagal di transaksi.
+    // Percobaan kedua menemukan ortu auth SUDAH ADA → reuse.
+    setupFullApprovalFlow();
+    // Reset dulu antrean Once dari setupAuthMocks (FIFO).
+    mockCreateUser.mockReset()
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: "User already been registered" },
+      })
+      .mockResolvedValueOnce({ data: { user: { id: "auth-siswa-uuid" } }, error: null });
+    mockListUsers.mockResolvedValue({
+      data: { users: [{ id: "auth-ortu-existing", email: "ortu@example.com" }] },
+      error: null,
+    });
+    mockUserFindUnique
+      .mockResolvedValueOnce({ id: "user-ortu-existing", role: "ORANG_TUA", aktif: true })
+      .mockResolvedValue(null);
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(true);
+    // Orang tua: record ditemukan via authId → tidak ada create.
+    const ortuCreates = mockUserCreate.mock.calls.filter(
+      (c) => c[0]?.data?.role === "ORANG_TUA",
+    );
+    expect(ortuCreates).toHaveLength(0);
+  });
+
+  it("approval ulang pendaftaran yang sudah DITERIMA → idempotent, tanpa side effect", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue({
+      ...pendaftaranWithEmis,
+      status: "DITERIMA",
+      diverifikasiOlehId: "guru-1",
+    });
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.message).toContain("sudah DITERIMA");
+    expect(result.message).toContain("Tidak ada akun");
+    // Tidak ada akun Auth, User, relasi, atau transisi status baru.
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(mockUserCreate).not.toHaveBeenCalled();
+    expect(mockUserFindUnique).not.toHaveBeenCalled();
+    expect(mockPendaftaranUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("password tidak bocor ke response error saat Auth gagal", async () => {
+    setupFullApprovalFlow();
+    // Reset dulu antrean Once dari setupAuthMocks.
+    mockCreateUser.mockReset().mockResolvedValueOnce({
+      data: null,
+      error: { message: "Internal Supabase error" },
+    });
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(false);
+    // Response tidak mengandung password hasil generateSecurePassword.
+    expect(result.message).not.toContain("RandomSecurePass123!");
+    expect(JSON.stringify(result)).not.toContain("RandomSecurePass123!");
   });
 });

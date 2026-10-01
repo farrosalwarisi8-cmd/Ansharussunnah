@@ -37,6 +37,7 @@ model User {
   verifikasiPendaftaran   Pendaftaran[]              @relation("VerifiedBy")
   verifikasiEmailManual   Pendaftaran[]              @relation("EmailVerifiedManuallyBy")
   kontakWaliDikonfirmasi  Pendaftaran[]              @relation("KontakWaliDikonfirmasiBy")
+  diprosesPendaftaran     Pendaftaran[]              @relation("ProcessingBy")
   penilaianTugas          PengumpulanTugas[]         @relation("TugasDinilaiOleh")
   penilaianUjianManual    PengerjaanUjian[]          @relation("PengerjaanDinilaiOleh")
   pengumumans             pengumumans[]
@@ -429,6 +430,16 @@ model Pendaftaran {
   alasanPenolakan                       String?                    @map("alasan_penolakan")
   diverifikasiOlehId                    String?                    @map("diverifikasi_oleh_id")
   waktuVerifikasi                       DateTime?                  @map("waktu_verifikasi") @db.Timestamptz(3)
+  // ============ STATE MACHINE APPROVAL (anti-race) ============
+  // Kolom jejak klaim SEDANG_DIPROSES. Null = tidak sedang diproses.
+  // `diprosesOlehId` admin yang mengklaim (audit: siapa yang
+  // menahan pendaftaran), `waktuMulaiProses` dipakai deteksi klaim
+  // stale (> 15 menit → admin lain boleh memulihkan ke
+  // MENUNGGU_VERIFIKASI). Keduanya dibersihkan saat status
+  // mencapai final (DITERIMA/DITOLAK) atau klaim dibatalkan.
+  diprosesOlehId                        String?                    @map("diproses_oleh_id")
+  waktuMulaiProses                      DateTime?                  @map("waktu_mulai_proses") @db.Timestamptz(3)
+  diprosesOleh                          User?                      @relation("ProcessingBy", fields: [diprosesOlehId], references: [id])
   createdAt                             DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                             DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
   agama                                 String?
@@ -456,6 +467,9 @@ model Pendaftaran {
   @@index([createdAt(sort: Desc)], map: "idx_pendaftaran_created")
   @@index([jenjangTujuanId], map: "idx_pendaftaran_jenjang")
   @@index([status], map: "idx_pendaftaran_status")
+  // Recovery klaim stale: cari SEDANG_DIPROSES yang waktunya sudah
+  // lewat (> 15 menit) tanpa scan seluruh tabel.
+  @@index([status, waktuMulaiProses], map: "idx_pendaftaran_status_waktu_proses")
   @@index([status, createdAt(sort: Desc)], map: "idx_pendaftaran_status_created")
   @@index([status, id(sort: Desc)], map: "idx_pendaftaran_status_id")
   // Dua index di bawah dibuat lewat SQL mentah di migrasi. Kalau tidak
@@ -1176,6 +1190,14 @@ enum JenisKelamin {
 enum StatusPendaftaran {
   MENUNGGU_PEMBAYARAN
   MENUNGGU_VERIFIKASI
+  // State machine anti-race: admin yang menekan "Terima" pertama
+  // kali mengklaim pendaftaran ke SEDANG_DIPROSES SEBELUM side
+  // effect apa pun (Supabase Auth, create User/Siswa). Dua admin
+  // yang menekan bersamaan hanya satu yang bisa klaim — yang
+  // lain berhenti tanpa membuat akun ganda. Bila proses gagal,
+  // status dikembalikan ke MENUNGGU_VERIFIKASI; bila menggantung
+  // > 15 menit (crash server), admin lain bisa memulihkannya.
+  SEDANG_DIPROSES
   DITERIMA
   DITOLAK
 }

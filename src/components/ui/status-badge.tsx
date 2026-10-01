@@ -30,6 +30,7 @@ const statusLabels: Record<string, string> = {
   IZIN: "Izin",
   MENUNGGU_VERIFIKASI: "Menunggu Verifikasi",
   MENUNGGU_PEMBAYARAN: "Menunggu Pembayaran",
+  SEDANG_DIPROSES: "Sedang Diproses",
   PENDING: "Pending",
   DIBAYAR_SEBAGIAN: "Sebagian",
   SAKIT: "Sakit",
@@ -58,6 +59,7 @@ export type StatusType =
   | "IZIN"
   | "MENUNGGU_VERIFIKASI"
   | "MENUNGGU_PEMBAYARAN"
+  | "SEDANG_DIPROSES"
   | "PENDING"
   | "DIBAYAR_SEBAGIAN"
   | "SAKIT"
@@ -92,6 +94,7 @@ const STATUS_TONE: Record<StatusType, { tone: Tone; icon: LucideIcon }> = {
   IZIN: { tone: "warning", icon: Clock },
   MENUNGGU_VERIFIKASI: { tone: "warning", icon: Clock },
   MENUNGGU_PEMBAYARAN: { tone: "warning", icon: Clock },
+  SEDANG_DIPROSES: { tone: "info", icon: Clock },
   PENDING: { tone: "warning", icon: Clock },
   DIBAYAR_SEBAGIAN: { tone: "warning", icon: Clock },
 
