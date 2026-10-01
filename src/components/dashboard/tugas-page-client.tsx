@@ -53,7 +53,7 @@ export default function TugasPage() {
 
       {isTeacher && <GuruTugasView />}
       {isStudent && <SiswaTugasView />}
-      {isParent && <OrangTuaTugasView selectedChild={selectedChild} />}
+      {isParent && <OrangTuaTugasView key={selectedChild?.id ?? "none"} selectedChild={selectedChild} />}
     </div>
   )
 }

@@ -23,6 +23,7 @@ import {
   type InputNilaiUjianManualValues,
 } from "@/lib/validations/ujian"
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
+import { normalizePagination, paginatedResult } from "@/lib/pagination"
 import type { ActionResponse } from "@/types"
 import { Role, StatusUjian, StatusPengerjaan, JenisUjian, Prisma } from "@prisma/client"
 import { toUserFriendlyError } from "@/lib/prisma-error"
@@ -924,7 +925,7 @@ export async function beriNilaiEsai(
         0
       )
       const totalPoinDidapat = semuaJawaban.reduce((acc: number, j) => {
-        return acc + (j.nilaiSoal ? Number(j.nilaiSoal) : 0)
+        return acc + (j.nilaiSoal != null ? Number(j.nilaiSoal) : 0)
       }, 0)
 
       // Cek apakah masih ada soal esai yang belum dinilai
@@ -1219,7 +1220,9 @@ export async function getUjianDetail(
 // 2. ACTIONS SISWA: PENGERJAAN UJIAN
 // ========================================================
 
-export async function getDaftarUjianSiswa(): Promise<ActionResponse> {
+export async function getDaftarUjianSiswa(
+  options?: { page?: number; pageSize?: number }
+): Promise<ActionResponse> {
   try {
     const user = await requireRole([Role.SISWA])
     if (!user.siswa || !user.siswa.kelasId) {
@@ -1231,67 +1234,81 @@ export async function getDaftarUjianSiswa(): Promise<ActionResponse> {
     // saat siswa melihat kembali daftar ujian.
     await tutupPengerjaanUjianKedaluwarsa()
 
+    const pagination = normalizePagination(options)
+
     const now = new Date()
 
-    const ujianList = await prisma.ujian.findMany({
-      where: {
-        kelasId: user.siswa.kelasId,
-        // Ujian yang bisa dikerjakan (PUBLISHED) ATAU ujian offline (DRAFT)
-        // yang sudah TELAH DINILAI untuk siswa ini (agar nilainya terlihat
-        // di riwayat; ujian offline tidak mewajibkan publish).
-        OR: [
-          { status: StatusUjian.PUBLISHED },
-          {
-            status: StatusUjian.DRAFT,
-            inputManual: true,
-            pengerjaan: {
-              some: {
-                siswaId: user.siswa.id,
-                status: StatusPengerjaan.DINILAI,
-              },
+    const filter = {
+      kelasId: user.siswa.kelasId,
+      // Ujian yang bisa dikerjakan (PUBLISHED) ATAU ujian offline (DRAFT)
+      // yang sudah TELAH DINILAI untuk siswa ini (agar nilainya terlihat
+      // di riwayat; ujian offline tidak mewajibkan publish).
+      OR: [
+        { status: StatusUjian.PUBLISHED },
+        {
+          status: StatusUjian.DRAFT,
+          inputManual: true,
+          pengerjaan: {
+            some: {
+              siswaId: user.siswa.id,
+              status: StatusPengerjaan.DINILAI,
             },
           },
-        ],
-        AND: [
-          {
-            OR: [
-              { targetGender: null },
-              { targetGender: user.siswa.jenisKelamin },
-            ],
-          },
-          {
-            OR: [
-              { mataPelajaran: { jenisKelamin: null } },
-              { mataPelajaran: { jenisKelamin: user.siswa.jenisKelamin } },
-            ],
-          },
-        ],
-      },
-      include: {
-        periodeAjaran: { select: { nama: true } },
-        dibuatOleh: { select: { nama: true } },
-        mataPelajaran: { select: { nama: true } },
-        pengerjaan: {
-          where: { siswaId: user.siswa.id },
-          select: {
-            id: true,
-            status: true,
-            waktuMulai: true,
-            waktuSubmit: true,
-            nilaiTotal: true,
-          },
         },
-        _count: { select: { soal: true } },
-      },
-      orderBy: { waktuMulai: "desc" },
-    })
+      ],
+      AND: [
+        // Ujian manual (offline) hanya ditampilkan bila sudah ada
+        // pengerjaan (agar nilainya terlihat di riwayat). Filter ini
+        // di-query (bukan di-.filter() setelah findMany) agar
+        // pagination server-side tetap benar.
+        {
+          OR: [
+            { inputManual: false },
+            { pengerjaan: { some: { siswaId: user.siswa.id } } },
+          ],
+        },
+        {
+          OR: [
+            { targetGender: null },
+            { targetGender: user.siswa.jenisKelamin },
+          ],
+        },
+        {
+          OR: [
+            { mataPelajaran: { jenisKelamin: null } },
+            { mataPelajaran: { jenisKelamin: user.siswa.jenisKelamin } },
+          ],
+        },
+      ],
+    }
 
-    const formatted = ujianList
-      // Ujian manual (offline) hanya ditampilkan bila sudah dinilai — siswa
-      // tidak mengerjakan online, jadi tanpa riwayat nilai jangan tampil
-      // sebagai ujian yang bisa "dikerjakan".
-      .filter((u) => !u.inputManual || u.pengerjaan.length > 0)
-      .map((u) => {
+    const [ujianList, total] = await Promise.all([
+      prisma.ujian.findMany({
+        where: filter,
+        include: {
+          periodeAjaran: { select: { nama: true } },
+          dibuatOleh: { select: { nama: true } },
+          mataPelajaran: { select: { nama: true } },
+          pengerjaan: {
+            where: { siswaId: user.siswa.id },
+            select: {
+              id: true,
+              status: true,
+              waktuMulai: true,
+              waktuSubmit: true,
+              nilaiTotal: true,
+            },
+          },
+          _count: { select: { soal: true } },
+        },
+        orderBy: { waktuMulai: "desc" },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.ujian.count({ where: filter }),
+    ])
+
+    const formatted = ujianList.map((u) => {
         const pengerjaan = u.pengerjaan[0] || null
         const isExpired = now > u.waktuSelesai
         const isStarted = now >= u.waktuMulai
@@ -1319,7 +1336,7 @@ export async function getDaftarUjianSiswa(): Promise<ActionResponse> {
     return {
       success: true,
       message: "Daftar ujian berhasil diambil",
-      data: formatted,
+      data: paginatedResult(formatted, total, pagination),
     }
   } catch (error: unknown) {
     return { success: false, message: toUserFriendlyError(error, "Gagal memuat ujian siswa") }
@@ -1859,33 +1876,43 @@ if (ujianId) {
 // ========================================================
 
 export async function getDaftarUjianGuru(
-  kelasId: string
+  kelasId: string,
+  options?: { page?: number; pageSize?: number }
 ): Promise<ActionResponse> {
   try {
     await verifyGuruAksesKelas(kelasId)
+
+    const pagination = normalizePagination(options)
 
     const aksesMapel = await getMapelIdYangDiajarDiKelas(kelasId)
     if (aksesMapel !== "ALL" && aksesMapel.length === 0) {
       return {
         success: true,
         message: "Daftar ujian kosong",
-        data: [],
+        data: paginatedResult([], 0, pagination),
       }
     }
 
-    const ujianList = await prisma.ujian.findMany({
-      where: {
-        kelasId,
-        ...(aksesMapel !== "ALL" ? { mataPelajaranId: { in: aksesMapel } } : {}),
-      },
-      include: {
-        periodeAjaran: { select: { nama: true } },
-        dibuatOleh: { select: { nama: true } },
-        mataPelajaran: { select: { nama: true, jenisKelamin: true } },
-        _count: { select: { soal: true, pengerjaan: true } },
-      },
-      orderBy: { waktuMulai: "desc" },
-    })
+    const filter = {
+      kelasId,
+      ...(aksesMapel !== "ALL" ? { mataPelajaranId: { in: aksesMapel } } : {}),
+    }
+
+    const [ujianList, total] = await Promise.all([
+      prisma.ujian.findMany({
+        where: filter,
+        include: {
+          periodeAjaran: { select: { nama: true } },
+          dibuatOleh: { select: { nama: true } },
+          mataPelajaran: { select: { nama: true, jenisKelamin: true } },
+          _count: { select: { soal: true, pengerjaan: true } },
+        },
+        orderBy: { waktuMulai: "desc" },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.ujian.count({ where: filter }),
+    ])
 
     const formatted = ujianList.map((u) => ({
       id: u.id,
@@ -1911,7 +1938,7 @@ export async function getDaftarUjianGuru(
     return {
       success: true,
       message: "Daftar ujian guru berhasil dimuat",
-      data: formatted,
+      data: paginatedResult(formatted, total, pagination),
     }
   } catch (error: unknown) {
     return { success: false, message: toUserFriendlyError(error, "Gagal memuat daftar ujian guru") }
@@ -1927,7 +1954,8 @@ export async function getDaftarUjianGuru(
  * ✅ KEAMANAN: Validasi relasi ParentStudent.
  */
 export async function getDaftarUjianAnak(
-  siswaId: string
+  siswaId: string,
+  options?: { page?: number; pageSize?: number }
 ): Promise<ActionResponse> {
   try {
     const user = await requireRole([Role.ORANG_TUA])
@@ -1959,43 +1987,52 @@ export async function getDaftarUjianAnak(
       return { success: false, message: "Data kelas siswa tidak valid" }
     }
 
-    const ujianList = await prisma.ujian.findMany({
-      where: {
-        kelasId: siswa.kelasId,
-        status: StatusUjian.PUBLISHED,
-        AND: [
-          {
-            OR: [
-              { targetGender: null },
-              { targetGender: siswa.jenisKelamin },
-            ],
-          },
-          {
-            OR: [
-              { mataPelajaran: { jenisKelamin: null } },
-              { mataPelajaran: { jenisKelamin: siswa.jenisKelamin } },
-            ],
-          },
-        ],
-      },
-      include: {
-        periodeAjaran: { select: { nama: true } },
-        dibuatOleh: { select: { nama: true } },
-        mataPelajaran: { select: { nama: true } },
-        pengerjaan: {
-          where: { siswaId },
-          select: {
-            id: true,
-            status: true,
-            waktuMulai: true,
-            waktuSubmit: true,
-            nilaiTotal: true,
-          },
+    const pagination = normalizePagination(options)
+
+    const filter = {
+      kelasId: siswa.kelasId,
+      status: StatusUjian.PUBLISHED,
+      AND: [
+        {
+          OR: [
+            { targetGender: null },
+            { targetGender: siswa.jenisKelamin },
+          ],
         },
-        _count: { select: { soal: true } },
-      },
-      orderBy: { waktuMulai: "desc" },
-    })
+        {
+          OR: [
+            { mataPelajaran: { jenisKelamin: null } },
+            { mataPelajaran: { jenisKelamin: siswa.jenisKelamin } },
+          ],
+        },
+      ],
+    }
+
+    const [ujianList, total] = await Promise.all([
+      prisma.ujian.findMany({
+        where: filter,
+        include: {
+          periodeAjaran: { select: { nama: true } },
+          dibuatOleh: { select: { nama: true } },
+          mataPelajaran: { select: { nama: true } },
+          pengerjaan: {
+            where: { siswaId },
+            select: {
+              id: true,
+              status: true,
+              waktuMulai: true,
+              waktuSubmit: true,
+              nilaiTotal: true,
+            },
+          },
+          _count: { select: { soal: true } },
+        },
+        orderBy: { waktuMulai: "desc" },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.ujian.count({ where: filter }),
+    ])
 
     const formatted = ujianList.map((u) => {
       const pengerjaan = u.pengerjaan[0] || null
@@ -2018,7 +2055,7 @@ export async function getDaftarUjianAnak(
     return {
       success: true,
       message: "Daftar ujian anak berhasil dimuat",
-      data: formatted,
+      data: paginatedResult(formatted, total, pagination),
     }
   } catch (error: unknown) {
     return { success: false, message: toUserFriendlyError(error, "Gagal memuat daftar ujian anak") }

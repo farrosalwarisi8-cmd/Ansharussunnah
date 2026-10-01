@@ -4,6 +4,7 @@ import * as React from "react"
 import { getDaftarUjianSiswa } from "@/actions/ujian"
 import { Clock, Play, Award, CheckCircle2 } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
+import { ListPagination } from "@/components/ui/list-pagination"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -29,6 +30,9 @@ type UjianItem = {
 
 export function SiswaUjianView() {
   const [ujianList, setUjianList] = React.useState<UjianItem[]>([])
+  const [page, setPage] = React.useState(1)
+  const [total, setTotal] = React.useState(0)
+  const [totalPages, setTotalPages] = React.useState(1)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -37,9 +41,16 @@ export function SiswaUjianView() {
       setLoading(true)
       setError(null)
       try {
-        const result = await getDaftarUjianSiswa()
+        const result = await getDaftarUjianSiswa({ page })
         if (result.success && result.data) {
-          setUjianList(result.data as UjianItem[])
+          const data = result.data as {
+            items: UjianItem[]
+            total: number
+            totalPages: number
+          }
+          setUjianList(data.items)
+          setTotal(data.total)
+          setTotalPages(data.totalPages)
         } else {
           setError(result.message || "Gagal memuat data ujian")
         }
@@ -50,7 +61,7 @@ export function SiswaUjianView() {
       }
     }
     fetchUjian()
-  }, [])
+  }, [page])
 
   if (loading) {
     return (
@@ -159,6 +170,16 @@ export function SiswaUjianView() {
           </Card>
         </div>
       )}
+
+      <ListPagination
+        page={page}
+        pageSize={25}
+        total={total}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        loading={loading}
+        itemLabel="ujian"
+      />
     </div>
   )
 }

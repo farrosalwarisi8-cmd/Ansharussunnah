@@ -14,6 +14,9 @@ const {
   mockTagihanSiswaFindMany,
   mockTagihanSiswaFindUnique,
   mockTagihanSiswaUpdate,
+  mockTagihanSiswaUpdateMany,
+  mockTransaksiKeuanganFindMany,
+  mockTransaksiKeuanganCount,
 } = vi.hoisted(() => ({
   mockRequireRole: vi.fn(),
   mockPembayaranSiswaFindMany: vi.fn(),
@@ -22,6 +25,9 @@ const {
   mockTagihanSiswaFindMany: vi.fn(),
   mockTagihanSiswaFindUnique: vi.fn(),
   mockTagihanSiswaUpdate: vi.fn(),
+  mockTagihanSiswaUpdateMany: vi.fn().mockResolvedValue({ count: 1 }),
+  mockTransaksiKeuanganFindMany: vi.fn(),
+  mockTransaksiKeuanganCount: vi.fn(),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -42,6 +48,11 @@ vi.mock("@/lib/prisma", () => ({
       findMany: mockTagihanSiswaFindMany,
       findUnique: mockTagihanSiswaFindUnique,
       update: mockTagihanSiswaUpdate,
+      updateMany: mockTagihanSiswaUpdateMany,
+    },
+    transaksiKeuangan: {
+      findMany: mockTransaksiKeuanganFindMany,
+      count: mockTransaksiKeuanganCount,
     },
   },
 }))
@@ -61,6 +72,8 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/storage", () => ({
   getSignedUrl: vi.fn(),
+  // getDaftarPembayaranPendingVerifikasi memanggil getSignedUrls (jamak).
+  getSignedUrls: vi.fn().mockResolvedValue(new Map()),
 }))
 
 vi.mock("next/cache", () => ({
@@ -74,6 +87,7 @@ vi.mock("next/cache", () => ({
 import {
   batalkanTagihanSpp,
   getDaftarPembayaranPendingVerifikasi,
+  getDaftarTransaksiKeuangan,
   getRekapSppPerKelas,
   getRekapSppPerJenjang,
 } from "@/actions/akuntansi"
@@ -167,6 +181,7 @@ describe("getDaftarPembayaranPendingVerifikasi", () => {
         },
       },
     ])
+    mockPembayaranSiswaCount.mockResolvedValue(2)
 
     const result = await getDaftarPembayaranPendingVerifikasi()
 
@@ -175,11 +190,16 @@ describe("getDaftarPembayaranPendingVerifikasi", () => {
     expect(result.data!.total).toBe(2)
     expect(result.data!.items).toHaveLength(2)
 
-    // Verifikasi query hanya menggunakan filter PENDING
+    // Verifikasi query hanya menggunakan filter PENDING + pagination server-side
     expect(mockPembayaranSiswaFindMany).toHaveBeenCalledWith({
       where: { statusPembayaran: "PENDING" },
       include: expect.any(Object),
       orderBy: { createdAt: "asc" },
+      skip: 0,
+      take: 25,
+    })
+    expect(mockPembayaranSiswaCount).toHaveBeenCalledWith({
+      where: { statusPembayaran: "PENDING" },
     })
 
     // Verifikasi data pertama
@@ -203,6 +223,7 @@ describe("getDaftarPembayaranPendingVerifikasi", () => {
   it("harus mengembalikan array kosong jika tidak ada pembayaran PENDING", async () => {
     setupAdminAuth()
     mockPembayaranSiswaFindMany.mockResolvedValue([])
+    mockPembayaranSiswaCount.mockResolvedValue(0)
 
     const result = await getDaftarPembayaranPendingVerifikasi()
 
@@ -248,6 +269,7 @@ describe("getDaftarPembayaranPendingVerifikasi", () => {
         },
       },
     ])
+    mockPembayaranSiswaCount.mockResolvedValue(1)
 
     const result = await getDaftarPembayaranPendingVerifikasi()
 
@@ -707,7 +729,7 @@ describe("batalkanTagihanSpp", () => {
 
     expect(result.success).toBe(false)
     expect(result.message).toContain("DIKONFIRMASI")
-    expect(mockTagihanSiswaUpdate).not.toHaveBeenCalled()
+    expect(mockTagihanSiswaUpdateMany).not.toHaveBeenCalled()
   })
 
   it("harus menolak pembatalan bila ada bukti transfer PENDING menunggu verifikasi", async () => {
@@ -725,7 +747,7 @@ describe("batalkanTagihanSpp", () => {
 
     expect(result.success).toBe(false)
     expect(result.message).toContain("menunggu verifikasi")
-    expect(mockTagihanSiswaUpdate).not.toHaveBeenCalled()
+    expect(mockTagihanSiswaUpdateMany).not.toHaveBeenCalled()
   })
 
   it("harus membatalkan tagihan bila belum ada pembayaran sama sekali", async () => {
@@ -735,7 +757,7 @@ describe("batalkanTagihanSpp", () => {
       totalTerbayar: null,
     })
     mockPembayaranSiswaCount.mockResolvedValue(0)
-    mockTagihanSiswaUpdate.mockResolvedValue({ id: "tagihan-1", status: "DIBATALKAN" })
+    mockTagihanSiswaUpdateMany.mockResolvedValue({ count: 1 })
 
     const result = await batalkanTagihanSpp({
       tagihanId: "tagihan-1",
@@ -743,9 +765,11 @@ describe("batalkanTagihanSpp", () => {
     })
 
     expect(result.success).toBe(true)
-    expect(mockTagihanSiswaUpdate).toHaveBeenCalledWith(
+    expect(mockTagihanSiswaUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "tagihan-1" },
+        // updateMany mengunci baris dengan kondisi status agar pembatalan
+        // tetap idempotent & bebas race.
+        where: expect.objectContaining({ id: "tagihan-1" }),
         data: expect.objectContaining({
           status: "DIBATALKAN",
           alasanPembatalan: "Salah nominal tagihan",
@@ -769,6 +793,72 @@ describe("batalkanTagihanSpp", () => {
 
     expect(result.success).toBe(false)
     expect(result.message).toContain("sudah dibatalkan")
-    expect(mockTagihanSiswaUpdate).not.toHaveBeenCalled()
+    expect(mockTagihanSiswaUpdateMany).not.toHaveBeenCalled()
+  })
+})
+
+// ========================================================
+// getDaftarTransaksiKeuangan — pagination server-side
+// ========================================================
+
+describe("getDaftarTransaksiKeuangan", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const trxRows = [
+    {
+      id: "trx-1",
+      tipe: "PEMASUKAN",
+      deskripsi: "Infaq Jumat",
+      nominal: { toString: () => "150000" },
+      tanggal: new Date("2026-03-01"),
+      status: "AKTIF",
+      alasanPembatalan: null,
+      kategori: { nama: "Infaq" },
+      dibuatOleh: { nama: "Kasir A" },
+    },
+  ]
+
+  it("mengembalikan amplop pagination dan memakai skip/take", async () => {
+    setupAdminAuth()
+    mockTransaksiKeuanganFindMany.mockResolvedValue(trxRows)
+    mockTransaksiKeuanganCount.mockResolvedValue(57)
+
+    const result = await getDaftarTransaksiKeuangan({ page: 3, pageSize: 20 })
+
+    expect(result.success).toBe(true)
+    expect(result.data).toMatchObject({ total: 57, page: 3, pageSize: 20, totalPages: 3 })
+    expect(result.data!.items[0]).toMatchObject({
+      id: "trx-1",
+      nominal: 150000,
+      kategori: "Infaq",
+      dibuatOleh: "Kasir A",
+    })
+    expect(mockTransaksiKeuanganFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 40, take: 20 }),
+    )
+    expect(mockTransaksiKeuanganCount).toHaveBeenCalledTimes(1)
+  })
+
+  it("membatasi page size ke 100 walau klien meminta lebih besar", async () => {
+    setupAdminAuth()
+    mockTransaksiKeuanganFindMany.mockResolvedValue([])
+    mockTransaksiKeuanganCount.mockResolvedValue(0)
+
+    await getDaftarTransaksiKeuangan({ page: 1, pageSize: 5000 })
+
+    expect(mockTransaksiKeuanganFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 0, take: 100 }),
+    )
+  })
+
+  it("menolak non-admin tanpa query database", async () => {
+    setupNonAdminAuth()
+
+    const result = await getDaftarTransaksiKeuangan()
+
+    expect(result.success).toBe(false)
+    expect(mockTransaksiKeuanganFindMany).not.toHaveBeenCalled()
   })
 })

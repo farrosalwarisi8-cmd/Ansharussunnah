@@ -272,4 +272,26 @@ describe("getCatatanRaporDetail", () => {
     expect(result.success).toBe(false)
     expect(result.message).toContain("Hanya wali kelas")
   })
+
+  it("mengembalikan nilai sikap 0 (bukan null) — regresi bug nilai-0", async () => {
+    mockCatatanRaporFindUnique.mockResolvedValue({
+      id: "catatan-0",
+      catatan: "Perlu pendampingan",
+      ranking: 30,
+      kedisiplinan: 0,
+      kemandirian: 0,
+      tingkahLaku: null,
+      prestasi: null,
+    })
+
+    const result = await getCatatanRaporDetail("siswa-1", "periode-1", 0)
+
+    expect(result.success).toBe(true)
+    const data = result.data as unknown as {
+      catatan: { kedisiplinan: number | null; kemandirian: number | null }
+    }
+    // Nilai 0 adalah nilai sah dan harus dikembalikan apa adanya.
+    expect(data.catatan.kedisiplinan).toBe(0)
+    expect(data.catatan.kemandirian).toBe(0)
+  })
 })

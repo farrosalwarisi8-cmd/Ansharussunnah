@@ -10,12 +10,15 @@ import {
   inputAbsensiBulkSchema,
   rekapKehadiranSchema,
   riwayatKehadiranSiswaSchema,
+  riwayatKehadiranAnakSchema,
   type InputAbsensiSingleValues,
   type InputAbsensiBulkValues,
   type RekapKehadiranValues,
   type RiwayatKehadiranSiswaValues,
+  type RiwayatKehadiranAnakValues,
 } from "@/lib/validations/absensi"
 import { toUserFriendlyError } from "@/lib/prisma-error"
+import { normalizePagination } from "@/lib/pagination"
 import type { ActionResponse } from "@/types"
 import { Role, StatusAbsensi } from "@prisma/client"
 import { revalidatePath } from "next/cache"
@@ -481,20 +484,55 @@ export async function getRiwayatKehadiranSiswa(
       whereClause.tanggal = tanggalFilter
     }
 
-    const riwayat = await prisma.absensi.findMany({
-      where: whereClause,
-      include: {
-        kelas: { select: { nama: true } },
-        periodeAjaran: { select: { nama: true } },
-        mataPelajaran: { select: { id: true, nama: true } },
-      },
-      orderBy: { tanggal: "desc" },
+    const pagination = normalizePagination({
+      page: payload?.page,
+      pageSize: payload?.pageSize,
     })
 
-    // Agregasi ringkas
-    const hitung = { HADIR: 0, SAKIT: 0, IZIN: 0, ALPHA: 0 }
-    for (const r of riwayat) {
-      hitung[r.status]++
+    // Daftar mapel untuk filter dihitung TANPA filter mapel, supaya tombol
+    // filter tidak hilang saat salah satu mapel sedang dipilih.
+    const whereDaftarMapel: Record<string, unknown> = { siswaId }
+    if (Object.keys(tanggalFilter).length > 0) {
+      whereDaftarMapel.tanggal = tanggalFilter
+    }
+
+    const [riwayat, total, ringkasanRaw, mapelRaw] = await Promise.all([
+      prisma.absensi.findMany({
+        where: whereClause,
+        include: {
+          kelas: { select: { nama: true } },
+          periodeAjaran: { select: { nama: true } },
+          mataPelajaran: { select: { id: true, nama: true } },
+        },
+        orderBy: [{ tanggal: "desc" }, { id: "desc" }],
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.absensi.count({ where: whereClause }),
+      prisma.absensi.groupBy({
+        by: ["status"],
+        where: whereClause,
+        _count: { _all: true },
+      }),
+      prisma.absensi.findMany({
+        where: whereDaftarMapel,
+        select: { mataPelajaranId: true, mataPelajaran: { select: { nama: true } } },
+        distinct: ["mataPelajaranId"],
+      }),
+    ])
+
+    // Agregasi ringkas dihitung server dari SELURUH baris terfilter, bukan hanya
+    // baris pada halaman ini.
+    const ringkasan = { HADIR: 0, SAKIT: 0, IZIN: 0, ALPHA: 0 }
+    for (const row of ringkasanRaw) {
+      ringkasan[row.status] = row._count._all
+    }
+
+    const mataPelajaranList: Array<{ id: string; nama: string }> = []
+    for (const m of mapelRaw) {
+      if (m.mataPelajaranId && m.mataPelajaran?.nama) {
+        mataPelajaranList.push({ id: m.mataPelajaranId, nama: m.mataPelajaran.nama })
+      }
     }
 
     return {
@@ -503,10 +541,15 @@ export async function getRiwayatKehadiranSiswa(
       data: {
         siswaId,
         nama: user.nama,
-        total: riwayat.length,
-        ringkasan: hitung,
+        total,
+        ringkasan,
+        mataPelajaranList,
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        totalPages: Math.max(1, Math.ceil(total / pagination.pageSize)),
         riwayat: riwayat.map((r) => ({
           id: r.id,
+          mataPelajaranId: r.mataPelajaran?.id || null,
           tanggal: r.tanggal,
           status: r.status,
           keterangan: r.keterangan,
@@ -533,10 +576,10 @@ export async function getRiwayatKehadiranSiswa(
  * Validasi relasi ParentStudent sebelum mengizinkan akses.
  */
 export async function getRiwayatKehadiranAnak(
-  payload: RiwayatKehadiranSiswaValues
+  payload: RiwayatKehadiranAnakValues
 ): Promise<ActionResponse> {
   try {
-    const validated = riwayatKehadiranSiswaSchema.safeParse(payload)
+    const validated = riwayatKehadiranAnakSchema.safeParse(payload)
     if (!validated.success) {
       return {
         success: false,
@@ -579,24 +622,55 @@ export async function getRiwayatKehadiranAnak(
       whereClause.tanggal = tanggalFilter
     }
 
-    const riwayat = await prisma.absensi.findMany({
-      where: whereClause,
-      include: {
-        kelas: { select: { nama: true } },
-        periodeAjaran: { select: { nama: true } },
-        mataPelajaran: { select: { id: true, nama: true } },
-      },
-      orderBy: { tanggal: "desc" },
+    const pagination = normalizePagination({
+      page: validated.data.page,
+      pageSize: validated.data.pageSize,
     })
 
-    const siswa = await prisma.siswa.findUnique({
-      where: { id: siswaId, deleted_at: null },
-      include: { user: { select: { nama: true } } },
-    })
+    const whereDaftarMapel: Record<string, unknown> = { siswaId }
+    if (Object.keys(tanggalFilter).length > 0) {
+      whereDaftarMapel.tanggal = tanggalFilter
+    }
 
-    const hitung = { HADIR: 0, SAKIT: 0, IZIN: 0, ALPHA: 0 }
-    for (const r of riwayat) {
-      hitung[r.status]++
+    const [riwayat, total, ringkasanRaw, mapelRaw, siswa] = await Promise.all([
+      prisma.absensi.findMany({
+        where: whereClause,
+        include: {
+          kelas: { select: { nama: true } },
+          periodeAjaran: { select: { nama: true } },
+          mataPelajaran: { select: { id: true, nama: true } },
+        },
+        orderBy: [{ tanggal: "desc" }, { id: "desc" }],
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.absensi.count({ where: whereClause }),
+      prisma.absensi.groupBy({
+        by: ["status"],
+        where: whereClause,
+        _count: { _all: true },
+      }),
+      prisma.absensi.findMany({
+        where: whereDaftarMapel,
+        select: { mataPelajaranId: true, mataPelajaran: { select: { nama: true } } },
+        distinct: ["mataPelajaranId"],
+      }),
+      prisma.siswa.findUnique({
+        where: { id: siswaId, deleted_at: null },
+        include: { user: { select: { nama: true } } },
+      }),
+    ])
+
+    const ringkasan = { HADIR: 0, SAKIT: 0, IZIN: 0, ALPHA: 0 }
+    for (const row of ringkasanRaw) {
+      ringkasan[row.status] = row._count._all
+    }
+
+    const mataPelajaranList: Array<{ id: string; nama: string }> = []
+    for (const m of mapelRaw) {
+      if (m.mataPelajaranId && m.mataPelajaran?.nama) {
+        mataPelajaranList.push({ id: m.mataPelajaranId, nama: m.mataPelajaran.nama })
+      }
     }
 
     return {
@@ -605,10 +679,15 @@ export async function getRiwayatKehadiranAnak(
       data: {
         siswaId,
         namaSiswa: siswa?.user.nama || "Siswa",
-        total: riwayat.length,
-        ringkasan: hitung,
+        total,
+        ringkasan,
+        mataPelajaranList,
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        totalPages: Math.max(1, Math.ceil(total / pagination.pageSize)),
         riwayat: riwayat.map((r) => ({
           id: r.id,
+          mataPelajaranId: r.mataPelajaran?.id || null,
           tanggal: r.tanggal,
           status: r.status,
           keterangan: r.keterangan,

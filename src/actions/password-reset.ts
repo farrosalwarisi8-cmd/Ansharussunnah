@@ -105,6 +105,9 @@ export async function requestPasswordReset(
 
     const hasilEmail = await sendEmail({
       to: normalizedEmail,
+      jenisEmail: "reset_password",
+      // Satu email OTP per token — retry event tidak menumpuk OTP baru.
+      idempotencyKey: `reset-otp:${tokenBaru.id}`,
       subject: "Kode Verifikasi Reset Password",
       html: buildOtpEmail({
         nama: user.nama,

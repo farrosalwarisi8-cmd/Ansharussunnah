@@ -123,7 +123,10 @@ async function hitungNilaiPerMapel(
     if (!mapelMap.has(mapel)) {
       mapelMap.set(mapel, { nilaiUjian: [], nilaiTugas: [] })
     }
-    if (p.nilaiTotal) {
+    // BUGFIX nilai-0: Nilai 0 adalah nilai yang SAH. Pemeriksaan truthiness
+    // (`if (p.nilaiTotal)`) membuang 0 sehingga nilai ujian 0 tidak pernah
+    // masuk perhitungan rapor. Gunakan pemeriksaan nullish.
+    if (p.nilaiTotal !== null && p.nilaiTotal !== undefined) {
       mapelMap.get(mapel)!.nilaiUjian.push(Number(p.nilaiTotal))
     }
   }
@@ -135,7 +138,8 @@ async function hitungNilaiPerMapel(
     if (!mapelMap.has(mapel)) {
       mapelMap.set(mapel, { nilaiUjian: [], nilaiTugas: [] })
     }
-    if (p.nilai) {
+    // BUGFIX nilai-0: lihat catatan di atas — nilai tugas 0 harus dihitung.
+    if (p.nilai !== null && p.nilai !== undefined) {
       mapelMap.get(mapel)!.nilaiTugas.push(Number(p.nilai))
     }
   }
@@ -351,7 +355,8 @@ export async function getRekapRaporKelas(
       if (!mapelMap.has(mapel)) {
         mapelMap.set(mapel, { nilaiUjian: [], nilaiTugas: [] })
       }
-      if (p.nilaiTotal) {
+      // BUGFIX nilai-0: nilai ujian 0 adalah nilai sah.
+      if (p.nilaiTotal !== null && p.nilaiTotal !== undefined) {
         mapelMap.get(mapel)!.nilaiUjian.push(Number(p.nilaiTotal))
       }
     }
@@ -369,7 +374,8 @@ export async function getRekapRaporKelas(
       if (!mapelMap.has(mapel)) {
         mapelMap.set(mapel, { nilaiUjian: [], nilaiTugas: [] })
       }
-      if (p.nilai) {
+      // BUGFIX nilai-0: nilai tugas 0 adalah nilai sah.
+      if (p.nilai !== null && p.nilai !== undefined) {
         mapelMap.get(mapel)!.nilaiTugas.push(Number(p.nilai))
       }
     }
@@ -728,10 +734,11 @@ export async function getCatatanRaporDetail(
               id: catatanRapor.id,
               catatan: catatanRapor.catatan,
               ranking: catatanRapor.ranking,
-              kedisiplinan: catatanRapor.kedisiplinan
+              // BUGFIX nilai-0: kedisiplinan/kemandirian 0 harus tampil, bukan null.
+              kedisiplinan: catatanRapor.kedisiplinan !== null
                 ? Number(catatanRapor.kedisiplinan)
                 : null,
-              kemandirian: catatanRapor.kemandirian
+              kemandirian: catatanRapor.kemandirian !== null
                 ? Number(catatanRapor.kemandirian)
                 : null,
               tingkahLaku: catatanRapor.tingkahLaku,
@@ -846,10 +853,11 @@ export async function getRaporSiswa(
         catatan: catatanRapor?.catatan || null,
         ranking: catatanRapor?.ranking || null,
         sikap: {
-          kedisiplinan: catatanRapor?.kedisiplinan
+          // BUGFIX nilai-0: kedisiplinan/kemandirian 0 harus tampil, bukan null.
+          kedisiplinan: catatanRapor?.kedisiplinan != null
             ? Number(catatanRapor.kedisiplinan)
             : null,
-          kemandirian: catatanRapor?.kemandirian
+          kemandirian: catatanRapor?.kemandirian != null
             ? Number(catatanRapor.kemandirian)
             : null,
           tingkahLaku: catatanRapor?.tingkahLaku || null,
@@ -971,10 +979,11 @@ export async function getRaporAnak(
         catatan: catatanRapor?.catatan || null,
         ranking: catatanRapor?.ranking || null,
         sikap: {
-          kedisiplinan: catatanRapor?.kedisiplinan
+          // BUGFIX nilai-0: kedisiplinan/kemandirian 0 harus tampil, bukan null.
+          kedisiplinan: catatanRapor?.kedisiplinan != null
             ? Number(catatanRapor.kedisiplinan)
             : null,
-          kemandirian: catatanRapor?.kemandirian
+          kemandirian: catatanRapor?.kemandirian != null
             ? Number(catatanRapor.kemandirian)
             : null,
           tingkahLaku: catatanRapor?.tingkahLaku || null,

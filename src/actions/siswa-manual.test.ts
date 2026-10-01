@@ -14,6 +14,8 @@ const {
   mockCreateUser,
   mockListUsers,
   mockPendaftaranFindFirst,
+  mockSiswaFindMany,
+  mockSiswaCount,
 } = vi.hoisted(() => ({
   mockPrismaTransaction: vi.fn(),
   mockUserFindFirst: vi.fn(),
@@ -26,6 +28,8 @@ const {
   mockCreateUser: vi.fn(),
   mockListUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
   mockPendaftaranFindFirst: vi.fn(),
+  mockSiswaFindMany: vi.fn(),
+  mockSiswaCount: vi.fn(),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -48,6 +52,8 @@ vi.mock("@/lib/prisma", () => ({
     },
     siswa: {
       findUnique: mockSiswaFindUnique,
+      findMany: mockSiswaFindMany,
+      count: mockSiswaCount,
     },
     parentStudent: {
       findUnique: mockParentStudentFindUnique,
@@ -82,7 +88,7 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }))
 
-import { createSiswaManual } from "@/actions/siswa-manual"
+import { createSiswaManual, getDaftarSiswaManual } from "@/actions/siswa-manual"
 import type { SiswaManualFormValues } from "@/lib/validations/siswa-manual"
 
 // ========================================================
@@ -551,5 +557,87 @@ describe("createSiswaManual — Gender Match Kelas", () => {
 
     expect(result.success).toBe(true)
     expect(result.data?.siswaUserId).toBe("user-siswa-1")
+  })
+})
+
+// ========================================================
+// getDaftarSiswaManual — pagination server-side & filter
+// ========================================================
+
+describe("getDaftarSiswaManual", () => {
+  const siswaRow = {
+    id: "siswa-1",
+    nisn: "0081234567",
+    nis: "001",
+    jenisKelamin: "LAKI_LAKI" as const,
+    kelas: { nama: "7A", jenjang: { nama: "Tsanawiyah" } },
+    user: {
+      id: "user-siswa-1",
+      nama: "Ahmad Fauzi",
+      email: "ahmad@example.com",
+      username: "ahmad",
+      aktif: true,
+      createdAt: new Date("2026-01-01"),
+    },
+    orangTua: [],
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("mengembalikan amplop pagination + item terformat", async () => {
+    mockSiswaFindMany.mockResolvedValue([siswaRow])
+    mockSiswaCount.mockResolvedValue(33)
+
+    const result = await getDaftarSiswaManual({ page: 2, pageSize: 10 })
+
+    expect(result.success).toBe(true)
+    expect(result.data).toMatchObject({ total: 33, page: 2, pageSize: 10, totalPages: 4 })
+    expect(result.data!.items[0]).toMatchObject({
+      id: "siswa-1",
+      nama: "Ahmad Fauzi",
+      kelasNama: "7A",
+      jenjangNama: "Tsanawiyah",
+    })
+    expect(mockSiswaFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 10, take: 10 }),
+    )
+    expect(mockSiswaCount).toHaveBeenCalledTimes(1)
+  })
+
+  it("menerapkan filter kelas, gender, dan pencarian di server", async () => {
+    mockSiswaFindMany.mockResolvedValue([])
+    mockSiswaCount.mockResolvedValue(0)
+
+    await getDaftarSiswaManual({
+      page: 1,
+      pageSize: 25,
+      search: "ahmad",
+      kelasNama: "7A",
+      jenisKelamin: "LAKI_LAKI",
+    })
+
+    expect(mockSiswaFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          deleted_at: null,
+          jenisKelamin: "LAKI_LAKI",
+          kelas: { nama: "7A" },
+          OR: expect.any(Array),
+        }),
+      }),
+    )
+  })
+
+  it("membatasi page size ke 100", async () => {
+    mockSiswaFindMany.mockResolvedValue([])
+    mockSiswaCount.mockResolvedValue(0)
+
+    await getDaftarSiswaManual({ page: 1, pageSize: 9999 })
+
+    expect(mockSiswaFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 0, take: 100 }),
+    )
   })
 })

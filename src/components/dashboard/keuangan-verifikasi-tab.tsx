@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw } from "lucide-react"
+import { ListPagination } from "@/components/ui/list-pagination"
 import { konfirmasiPembayaranSppOlehAdmin, getDaftarPembayaranPendingVerifikasi } from "@/actions/akuntansi"
 
 type PendingPaymentItem = {
@@ -30,13 +31,21 @@ export function VerifikasiPembayaranTab() {
   const [pendingPayments, setPendingPayments] = React.useState<PendingPaymentItem[]>([])
   const [loadingPending, setLoadingPending] = React.useState(true)
   const [processingId, setProcessingId] = React.useState<string | null>(null)
+  const [page, setPage] = React.useState(1)
+  const [totalPages, setTotalPages] = React.useState(1)
+  const [total, setTotal] = React.useState(0)
+  const [pageSize, setPageSize] = React.useState(20)
 
-  const fetchPendingPayments = React.useCallback(async () => {
+  const fetchPendingPayments = React.useCallback(async (targetPage: number = 1) => {
     setLoadingPending(true)
     try {
-      const result = await getDaftarPembayaranPendingVerifikasi()
+      const result = await getDaftarPembayaranPendingVerifikasi({ page: targetPage })
       if (result.success && result.data) {
         setPendingPayments(result.data.items)
+        setPage(result.data.page)
+        setTotalPages(result.data.totalPages)
+        setTotal(result.data.total)
+        setPageSize(result.data.pageSize)
       } else {
         toast({ title: "Gagal memuat data", description: result.message, variant: "destructive" })
       }
@@ -47,7 +56,7 @@ export function VerifikasiPembayaranTab() {
     }
   }, [toast])
 
-  React.useEffect(() => { fetchPendingPayments() }, [fetchPendingPayments])
+  React.useEffect(() => { fetchPendingPayments(1) }, [fetchPendingPayments])
 
   const handleVerifyPayment = async (pembayaranId: string, approve: boolean) => {
     setProcessingId(pembayaranId)
@@ -59,7 +68,7 @@ export function VerifikasiPembayaranTab() {
         alasanPenolakan: approve ? undefined : "Bukti transfer tidak valid/kurang.",
       })
       if (result.success) {
-        await fetchPendingPayments()
+        await fetchPendingPayments(page)
         toast({ title: approve ? "Pembayaran Diterima & Lunas! ✅" : "Pembayaran Ditolak ❌", description: result.message })
       } else {
         toast({ title: "Gagal Memproses", description: result.message, variant: "destructive" })
@@ -79,7 +88,7 @@ export function VerifikasiPembayaranTab() {
             <CardTitle className="text-base font-bold text-slate-800">Antrean Bukti Transfer Menunggu Verifikasi</CardTitle>
             <CardDescription className="text-xs text-slate-500">Periksa kesesuaian nominal dan rekening pengirim sebelum menyetujui kuitansi lunas</CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchPendingPayments} disabled={loadingPending} className="rounded-xl text-xs font-bold">
+          <Button variant="outline" size="sm" onClick={() => fetchPendingPayments(page)} disabled={loadingPending} className="rounded-xl text-xs font-bold">
             <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loadingPending ? "animate-spin" : ""}`} />
             Refresh
           </Button>
@@ -133,6 +142,16 @@ export function VerifikasiPembayaranTab() {
         ) : (
           <div className="p-8 text-center text-slate-500 text-sm">🎉 Semua pembayaran masuk telah diverifikasi! Tidak ada antrean pending.</div>
         )}
+
+        <ListPagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          totalPages={totalPages}
+          onPageChange={(p) => fetchPendingPayments(p)}
+          loading={loadingPending}
+          itemLabel="pembayaran"
+        />
       </CardContent>
     </Card>
   )

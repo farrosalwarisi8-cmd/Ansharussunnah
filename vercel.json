@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/bersihkan-token",
       "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/proses-email-outbox",
+      "schedule": "*/2 * * * *"
     }
   ]
 }

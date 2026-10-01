@@ -1,6 +1,11 @@
 // src/lib/email.ts
+//
+// Template email + API pengiriman tingkat tinggi. Sejak sistem outbox,
+// `sendEmail` TIDAK mengirim langsung — ia mengantrikan ke tabel email_outbox
+// dan worker cron yang mengirim dengan retry/backoff. Provider mentah ada di
+// src/lib/email-provider.ts.
 
-import { Resend } from "resend"
+import { enqueueEmail, type JenisEmail } from "@/lib/email-outbox"
 
 function escapeHtml(value: string): string {
   return value
@@ -11,55 +16,51 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;")
 }
 
-function createResend() {
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) return null
-  try {
-    return new Resend(apiKey)
-  } catch {
-    return null
-  }
-}
-
-const resend = createResend()
-const fromEmail = process.env.EMAIL_FROM || "Sistem Pendaftaran <onboarding@resend.dev>"
-const replyTo = process.env.EMAIL_REPLY_TO || "admin@sekolahmu.sch.id"
-
-interface SendEmailParams {
+export interface SendEmailParams {
   to: string
   subject: string
   html: string
+  /** Kategori email (untuk audit di outbox). */
+  jenisEmail?: JenisEmail | string
+  /** Kunci idempotency → cegah email ganda untuk event yang sama. */
+  idempotencyKey?: string
 }
 
-export async function sendEmail({ to, subject, html }: SendEmailParams) {
-  if (!resend) {
-    console.warn(
-      "[email] RESEND_API_KEY belum dikonfigurasi. Email tidak terkirim."
-    )
+export type HasilSendEmail =
+  | { success: true; id?: string }
+  | { success: false; error: string }
+
+/**
+ * Antrekan email ke outbox (BUKAN kirim langsung). Worker cron mengirim dengan
+ * retry/backoff; kegagalan provider terlihat & bisa di-retry admin.
+ *
+ * TIDAK PERNAH melempar. `success: true` juga ketika email dengan kunci
+ * idempotency sama sudah ada (bukan error). `success: false` hanya bila outbox
+ * gagal menyimpan.
+ */
+export async function sendEmail({
+  to,
+  subject,
+  html,
+  jenisEmail,
+  idempotencyKey,
+}: SendEmailParams): Promise<HasilSendEmail> {
+  const hasil = await enqueueEmail({
+    jenisEmail: jenisEmail ?? "umum",
+    recipient: to,
+    subject,
+    html,
+    idempotencyKey,
+  })
+
+  if (!hasil.ok) {
     return {
       success: false,
-      error: "RESEND_API_KEY belum dikonfigurasi",
+      error: "Email gagal masuk antrian. Silakan coba lagi.",
     }
   }
-  try {
-    const { data, error } = await resend.emails.send({
-      from: fromEmail,
-      to: [to],
-      replyTo,
-      subject,
-      html,
-    })
 
-    if (error) {
-      console.error("Email send error:", error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true, id: data?.id }
-  } catch (error: unknown) {
-    console.error("Email send exception:", error)
-    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
-  }
+  return { success: true }
 }
 
 /**
@@ -282,10 +283,19 @@ export function buildTagihanSppEmail(params: {
   bulanLabel: string
   nominal: number
   jatuhTempo: Date
+  // Rekening tujuan dari konfigurasi DB (PengaturanPPDB). WAJIB dikirim server —
+  // sebelumnya template ini menulis nomor rekening hardcoded, sehingga perubahan
+  // rekening di panel admin tidak pernah sampai ke email pembayaran.
+  bankNama: string
+  bankNoRekening: string
+  bankAtasNama: string
 }): string {
   const namaSiswa = escapeHtml(params.namaSiswa)
   const bulanLabel = escapeHtml(params.bulanLabel)
   const nominal = params.nominal.toLocaleString("id-ID")
+  const bankNama = escapeHtml(params.bankNama)
+  const bankNoRekening = escapeHtml(params.bankNoRekening)
+  const bankAtasNama = escapeHtml(params.bankAtasNama)
   const jatuhTempo = params.jatuhTempo.toLocaleDateString("id-ID", {
     day: "numeric",
     month: "long",
@@ -311,8 +321,8 @@ export function buildTagihanSppEmail(params: {
 
         <h3 style="color: #333;">💳 Nomor Rekening Resmi Pesantren Anshorussunnah</h3>
         <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 12px 0;">
-          <p style="margin: 2px 0; font-size: 20px; font-weight: bold; letter-spacing: 2px; font-family: monospace; color: #1e40af;">7700 8899 0011</p>
-          <p style="margin: 2px 0; color: #475569; font-size: 13px;">Bank Syariah Indonesia (BSI) — a.n Yayasan Anshorussunnah</p>
+          <p style="margin: 2px 0; font-size: 20px; font-weight: bold; letter-spacing: 2px; font-family: monospace; color: #1e40af;">${bankNoRekening}</p>
+          <p style="margin: 2px 0; color: #475569; font-size: 13px;">${bankNama} — a.n ${bankAtasNama}</p>
         </div>
 
         <p>Silakan lakukan pembayaran sebelum tanggal jatuh tempo. Setelah transfer, upload bukti pembayaran melalui <strong>menu Tagihan SPP</strong> pada akun Login Pesantren Anshorussunnah agar segera diverifikasi oleh admin keuangan.</p>
@@ -633,6 +643,9 @@ export async function sendPendaftaranBerhasilEmail(params: {
 
   return sendEmail({
     to: emailOrangTua,
+    jenisEmail: "pendaftaran_berhasil",
+    // Kunci idempotency: event pendaftaran ini hanya boleh menghasilkan satu email.
+    idempotencyKey: `pendaftaran-berhasil:${nomorPendaftaran}`,
     subject: `Pendaftaran ${nomorPendaftaran} — ${namaSiswa} | Segera Lengkapi Pembayaran & Dokumen`,
     html: buildPendaftaranBerhasilEmail({
       ...rest,
@@ -665,6 +678,9 @@ export async function sendPendaftaranDitolakEmail(params: {
 
   return sendEmail({
     to: emailOrangTua,
+    jenisEmail: "pendaftaran_ditolak",
+    // Kunci idempotency: sekali ditolak, email hanya dibuat sekali.
+    idempotencyKey: `pendaftaran-ditolak:${nomorPendaftaran}`,
     subject: `Pendaftaran ${nomorPendaftaran} Belum Diterima — ${namaSiswa}`,
     html: buildPendaftaranDitolakEmail({
       ...rest,

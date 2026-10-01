@@ -14,6 +14,7 @@ import {
   type UpdateMateriValues,
 } from "@/lib/validations/materi"
 import type { ActionResponse } from "@/types"
+import { normalizePagination, paginatedResult } from "@/lib/pagination"
 import { Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
@@ -349,32 +350,42 @@ export async function deleteMateri(materiId: string): Promise<ActionResponse> {
  * Guru melihat semua materi yang dia upload di kelas tertentu.
  */
 export async function getDaftarMateriGuru(
-  kelasId: string
+  kelasId: string,
+  options?: { page?: number; pageSize?: number }
 ): Promise<ActionResponse> {
   try {
     await verifyGuruAksesKelas(kelasId)
+
+    const pagination = normalizePagination(options)
 
     const aksesMapel = await getMapelIdYangDiajarDiKelas(kelasId)
     if (aksesMapel !== "ALL" && aksesMapel.length === 0) {
       return {
         success: true,
         message: "Daftar materi kosong",
-        data: [],
+        data: paginatedResult([], 0, pagination),
       }
     }
 
-    const materiList = await prisma.materiPembelajaran.findMany({
-      where: {
-        kelasId,
-        ...(aksesMapel !== "ALL" ? { mataPelajaranId: { in: aksesMapel } } : {}),
-      },
-      include: {
-        periodeAjaran: { select: { nama: true } },
-        diunggahOleh: { select: { nama: true } },
-        mataPelajaran: { select: { nama: true, jenisKelamin: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    })
+    const filter = {
+      kelasId,
+      ...(aksesMapel !== "ALL" ? { mataPelajaranId: { in: aksesMapel } } : {}),
+    }
+
+    const [materiList, total] = await Promise.all([
+      prisma.materiPembelajaran.findMany({
+        where: filter,
+        include: {
+          periodeAjaran: { select: { nama: true } },
+          diunggahOleh: { select: { nama: true } },
+          mataPelajaran: { select: { nama: true, jenisKelamin: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.materiPembelajaran.count({ where: filter }),
+    ])
 
     // Batch: ambil semua signed URL materi yang punya file dalam SATU panggilan API
     const urlFileList = materiList
@@ -408,8 +419,9 @@ export async function getDaftarMateriGuru(
     return {
       success: true,
       message: "Daftar materi berhasil dimuat",
-      data: formatted,
-    }  } catch (error: unknown) {
+      data: paginatedResult(formatted, total, pagination),
+    }
+  } catch (error: unknown) {
     return {
       success: false,
       message: error instanceof Error ? error.message : "Gagal memuat daftar materi",
@@ -427,38 +439,49 @@ export async function getDaftarMateriGuru(
  * Siswa melihat semua materi di kelasnya sendiri.
  * siswaId diambil dari session, bukan dari input client.
  */
-export async function getDaftarMateriSiswa(): Promise<ActionResponse> {
+export async function getDaftarMateriSiswa(
+  options?: { page?: number; pageSize?: number }
+): Promise<ActionResponse> {
   try {
     const user = await requireRole([Role.SISWA])
     if (!user.siswa || !user.siswa.kelasId) {
       return { success: false, message: "Siswa belum terdaftar di kelas aktif" }
     }
 
-    const materiList = await prisma.materiPembelajaran.findMany({
-      where: {
-        kelasId: user.siswa.kelasId,
-        AND: [
-          {
-            OR: [
-              { targetGender: null },
-              { targetGender: user.siswa.jenisKelamin },
-            ],
-          },
-          {
-            OR: [
-              { mataPelajaran: { jenisKelamin: null } },
-              { mataPelajaran: { jenisKelamin: user.siswa.jenisKelamin } },
-            ],
-          },
-        ],
-      },
-      include: {
-        periodeAjaran: { select: { nama: true } },
-        diunggahOleh: { select: { nama: true } },
-        mataPelajaran: { select: { nama: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    })
+    const pagination = normalizePagination(options)
+
+    const filter = {
+      kelasId: user.siswa.kelasId,
+      AND: [
+        {
+          OR: [
+            { targetGender: null },
+            { targetGender: user.siswa.jenisKelamin },
+          ],
+        },
+        {
+          OR: [
+            { mataPelajaran: { jenisKelamin: null } },
+            { mataPelajaran: { jenisKelamin: user.siswa.jenisKelamin } },
+          ],
+        },
+      ],
+    }
+
+    const [materiList, total] = await Promise.all([
+      prisma.materiPembelajaran.findMany({
+        where: filter,
+        include: {
+          periodeAjaran: { select: { nama: true } },
+          diunggahOleh: { select: { nama: true } },
+          mataPelajaran: { select: { nama: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.materiPembelajaran.count({ where: filter }),
+    ])
 
     // Batch: ambil semua signed URL materi yang punya file dalam SATU panggilan API
     const urlFileList = materiList
@@ -487,8 +510,9 @@ export async function getDaftarMateriSiswa(): Promise<ActionResponse> {
     return {
       success: true,
       message: "Daftar materi berhasil dimuat",
-      data: formatted,
-    }  } catch (error: unknown) {
+      data: paginatedResult(formatted, total, pagination),
+    }
+  } catch (error: unknown) {
     return {
       success: false,
       message: error instanceof Error ? error.message : "Gagal memuat daftar materi",
@@ -507,7 +531,8 @@ export async function getDaftarMateriSiswa(): Promise<ActionResponse> {
  * Validasi relasi ParentStudent.
  */
 export async function getDaftarMateriAnak(
-  siswaId: string
+  siswaId: string,
+  options?: { page?: number; pageSize?: number }
 ): Promise<ActionResponse> {
   try {
     const user = await requireRole([Role.ORANG_TUA])
@@ -529,31 +554,40 @@ export async function getDaftarMateriAnak(
       return { success: false, message: "Data kelas siswa tidak valid" }
     }
 
-    const materiList = await prisma.materiPembelajaran.findMany({
-      where: {
-        kelasId: siswa.kelasId,
-        AND: [
-          {
-            OR: [
-              { targetGender: null },
-              { targetGender: siswa.jenisKelamin },
-            ],
-          },
-          {
-            OR: [
-              { mataPelajaran: { jenisKelamin: null } },
-              { mataPelajaran: { jenisKelamin: siswa.jenisKelamin } },
-            ],
-          },
-        ],
-      },
-      include: {
-        periodeAjaran: { select: { nama: true } },
-        diunggahOleh: { select: { nama: true } },
-        mataPelajaran: { select: { nama: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    })
+    const pagination = normalizePagination(options)
+
+    const filter = {
+      kelasId: siswa.kelasId,
+      AND: [
+        {
+          OR: [
+            { targetGender: null },
+            { targetGender: siswa.jenisKelamin },
+          ],
+        },
+        {
+          OR: [
+            { mataPelajaran: { jenisKelamin: null } },
+            { mataPelajaran: { jenisKelamin: siswa.jenisKelamin } },
+          ],
+        },
+      ],
+    }
+
+    const [materiList, total] = await Promise.all([
+      prisma.materiPembelajaran.findMany({
+        where: filter,
+        include: {
+          periodeAjaran: { select: { nama: true } },
+          diunggahOleh: { select: { nama: true } },
+          mataPelajaran: { select: { nama: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.materiPembelajaran.count({ where: filter }),
+    ])
 
     // Batch: ambil semua signed URL materi yang punya file dalam SATU panggilan API
     const urlFileList = materiList
@@ -582,7 +616,7 @@ export async function getDaftarMateriAnak(
     return {
       success: true,
       message: "Daftar materi anak berhasil dimuat",
-      data: formatted,
+      data: paginatedResult(formatted, total, pagination),
     }
   } catch (error: unknown) {
     return {

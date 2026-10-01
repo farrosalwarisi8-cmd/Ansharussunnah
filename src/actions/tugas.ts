@@ -21,6 +21,7 @@ import {
   type InputNilaiTugasManualValues,
 } from "@/lib/validations/tugas"
 import type { ActionResponse } from "@/types"
+import { normalizePagination, paginatedResult } from "@/lib/pagination"
 import { Role, StatusPengumpulan, Prisma } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
@@ -405,9 +406,14 @@ export async function deleteTugas(tugasId: string): Promise<ActionResponse> {
 /**
  * Guru melihat daftar tugas yang dibuatnya untuk kelas tertentu.
  */
-export async function getDaftarTugasGuru(kelasId: string): Promise<ActionResponse> {
+export async function getDaftarTugasGuru(
+  kelasId: string,
+  options?: { page?: number; pageSize?: number }
+): Promise<ActionResponse> {
   try {
     await verifyGuruAksesKelas(kelasId)
+
+    const pagination = normalizePagination(options)
 
     const aksesMapel = await getMapelIdYangDiajarDiKelas(kelasId)
     // Pengajar tanpa penugasan mapel → tidak ada konten yang boleh dilihat
@@ -415,23 +421,30 @@ export async function getDaftarTugasGuru(kelasId: string): Promise<ActionRespons
       return {
         success: true,
         message: "Daftar tugas kosong",
-        data: [],
+        data: paginatedResult([], 0, pagination),
       }
     }
 
-    const tugasList = await prisma.tugas.findMany({
-      where: {
-        kelasId,
-        ...(aksesMapel !== "ALL" ? { mataPelajaranId: { in: aksesMapel } } : {}),
-      },
-      include: {
-        periodeAjaran: { select: { nama: true } },
-        dibuatOleh: { select: { nama: true } },
-        mataPelajaran: { select: { nama: true, jenisKelamin: true } },
-        _count: { select: { pengumpulan: true } },
-      },
-      orderBy: { deadline: "desc" },
-    })
+    const filter = {
+      kelasId,
+      ...(aksesMapel !== "ALL" ? { mataPelajaranId: { in: aksesMapel } } : {}),
+    }
+
+    const [tugasList, total] = await Promise.all([
+      prisma.tugas.findMany({
+        where: filter,
+        include: {
+          periodeAjaran: { select: { nama: true } },
+          dibuatOleh: { select: { nama: true } },
+          mataPelajaran: { select: { nama: true, jenisKelamin: true } },
+          _count: { select: { pengumpulan: true } },
+        },
+        orderBy: { deadline: "desc" },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.tugas.count({ where: filter }),
+    ])
 
     const formatted = tugasList.map((t) => ({
       id: t.id,
@@ -452,7 +465,7 @@ export async function getDaftarTugasGuru(kelasId: string): Promise<ActionRespons
     return {
       success: true,
       message: "Daftar tugas berhasil dimuat",
-      data: formatted,
+      data: paginatedResult(formatted, total, pagination),
     }
   } catch (error: unknown) {
     return {
@@ -811,7 +824,9 @@ export async function getRekapPengumpulanTugas(
  * Siswa melihat daftar tugas untuk kelasnya.
  * Termasuk status pengumpulan sendiri.
  */
-export async function getDaftarTugasSiswa(): Promise<ActionResponse> {
+export async function getDaftarTugasSiswa(
+  options?: { page?: number; pageSize?: number }
+): Promise<ActionResponse> {
   try {
     const user = await requireRole([Role.SISWA])
     if (!user.siswa || !user.siswa.kelasId) {
@@ -821,53 +836,64 @@ export async function getDaftarTugasSiswa(): Promise<ActionResponse> {
       }
     }
 
-    const tugasList = await prisma.tugas.findMany({
-      where: {
-        kelasId: user.siswa.kelasId,
-        AND: [
-          {
-            OR: [
-              { targetGender: null },
-              { targetGender: user.siswa.jenisKelamin },
-            ],
-          },
-          {
-            OR: [
-              { mataPelajaran: { jenisKelamin: null } },
-              { mataPelajaran: { jenisKelamin: user.siswa.jenisKelamin } },
-            ],
-          },
-        ],
-      },
-      include: {
-        periodeAjaran: { select: { nama: true } },
-        dibuatOleh: { select: { nama: true } },
-        mataPelajaran: { select: { nama: true } },
-        pengumpulan: {
-          where: { siswaId: user.siswa.id },
-          select: {
-            id: true,
-            status: true,
-            waktuKumpul: true,
-            nilai: true,
-            feedback: true,
-            jumlahRevisi: true,
+    const pagination = normalizePagination(options)
+
+    const filter = {
+      kelasId: user.siswa.kelasId,
+      // Tugas manual (offline) hanya ditampilkan bila SUDAH ada pengumpulan
+      // (agar nilai/feedback terlihat di riwayat); bila belum dinilai, jangan
+      // tampil sebagai tugas yang bisa "dikumpulkan" — pengerjaannya offline.
+      // Filter ini di-query (bukan di-.filter() setelah findMany) agar
+      // pagination server-side tetap benar.
+      OR: [
+        { inputManual: false },
+        { pengumpulan: { some: { siswaId: user.siswa.id } } },
+      ],
+      AND: [
+        {
+          OR: [
+            { targetGender: null },
+            { targetGender: user.siswa.jenisKelamin },
+          ],
+        },
+        {
+          OR: [
+            { mataPelajaran: { jenisKelamin: null } },
+            { mataPelajaran: { jenisKelamin: user.siswa.jenisKelamin } },
+          ],
+        },
+      ],
+    }
+
+    const [tugasList, total] = await Promise.all([
+      prisma.tugas.findMany({
+        where: filter,
+        include: {
+          periodeAjaran: { select: { nama: true } },
+          dibuatOleh: { select: { nama: true } },
+          mataPelajaran: { select: { nama: true } },
+          pengumpulan: {
+            where: { siswaId: user.siswa.id },
+            select: {
+              id: true,
+              status: true,
+              waktuKumpul: true,
+              nilai: true,
+              feedback: true,
+              jumlahRevisi: true,
+            },
           },
         },
-      },
-      orderBy: { deadline: "asc" },
-    })
+        orderBy: { deadline: "asc" },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.tugas.count({ where: filter }),
+    ])
 
     const now = new Date()
 
-    // Tugas manual (offline) hanya ditampilkan ke siswa bila SUDAH dinilai
-    // (agar nilai/feedback terlihat di riwayat); bila belum dinilai, jangan
-    // tampil sebagai tugas yang bisa "dikumpulkan" — pengerjaannya offline.
-    const tugasTampil = tugasList.filter(
-      (t) => !t.inputManual || t.pengumpulan.length > 0
-    )
-
-    const formatted = tugasTampil.map((t) => {
+    const formatted = tugasList.map((t) => {
       const pengumpulan = t.pengumpulan[0] || null
       const isOverdue = now > t.deadline
 
@@ -900,7 +926,7 @@ export async function getDaftarTugasSiswa(): Promise<ActionResponse> {
     return {
       success: true,
       message: "Daftar tugas berhasil dimuat",
-      data: formatted,
+      data: paginatedResult(formatted, total, pagination),
     }
   } catch (error: unknown) {
     return {
@@ -1283,7 +1309,8 @@ export async function getDetailTugasSiswa(
  * ✅ KEAMANAN: Validasi relasi ParentStudent.
  */
 export async function getTugasAnak(
-  siswaId: string
+  siswaId: string,
+  options?: { page?: number; pageSize?: number }
 ): Promise<ActionResponse> {
   try {
     const user = await requireRole([Role.ORANG_TUA])
@@ -1314,39 +1341,48 @@ export async function getTugasAnak(
       return { success: false, message: "Data siswa tidak valid" }
     }
 
-    const tugasList = await prisma.tugas.findMany({
-      where: {
-        kelasId: siswa.kelasId,
-        AND: [
-          {
-            OR: [
-              { targetGender: null },
-              { targetGender: siswa.jenisKelamin },
-            ],
-          },
-          {
-            OR: [
-              { mataPelajaran: { jenisKelamin: null } },
-              { mataPelajaran: { jenisKelamin: siswa.jenisKelamin } },
-            ],
-          },
-        ],
-      },
-      include: {
-        dibuatOleh: { select: { nama: true } },
-        mataPelajaran: { select: { nama: true } },
-        pengumpulan: {
-          where: { siswaId },
-          select: {
-            status: true,
-            waktuKumpul: true,
-            nilai: true,
-            feedback: true,
+    const pagination = normalizePagination(options)
+
+    const filter = {
+      kelasId: siswa.kelasId,
+      AND: [
+        {
+          OR: [
+            { targetGender: null },
+            { targetGender: siswa.jenisKelamin },
+          ],
+        },
+        {
+          OR: [
+            { mataPelajaran: { jenisKelamin: null } },
+            { mataPelajaran: { jenisKelamin: siswa.jenisKelamin } },
+          ],
+        },
+      ],
+    }
+
+    const [tugasList, total] = await Promise.all([
+      prisma.tugas.findMany({
+        where: filter,
+        include: {
+          dibuatOleh: { select: { nama: true } },
+          mataPelajaran: { select: { nama: true } },
+          pengumpulan: {
+            where: { siswaId },
+            select: {
+              status: true,
+              waktuKumpul: true,
+              nilai: true,
+              feedback: true,
+            },
           },
         },
-      },
-      orderBy: { deadline: "desc" },
-    })
+        orderBy: { deadline: "desc" },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.tugas.count({ where: filter }),
+    ])
 
     const formatted = tugasList.map((t) => {
       const pengumpulan = t.pengumpulan[0] || null
@@ -1373,7 +1409,7 @@ export async function getTugasAnak(
       message: "Daftar tugas anak berhasil dimuat",
       data: {
         namaSiswa: siswa.user.nama,
-        tugas: formatted,
+        ...paginatedResult(formatted, total, pagination),
       },
     }
   } catch (error: unknown) {

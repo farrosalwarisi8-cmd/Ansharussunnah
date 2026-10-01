@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { CheckCircle2, XCircle, Plus, Loader2, Receipt } from "lucide-react"
+import { ListPagination } from "@/components/ui/list-pagination"
 import {
   createTransaksiKeuangan,
   batalkanTransaksiKeuangan,
@@ -50,6 +51,11 @@ export function KasirTab() {
   const [kategoriList, setKategoriList] = React.useState<KategoriItem[]>([])
   const [transaksiList, setTransaksiList] = React.useState<TransaksiItem[]>([])
   const [loadingData, setLoadingData] = React.useState(true)
+  // Pagination server-side riwayat transaksi.
+  const [trxPage, setTrxPage] = React.useState(1)
+  const [trxTotalPages, setTrxTotalPages] = React.useState(1)
+  const [trxTotal, setTrxTotal] = React.useState(0)
+  const [trxPageSize, setTrxPageSize] = React.useState(20)
 
   // Form transaksi
   const [tipeTransaksi, setTipeTransaksi] = React.useState<"PEMASUKAN" | "PENGELUARAN">("PEMASUKAN")
@@ -76,7 +82,7 @@ export function KasirTab() {
     try {
       const [kategoriRes, trxRes] = await Promise.all([
         getKategoriTransaksiList(),
-        getDaftarTransaksiKeuangan(20),
+        getDaftarTransaksiKeuangan({ page: trxPage }),
       ])
       if (kategoriRes.success && kategoriRes.data) {
         setKategoriList(kategoriRes.data)
@@ -87,7 +93,11 @@ export function KasirTab() {
         toast({ variant: "destructive", title: "Gagal memuat kategori", description: kategoriRes.message })
       }
       if (trxRes.success && trxRes.data) {
-        setTransaksiList(trxRes.data)
+        setTransaksiList(trxRes.data.items)
+        setTrxPage(trxRes.data.page)
+        setTrxTotalPages(trxRes.data.totalPages)
+        setTrxTotal(trxRes.data.total)
+        setTrxPageSize(trxRes.data.pageSize)
       } else {
         toast({ variant: "destructive", title: "Gagal memuat riwayat", description: trxRes.message })
       }
@@ -96,7 +106,7 @@ export function KasirTab() {
     } finally {
       setLoadingData(false)
     }
-  }, [tipeTransaksi, toast])
+  }, [tipeTransaksi, toast, trxPage])
 
   React.useEffect(() => {
     fetchData()
@@ -133,8 +143,8 @@ export function KasirTab() {
       setDeskripsiTransaksi("")
       setNominalTransaksi("")
       // Muat ulang riwayat dari database
-      const trxRes = await getDaftarTransaksiKeuangan(20)
-      if (trxRes.success && trxRes.data) setTransaksiList(trxRes.data)
+      const trxRes = await getDaftarTransaksiKeuangan({ page: trxPage })
+      if (trxRes.success && trxRes.data) setTransaksiList(trxRes.data.items)
     } catch {
       toast({ variant: "destructive", title: "Gagal Menyimpan", description: "Terjadi kesalahan saat menyimpan transaksi." })
     } finally {
@@ -181,8 +191,8 @@ export function KasirTab() {
         setCancelDialogOpen(false)
         setCancelTargetId("")
         setCancelAlasan("")
-        const trxRes = await getDaftarTransaksiKeuangan(20)
-        if (trxRes.success && trxRes.data) setTransaksiList(trxRes.data)
+        const trxRes = await getDaftarTransaksiKeuangan({ page: trxPage })
+        if (trxRes.success && trxRes.data) setTransaksiList(trxRes.data.items)
       } else {
         toast({ variant: "destructive", title: "Gagal Membatalkan", description: result.message })
       }
@@ -327,6 +337,16 @@ export function KasirTab() {
               </div>
             ))
           )}
+
+          <ListPagination
+            page={trxPage}
+            pageSize={trxPageSize}
+            total={trxTotal}
+            totalPages={trxTotalPages}
+            onPageChange={setTrxPage}
+            loading={loadingData}
+            itemLabel="transaksi"
+          />
         </CardContent>
       </Card>
 

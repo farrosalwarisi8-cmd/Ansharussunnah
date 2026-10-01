@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest"
-import { buildPendaftaranBerhasilEmail, buildPendaftaranDitolakEmail } from "@/lib/email"
+import {
+  buildPendaftaranBerhasilEmail,
+  buildPendaftaranDitolakEmail,
+  buildTagihanSppEmail,
+} from "@/lib/email"
 
 describe("buildPendaftaranBerhasilEmail", () => {
   it("render tellerham tanp galat dan menolak injeksi HTML", () => {
@@ -12,7 +16,7 @@ describe("buildPendaftaranBerhasilEmail", () => {
       biayaUangGedung: 750000,
       biayaSarpras: 250000,
       bankNama: "Bank Syariah Indonesia",
-      bankNoRekening: "7700 8899 0011",
+      bankNoRekening: "1234 5678 9012",
       bankAtasNama: "Yayasan Anshorussunnah",
       kontakWa: "6281234567890",
       namaKontakWa: "Admin PPDB",
@@ -25,7 +29,7 @@ describe("buildPendaftaranBerhasilEmail", () => {
 
     expect(html).toContain("REG-2026-00042-T7K2")
     expect(html).toContain("Rp 1.500.000")
-    expect(html).toContain("7700 8899 0011")
+    expect(html).toContain("1234 5678 9012")
     expect(html).toContain("wa.me/6281234567890")
     expect(html).not.toContain("<script>")
     expect(html).toContain("&lt;script&gt;")
@@ -45,7 +49,7 @@ describe("buildPendaftaranBerhasilEmail", () => {
       biayaUangGedung: 0,
       biayaSarpras: 0,
       bankNama: "BSI",
-      bankNoRekening: "7700 8899 0011",
+      bankNoRekening: "1234 5678 9012",
       bankAtasNama: "Yayasan",
       kontakWa: "6281234567890",
       namaKontakWa: null,
@@ -58,6 +62,62 @@ describe("buildPendaftaranBerhasilEmail", () => {
     expect(html).toContain("Rp 300.000")
     expect(html).not.toContain("Uang Gedung")
     expect(html).not.toContain("Sarana Prasarana")
+  })
+})
+
+describe("buildTagihanSppEmail — rekening dinamis dari konfigurasi", () => {
+  const base = {
+    namaSiswa: "Ahmad Fauzi",
+    bulanLabel: "Maret 2026",
+    nominal: 500000,
+    jatuhTempo: new Date("2026-03-10T23:59:59Z"),
+  }
+
+  it("memakai rekening yang dikirim server, bukan nilai hardcoded", () => {
+    const html = buildTagihanSppEmail({
+      ...base,
+      bankNama: "Bank Muamalat",
+      bankNoRekening: "9999 8888 7777",
+      bankAtasNama: "Yayasan Baru",
+    })
+
+    expect(html).toContain("9999 8888 7777")
+    expect(html).toContain("Bank Muamalat")
+    expect(html).toContain("Yayasan Baru")
+    // Nomor rekening lama tidak boleh pernah muncul lagi di email SPP.
+    expect(html).not.toContain("7700 8899 0011")
+    expect(html).not.toContain("Bank Syariah Indonesia (BSI)")
+  })
+
+  it("perubahan rekening mengubah isi email", () => {
+    const a = buildTagihanSppEmail({
+      ...base,
+      bankNama: "BRI",
+      bankNoRekening: "1111 1111 1111",
+      bankAtasNama: "A",
+    })
+    const b = buildTagihanSppEmail({
+      ...base,
+      bankNama: "BCA",
+      bankNoRekening: "2222 2222 2222",
+      bankAtasNama: "B",
+    })
+
+    expect(a).toContain("1111 1111 1111")
+    expect(b).toContain("2222 2222 2222")
+    expect(a).not.toContain("2222 2222 2222")
+  })
+
+  it("meng-escape nilai rekening agar tidak bisa menyuntikkan HTML", () => {
+    const html = buildTagihanSppEmail({
+      ...base,
+      bankNama: '<script>alert(1)</script>',
+      bankNoRekening: "0000",
+      bankAtasNama: "Yayasan",
+    })
+
+    expect(html).not.toContain("<script>")
+    expect(html).toContain("&lt;script&gt;")
   })
 })
 

@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { ListPagination } from "@/components/ui/list-pagination"
 import dynamic from "next/dynamic"
 const Dialog = dynamic(() => import("@/components/ui/dialog").then(m => m.Dialog), { ssr: false })
 const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogContent), { ssr: false })
@@ -298,6 +299,12 @@ export default function KelolaSiswaPage() {
   const [filterKelas, setFilterKelas] = React.useState<string>("ALL")
   const [filterGender, setFilterGender] = React.useState<string>("ALL")
   const [searchQuery, setSearchQuery] = React.useState("")
+  const [debouncedSearch, setDebouncedSearch] = React.useState("")
+  // Pagination server-side daftar siswa.
+  const [page, setPage] = React.useState(1)
+  const [totalPages, setTotalPages] = React.useState(1)
+  const [total, setTotal] = React.useState(0)
+  const [pageSize, setPageSize] = React.useState(25)
 
   // Modal state
   const [isAddOpen, setIsAddOpen] = React.useState(false)
@@ -345,13 +352,42 @@ export default function KelolaSiswaPage() {
     nama: string
   }>({ open: false, siswaId: "", nama: "" })
 
+  // Muat satu halaman siswa dengan filter server-side.
+  const fetchSiswa = React.useCallback(
+    async (targetPage: number) => {
+      const res = await getDaftarSiswaManual({
+        page: targetPage,
+        search: debouncedSearch.trim() || undefined,
+        kelasNama: filterKelas !== "ALL" ? filterKelas : undefined,
+        jenisKelamin:
+          filterGender === "LAKI_LAKI" || filterGender === "PEREMPUAN"
+            ? filterGender
+            : undefined,
+      })
+      if (res.success && res.data) {
+        const data = res.data as unknown as {
+          items: SiswaListItem[]
+          total: number
+          page: number
+          pageSize: number
+          totalPages: number
+        }
+        setSiswaList(data.items)
+        setTotal(data.total)
+        setPage(data.page)
+        setTotalPages(data.totalPages)
+        setPageSize(data.pageSize)
+      } else if (res.message) {
+        toast({ title: "Gagal memuat data", description: res.message, variant: "destructive" })
+      }
+    },
+    [debouncedSearch, filterKelas, filterGender, toast]
+  )
+
   // Refresh daftar siswa setelah berkas diubah (dipanggil dari modal).
   const refreshSiswaList = React.useCallback(async () => {
-    const res = await getDaftarSiswaManual()
-    if (res.success && res.data) {
-      setSiswaList(res.data as unknown as SiswaListItem[])
-    }
-  }, [])
+    await fetchSiswa(page)
+  }, [fetchSiswa, page])
 
   // Available kelas based on selected jenjang (not used directly here, kelasId is direct)
   const [availableKelas, setAvailableKelas] = React.useState<KelasItem[]>([])
@@ -402,29 +438,45 @@ export default function KelolaSiswaPage() {
     }
   }, [jenisKelaminValue, selectedKelasId, availableKelas, setValue])
 
-  // Load data on mount
+  // Kelas untuk dropdown filter & form (cukup sekali muat).
   React.useEffect(() => {
-    async function loadData() {
-      setLoadingData(true)
+    async function loadKelas() {
       try {
-        const [siswaRes, kelasRes] = await Promise.all([
-          getDaftarSiswaManual(),
-          getKelasList(),
-        ])
-        if (siswaRes.success && siswaRes.data) {
-          setSiswaList(siswaRes.data as unknown as SiswaListItem[])
-        }
+        const kelasRes = await getKelasList()
         if (kelasRes.success && kelasRes.data) {
           setAvailableKelas(kelasRes.data)
         }
       } catch {
-        toast({ title: "Gagal memuat data", description: "Terjadi kesalahan saat memuat data siswa." })
-      } finally {
-        setLoadingData(false)
+        // Dropdown kelas opsional — kegagalan tidak menghalangi daftar siswa.
       }
     }
-    loadData()
-  }, [toast])
+    loadKelas()
+  }, [])
+
+  // Debounce pencarian agar tiap ketikan tidak memicu query.
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 300)
+    return () => clearTimeout(t)
+  }, [searchQuery])
+
+  // Reset ke halaman 1 saat filter berubah.
+  React.useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, filterKelas, filterGender])
+
+  // Muat daftar siswa (server-side pagination + filter).
+  React.useEffect(() => {
+    let active = true
+    async function run() {
+      setLoadingData(true)
+      await fetchSiswa(page)
+      if (active) setLoadingData(false)
+    }
+    run()
+    return () => {
+      active = false
+    }
+  }, [fetchSiswa, page])
 
   // Step validation fields
   const stepFields: Record<number, (keyof SiswaManualFormValues)[]> = {
@@ -482,10 +534,7 @@ export default function KelolaSiswaPage() {
         })
 
         // Refresh data
-        const siswaRes = await getDaftarSiswaManual()
-        if (siswaRes.success && siswaRes.data) {
-          setSiswaList(siswaRes.data as unknown as SiswaListItem[])
-        }
+        await refreshSiswaList()
 
         toast({
           title: "Akun Siswa Berhasil Dibuat! 🎉",
@@ -575,10 +624,7 @@ export default function KelolaSiswaPage() {
         setEditPassword("")
 
         // Refresh data
-        const siswaRes = await getDaftarSiswaManual()
-        if (siswaRes.success && siswaRes.data) {
-          setSiswaList(siswaRes.data as unknown as SiswaListItem[])
-        }
+        await refreshSiswaList()
 
         if (editPassword.trim()) {
           setPasswordDisplay({
@@ -620,10 +666,7 @@ export default function KelolaSiswaPage() {
         setHapusConfirm({ open: false, userId: "", nama: "" })
 
         // Refresh data
-        const siswaRes = await getDaftarSiswaManual()
-        if (siswaRes.success && siswaRes.data) {
-          setSiswaList(siswaRes.data as unknown as SiswaListItem[])
-        }
+        await refreshSiswaList()
 
         toast({
           title: "Siswa Dihapus 🗑️",
@@ -649,38 +692,12 @@ export default function KelolaSiswaPage() {
     }
   }
 
-  // Filter siswa list
-  const filteredSiswa = React.useMemo(() => {
-    let filtered = siswaList
-
-    if (filterKelas !== "ALL") {
-      filtered = filtered.filter((s) => s.kelasNama === filterKelas)
-    }
-
-    if (filterGender !== "ALL") {
-      filtered = filtered.filter((s) => s.jenisKelamin === filterGender)
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
-      filtered = filtered.filter(
-        (s) =>
-          s.nama.toLowerCase().includes(q) ||
-          s.email.toLowerCase().includes(q) ||
-          (s.username && s.username.toLowerCase().includes(q)) ||
-          (s.nisn && s.nisn.includes(q)) ||
-          (s.nis && s.nis.includes(q))
-      )
-    }
-
-    return filtered
-  }, [siswaList, filterKelas, filterGender, searchQuery])
-
-  // Get unique kelas names for filter
+  // Nama kelas untuk dropdown filter diambil dari daftar kelas (bukan halaman
+  // siswa yang sedang tampil) agar pilihan tidak menyusut saat pagination.
   const kelasNames = React.useMemo(() => {
-    const names = new Set(siswaList.map((s) => s.kelasNama).filter(Boolean))
+    const names = new Set(availableKelas.map((k) => k.nama).filter(Boolean))
     return Array.from(names) as string[]
-  }, [siswaList])
+  }, [availableKelas])
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -741,7 +758,7 @@ export default function KelolaSiswaPage() {
         <CardHeader className="p-5 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-base font-bold text-slate-800">
-              Daftar Siswa ({filteredSiswa.length} Siswa)
+              Daftar Siswa ({total} Siswa)
             </CardTitle>
           </div>
         </CardHeader>
@@ -752,7 +769,7 @@ export default function KelolaSiswaPage() {
               <Loader2 className="h-6 w-6 animate-spin text-yellow-500" />
               <span className="ml-2 text-sm text-slate-500">Memuat data...</span>
             </div>
-          ) : filteredSiswa.length === 0 ? (
+          ) : siswaList.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center p-12">
               <div className="w-14 h-14 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-4">
                 <UserCheck className="h-7 w-7" />
@@ -780,7 +797,7 @@ export default function KelolaSiswaPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredSiswa.map((s) => (
+                    {siswaList.map((s) => (
                       <tr key={s.id} className="hover:bg-slate-50/80">
                         <td className="p-4 pl-6">
                           <div className="font-bold text-slate-800">
@@ -916,7 +933,7 @@ export default function KelolaSiswaPage() {
 
               {/* Mobile Card List */}
               <div className="md:hidden p-4 space-y-3">
-                {filteredSiswa.map((s) => (
+                {siswaList.map((s) => (
                   <div key={s.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -1032,6 +1049,19 @@ export default function KelolaSiswaPage() {
                 ))}
               </div>
             </>
+          )}
+
+          {!loadingData && (
+            <ListPagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              loading={loadingData}
+              itemLabel="siswa"
+              className="px-4 pb-4"
+            />
           )}
         </CardContent>
       </Card>

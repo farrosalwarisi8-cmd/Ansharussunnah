@@ -50,11 +50,23 @@ export const rekapKehadiranSchema = z.object({
 
 export type RekapKehadiranValues = z.infer<typeof rekapKehadiranSchema>
 
+// Siswa melihat riwayatnya SENDIRI — siswaId tidak dipakai dari klien (diambil
+// dari sesi), jadi tidak ada di skema ini. Klien hanya mengirim filter + page.
 export const riwayatKehadiranSiswaSchema = z.object({
-  siswaId: z.string().min(1),
   mataPelajaranId: z.string().nullable().optional(),
   tanggalMulai: z.string().optional(),
   tanggalSelesai: z.string().optional(),
+  // Pagination server-side: dibatasi 1..100 agar klien tidak bisa meminta
+  // seluruh riwayat sekaligus.
+  page: z.number().int().min(1).optional(),
+  pageSize: z.number().int().min(1).max(100).optional(),
 })
 
 export type RiwayatKehadiranSiswaValues = z.infer<typeof riwayatKehadiranSiswaSchema>
+
+// Orang tua WAJIB menyebutkan siswa mana yang dibaca (diverifikasi relasinya).
+export const riwayatKehadiranAnakSchema = riwayatKehadiranSiswaSchema.extend({
+  siswaId: z.string().min(1),
+})
+
+export type RiwayatKehadiranAnakValues = z.infer<typeof riwayatKehadiranAnakSchema>

@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Clock, Upload } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
+import { ListPagination } from "@/components/ui/list-pagination"
 import Link from "next/link"
 import { getDaftarTugasSiswa } from "@/actions/tugas"
 
@@ -30,6 +31,9 @@ type TugasItem = {
 
 export function SiswaTugasView() {
   const [tugasList, setTugasList] = React.useState<TugasItem[]>([])
+  const [page, setPage] = React.useState(1)
+  const [total, setTotal] = React.useState(0)
+  const [totalPages, setTotalPages] = React.useState(1)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -38,9 +42,16 @@ export function SiswaTugasView() {
       setLoading(true)
       setError(null)
       try {
-        const result = await getDaftarTugasSiswa()
+        const result = await getDaftarTugasSiswa({ page })
         if (result.success && result.data) {
-          setTugasList(result.data as TugasItem[])
+          const data = result.data as {
+            items: TugasItem[]
+            total: number
+            totalPages: number
+          }
+          setTugasList(data.items)
+          setTotal(data.total)
+          setTotalPages(data.totalPages)
         } else {
           setError(result.message || "Gagal memuat daftar tugas")
         }
@@ -51,7 +62,7 @@ export function SiswaTugasView() {
       }
     }
     fetchTugas()
-  }, [])
+  }, [page])
 
   if (loading) {
     return (
@@ -160,6 +171,16 @@ export function SiswaTugasView() {
           )}
         </TabsContent>
       </Tabs>
+
+      <ListPagination
+        page={page}
+        pageSize={25}
+        total={total}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        loading={loading}
+        itemLabel="tugas"
+      />
     </div>
   )
 }

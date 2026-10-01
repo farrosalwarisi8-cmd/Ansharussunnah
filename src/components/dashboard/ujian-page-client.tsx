@@ -53,7 +53,7 @@ export default function UjianPage() {
 
       {isTeacher && <GuruUjianView />}
       {isStudent && <SiswaUjianView />}
-      {isParent && <OrangTuaUjianView selectedChild={selectedChild} />}
+      {isParent && <OrangTuaUjianView key={selectedChild?.id ?? "none"} selectedChild={selectedChild} />}
     </div>
   )
 }

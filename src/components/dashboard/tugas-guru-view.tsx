@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Clock, Loader2, Trash2, Pencil, PenLine } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
+import { ListPagination } from "@/components/ui/list-pagination"
 import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
 import dynamic from "next/dynamic"
@@ -57,6 +58,9 @@ export function GuruTugasView() {
   const [selectedKelasId, setSelectedKelasId] = React.useState<string>("")
   const [loadingKelas, setLoadingKelas] = React.useState(true)
   const [tugasList, setTugasList] = React.useState<GuruTugasItem[]>([])
+  const [tugasPage, setTugasPage] = React.useState(1)
+  const [tugasTotal, setTugasTotal] = React.useState(0)
+  const [tugasTotalPages, setTugasTotalPages] = React.useState(1)
   const [loadingTugas, setLoadingTugas] = React.useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   const [deleteTarget, setDeleteTarget] = React.useState<GuruTugasItem | null>(null)
@@ -85,9 +89,18 @@ export function GuruTugasView() {
         setIsEditOpen(false)
         setEditTugas(null)
         if (selectedKelasId) {
-          const fetchResult = await getDaftarTugasGuru(selectedKelasId)
+          const fetchResult = await getDaftarTugasGuru(selectedKelasId, {
+            page: tugasPage,
+          })
           if (fetchResult.success && fetchResult.data) {
-            setTugasList(fetchResult.data as GuruTugasItem[])
+            const data = fetchResult.data as {
+              items: GuruTugasItem[]
+              total: number
+              totalPages: number
+            }
+            setTugasList(data.items)
+            setTugasTotal(data.total)
+            setTugasTotalPages(data.totalPages)
           }
         }
       } else {
@@ -131,6 +144,7 @@ export function GuruTugasView() {
           if (data.length > 0) {
             setSelectedKelasId(data[0].kelasId)
           }
+          setTugasPage(1)
         }
       } catch {
         // Silently fail
@@ -146,20 +160,33 @@ export function GuruTugasView() {
     async function fetchTugas() {
       setLoadingTugas(true)
       try {
-        const result = await getDaftarTugasGuru(selectedKelasId)
+        const result = await getDaftarTugasGuru(selectedKelasId, {
+          page: tugasPage,
+        })
         if (result.success && result.data) {
-          setTugasList(result.data as GuruTugasItem[])
+          const data = result.data as {
+            items: GuruTugasItem[]
+            total: number
+            totalPages: number
+          }
+          setTugasList(data.items)
+          setTugasTotal(data.total)
+          setTugasTotalPages(data.totalPages)
         } else {
           setTugasList([])
+          setTugasTotal(0)
+          setTugasTotalPages(1)
         }
       } catch {
         setTugasList([])
+        setTugasTotal(0)
+        setTugasTotalPages(1)
       } finally {
         setLoadingTugas(false)
       }
     }
     fetchTugas()
-  }, [selectedKelasId])
+  }, [selectedKelasId, tugasPage])
 
   if (loadingKelas) {
     return (
@@ -382,6 +409,16 @@ export function GuruTugasView() {
           ))}
         </div>
       )}
+
+      <ListPagination
+        page={tugasPage}
+        pageSize={25}
+        total={tugasTotal}
+        totalPages={tugasTotalPages}
+        onPageChange={setTugasPage}
+        loading={loadingTugas}
+        itemLabel="tugas"
+      />
     </div>
   )
 }

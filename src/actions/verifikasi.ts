@@ -24,6 +24,7 @@ import {
 import { salinDokumenPendaftaranKeSiswa } from "@/lib/salin-dokumen-pendaftaran";
 import { BERKAS_BUCKET } from "@/lib/berkas-siswa-service";
 import { toUserFriendlyError, AppError } from "@/lib/prisma-error";
+import { normalizePagination } from "@/lib/pagination";
 import type { ActionResponse, PendaftaranWithRelations } from "@/types";
 import { StatusPendaftaran, StatusVerifikasiBukti, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -45,9 +46,15 @@ export async function getPendaftaranList(options?: {
   try {
     await requireGuruAdmin();
 
-    const page = options?.page || 1;
-    const limit = options?.limit || 10;
-    const skip = (page - 1) * limit;
+    // Pagination dibatasi server: limit dari klien dibatasi 1..100 sehingga
+    // daftar tidak bisa ditarik seluruhnya dalam satu panggilan.
+    const pagination = normalizePagination(
+      { page: options?.page, pageSize: options?.limit },
+      { defaultPageSize: 10 },
+    );
+    const page = pagination.page;
+    const limit = pagination.pageSize;
+    const skip = pagination.skip;
 
     const whereCondition: Record<string, unknown> = { deleted_at: null };
 
@@ -958,6 +965,9 @@ export async function verifikasiPendaftaran(
       try {
         const hasilEmail = await sendEmail({
           to: emailOrtu,
+          jenisEmail: "kredensial_akun",
+          // Sekali approval → sekali email kredensial (retry tidak menggandakan).
+          idempotencyKey: `kredensial:${pendaftaran.nomorPendaftaran}`,
           subject: ortuAlreadyExisted
             ? `Santri Baru Diterima — ${pendaftaran.nomorPendaftaran}`
             : `Pendaftaran Disetujui — ${pendaftaran.nomorPendaftaran}`,
@@ -1004,6 +1014,8 @@ export async function verifikasiPendaftaran(
       if (ortuAlreadyExisted && ortuRecordBaruDibuat) {
         await sendEmail({
           to: emailOrtu,
+          jenisEmail: "role_baru",
+          idempotencyKey: `role-baru:${pendaftaran.nomorPendaftaran}`,
           subject: "Akun Orang Tua Baru Ditambahkan — Ansharussunnah",
           html: buildPemberitahuanRoleBaruEmail({
             nama: pendaftaran.namaOrangTua,

@@ -36,6 +36,7 @@ const {
       delete: vi.fn(),
       findUnique: vi.fn(),
       findMany: vi.fn(),
+      count: vi.fn(),
     },
     siswa: {
       findUnique: vi.fn(),
@@ -280,15 +281,26 @@ describe("getDaftarMateriGuru / getDaftarMateriSiswa / getDaftarMateriAnak — U
 
   it("guru: harus menerima urlFile Drive + signedUrl null, tanpa mengirim Drive ke Supabase", async () => {
     mockPrisma.materiPembelajaran.findMany.mockResolvedValue([materiDrive])
+    mockPrisma.materiPembelajaran.count.mockResolvedValue(1)
     mockGetSignedUrls.mockResolvedValue(new Map())
 
     const result = await getDaftarMateriGuru("kelas-1")
 
     if (!result.success) throw new Error(result.message)
-    const list = result.data as Array<Record<string, unknown>>
+    const { items: list, total, totalPages } = result.data as {
+      items: Array<Record<string, unknown>>
+      total: number
+      totalPages: number
+    }
     expect(list).toHaveLength(1)
+    expect(total).toBe(1)
+    expect(totalPages).toBe(1)
     expect(list[0].urlFile).toBe(GOOGLE_DRIVE_URL)
     expect(list[0].signedUrl).toBeNull()
+    // pagination server-side: page 1, pageSize default 25
+    const queryArg = mockPrisma.materiPembelajaran.findMany.mock.calls[0][0]
+    expect(queryArg.skip).toBe(0)
+    expect(queryArg.take).toBe(25)
 
     const pathsArg = mockGetSignedUrls.mock.calls[0][1] as string[]
     expect(pathsArg).not.toContain(GOOGLE_DRIVE_URL)
@@ -297,12 +309,13 @@ describe("getDaftarMateriGuru / getDaftarMateriSiswa / getDaftarMateriAnak — U
   it("siswa: harus melihat materi Drive dengan url asli (bukan signed)", async () => {
     mockRequireRole.mockResolvedValue(siswaSession)
     mockPrisma.materiPembelajaran.findMany.mockResolvedValue([materiDrive])
+    mockPrisma.materiPembelajaran.count.mockResolvedValue(1)
     mockGetSignedUrls.mockResolvedValue(new Map())
 
     const result = await getDaftarMateriSiswa()
 
     if (!result.success) throw new Error(result.message)
-    const list = result.data as Array<Record<string, unknown>>
+    const list = (result.data as { items: Array<Record<string, unknown>> }).items
     expect(list[0].urlFile).toBe(GOOGLE_DRIVE_URL)
     expect(list[0].signedUrl).toBeNull()
   })
@@ -310,6 +323,7 @@ describe("getDaftarMateriGuru / getDaftarMateriSiswa / getDaftarMateriAnak — U
   it("siswa: harus tetap membuat signedUrl untuk path internal (regresi)", async () => {
     mockRequireRole.mockResolvedValue(siswaSession)
     mockPrisma.materiPembelajaran.findMany.mockResolvedValue([materiInternal])
+    mockPrisma.materiPembelajaran.count.mockResolvedValue(1)
     mockGetSignedUrls.mockResolvedValue(
       new Map([[materiInternal.urlFile, "https://supabase.co/signed?token=y"]])
     )
@@ -317,7 +331,7 @@ describe("getDaftarMateriGuru / getDaftarMateriSiswa / getDaftarMateriAnak — U
     const result = await getDaftarMateriSiswa()
 
     if (!result.success) throw new Error(result.message)
-    const list = result.data as Array<Record<string, unknown>>
+    const list = (result.data as { items: Array<Record<string, unknown>> }).items
     expect(list[0].signedUrl).toBe("https://supabase.co/signed?token=y")
   })
 
@@ -332,6 +346,7 @@ describe("getDaftarMateriGuru / getDaftarMateriSiswa / getDaftarMateriAnak — U
       materiDrive,
       materiInternal,
     ])
+    mockPrisma.materiPembelajaran.count.mockResolvedValue(2)
     mockGetSignedUrls.mockResolvedValue(
       new Map([[materiInternal.urlFile, "https://supabase.co/signed?token=y"]])
     )
@@ -339,7 +354,7 @@ describe("getDaftarMateriGuru / getDaftarMateriSiswa / getDaftarMateriAnak — U
     const result = await getDaftarMateriAnak("siswa-1")
 
     if (!result.success) throw new Error(result.message)
-    const list = result.data as Array<Record<string, unknown>>
+    const list = (result.data as { items: Array<Record<string, unknown>> }).items
     expect(list).toHaveLength(2)
 
     const byJudul = new Map(list.map((m) => [m.judul, m]))

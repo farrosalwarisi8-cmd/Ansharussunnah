@@ -21,6 +21,7 @@ const {
   mockGetMapelIdYangDiajarDiKelas,
   mockUjianFindUnique,
   mockUjianFindMany,
+  mockUjianCount,
   mockPengerjaanFindUnique,
   mockPengerjaanFindMany,
   mockPengerjaanUpdate,
@@ -42,6 +43,7 @@ const {
   mockGetMapelIdYangDiajarDiKelas: vi.fn(),
   mockUjianFindUnique: vi.fn(),
   mockUjianFindMany: vi.fn(),
+  mockUjianCount: vi.fn(),
   mockPengerjaanFindUnique: vi.fn(),
   mockPengerjaanFindMany: vi.fn(),
   mockPengerjaanUpdate: vi.fn(),
@@ -82,6 +84,7 @@ vi.mock("@/lib/prisma", () => ({
     ujian: {
       findUnique: mockUjianFindUnique,
       findMany: mockUjianFindMany,
+      count: mockUjianCount,
     },
     pengerjaanUjian: {
       findUnique: mockPengerjaanFindUnique,
@@ -187,6 +190,7 @@ beforeEach(() => {
   mockRateLimitAsync.mockResolvedValue({ success: true })
   mockGetClientIp.mockResolvedValue("127.0.0.1")
   mockVerifyGuruAksesKelas.mockResolvedValue({ user: { id: "guru-1" } })
+  mockUjianCount.mockResolvedValue(1)
 })
 
 afterEach(() => {
@@ -526,7 +530,11 @@ describe("getDaftarUjianGuru — filter akses mapel", () => {
     expect(where).toEqual(
       expect.objectContaining({ mataPelajaranId: { in: ["mapel-fiqih"] } })
     )
-    const rows = rowData(result.data)
+    // pagination server-side: page 1, pageSize default 25
+    const queryArg = callArg<{ skip: number; take: number }>(mockUjianFindMany)
+    expect(queryArg.skip).toBe(0)
+    expect(queryArg.take).toBe(25)
+    const rows = rowData((result.data as { items: UjianRowView[] }).items)
     expect(rows[0].mataPelajaran).toBe("Fiqih Ibadah")
     expect(rows[0].deskripsi).toBe("Ujian akhir")
     expect(rows[0].totalSoal).toBe(5)
@@ -552,7 +560,7 @@ describe("getDaftarUjianGuru — filter akses mapel", () => {
     const result = await getDaftarUjianGuru("7A-IKHWAN")
 
     expect(result.success).toBe(true)
-    expect(result.data).toEqual([])
+    expect((result.data as { items: unknown[] }).items).toEqual([])
     expect(mockUjianFindMany).not.toHaveBeenCalled()
   })
 
@@ -603,7 +611,7 @@ describe("getDaftarUjianAnak — orang tua", () => {
     const result = await getDaftarUjianAnak("siswa-1")
 
     expect(result.success).toBe(true)
-    const rows = rowData(result.data)
+    const rows = rowData((result.data as { items: UjianRowView[] }).items)
     expect(rows[0].mataPelajaran).toBe("Fiqih Ibadah")
     expect(rows[0].statusPengerjaan).toBe("BELUM_MULAI")
     expect(rows[0].nilai).toBeNull()
@@ -639,7 +647,7 @@ describe("getDaftarUjianAnak — orang tua", () => {
     const result = await getDaftarUjianAnak("siswa-1")
 
     expect(result.success).toBe(true)
-    const rows = rowData(result.data)
+    const rows = rowData((result.data as { items: UjianRowView[] }).items)
     expect(rows[0].statusPengerjaan).toBe(StatusPengerjaan.DINILAI)
     expect(rows[0].nilai?.toNumber()).toBe(87.5)
   })

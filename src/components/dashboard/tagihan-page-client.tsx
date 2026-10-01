@@ -4,7 +4,11 @@ import * as React from "react"
 import { useDashboard } from "@/components/dashboard/dashboard-context"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ChildSelector } from "@/components/dashboard/child-selector"
-import { getTagihanSppSiswa, submitBuktiPembayaranSpp } from "@/actions/akuntansi"
+import {
+  getTagihanSppSiswa,
+  submitBuktiPembayaranSpp,
+  getRekeningPembayaran,
+} from "@/actions/akuntansi"
 import {
   getDaftarSiswaKeuangan,
   getStrukturKelasUntukKeuangan,
@@ -20,6 +24,7 @@ import { AccessDenied } from "@/components/ui/access-denied"
 import dynamic from "next/dynamic"
 import { Upload, Clock, CheckCircle2, Building2, Copy, Loader2, UserSearch, X } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
+import { ListPagination } from "@/components/ui/list-pagination"
 
 // Single dynamic import for all Dialog parts — one chunk instead of five
 const DialogRoot = dynamic(
@@ -300,8 +305,18 @@ function TagihanContent() {
   const [tagihanList, setTagihanList] = React.useState<TagihanItem[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  // Pagination server-side daftar tagihan.
+  const [tagihanPage, setTagihanPage] = React.useState(1)
+  const [tagihanTotalPages, setTagihanTotalPages] = React.useState(1)
+  const [tagihanTotal, setTagihanTotal] = React.useState(0)
+  const [tagihanPageSize, setTagihanPageSize] = React.useState(12)
 
   const [selectedTagihan, setSelectedTagihan] = React.useState<TagihanItem | null>(null)
+
+  // Kunci idempotency untuk submit bukti: dibuat sekali per percobaan kirim dan
+  // dipakai ulang bila user menekan kirim lagi (retry/timeout), sehingga server
+  // tidak membuat pembayaran kedua. Direset setelah berhasil.
+  const submitKeyRef = React.useRef<string>("")
 
   // Upload Form State (hanya untuk orang tua)
   const [bankPengirim, setBankPengirim] = React.useState("BSI (Bank Syariah Indonesia)")
@@ -312,6 +327,29 @@ function TagihanContent() {
 
   // Admin keuangan: siswa yang dipilih
   const [siswaTerpilihId, setSiswaTerpilihId] = React.useState<string | null>(null)
+
+  // Rekening tujuan dari konfigurasi DB — jangan hardcode di client.
+  const [rekening, setRekening] = React.useState({
+    bankNama: "",
+    bankNoRekening: "",
+    bankAtasNama: "",
+    kontakWa: "",
+    namaKontakWa: "",
+  })
+
+  React.useEffect(() => {
+    let mounted = true
+    getRekeningPembayaran()
+      .then((res) => {
+        if (mounted && res.success && res.data) setRekening(res.data)
+      })
+      .catch(() => {
+        // Biarkan kosong — kartu rekening menyembunyikan nilai yang belum tersedia.
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   // Fetch tagihan data berdasarkan konteks pengguna
   const fetchTagihan = React.useCallback(async () => {
@@ -333,9 +371,20 @@ function TagihanContent() {
         return
       }
 
-      const result = await getTagihanSppSiswa(siswaId)
+      const result = await getTagihanSppSiswa(siswaId, { page: tagihanPage })
       if (result.success && result.data) {
-        setTagihanList(result.data as TagihanItem[])
+        const data = result.data as {
+          items: TagihanItem[]
+          total: number
+          page: number
+          pageSize: number
+          totalPages: number
+        }
+        setTagihanList(data.items)
+        setTagihanTotal(data.total)
+        setTagihanPage(data.page)
+        setTagihanTotalPages(data.totalPages)
+        setTagihanPageSize(data.pageSize)
       } else {
         setTagihanList([])
         setError(result.message || "Gagal memuat data tagihan")
@@ -345,11 +394,16 @@ function TagihanContent() {
     } finally {
       setLoading(false)
     }
-  }, [isParent, isAdminKeuangan, isGuru, selectedChild, siswaTerpilihId])
+  }, [isParent, isAdminKeuangan, isGuru, selectedChild, siswaTerpilihId, tagihanPage])
 
   React.useEffect(() => {
     fetchTagihan()
   }, [fetchTagihan])
+
+  // Kembali ke halaman 1 saat berganti siswa.
+  React.useEffect(() => {
+    setTagihanPage(1)
+  }, [selectedChild?.id, siswaTerpilihId])
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
@@ -372,6 +426,13 @@ function TagihanContent() {
     }
     const selectedTagihanId = selectedTagihan.id
 
+    if (!submitKeyRef.current) {
+      submitKeyRef.current =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    }
+
     setSubmitting(true)
     try {
       const result = await submitBuktiPembayaranSpp({
@@ -381,6 +442,7 @@ function TagihanContent() {
         urlBukti: buktiUrl,
         namaBukti: buktiUrl.split('/').pop() || 'bukti-transfer',
         catatan: `Transfer via ${bankPengirim} a.n ${namaPengirim}`,
+        idempotencyKey: submitKeyRef.current,
       })
 
       if (!result.success) {
@@ -396,6 +458,7 @@ function TagihanContent() {
         title: "Bukti Transfer Terkirim! 💳",
         description: "Admin keuangan akan memverifikasi pembayaran Anda dalam 1x24 jam.",
       })
+      submitKeyRef.current = ""
       setSelectedTagihan(null)
       fetchTagihan()
     } catch {
@@ -441,16 +504,17 @@ function TagihanContent() {
               <span>Rekening Resmi Pesantren Anshorussunnah</span>
             </div>
             <div className="text-xl sm:text-2xl font-black font-mono tracking-wider text-white">
-              7700 8899 0011
+              {rekening.bankNoRekening || "—"}
             </div>
             <p className="text-xs text-yellow-200/80">
-              Bank Syariah Indonesia (BSI) • a.n Yayasan Anshorussunnah
+              {rekening.bankNama ? `${rekening.bankNama} • a.n ${rekening.bankAtasNama}` : "Memuat rekening…"}
             </p>
           </div>
 
           <Button
             type="button"
-            onClick={() => copyToClipboard("770088990011")}
+            disabled={!rekening.bankNoRekening}
+            onClick={() => copyToClipboard(rekening.bankNoRekening.replace(/\D/g, ""))}
             className="bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold rounded-xl h-11 px-5 text-xs shrink-0 min-h-[44px]"
           >
             <Copy className="h-4 w-4 mr-1.5" />
@@ -560,6 +624,17 @@ function TagihanContent() {
                 </div>
               </div>
             ))}
+
+            <ListPagination
+              page={tagihanPage}
+              pageSize={tagihanPageSize}
+              total={tagihanTotal}
+              totalPages={tagihanTotalPages}
+              onPageChange={setTagihanPage}
+              loading={loading}
+              itemLabel="tagihan"
+              className="border-t border-slate-100"
+            />
           </CardContent>
         </Card>
       )}

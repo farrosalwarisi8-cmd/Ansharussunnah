@@ -3,6 +3,7 @@
 import * as React from "react"
 import { getDaftarUjianAnak } from "@/actions/ujian"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
+import { ListPagination } from "@/components/ui/list-pagination"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
 
@@ -25,6 +26,9 @@ type UjianItem = {
 
 export function OrangTuaUjianView({ selectedChild }: { selectedChild: { id: string; nama: string } | null }) {
   const [ujianList, setUjianList] = React.useState<UjianItem[]>([])
+  const [page, setPage] = React.useState(1)
+  const [total, setTotal] = React.useState(0)
+  const [totalPages, setTotalPages] = React.useState(1)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -37,9 +41,16 @@ export function OrangTuaUjianView({ selectedChild }: { selectedChild: { id: stri
       setLoading(true)
       setError(null)
       try {
-        const result = await getDaftarUjianAnak(selectedChild.id)
+        const result = await getDaftarUjianAnak(selectedChild.id, { page })
         if (result.success && result.data) {
-          setUjianList(result.data as UjianItem[])
+          const data = result.data as {
+            items: UjianItem[]
+            total: number
+            totalPages: number
+          }
+          setUjianList(data.items)
+          setTotal(data.total)
+          setTotalPages(data.totalPages)
         } else {
           setError(result.message || "Gagal memuat data ujian anak")
         }
@@ -50,7 +61,7 @@ export function OrangTuaUjianView({ selectedChild }: { selectedChild: { id: stri
       }
     }
     fetchUjian()
-  }, [selectedChild?.id])
+  }, [selectedChild?.id, page])
 
   if (!selectedChild) {
     return (
@@ -102,6 +113,16 @@ export function OrangTuaUjianView({ selectedChild }: { selectedChild: { id: stri
             </div>
           ))
         )}
+
+        <ListPagination
+          page={page}
+          pageSize={25}
+          total={total}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          loading={loading}
+          itemLabel="ujian"
+        />
       </CardContent>
     </Card>
   )

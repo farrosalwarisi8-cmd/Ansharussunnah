@@ -7,6 +7,7 @@ const {
   mockPendaftaranFindUnique,
   mockPendaftaranFindFirst,
   mockPendaftaranUpdate,
+  mockPendaftaranUpdateMany,
   mockDeleteUser,
   mockCreateUser,
   mockListUsers,
@@ -26,6 +27,7 @@ const {
   mockPendaftaranFindUnique: vi.fn(),
   mockPendaftaranFindFirst: vi.fn().mockResolvedValue(null),
   mockPendaftaranUpdate: vi.fn(),
+  mockPendaftaranUpdateMany: vi.fn().mockResolvedValue({ count: 1 }),
   mockDeleteUser: vi.fn().mockResolvedValue({ error: null }),
   mockCreateUser: vi.fn(),
   mockListUsers: vi.fn().mockResolvedValue({
@@ -273,6 +275,9 @@ function setupTransactionMock() {
         pendaftaran: {
           findFirst: mockPendaftaranFindFirst,
           update: mockPendaftaranUpdate,
+          // Klaim status atomik (MENUNGGU_VERIFIKASI → final). Mock harus
+          // mengembalikan { count } — action membaca claimed.count.
+          updateMany: mockPendaftaranUpdateMany,
         },
         buktiTransferPendaftaran: {
           update: mockBuktiTransferUpdate,
@@ -692,7 +697,7 @@ describe("verifikasiPendaftaran — Salin Dokumen saat DITERIMA", () => {
       async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
         fn({
           buktiTransferPendaftaran: { update: mockBuktiTransferUpdate },
-          pendaftaran: { update: mockPendaftaranUpdate },
+          pendaftaran: { update: mockPendaftaranUpdate, updateMany: mockPendaftaranUpdateMany },
         }),
     );
 
@@ -748,7 +753,7 @@ describe("verifikasiPendaftaran — Override Kelas Tujuan (pendaftar tanpa kelas
     expect(siswaData.kelasId).toBe("kelas-1");
 
     // Kelas override juga dipersist ke record pendaftaran (rekap konsisten)
-    expect(mockPendaftaranUpdate).toHaveBeenCalledWith(
+    expect(mockPendaftaranUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ kelasTujuanId: "kelas-1" }),
       }),
@@ -909,7 +914,7 @@ describe("verifikasiPendaftaran — DITOLAK", () => {
     mockPrismaTransaction.mockImplementation(
       async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
         return fn({
-          pendaftaran: { update: mockPendaftaranUpdate },
+          pendaftaran: { update: mockPendaftaranUpdate, updateMany: mockPendaftaranUpdateMany },
           buktiTransferPendaftaran: { update: mockBuktiTransferUpdate },
         });
       },
@@ -923,7 +928,7 @@ describe("verifikasiPendaftaran — DITOLAK", () => {
 
     expect(result.success).toBe(true);
     expect(result.message).toContain("DITOLAK");
-    expect(mockPendaftaranUpdate).toHaveBeenCalledOnce();
+    expect(mockPendaftaranUpdateMany).toHaveBeenCalledOnce();
     expect(mockBuktiTransferUpdate).toHaveBeenCalledOnce();
   });
 
@@ -936,7 +941,10 @@ describe("verifikasiPendaftaran — DITOLAK", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.message).toContain("Alasan penolakan wajib diisi");
+    // Alasan penolakan divalidasi di schema, sehingga pesannya generik tetapi
+    // field error spesifik tetap dikembalikan ke klien.
+    expect(result.message).toContain("tidak valid");
+    expect(result.errors?.alasanPenolakan).toBeDefined();
     expect(mockPrismaTransaction).not.toHaveBeenCalled();
   });
 
@@ -945,7 +953,7 @@ describe("verifikasiPendaftaran — DITOLAK", () => {
     mockPrismaTransaction.mockImplementation(
       async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
         return fn({
-          pendaftaran: { update: mockPendaftaranUpdate },
+          pendaftaran: { update: mockPendaftaranUpdate, updateMany: mockPendaftaranUpdateMany },
           buktiTransferPendaftaran: { update: mockBuktiTransferUpdate },
         });
       },
@@ -989,7 +997,7 @@ describe("verifikasiPendaftaran — DITOLAK", () => {
     mockPrismaTransaction.mockImplementation(
       async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
         return fn({
-          pendaftaran: { update: mockPendaftaranUpdate },
+          pendaftaran: { update: mockPendaftaranUpdate, updateMany: mockPendaftaranUpdateMany },
           buktiTransferPendaftaran: { update: mockBuktiTransferUpdate },
         });
       },
@@ -1008,7 +1016,7 @@ describe("verifikasiPendaftaran — DITOLAK", () => {
     // Penolakan tetap dianggap berhasil; admin diberi tahu emailnya gagal.
     expect(result.success).toBe(true);
     expect(result.message).toContain("GAGAL terkirim");
-    expect(mockPendaftaranUpdate).toHaveBeenCalledOnce();
+    expect(mockPendaftaranUpdateMany).toHaveBeenCalledOnce();
   });
 
   it("tetap sukses saat template email penolakan melempar error", async () => {
@@ -1016,7 +1024,7 @@ describe("verifikasiPendaftaran — DITOLAK", () => {
     mockPrismaTransaction.mockImplementation(
       async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
         return fn({
-          pendaftaran: { update: mockPendaftaranUpdate },
+          pendaftaran: { update: mockPendaftaranUpdate, updateMany: mockPendaftaranUpdateMany },
           buktiTransferPendaftaran: { update: mockBuktiTransferUpdate },
         });
       },
@@ -1370,7 +1378,7 @@ describe("verifikasiPendaftaran — Gender Match Kelas", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(mockPendaftaranUpdate).toHaveBeenCalled();
+    expect(mockPendaftaranUpdateMany).toHaveBeenCalled();
   });
 });
 
@@ -1482,7 +1490,7 @@ describe("verifikasiPendaftaran — Duplikat NISN", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(mockPendaftaranUpdate).toHaveBeenCalled();
+    expect(mockPendaftaranUpdateMany).toHaveBeenCalled();
   });
 });
 

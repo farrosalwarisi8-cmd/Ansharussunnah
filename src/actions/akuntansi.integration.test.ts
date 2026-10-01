@@ -20,11 +20,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const {
   mockRequireRole,
   mockPembayaranSiswaFindMany,
+  mockPembayaranSiswaCount,
   mockSiswaFindMany,
   mockTagihanSiswaFindMany,
 } = vi.hoisted(() => ({
   mockRequireRole: vi.fn(),
   mockPembayaranSiswaFindMany: vi.fn(),
+  mockPembayaranSiswaCount: vi.fn(),
   mockSiswaFindMany: vi.fn(),
   mockTagihanSiswaFindMany: vi.fn(),
 }))
@@ -36,7 +38,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   default: {
-    pembayaranSiswa: { findMany: mockPembayaranSiswaFindMany },
+    pembayaranSiswa: { findMany: mockPembayaranSiswaFindMany, count: mockPembayaranSiswaCount },
     siswa: { findMany: mockSiswaFindMany },
     tagihanSiswa: { findMany: mockTagihanSiswaFindMany },
   },
@@ -45,7 +47,11 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/guru-auth", () => ({ verifyGuruAksesKelas: vi.fn() }))
 vi.mock("@/lib/rate-limit", () => ({ getClientIpFromHeaders: vi.fn(), rateLimitAsync: vi.fn() }))
 vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdmin: vi.fn() }))
-vi.mock("@/lib/storage", () => ({ getSignedUrl: vi.fn() }))
+vi.mock("@/lib/storage", () => ({
+  getSignedUrl: vi.fn(),
+  // getDaftarPembayaranPendingVerifikasi memanggil getSignedUrls (jamak).
+  getSignedUrls: vi.fn().mockResolvedValue(new Map()),
+}))
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 
 import { AppError } from "@/lib/prisma-error"
@@ -109,7 +115,7 @@ describe("getDaftarPembayaranPendingVerifikasi — Full Pipeline", () => {
 
     const result = await getDaftarPembayaranPendingVerifikasi()
 
-    // Verifikasi query: PENDING filter, nested includes, asc order
+    // Verifikasi query: PENDING filter, nested includes, asc order + pagination
     expect(mockPembayaranSiswaFindMany).toHaveBeenCalledWith({
       where: { statusPembayaran: "PENDING" },
       include: {
@@ -125,6 +131,8 @@ describe("getDaftarPembayaranPendingVerifikasi — Full Pipeline", () => {
         },
       },
       orderBy: { createdAt: "asc" },
+      skip: 0,
+      take: 25,
     })
 
     // Verifikasi transformation: nested → flat, Decimal → number
@@ -140,6 +148,8 @@ describe("getDaftarPembayaranPendingVerifikasi — Full Pipeline", () => {
       metodeBayar: "Transfer BSI",
       namaBukti: "bukti.jpg",
       urlBukti: "spp/tag-1/bukti.jpg",
+      // Path storage internal → signed URL dihasilkan; mock Map kosong → null.
+      signedUrlBukti: null,
       catatan: null,
       waktuUpload: new Date("2024-03-01T09:30:00Z"),
     })
@@ -166,6 +176,7 @@ describe("getDaftarPembayaranPendingVerifikasi — Full Pipeline", () => {
     }))
 
     mockPembayaranSiswaFindMany.mockResolvedValue(items)
+    mockPembayaranSiswaCount.mockResolvedValue(15)
 
     const result = await getDaftarPembayaranPendingVerifikasi()
 
@@ -197,6 +208,7 @@ describe("getDaftarPembayaranPendingVerifikasi — Full Pipeline", () => {
         },
       },
     }])
+    mockPembayaranSiswaCount.mockResolvedValue(1)
 
     const result = await getDaftarPembayaranPendingVerifikasi()
 

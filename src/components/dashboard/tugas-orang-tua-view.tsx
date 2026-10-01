@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { StatusBadge, type StatusType } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
+import { ListPagination } from "@/components/ui/list-pagination"
 import { getTugasAnak } from "@/actions/tugas"
 
 type TugasItem = {
@@ -27,6 +28,9 @@ type TugasItem = {
 
 export function OrangTuaTugasView({ selectedChild }: { selectedChild: ChildStudent | null }) {
   const [tugasList, setTugasList] = React.useState<TugasItem[]>([])
+  const [page, setPage] = React.useState(1)
+  const [total, setTotal] = React.useState(0)
+  const [totalPages, setTotalPages] = React.useState(1)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -39,10 +43,16 @@ export function OrangTuaTugasView({ selectedChild }: { selectedChild: ChildStude
       setLoading(true)
       setError(null)
       try {
-        const result = await getTugasAnak(selectedChild.id)
+        const result = await getTugasAnak(selectedChild.id, { page })
         if (result.success && result.data) {
-          const data = result.data as { tugas?: TugasItem[]; tugasList?: TugasItem[] }
-          setTugasList(data.tugas || data.tugasList || [])
+          const data = result.data as {
+            items?: TugasItem[]
+            total?: number
+            totalPages?: number
+          }
+          setTugasList(data.items ?? [])
+          setTotal(data.total ?? 0)
+          setTotalPages(data.totalPages ?? 1)
         } else {
           setError(result.message || "Gagal memuat daftar tugas anak")
         }
@@ -53,7 +63,7 @@ export function OrangTuaTugasView({ selectedChild }: { selectedChild: ChildStude
       }
     }
     fetchTugas()
-  }, [selectedChild?.id])
+  }, [selectedChild?.id, page])
 
   if (!selectedChild) {
     return (
@@ -109,6 +119,16 @@ export function OrangTuaTugasView({ selectedChild }: { selectedChild: ChildStude
             </div>
           ))
         )}
+
+        <ListPagination
+          page={page}
+          pageSize={25}
+          total={total}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          loading={loading}
+          itemLabel="tugas"
+        />
       </CardContent>
     </Card>
   )

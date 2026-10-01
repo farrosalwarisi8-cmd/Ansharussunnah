@@ -34,6 +34,7 @@ import {
   BarChart3,
   ShieldCheck,
   KeyRound,
+  Mail,
   type LucideIcon,
 } from "lucide-react"
 import { useDashboard } from "./dashboard-context"
@@ -113,6 +114,7 @@ const PAGE_META: Record<string, { title: string; section?: string }> = {
     title: "Kelola Akun Keuangan",
     section: "Keuangan",
   },
+  "/dashboard/email-outbox": { title: "Email Outbox", section: "Sistem" },
 }
 
 const ROLE_LABEL: Record<Role, string> = {
@@ -193,6 +195,7 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
         { title: "Tagihan Siswa", href: "/dashboard/tagihan", icon: CreditCard, isPrimaryMobile: true, mobileTitle: "Tagihan" },
         { title: "Daftar Siswa", href: "/dashboard/daftar-siswa", icon: Users2, isPrimaryMobile: true, mobileTitle: "Siswa" },
         { title: "Biaya PPDB", href: "/dashboard/biaya-ppdb", icon: Wallet },
+        { title: "Email Outbox", href: "/dashboard/email-outbox", icon: Mail, adminOnly: true },
       ]
 
     case Role.SUPER_ADMIN:
@@ -216,6 +219,7 @@ export function getNavItems(role: Role, isAdmin: boolean): NavItem[] {
         { title: "Verifikasi Pendaftar", href: "/dashboard/verifikasi-pendaftaran", icon: UserCheck },
         { title: "Biaya PPDB", href: "/dashboard/biaya-ppdb", icon: Wallet },
         { title: "Kelola Akun Keuangan", href: "/dashboard/kelola-akun-keuangan", icon: Wallet },
+        { title: "Email Outbox", href: "/dashboard/email-outbox", icon: Mail, adminOnly: true },
       ]
   }
 }
@@ -270,6 +274,9 @@ export function getNavSections(role: Role, isAdmin: boolean): NavSection[] {
     )
   )
   if (keuangan.length) sections.push({ title: "Keuangan", items: keuangan })
+
+  const sistem = items.filter((i) => i.href === "/dashboard/email-outbox")
+  if (sistem.length) sections.push({ title: "Sistem", items: sistem })
 
   sections.push({
     title: "Pengaturan",

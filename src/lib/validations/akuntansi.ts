@@ -53,6 +53,9 @@ export const submitBuktiSppSchema = z.object({
   urlBukti: z.string().min(1, "Bukti transfer wajib diupload"),
   namaBukti: z.string().min(1, "Nama berkas bukti wajib diisi"),
   catatan: z.string().max(255).optional(),
+  // Kunci idempotency dari klien. Disarankan selalu dikirim; opsional agar
+  // klien lama tetap bekerja (perilaku lama = tidak idempotent).
+  idempotencyKey: z.string().min(8).max(128).optional(),
 })
 
 export type SubmitBuktiSppValues = z.infer<typeof submitBuktiSppSchema>

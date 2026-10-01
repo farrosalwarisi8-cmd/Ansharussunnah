@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Clock, FileText, BarChart2, Calendar, Loader2, Pencil, Trash2 } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
+import { ListPagination } from "@/components/ui/list-pagination"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -58,6 +59,9 @@ export function GuruUjianView() {
   const [selectedKelasId, setSelectedKelasId] = React.useState<string>("")
   const [loadingKelas, setLoadingKelas] = React.useState(true)
   const [ujianList, setUjianList] = React.useState<UjianItem[]>([])
+  const [ujianPage, setUjianPage] = React.useState(1)
+  const [ujianTotal, setUjianTotal] = React.useState(0)
+  const [ujianTotalPages, setUjianTotalPages] = React.useState(1)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -76,6 +80,7 @@ export function GuruUjianView() {
           setKelasList(data)
           if (data.length > 0) {
             setSelectedKelasId(data[0].kelasId)
+            setUjianPage(1)
           }
         }
       } catch {
@@ -92,9 +97,16 @@ export function GuruUjianView() {
     setLoading(true)
     setError(null)
     try {
-      const result = await getDaftarUjianGuru(selectedKelasId)
+      const result = await getDaftarUjianGuru(selectedKelasId, { page: ujianPage })
       if (result.success && result.data) {
-        setUjianList(result.data as UjianItem[])
+        const data = result.data as {
+          items: UjianItem[]
+          total: number
+          totalPages: number
+        }
+        setUjianList(data.items)
+        setUjianTotal(data.total)
+        setUjianTotalPages(data.totalPages)
       } else {
         setError(result.message || "Gagal memuat data ujian")
       }
@@ -103,7 +115,7 @@ export function GuruUjianView() {
     } finally {
       setLoading(false)
     }
-  }, [selectedKelasId])
+  }, [selectedKelasId, ujianPage])
 
   React.useEffect(() => {
     fetchUjian()
@@ -170,6 +182,7 @@ export function GuruUjianView() {
               value={selectedKelasId}
               onChange={(e) => {
                 setSelectedKelasId(e.target.value)
+                setUjianPage(1)
                 setError(null)
               }}
               className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-yellow-500"
@@ -319,6 +332,16 @@ export function GuruUjianView() {
         ))}
         </div>
       )}
+
+      <ListPagination
+        page={ujianPage}
+        pageSize={25}
+        total={ujianTotal}
+        totalPages={ujianTotalPages}
+        onPageChange={setUjianPage}
+        loading={loading}
+        itemLabel="ujian"
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

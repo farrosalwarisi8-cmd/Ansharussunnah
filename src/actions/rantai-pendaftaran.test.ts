@@ -87,6 +87,24 @@ vi.mock("@/lib/prisma", () => {
       Object.assign(db.pendaftaran, data);
       return { ...db.pendaftaran };
     }),
+    // Klaim status atomik (MENUNGGU_VERIFIKASI → DITERIMA/DITOLAK). Hanya
+    // mengubah state bila status saat ini masih cocok dengan `where.status`,
+    // lalu mengembalikan { count } seperti Prisma.updateMany.
+    updateMany: vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: { id: string; status?: string };
+        data: Record<string, unknown>;
+      }) => {
+        if (where?.status && db.pendaftaran.status !== where.status) {
+          return { count: 0 };
+        }
+        Object.assign(db.pendaftaran, data);
+        return { count: 1 };
+      },
+    ),
   };
 
   const buktiTransferPendaftaran = {
@@ -140,7 +158,10 @@ vi.mock("@/lib/prisma", () => {
         id: "kelas-1",
         nama: "Kelas 1",
         jenisKelamin: "LAKI_LAKI",
-        jenjang: "MTSD",
+        // Approval memvalidasi kelas.jenjangId === pendaftaran.jenjangTujuanId.
+        // Fixture pendaftaran memakai jenjang-1, jadi kelas harus cocok.
+        jenjangId: "jenjang-1",
+        jenjang: { nama: "MTSD" },
         kapasitas: 30,
         _count: { siswa: 5 },
       }),

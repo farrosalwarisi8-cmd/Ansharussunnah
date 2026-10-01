@@ -11,6 +11,7 @@ import { siswaCocokKelas } from "@/lib/guru-kelas-gender"
 import { deriveUniqueUsername } from "@/lib/username"
 import { toUserFriendlyError } from "@/lib/prisma-error"
 import { sendEmail, buildPemberitahuanRoleBaruEmail } from "@/lib/email"
+import { normalizePagination, paginatedResult, type Paginated } from "@/lib/pagination"
 import type { ActionResponse } from "@/types"
 import { Role, StatusPendaftaran } from "@prisma/client"
 import { revalidatePath } from "next/cache"
@@ -611,49 +612,82 @@ type SiswaManualListItem = {
 /**
  * Mengambil daftar siswa (termasuk yang dibuat manual) beserta info kelas dan orang tua.
  */
-export async function getDaftarSiswaManual(): Promise<ActionResponse<SiswaManualListItem[]>> {
+export async function getDaftarSiswaManual(options?: {
+  page?: number
+  pageSize?: number
+  search?: string
+  kelasNama?: string
+  jenisKelamin?: "LAKI_LAKI" | "PEREMPUAN"
+}): Promise<ActionResponse<Paginated<SiswaManualListItem>>> {
   try {
     await requireGuruAdmin()
 
-    const siswaList = await prisma.siswa.findMany({
-      where: { deleted_at: null, },
-      include: {
-        user: {
-          select: {
-            id: true,
-            nama: true,
-            email: true,
-            username: true,
-            aktif: true,
-            createdAt: true,
-          },
-        },
-        kelas: {
-          select: {
-            nama: true,
-            jenjang: {
-              select: { nama: true },
+    const pagination = normalizePagination(options)
+    const search = options?.search?.trim()
+
+    // Filter dikerjakan di server supaya pagination tetap benar: memfilter
+    // hanya pada baris yang sudah di-fetch akan menghasilkan hasil yang salah.
+    const where: Record<string, unknown> = { deleted_at: null }
+    if (options?.jenisKelamin) {
+      where.jenisKelamin = options.jenisKelamin
+    }
+    if (options?.kelasNama) {
+      where.kelas = { nama: options.kelasNama }
+    }
+    if (search) {
+      where.OR = [
+        { user: { nama: { contains: search, mode: "insensitive" } } },
+        { user: { email: { contains: search, mode: "insensitive" } } },
+        { user: { username: { contains: search, mode: "insensitive" } } },
+        { nisn: { contains: search, mode: "insensitive" } },
+        { nis: { contains: search, mode: "insensitive" } },
+      ]
+    }
+
+    const [siswaList, total] = await Promise.all([
+      prisma.siswa.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              nama: true,
+              email: true,
+              username: true,
+              aktif: true,
+              createdAt: true,
             },
           },
-        },
-        orangTua: {
-          include: {
-            orangTua: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    nama: true,
-                    email: true,
+          kelas: {
+            select: {
+              nama: true,
+              jenjang: {
+                select: { nama: true },
+              },
+            },
+          },
+          orangTua: {
+            include: {
+              orangTua: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      nama: true,
+                      email: true,
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
-      orderBy: { user: { createdAt: "desc" } },
-    })
+        orderBy: [{ user: { createdAt: "desc" } }, { id: "desc" }],
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.siswa.count({ where }),
+    ])
 
     const formatted: SiswaManualListItem[] = siswaList.map((s) => ({
       id: s.id,
@@ -680,7 +714,7 @@ export async function getDaftarSiswaManual(): Promise<ActionResponse<SiswaManual
     return {
       success: true,
       message: "Daftar siswa berhasil dimuat",
-      data: formatted,
+      data: paginatedResult(formatted, total, pagination),
     }
   } catch (error: unknown) {
     return {

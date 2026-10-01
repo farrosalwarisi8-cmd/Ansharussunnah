@@ -31,11 +31,13 @@ import {
   type RekapSppFilterValues,
 } from "@/lib/validations/akuntansi"
 import { sendEmail, buildTagihanSppEmail } from "@/lib/email"
+import { getPengaturanPPDB } from "@/lib/biaya-ppdb-server"
 import type { ActionResponse } from "@/types"
 import { Role, StatusTagihan, StatusPembayaran, StatusTransaksi, TipeTransaksi } from "@prisma/client"
 import { Prisma } from "@prisma/client"
 import { toUserFriendlyError, AppError } from "@/lib/prisma-error"
 import { isCronAuthorized } from "@/lib/cron-auth"
+import { normalizePagination, paginatedResult, type Paginated } from "@/lib/pagination"
 import { revalidatePath } from "next/cache"
 
 const BULAN_NAMES = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
@@ -533,15 +535,26 @@ export async function generateTagihanSppKhusus(
 
     let totalEmailTerkirim = 0
     if (kirimEmail) {
+      // Rekening tujuan diambil dari konfigurasi DB (PengaturanPPDB) supaya
+      // perubahan rekening di panel admin ikut terkirim di email tagihan.
+      // Fail-open: getPengaturanPPDB mengembalikan default teraman bila DB
+      // bermasalah, sehingga email tidak pernah menampilkan rekening kosong.
+      const rekening = await getPengaturanPPDB()
       for (const t of targetEmail) {
         const res = await sendEmail({
           to: t.to,
+          jenisEmail: "tagihan_spp",
+          // Satu email per penerima per periode tagihan.
+          idempotencyKey: `tagihan-spp:${tahun}-${bulan}:${t.to}`,
           subject: `Tagihan SPP ${bulanLabel} ${tahun} — ${t.namaSiswa}`,
           html: buildTagihanSppEmail({
             namaSiswa: t.namaSiswa,
             bulanLabel: `${bulanLabel} ${tahun}`,
             nominal: t.nominal,
             jatuhTempo,
+            bankNama: rekening.bankNama,
+            bankNoRekening: rekening.bankNoRekening,
+            bankAtasNama: rekening.bankAtasNama,
           }),
         }).catch((err) => {
           console.error("Gagal kirim email tagihan SPP:", err)
@@ -603,7 +616,7 @@ export async function submitBuktiPembayaranSpp(
       }
     }
 
-    const { tagihanId, nominalDibayar, metodeBayar, urlBukti, namaBukti, catatan } = validated.data
+    const { tagihanId, nominalDibayar, metodeBayar, urlBukti, namaBukti, catatan, idempotencyKey } = validated.data
 
     const sessionUser = await requireAuth()
 
@@ -686,46 +699,98 @@ export async function submitBuktiPembayaranSpp(
     //   - Status tagihan → MENUNGGU_VERIFIKASI (BUKAN SUDAH_BAYAR)
     //   - Admin keuangan harus memanggil konfirmasiPembayaranSppOlehAdmin untuk finalisasi
     //   - nominalDibayar dicatat apa adanya; admin yang memvalidasi kesesuaiannya
-    await prisma.$transaction(
-      async (tx) => {
-      const tagihanSaatIni = await tx.tagihanSiswa.findUnique({
-        where: { id: tagihanId },
-        select: { status: true },
-      })
-      if (!tagihanSaatIni) throw new AppError("Tagihan tidak ditemukan")
-      if (tagihanSaatIni.status === StatusTagihan.SUDAH_BAYAR) {
-        throw new AppError("Tagihan sudah lunas")
-      }
-      if (tagihanSaatIni.status === StatusTagihan.DIBATALKAN) {
-        throw new AppError("Tagihan sudah dibatalkan")
-      }
-      if (tagihanSaatIni.status === StatusTagihan.MENUNGGU_VERIFIKASI) {
-        throw new AppError("Bukti pembayaran sudah diterima dan sedang menunggu verifikasi admin")
-      }
+    //
+    // IDEMPOTENSI & RACE CONDITION:
+    //   (a) idempotencyKey dari klien → retry kunci sama mengembalikan pembayaran
+    //       yang sudah ada, tidak membuat baris kedua.
+    //   (b) Klaim status tagihan memakai updateMany BERSYARAT (bukan
+    //       findUnique-lalu-update) sehingga dua request paralel hanya satu yang
+    //       berhasil memindahkan status ke MENUNGGU_VERIFIKASI.
+    //   (c) Index unik parsial DB (satu PENDING per tagihan, migration
+    //       20261001010000) + unique (tagihan_id, idempotency_key) menjadi jaring
+    //       pengaman terakhir; pelanggarannya diubah menjadi pesan ramah.
+    try {
+      await prisma.$transaction(
+        async (tx) => {
+          // (a) Replay idempotent: kunci sama pada tagihan sama → tidak membuat baru.
+          if (idempotencyKey) {
+            const existingPayment = await tx.pembayaranSiswa.findFirst({
+              where: { tagihanId, idempotencyKey },
+              select: { id: true },
+            })
+            if (existingPayment) return existingPayment.id
+          }
 
-      await tx.pembayaranSiswa.create({
-        data: {
-          tagihanId,
-          nominalDibayar: new Prisma.Decimal(nominalDibayar),
-          tanggalBayar: new Date(),
-          metodeBayar,
-          urlBukti,
-          namaBukti,
-          catatan,
-          statusPembayaran: StatusPembayaran.PENDING,
-          // dikonfirmasiOlehId & waktuKonfirmasi dibiarkan null hingga admin konfirmasi
-        },
-      })
+          const tagihanSaatIni = await tx.tagihanSiswa.findUnique({
+            where: { id: tagihanId },
+            select: { status: true },
+          })
+          if (!tagihanSaatIni) throw new AppError("Tagihan tidak ditemukan")
+          if (tagihanSaatIni.status === StatusTagihan.SUDAH_BAYAR) {
+            throw new AppError("Tagihan sudah lunas")
+          }
+          if (tagihanSaatIni.status === StatusTagihan.DIBATALKAN) {
+            throw new AppError("Tagihan sudah dibatalkan")
+          }
+          if (tagihanSaatIni.status === StatusTagihan.MENUNGGU_VERIFIKASI) {
+            throw new AppError("Bukti pembayaran sudah diterima dan sedang menunggu verifikasi admin")
+          }
 
-      await tx.tagihanSiswa.update({
-        where: { id: tagihanId },
-        data: {
-          status: StatusTagihan.MENUNGGU_VERIFIKASI,
+          // (b) Klaim atomik: hanya boleh berpindah bila belum menunggu/lunas/batal.
+          const klaim = await tx.tagihanSiswa.updateMany({
+            where: {
+              id: tagihanId,
+              status: {
+                notIn: [
+                  StatusTagihan.MENUNGGU_VERIFIKASI,
+                  StatusTagihan.SUDAH_BAYAR,
+                  StatusTagihan.DIBATALKAN,
+                ],
+              },
+            },
+            data: { status: StatusTagihan.MENUNGGU_VERIFIKASI },
+          })
+          if (klaim.count === 0) {
+            throw new AppError(
+              "Bukti pembayaran sudah diterima dan sedang menunggu verifikasi admin"
+            )
+          }
+
+          const pembayaran = await tx.pembayaranSiswa.create({
+            data: {
+              tagihanId,
+              nominalDibayar: new Prisma.Decimal(nominalDibayar),
+              tanggalBayar: new Date(),
+              metodeBayar,
+              urlBukti,
+              namaBukti,
+              catatan,
+              idempotencyKey: idempotencyKey ?? null,
+              statusPembayaran: StatusPembayaran.PENDING,
+              // dikonfirmasiOlehId & waktuKonfirmasi dibiarkan null hingga admin konfirmasi
+            },
+            select: { id: true },
+          })
+
+          return pembayaran.id
         },
-      })
-      },
-      { timeout: 10000, maxWait: 3000 }
-    )
+        { timeout: 10000, maxWait: 3000 }
+      )
+    } catch (txErr) {
+      // Race dua request paralel → unique violation. Kembalikan pesan ramah,
+      // bukan pesan generik P2002 "Data yang sama sudah terdaftar".
+      if (
+        txErr instanceof Prisma.PrismaClientKnownRequestError &&
+        txErr.code === "P2002"
+      ) {
+        return {
+          success: false,
+          message:
+            "Bukti pembayaran untuk tagihan ini baru saja dikirim dan sedang menunggu verifikasi admin keuangan. Harap tunggu sebelum mengirim ulang.",
+        }
+      }
+      throw txErr
+    }
 
     revalidatePath("/dashboard/keuangan")
     return {
@@ -1383,10 +1448,12 @@ export async function getRekapTunggakanSpp(
 //     untuk ditampilkan di tab Verifikasi Pembayaran Masuk.
 // ========================================================
 
-export async function getDaftarPembayaranPendingVerifikasi(): Promise<
-  ActionResponse<{
-    total: number
-    items: {
+export async function getDaftarPembayaranPendingVerifikasi(options?: {
+  page?: number
+  pageSize?: number
+}): Promise<
+  ActionResponse<
+    Paginated<{
       id: string
       tagihanId: string
       santriNama: string
@@ -1399,34 +1466,41 @@ export async function getDaftarPembayaranPendingVerifikasi(): Promise<
       metodeBayar: string
       namaBukti: string | null
       urlBukti: string | null
+      signedUrlBukti: string | null
       catatan: string | null
       waktuUpload: Date
-    }[]
-  }>
+    }>
+  >
 > {
   try {
     await requireAdminKeuangan()
 
-    const pendingPembayaran = await prisma.pembayaranSiswa.findMany({
-      where: {
-        statusPembayaran: StatusPembayaran.PENDING,
-      },
-      include: {
-        tagihan: {
-          include: {
-            siswa: {
-              include: {
-                user: { select: { nama: true } },
-                kelas: {
-                  include: { jenjang: true },
+    const pagination = normalizePagination(options)
+    const where = { statusPembayaran: StatusPembayaran.PENDING }
+
+    const [pendingPembayaran, total] = await Promise.all([
+      prisma.pembayaranSiswa.findMany({
+        where,
+        include: {
+          tagihan: {
+            include: {
+              siswa: {
+                include: {
+                  user: { select: { nama: true } },
+                  kelas: {
+                    include: { jenjang: true },
+                  },
                 },
               },
             },
           },
         },
-      },
-      orderBy: { createdAt: "asc" },
-    })
+        orderBy: { createdAt: "asc" },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.pembayaranSiswa.count({ where }),
+    ])
 
     const buktiPaths = pendingPembayaran
       .map((p) => p.urlBukti)
@@ -1460,8 +1534,8 @@ export async function getDaftarPembayaranPendingVerifikasi(): Promise<
 
     return {
       success: true,
-      message: `Ditemukan ${items.length} pembayaran menunggu verifikasi`,
-      data: { total: items.length, items },
+      message: `Ditemukan ${total} pembayaran menunggu verifikasi`,
+      data: paginatedResult(items, total, pagination),
     }
   } catch (error: unknown) {
     return {
@@ -1783,7 +1857,40 @@ export async function getRekapSppPerJenjang(
 //    PENTEST FIX #1: Expose status MENUNGGU_VERIFIKASI & DIBAYAR_SEBAGIAN dengan jelas
 // ========================================================
 
-export async function getTagihanSppSiswa(siswaId: string): Promise<ActionResponse> {
+/**
+ * Rekening tujuan pembayaran yang sedang berlaku (dari konfigurasi DB).
+ * Dipakai halaman Tagihan SPP agar nomor rekening dinamis — sebelumnya
+ * di-hardcode di client sehingga perubahan rekening admin tidak terlihat.
+ */
+export async function getRekeningPembayaran(): Promise<
+  ActionResponse<{
+    bankNama: string
+    bankNoRekening: string
+    bankAtasNama: string
+    kontakWa: string
+    namaKontakWa: string
+  }>
+> {
+  try {
+    await requireAuth()
+    const rekening = await getPengaturanPPDB()
+    return {
+      success: true,
+      message: "Rekening pembayaran berhasil dimuat",
+      data: rekening,
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: toUserFriendlyError(error, "Gagal memuat rekening pembayaran"),
+    }
+  }
+}
+
+export async function getTagihanSppSiswa(
+  siswaId: string,
+  options?: { page?: number; pageSize?: number }
+): Promise<ActionResponse> {
   try {
     const sessionUser = await requireAuth()
 
@@ -1819,16 +1926,24 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
       return { success: false, message: "Hak akses tidak valid" }
     }
 
-    const tagihanList = await prisma.tagihanSiswa.findMany({
-      where: { siswaId, deleted_at: null },
-      include: {
-        pembayaran: {
-          orderBy: { createdAt: "desc" },
-          include: { dikonfirmasiOleh: { select: { nama: true } } },
+    const pagination = normalizePagination(options, { defaultPageSize: 12 })
+    const whereTagihan = { siswaId, deleted_at: null }
+
+    const [tagihanList, totalTagihan] = await Promise.all([
+      prisma.tagihanSiswa.findMany({
+        where: whereTagihan,
+        include: {
+          pembayaran: {
+            orderBy: { createdAt: "desc" },
+            include: { dikonfirmasiOleh: { select: { nama: true } } },
+          },
         },
-      },
-      orderBy: [{ tahun: "desc" }, { bulan: "desc" }],
-    })
+        orderBy: [{ tahun: "desc" }, { bulan: "desc" }],
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.tagihanSiswa.count({ where: whereTagihan }),
+    ])
 
     // Batch: kumpulkan semua urlBukti dari pembayaran terakhir di seluruh tagihan,
     // lalu generate signed URL sekaligus dalam SATU panggilan API
@@ -1907,7 +2022,7 @@ export async function getTagihanSppSiswa(siswaId: string): Promise<ActionRespons
     return {
       success: true,
       message: "Data tagihan & riwayat SPP sukses dimuat",
-      data: formatted,
+      data: paginatedResult(formatted, totalTagihan, pagination),
     }
   } catch (error: unknown) {
     return { success: false, message: toUserFriendlyError(error, "Gagal memuat rincian tagihan") }
@@ -1953,11 +2068,12 @@ export async function getKategoriTransaksiList(): Promise<
  * Riwayat transaksi keuangan terbaru (aktif + dibatalkan) untuk tab Kasir.
  * Hanya ADMIN_KEUANGAN / SUPER_ADMIN.
  */
-export async function getDaftarTransaksiKeuangan(
-  limit: number = 20
-): Promise<
+export async function getDaftarTransaksiKeuangan(options?: {
+  page?: number
+  pageSize?: number
+}): Promise<
   ActionResponse<
-    Array<{
+    Paginated<{
       id: string
       tipe: TipeTransaksi
       kategori: string
@@ -1973,32 +2089,41 @@ export async function getDaftarTransaksiKeuangan(
   try {
     await requireAdminKeuangan()
 
-    const safeLimit = Math.min(Math.max(1, limit), 100)
+    const pagination = normalizePagination(options, { defaultPageSize: 20 })
+    const where = { deleted_at: null }
 
-    const transaksi = await prisma.transaksiKeuangan.findMany({
-      where: { deleted_at: null },
-      include: {
-        kategori: { select: { nama: true } },
-        dibuatOleh: { select: { nama: true } },
-      },
-      orderBy: { tanggal: "desc" },
-      take: safeLimit,
-    })
+    const [transaksi, total] = await Promise.all([
+      prisma.transaksiKeuangan.findMany({
+        where,
+        include: {
+          kategori: { select: { nama: true } },
+          dibuatOleh: { select: { nama: true } },
+        },
+        orderBy: { tanggal: "desc" },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      prisma.transaksiKeuangan.count({ where }),
+    ])
 
     return {
       success: true,
       message: "Riwayat transaksi berhasil dimuat",
-      data: transaksi.map((t) => ({
-        id: t.id,
-        tipe: t.tipe,
-        kategori: t.kategori.nama,
-        deskripsi: t.deskripsi,
-        nominal: Number(t.nominal),
-        tanggal: t.tanggal,
-        status: t.status,
-        alasanPembatalan: t.alasanPembatalan,
-        dibuatOleh: t.dibuatOleh.nama,
-      })),
+      data: paginatedResult(
+        transaksi.map((t) => ({
+          id: t.id,
+          tipe: t.tipe,
+          kategori: t.kategori.nama,
+          deskripsi: t.deskripsi,
+          nominal: Number(t.nominal),
+          tanggal: t.tanggal,
+          status: t.status,
+          alasanPembatalan: t.alasanPembatalan,
+          dibuatOleh: t.dibuatOleh.nama,
+        })),
+        total,
+        pagination,
+      ),
     }
   } catch (error: unknown) {
     return {

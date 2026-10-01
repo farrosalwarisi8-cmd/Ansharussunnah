@@ -123,6 +123,8 @@ model Siswa {
   @@index([kelasId], map: "idx_siswas_kelas")
   @@index([pendaftaranId], map: "idx_siswas_pendaftaran")
   @@index([userId], map: "idx_siswas_user")
+  // Filter daftar siswa: deleted_at IS NULL (lihat migration 20261002010000).
+  @@index([deleted_at], map: "idx_siswas_deleted")
   @@map("siswas")
 }
 
@@ -825,9 +827,17 @@ model Absensi {
   periodeAjaran   PeriodeAjaran  @relation(fields: [periodeAjaranId], references: [id])
   siswa           Siswa          @relation(fields: [siswaId], references: [id], onDelete: Cascade)
 
-  @@unique([siswaId, tanggal, mataPelajaranId], map: "uq_absensi_siswa_tanggal_mapel")
+  // Unique per PERIODE: absensi adalah milik sebuah periode ajaran, sehingga
+  // kombinasi yang sama pada periode berbeda adalah dua baris yang sah (mis.
+  // periode yang tanggalnya saling tumpang tindih atau data koreksi lintas
+  // tahun ajaran). Tanpa periodeAjaranId, baris periode lama bisa memblokir
+  // penulisan periode baru. Lihat migration 20261001000000.
+  @@unique([siswaId, tanggal, mataPelajaranId, periodeAjaranId], map: "uq_absensi_siswa_tanggal_mapel_periode")
   @@index([kelasId, tanggal])
   @@index([siswaId, tanggal])
+  // Index rekap: query rekap kehadiran selalu memfilter siswa + periode lalu
+  // mengurutkan/menjangkau berdasarkan tanggal.
+  @@index([siswaId, periodeAjaranId, tanggal], map: "idx_absensi_siswa_periode_tanggal")
   @@index([mataPelajaranId], map: "idx_absensi_mapel")
   @@index([periodeAjaranId])
   @@index([kelasId], map: "idx_absensi_kelas")
@@ -835,6 +845,8 @@ model Absensi {
   @@index([siswaId], map: "idx_absensi_siswa")
   @@index([siswaId, periodeAjaranId], map: "idx_absensi_siswa_periode")
   @@index([tanggal(sort: Desc)], map: "idx_absensi_tanggal")
+  // Riwayat absensi per siswa diurutkan tanggal desc (lihat migration 20261002010000).
+  @@index([siswaId, tanggal(sort: Desc)], map: "idx_absensi_siswa_tanggal_desc")
   @@map("absensis")
 }
 
@@ -953,6 +965,8 @@ model TagihanSiswa {
   @@index([jenisTagihan], map: "idx_tagihan_jenis")
   @@index([siswaId], map: "idx_tagihan_siswa")
   @@index([status], map: "idx_tagihan_status")
+  // Daftar tagihan satu siswa diurutkan tahun/bulan desc (lihat migration 20261002010000).
+  @@index([siswaId, tahun(sort: Desc), bulan(sort: Desc)], map: "idx_tagihan_siswa_tahun_bulan")
   @@map("tagihan_siswas")
 }
 
@@ -967,6 +981,10 @@ model PembayaranSiswa {
   catatan            String?
   statusPembayaran   StatusPembayaran @default(PENDING) @map("status_pembayaran")
   alasanPenolakan    String?          @map("alasan_penolakan")
+  // Kunci idempotency dari klien: retry submit dengan kunci sama tidak boleh
+  // membuat baris pembayaran kedua. Unik per tagihan (lihat
+  // uq_pembayaran_tagihan_idempotency). NULL = klien lama yang belum mengirim.
+  idempotencyKey     String?          @map("idempotency_key")
   dikonfirmasiOlehId String?          @map("dikonfirmasi_oleh_id")
   waktuKonfirmasi    DateTime?        @map("waktu_konfirmasi") @db.Timestamptz(3)
   createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -974,12 +992,49 @@ model PembayaranSiswa {
   dikonfirmasiOleh   User?            @relation("PembayaranDikonfirmasi", fields: [dikonfirmasiOlehId], references: [id])
   tagihan            TagihanSiswa     @relation(fields: [tagihanId], references: [id], onDelete: Cascade)
 
+  @@unique([tagihanId, idempotencyKey], map: "uq_pembayaran_tagihan_idempotency")
   @@index([tagihanId])
   @@index([tanggalBayar])
   @@index([statusPembayaran], map: "idx_pembayaran_status")
   @@index([tagihanId], map: "idx_pembayaran_tagihan")
   @@index([tanggalBayar(sort: Desc)], map: "idx_pembayaran_tanggal")
+  // Antrian verifikasi: filter status PENDING, urut createdAt (lihat migration 20261002010000).
+  @@index([statusPembayaran, createdAt], map: "idx_pembayaran_status_created")
   @@map("pembayaran_siswas")
+}
+
+// Outbox email: setiap email penting disimpan dulu di sini, lalu dikirim oleh
+// worker (cron) dengan retry/backoff. Tujuan:
+//   - email tidak hilang karena fire-and-forget,
+//   - kegagalan provider bisa dilihat & di-retry admin,
+//   - idempotencyKey mencegah email ganda untuk event yang sama.
+//
+// KEAMANAN: payload memuat HTML lengkap email (termasuk, mis. password akun
+// baru) karena subscriber memang butuh isinya saat retry. Karena itu payload
+// TIDAK PERNAH ditampilkan di UI/log — admin hanya melihat metadata. Log error
+// provider disanitasi sebelum disimpan (lihat src/lib/email-outbox.ts).
+model EmailOutbox {
+  id             String            @id @default(cuid())
+  jenisEmail     String            @map("jenis_email")
+  recipient      String
+  subject        String
+  payload        Json
+  status         StatusEmailOutbox @default(PENDING)
+  attempts       Int               @default(0)
+  lastError      String?           @map("last_error")
+  nextRetryAt    DateTime?         @map("next_retry_at") @db.Timestamptz(3)
+  sentAt         DateTime?         @map("sent_at") @db.Timestamptz(3)
+  // Kunci unik per event bisnis → mencegah email duplikat bila event diproses
+  // ulang. NULL = banyak baris boleh (event tanpa kunci).
+  idempotencyKey String?           @unique @map("idempotency_key")
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  // Worker mengambil baris PENDING yang sudah jatuh tempo retry.
+  @@index([status, nextRetryAt], map: "idx_email_outbox_status_retry")
+  // Daftar admin diurutkan createdAt desc.
+  @@index([createdAt(sort: Desc)], map: "idx_email_outbox_created")
+  @@map("email_outbox")
 }
 
 model KategoriTransaksi {
@@ -1024,6 +1079,8 @@ model TransaksiKeuangan {
   @@index([status], map: "idx_transaksi_status")
   @@index([tanggal(sort: Desc)], map: "idx_transaksi_tanggal")
   @@index([tipe], map: "idx_transaksi_tipe")
+  // Daftar kas: filter deleted_at IS NULL, urut tanggal desc (lihat migration 20261002010000).
+  @@index([deleted_at, tanggal(sort: Desc)], map: "idx_transaksi_deleted_tanggal")
   @@map("transaksi_keuangans")
 }
 
@@ -1200,6 +1257,12 @@ enum StatusPembayaran {
 enum StatusTransaksi {
   AKTIF
   DIBATALKAN
+}
+
+enum StatusEmailOutbox {
+  PENDING
+  SENT
+  FAILED
 }
 
 enum StatusOrangTua {
