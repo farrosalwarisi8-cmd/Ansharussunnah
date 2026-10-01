@@ -454,10 +454,8 @@ model Pendaftaran {
   @@index([createdAt(sort: Desc)], map: "idx_pendaftaran_created")
   @@index([jenjangTujuanId], map: "idx_pendaftaran_jenjang")
   @@index([status], map: "idx_pendaftaran_status")
-  // Komposit untuk daftar pendaftaran: filter status + sort createdAt (GET
-  // /dashboard pendaftaran & halaman verifikasi). Tanpa ini Postgres memakai
-  // satu index status lalu sort in-memory, atau sebaliknya.
   @@index([status, createdAt(sort: Desc)], map: "idx_pendaftaran_status_created")
+  @@index([status, id(sort: Desc)], map: "idx_pendaftaran_status_id")
   // Dua index di bawah dibuat lewat SQL mentah di migrasi. Kalau tidak
   // didaftarkan di sini, `migrate dev` akan menganggapnya drift dan
   // menghapusnya tanpa tanya. Prisma 6.19 belum mendukung klausa `WHERE`
@@ -638,6 +636,8 @@ model Ujian {
   @@index([mataPelajaranId], map: "idx_ujian_mapel")
   @@index([periodeAjaranId], map: "idx_ujian_periode")
   @@index([status], map: "idx_ujian_status")
+  @@index([status, waktuSelesai], map: "idx_ujian_status_waktu_selesai")
+  @@index([kelasId, periodeAjaranId, status], map: "idx_ujian_kelas_periode_status")
   @@map("ujians")
 }
 

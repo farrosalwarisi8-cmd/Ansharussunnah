@@ -93,7 +93,7 @@ export async function requestPasswordReset(
     const { plainOtp, hashedOtp } = await createOtpWithHash()
     const expiredAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000)
 
-    await prisma.passwordResetToken.create({
+    const tokenBaru = await prisma.passwordResetToken.create({
       data: {
         userId: user.id,
         kodeOtpHash: hashedOtp,
@@ -103,7 +103,7 @@ export async function requestPasswordReset(
       },
     })
 
-    await sendEmail({
+    const hasilEmail = await sendEmail({
       to: normalizedEmail,
       subject: "Kode Verifikasi Reset Password",
       html: buildOtpEmail({
@@ -112,6 +112,14 @@ export async function requestPasswordReset(
         expiryMinutes: OTP_EXPIRY_MINUTES,
       }),
     })
+
+    if (!hasilEmail.success) {
+      await prisma.passwordResetToken.update({
+        where: { id: tokenBaru.id },
+        data: { digunakan: true },
+      })
+      console.error("Email OTP gagal dikirim:", hasilEmail.error)
+    }
 
     return genericSuccessResponse
   } catch (error: unknown) {
@@ -254,23 +262,24 @@ export async function resetPassword(
       return { success: false, message: "Token reset tidak valid" }
     }
 
-    const token = await prisma.passwordResetToken.findFirst({
+    const supabaseAdmin = createSupabaseAdmin()
+
+    const claimed = await prisma.passwordResetToken.updateMany({
       where: {
         id: resetTokenId,
         userId: user.id,
         digunakan: false,
         expiredAt: { gte: new Date() },
       },
+      data: { digunakan: true },
     })
 
-    if (!token) {
+    if (claimed.count === 0) {
       return {
         success: false,
         message: "Token reset tidak valid atau sudah kedaluwarsa",
       }
     }
-
-    const supabaseAdmin = createSupabaseAdmin()
 
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       user.authId,
@@ -278,9 +287,6 @@ export async function resetPassword(
     )
 
     if (updateError) {
-      // KEAMANAN (L3): jangan bocorkan detail error Supabase ke pengguna —
-      // bisa mengungkap alasan internal akun. Cukup pesan generik; detail
-      // dicatat di sisi server untuk diagnosis.
       console.error("Password reset updateUserById gagal:", updateError.message)
       return {
         success: false,
@@ -293,19 +299,11 @@ export async function resetPassword(
 
     await prisma.$transaction(
       async (tx) => {
-      await tx.passwordResetToken.update({
-        where: { id: token.id },
-        data: { digunakan: true },
-      })
-
       await tx.passwordResetToken.updateMany({
         where: { userId: user.id, digunakan: false },
         data: { digunakan: true },
       })
 
-      // Akun multi-role berbagi authId yang sama (mis. SISWA + ORANG_TUA).
-      // Perbarui SEMUA record dengan authId tersebut agar flag
-      // mustChangePassword & password cadangan konsisten di tiap role.
       await tx.user.updateMany({
         where: { authId: user.authId },
         data: {

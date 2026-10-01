@@ -7,7 +7,7 @@ import { deriveUniqueUsername } from "@/lib/username";
 import { siswaCocokKelas } from "@/lib/guru-kelas-gender";
 import { requireGuruAdmin } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
-import { getSignedUrl } from "@/lib/storage";
+import { getSignedUrl, getSignedUrls } from "@/lib/storage";
 import { generateSecurePassword } from "@/lib/password";
 import { REKENING_PPDB_DEFAULT } from "@/lib/biaya-ppdb";
 import {
@@ -69,7 +69,7 @@ export async function getPendaftaranList(options?: {
     const [items, total] = await Promise.all([
       prisma.pendaftaran.findMany({
         where: whereCondition,
-        orderBy: { createdAt: sortDirection },
+        orderBy: [{ createdAt: sortDirection }, { id: sortDirection }],
         skip,
         take: limit,
         include: {
@@ -77,8 +77,6 @@ export async function getPendaftaranList(options?: {
           kelasTujuan: true,
           buktiTransfer: { orderBy: { waktuUpload: "desc" } },
           diverifikasiOleh: true,
-          // Jejak konfirmasi kontak wali (pengganti OTP) — panel admin
-          // menampilkan siapa/kapan, dan itu juga yang membuka gerbang DITERIMA.
           kontakWaliDikonfirmasiOleh: true,
         },
       }),
@@ -218,7 +216,15 @@ export async function getPendaftaranDetail(pendaftaranId: string): Promise<
       return { success: false, message: "Data pendaftaran tidak ditemukan" };
     }
 
-    const [signedKK, signedAkte, signedFoto, signedBukti] = await Promise.all([
+    const buktiPaths = pendaftaran.buktiTransfer
+      .map((bt) => bt.urlFile)
+      .filter((u): u is string => !!u && !u.startsWith("http"))
+
+    const signedBuktiMap = buktiPaths.length > 0
+      ? await getSignedUrls("bukti-transfer", buktiPaths)
+      : new Map<string, string | null>()
+
+    const [signedKK, signedAkte, signedFoto] = await Promise.all([
       pendaftaran.dokKartuKeluarga
         ? getSignedUrl("dokumen-pendaftaran", pendaftaran.dokKartuKeluarga)
         : null,
@@ -228,13 +234,14 @@ export async function getPendaftaranDetail(pendaftaranId: string): Promise<
       pendaftaran.dokFoto
         ? getSignedUrl("dokumen-pendaftaran", pendaftaran.dokFoto)
         : null,
-      Promise.all(
-        pendaftaran.buktiTransfer.map(async (bt) => ({
-          id: bt.id,
-          url: await getSignedUrl("bukti-transfer", bt.urlFile),
-        })),
-      ),
-    ]);
+    ])
+
+    const signedBukti = pendaftaran.buktiTransfer.map((bt) => ({
+      id: bt.id,
+      url: bt.urlFile && bt.urlFile.startsWith("http")
+        ? bt.urlFile
+        : (bt.urlFile ? (signedBuktiMap.get(bt.urlFile) ?? null) : null),
+    }))
 
     return {
       success: true,
@@ -312,6 +319,7 @@ export async function verifikasiPendaftaran(
       where: { id: pendaftaranId, deleted_at: null },
       include: {
         buktiTransfer: { orderBy: { waktuUpload: "desc" }, take: 1 },
+        jenjangTujuan: true,
       },
     });
 
@@ -375,8 +383,11 @@ export async function verifikasiPendaftaran(
 
       await prisma.$transaction(
         async (tx) => {
-          await tx.pendaftaran.update({
-            where: { id: pendaftaranId },
+          const claimed = await tx.pendaftaran.updateMany({
+            where: {
+              id: pendaftaranId,
+              status: StatusPendaftaran.MENUNGGU_VERIFIKASI,
+            },
             data: {
               status: StatusPendaftaran.DITOLAK,
               catatanAdmin: catatanAdmin || null,
@@ -385,6 +396,12 @@ export async function verifikasiPendaftaran(
               waktuVerifikasi: new Date(),
             },
           });
+
+          if (claimed.count === 0) {
+            throw new AppError(
+              "Pendaftaran sudah diproses admin lain. Silakan refresh halaman.",
+            );
+          }
 
           if (latestBuktiId) {
             await tx.buktiTransferPendaftaran.update({
@@ -397,6 +414,8 @@ export async function verifikasiPendaftaran(
               },
             });
           }
+
+          return claimed;
         },
         { timeout: 10000, maxWait: 5000 },
       );
@@ -451,7 +470,7 @@ export async function verifikasiPendaftaran(
       if (finalKelasId) {
         const kelas = await prisma.kelas.findUnique({
           where: { id: finalKelasId },
-          include: { _count: { select: { siswa: true } } },
+          include: { _count: { select: { siswa: true } }, jenjang: true },
         });
         if (!kelas) {
           return {
@@ -460,6 +479,15 @@ export async function verifikasiPendaftaran(
               "Kelas tujuan tidak ditemukan. Pilih kelas yang tersedia sebelum menerima pendaftaran.",
           };
         }
+
+        // Validasi jenjang kelas harus sama dengan jenjang tujuan pendaftar
+        if (pendaftaran.jenjangTujuanId && kelas.jenjangId !== pendaftaran.jenjangTujuanId) {
+          return {
+            success: false,
+            message: `Kelas "${kelas.nama}" adalah kelas ${kelas.jenjang?.nama || "lain"} dan tidak sesuai dengan jenjang tujuan pendaftar (${pendaftaran.jenjangTujuan?.nama || "tidak diketahui"}). Pilih kelas yang sesuai.`,
+          };
+        }
+
         if (kelas.kapasitas > 0 && kelas._count.siswa >= kelas.kapasitas) {
           return {
             success: false,
@@ -813,8 +841,11 @@ export async function verifikasiPendaftaran(
               });
             }
 
-            await tx.pendaftaran.update({
-              where: { id: pendaftaranId },
+            const claimed = await tx.pendaftaran.updateMany({
+              where: {
+                id: pendaftaranId,
+                status: StatusPendaftaran.MENUNGGU_VERIFIKASI,
+              },
               data: {
                 status: StatusPendaftaran.DITERIMA,
                 catatanAdmin: catatanAdmin || null,
@@ -823,6 +854,12 @@ export async function verifikasiPendaftaran(
                 waktuVerifikasi: new Date(),
               },
             });
+
+            if (claimed.count === 0) {
+              throw new AppError(
+                "Pendaftaran sudah diproses admin lain. Silakan refresh halaman.",
+              );
+            }
           },
           { timeout: 15000, maxWait: 5000 },
         );

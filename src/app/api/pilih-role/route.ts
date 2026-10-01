@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
   // Find all user records with this authId
   const users = await prisma.user.findMany({
-    where: { authId: authUser.id, deleted_at: null },
+    where: { authId: authUser.id, deleted_at: null, aktif: true },
     select: {
       id: true,
       nama: true,

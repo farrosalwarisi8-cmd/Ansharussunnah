@@ -179,12 +179,23 @@ export const uploadBuktiTransferSchema = z.object({
 export const verifikasiPendaftaranSchema = z.object({
   pendaftaranId: z.string().min(1),
   status: z.enum(["DITERIMA", "DITOLAK"]),
-  catatanAdmin: z.string().optional(),
-  alasanPenolakan: z.string().optional(),
+  catatanAdmin: z.string().max(500).optional(),
+  alasanPenolakan: z.string().trim().min(5, "Alasan penolakan minimal 5 karakter").max(500, "Alasan penolakan maksimal 500 karakter").optional(),
   // Override kelas tujuan saat menerima pendaftaran (opsional). Dipakai bila
   // pendaftar mendaftar tanpa kelas (tidak ada kelas yang cocok gender) sehingga
   // panitia dapat langsung menentukan kelas saat approve.
   kelasTujuanId: z.string().min(1).optional(),
-})
+}).refine(
+  (data) => {
+    if (data.status === "DITOLAK" && (!data.alasanPenolakan || data.alasanPenolakan.trim().length < 5)) {
+      return false
+    }
+    return true
+  },
+  {
+    message: "Alasan penolakan wajib diisi (minimal 5 karakter) jika menolak pendaftaran",
+    path: ["alasanPenolakan"],
+  }
+)
 
 export type VerifikasiPendaftaranValues = z.infer<typeof verifikasiPendaftaranSchema>

@@ -835,76 +835,78 @@ export default function KelolaSiswaPage() {
                         <td className="p-4">
                           <StatusBadge status={s.aktif ? "AKTIF" : "NONAKTIF"} />
                         </td>
-                        <td className="p-4 pr-6 text-right space-x-1.5">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => openEditAkun(s)}
-                            className="rounded-xl text-xs font-semibold"
-                          >
-                            <Key className="h-3 w-3 mr-1" />
-                            Ubah Akun
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              setResetConfirm({
-                                open: true,
-                                userId: s.userId,
-                                nama: s.nama,
-                                type: "SISWA",
-                              })
-                            }
-                            className="rounded-xl text-xs font-semibold"
-                          >
-                            <RotateCcw className="h-3 w-3 mr-1" />
-                            Reset PW
-                          </Button>
-                          {s.orangTua.length > 0 && (
+                        <td className="p-4 pr-6 text-right">
+                          <div className="flex flex-wrap justify-end gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openEditAkun(s)}
+                              className="rounded-xl text-xs font-semibold"
+                            >
+                              <Key className="h-3 w-3 mr-1" />
+                              Ubah Akun
+                            </Button>
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() =>
                                 setResetConfirm({
                                   open: true,
-                                  userId: s.orangTua[0].userId,
-                                  nama: s.orangTua[0].nama,
-                                  type: "ORANG_TUA",
+                                  userId: s.userId,
+                                  nama: s.nama,
+                                  type: "SISWA",
                                 })
                               }
                               className="rounded-xl text-xs font-semibold"
                             >
                               <RotateCcw className="h-3 w-3 mr-1" />
-                              PW Ortu
+                              Reset PW
                             </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() =>
-                              setBerkasModal({ open: true, siswaId: s.id, nama: s.nama })
-                            }
-                            className="rounded-xl text-xs font-semibold"
-                          >
-                            <FileText className="h-3 w-3 mr-1" />
-                            Berkas
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() =>
-                              setHapusConfirm({
-                                open: true,
-                                userId: s.userId,
-                                nama: s.nama,
-                              })
-                            }
-                            className="rounded-xl text-xs font-semibold"
-                          >
-                            <Trash2 className="h-3 w-3 mr-1" />
-                            Hapus
-                          </Button>
+                            {s.orangTua.length > 0 && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  setResetConfirm({
+                                    open: true,
+                                    userId: s.orangTua[0].userId,
+                                    nama: s.orangTua[0].nama,
+                                    type: "ORANG_TUA",
+                                  })
+                                }
+                                className="rounded-xl text-xs font-semibold"
+                              >
+                                <RotateCcw className="h-3 w-3 mr-1" />
+                                PW Ortu
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={() =>
+                                setBerkasModal({ open: true, siswaId: s.id, nama: s.nama })
+                              }
+                              className="rounded-xl text-xs font-semibold"
+                            >
+                              <FileText className="h-3 w-3 mr-1" />
+                              Berkas
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() =>
+                                setHapusConfirm({
+                                  open: true,
+                                  userId: s.userId,
+                                  nama: s.nama,
+                                })
+                              }
+                              className="rounded-xl text-xs font-semibold"
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              Hapus
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -955,12 +957,12 @@ export default function KelolaSiswaPage() {
                       )}
                     </div>
 
-                    <div className="flex gap-2 pt-1">
+                    <div className="grid grid-cols-2 gap-2 pt-1">
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => openEditAkun(s)}
-                        className="flex-1 rounded-xl text-xs min-h-[40px]"
+                        className="rounded-xl text-xs min-h-[40px]"
                       >
                         <Key className="h-3 w-3 mr-1" />
                         Ubah Akun
@@ -971,7 +973,7 @@ export default function KelolaSiswaPage() {
                         onClick={() =>
                           setBerkasModal({ open: true, siswaId: s.id, nama: s.nama })
                         }
-                        className="flex-1 rounded-xl text-xs min-h-[40px]"
+                        className="rounded-xl text-xs min-h-[40px]"
                       >
                         <FileText className="h-3 w-3 mr-1" />
                         Berkas
@@ -987,10 +989,10 @@ export default function KelolaSiswaPage() {
                             type: "SISWA",
                           })
                         }
-                        className="flex-1 rounded-xl text-xs min-h-[40px]"
+                        className="rounded-xl text-xs min-h-[40px]"
                       >
                         <RotateCcw className="h-3 w-3 mr-1" />
-                        Reset PW Siswa
+                        Reset PW
                       </Button>
                       {s.orangTua.length > 0 && (
                         <Button
@@ -1004,10 +1006,10 @@ export default function KelolaSiswaPage() {
                               type: "ORANG_TUA",
                             })
                           }
-                          className="flex-1 rounded-xl text-xs min-h-[40px]"
+                          className="rounded-xl text-xs min-h-[40px]"
                         >
                           <RotateCcw className="h-3 w-3 mr-1" />
-                          PW Orang Tua
+                          PW Ortu
                         </Button>
                       )}
                       <Button
@@ -1020,10 +1022,10 @@ export default function KelolaSiswaPage() {
                             nama: s.nama,
                           })
                         }
-                        className="rounded-xl text-xs min-h-[40px]"
+                        className="col-span-2 rounded-xl text-xs min-h-[40px]"
                       >
                         <Trash2 className="h-3 w-3 mr-1" />
-                        Hapus
+                        Hapus Siswa
                       </Button>
                     </div>
                   </div>

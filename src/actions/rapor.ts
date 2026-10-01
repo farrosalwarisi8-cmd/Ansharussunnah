@@ -204,12 +204,13 @@ async function hitungKehadiran(
   })
 
   const hitung = { HADIR: 0, SAKIT: 0, IZIN: 0, ALPHA: 0 }
+  let total = 0
   for (const a of absensiList) {
     if (!dalamBulan(a.tanggal, bulan)) continue
     hitung[a.status]++
+    total++
   }
 
-  const total = absensiList.length
   const persentase =
     total > 0 ? ((hitung.HADIR / total) * 100).toFixed(1) : "0.0"
 

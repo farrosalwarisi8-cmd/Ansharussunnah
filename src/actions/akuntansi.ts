@@ -688,6 +688,21 @@ export async function submitBuktiPembayaranSpp(
     //   - nominalDibayar dicatat apa adanya; admin yang memvalidasi kesesuaiannya
     await prisma.$transaction(
       async (tx) => {
+      const tagihanSaatIni = await tx.tagihanSiswa.findUnique({
+        where: { id: tagihanId },
+        select: { status: true },
+      })
+      if (!tagihanSaatIni) throw new AppError("Tagihan tidak ditemukan")
+      if (tagihanSaatIni.status === StatusTagihan.SUDAH_BAYAR) {
+        throw new AppError("Tagihan sudah lunas")
+      }
+      if (tagihanSaatIni.status === StatusTagihan.DIBATALKAN) {
+        throw new AppError("Tagihan sudah dibatalkan")
+      }
+      if (tagihanSaatIni.status === StatusTagihan.MENUNGGU_VERIFIKASI) {
+        throw new AppError("Bukti pembayaran sudah diterima dan sedang menunggu verifikasi admin")
+      }
+
       await tx.pembayaranSiswa.create({
         data: {
           tagihanId,
@@ -1122,8 +1137,11 @@ export async function batalkanTagihanSpp(
       }
     }
 
-    await prisma.tagihanSiswa.update({
-      where: { id: tagihanId },
+    const cancelled = await prisma.tagihanSiswa.updateMany({
+      where: {
+        id: tagihanId,
+        status: { not: StatusTagihan.DIBATALKAN },
+      },
       data: {
         status: StatusTagihan.DIBATALKAN,
         alasanPembatalan,
@@ -1131,6 +1149,10 @@ export async function batalkanTagihanSpp(
         waktuPembatalan: new Date(),
       },
     })
+
+    if (cancelled.count === 0) {
+      return { success: false, message: "Tagihan sudah dibatalkan atau tidak dapat dibatalkan" }
+    }
 
     revalidatePath("/dashboard/keuangan")
     return { success: true, message: "Tagihan SPP berhasil dibatalkan" }
@@ -1406,6 +1428,14 @@ export async function getDaftarPembayaranPendingVerifikasi(): Promise<
       orderBy: { createdAt: "asc" },
     })
 
+    const buktiPaths = pendingPembayaran
+      .map((p) => p.urlBukti)
+      .filter((u): u is string => !!u && u.startsWith("spp/"))
+
+    const signedUrlMap = buktiPaths.length > 0
+      ? await getSignedUrls("bukti-spp", buktiPaths)
+      : new Map<string, string | null>()
+
     const items = pendingPembayaran.map((p) => ({
       id: p.id,
       tagihanId: p.tagihanId,
@@ -1421,6 +1451,9 @@ export async function getDaftarPembayaranPendingVerifikasi(): Promise<
       metodeBayar: p.metodeBayar,
       namaBukti: p.namaBukti,
       urlBukti: p.urlBukti,
+      signedUrlBukti: p.urlBukti && p.urlBukti.startsWith("spp/")
+        ? (signedUrlMap.get(p.urlBukti) ?? null)
+        : p.urlBukti,
       catatan: p.catatan,
       waktuUpload: p.createdAt,
     }))
