@@ -281,7 +281,10 @@ export async function getPendaftaranDetail(pendaftaranId: string): Promise<
  * memulihkan pendaftaran ke MENUNGGU_VERIFIKASI dan memproses
  * ulang dari awal.
  */
-export const STALE_PROSES_MS = 15 * 60 * 1000;
+// `export`-free: berkas ini bertanda "use server" yang hanya
+// boleh mengekspor fungsi async. Konstanta ini cukup dipakai
+// internal (lihat pemulihan klaim stale di bawah).
+const STALE_PROSES_MS = 15 * 60 * 1000;
 
 /**
  * Batalkan klaim SEDANG_DIPROSES → kembali ke MENUNGGU_VERIFIKASI.
