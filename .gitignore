@@ -43,3 +43,6 @@ yarn-error.log*
 next-env.d.ts
 .freebuff/
 .env.prod
+
+# recovery data (sensitive — berisi hash password & file pengguna, JANGAN commit)
+/recovery/
