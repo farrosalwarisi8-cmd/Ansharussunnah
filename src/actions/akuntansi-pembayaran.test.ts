@@ -71,12 +71,14 @@ vi.mock("@/lib/prisma", () => ({
 import { submitBuktiPembayaranSpp } from "@/actions/akuntansi"
 import { Prisma } from "@prisma/client"
 
+// URL eksternal ke domain allowlist agar alur verifikasi
+// storage internal dilewati (Google Drive adalah satu-satunya
+// domain eksternal yang diizinkan).
 const payload = {
   tagihanId: "tag-1",
   nominalDibayar: 500000,
   metodeBayar: "Transfer BSI",
-  // URL eksternal agar alur verifikasi storage internal dilewati.
-  urlBukti: "https://drive.example.com/bukti.jpg",
+  urlBukti: "https://drive.google.com/file/d/abc123/view?usp=sharing",
   namaBukti: "bukti.jpg",
   catatan: "Transfer via BSI",
   idempotencyKey: "idem-key-12345678",
@@ -209,5 +211,68 @@ describe("submitBuktiPembayaranSpp — idempotensi & race", () => {
     expect(result.success).toBe(false)
     expect(result.message).toContain("Terlalu banyak")
     expect(mockTransaction).not.toHaveBeenCalled()
+  })
+
+  it("URL eksternal domain arbitrary ditolak (allowlist ketat)", async () => {
+    const result = await submitBuktiPembayaranSpp({
+      ...payload,
+      urlBukti: "https://evil.example.com/bukti.jpg",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("tidak diizinkan")
+    expect(mockTransaction).not.toHaveBeenCalled()
+  })
+
+  it("URL http:// ditolak — hanya https yang diizinkan", async () => {
+    const result = await submitBuktiPembayaranSpp({
+      ...payload,
+      urlBukti: "http://drive.google.com/file/d/abc",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("https")
+    expect(mockTransaction).not.toHaveBeenCalled()
+  })
+
+  it("URL javascript: ditolak (XSS via URL)", async () => {
+    const result = await submitBuktiPembayaranSpp({
+      ...payload,
+      urlBukti: "javascript:alert(1)",
+    })
+
+    expect(result.success).toBe(false)
+    expect(mockTransaction).not.toHaveBeenCalled()
+  })
+
+  it("URL dengan kredensial tersembunyi ditolak", async () => {
+    const result = await submitBuktiPembayaranSpp({
+      ...payload,
+      urlBukti: "https://user:pass@drive.google.com/file/d/abc",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("kredensial")
+    expect(mockTransaction).not.toHaveBeenCalled()
+  })
+
+  it("URL Google Drive yang valid disimpan ternormalisasi", async () => {
+    await submitBuktiPembayaranSpp(payload)
+
+    const arg = mockPembayaranCreate.mock.calls[0][0].data
+    // Fragment dibuang; query dipertahankan.
+    expect(arg.urlBukti).toBe(
+      "https://drive.google.com/file/d/abc123/view?usp=sharing"
+    )
+  })
+
+  it("URL dengan fragment dinormalisasi sebelum disimpan", async () => {
+    await submitBuktiPembayaranSpp({
+      ...payload,
+      urlBukti: "https://drive.google.com/file/d/abc/view#frag",
+    })
+
+    const arg = mockPembayaranCreate.mock.calls[0][0].data
+    expect(arg.urlBukti).toBe("https://drive.google.com/file/d/abc/view")
   })
 })

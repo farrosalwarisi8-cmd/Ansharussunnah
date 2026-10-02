@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/auth"
 import { verifyGuruAksesKelas, getMapelIdYangDiajarDiKelas } from "@/lib/guru-auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getSignedUrls, isExternalUrl } from "@/lib/storage"
+import { validasiUrlEksternal } from "@/lib/validations/external-url"
 import {
   createMateriSchema,
   updateMateriSchema,
@@ -103,6 +104,8 @@ export async function createMateri(
     // Dua bentuk diterima:
     //  1) Path storage internal -> `materi/{kelasId}/...` (diverifikasi di bucket)
     //  2) URL eksternal (Google Drive / cloud) -> `https://...` (diterima apa adanya)
+    // URL tersimpan: internal apa adanya, eksternal ternormalisasi.
+    let urlFileTersimpan = urlFile
     if (urlFile) {
       const expectedPrefix = `materi/${kelasId}/`
       const isInternalPath = urlFile.startsWith("materi/")
@@ -110,6 +113,17 @@ export async function createMateri(
 
       if (!isInternalPath && !isExternalUrl) {
         return { success: false, message: "Struktur lokasi berkas tidak valid" }
+      }
+
+      // URL eksternal WAJIB lolos allowlist domain (Google Drive).
+      // Domain arbitrary, protokol non-https, kredensial, dan
+      // scheme berbahaya DITOLAK. URL tersimpan ternormalisasi.
+      if (isExternalUrl) {
+        const eksternal = validasiUrlEksternal(urlFile)
+        if (!eksternal.ok) {
+          return { success: false, message: eksternal.reason }
+        }
+        urlFileTersimpan = eksternal.normalized
       }
 
       if (isInternalPath) {
@@ -144,7 +158,7 @@ export async function createMateri(
         kelasId,
         targetGender: effectiveTargetGender,
         periodeAjaranId,
-        urlFile: urlFile || null,
+        urlFile: urlFileTersimpan || null,
         urlLink: urlLink || null,
         diunggahOlehId: user.id,
       },
@@ -241,6 +255,14 @@ export async function updateMateri(
       const isExternalUrl = /^https?:\/\//i.test(payload.urlFile)
       if (!isInternalPath && !isExternalUrl) {
         return { success: false, message: "Struktur lokasi berkas tidak valid" }
+      }
+      // URL eksternal WAJIB lolos allowlist domain (Google Drive).
+      if (isExternalUrl) {
+        const eksternal = validasiUrlEksternal(payload.urlFile)
+        if (!eksternal.ok) {
+          return { success: false, message: eksternal.reason }
+        }
+        payload.urlFile = eksternal.normalized
       }
       if (isInternalPath) {
         if (!urlFileCheck(payload.urlFile, expectedPrefix)) {

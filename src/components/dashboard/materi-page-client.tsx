@@ -406,13 +406,31 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
                       )}
                     </div>
 
-                    {(mat.signedUrl || mat.urlFile || mat.urlLink) && (
+                    {(mat.signedUrl || mat.urlLink) && (
                       <Button asChild className="w-full bg-slate-800 hover:bg-slate-800 text-white font-bold rounded-xl min-h-[44px] text-xs">
-                        <a href={mat.signedUrl || mat.urlFile || mat.urlLink || "#"} target="_blank" rel="noreferrer">
+                        {/* Internal files hanya dibuka lewat signed URL;
+                            urlLink adalah link eksternal yang validasi
+                            http(s) sudah dilewatkan saat penyimpanan.
+                            Raw path private (mat.urlFile) TIDAK PERNAH
+                            dipakai sebagai href browser. */}
+                        <a
+                          href={mat.signedUrl || mat.urlLink || undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-disabled={!mat.signedUrl && !mat.urlLink}
+                        >
                           <ExternalLink className="h-3.5 w-3.5 mr-2 text-yellow-400" />
                           Buka &amp; Unduh Materi
                         </a>
                       </Button>
+                    )}
+
+                    {/* Berkas internal ada tapi signed URL gagal dibuat:
+                        tampilkan pesan jelas, jangan expose raw path. */}
+                    {mat.urlFile && !mat.signedUrl && (
+                      <div className="text-xs text-rose-500 font-semibold" role="alert">
+                        ⚠ Berkas materi tidak tersedia atau link kedaluwarsa. Hubungi pengajar.
+                      </div>
                     )}
 
                     {/* Guru actions: Presensi + Edit + Delete */}

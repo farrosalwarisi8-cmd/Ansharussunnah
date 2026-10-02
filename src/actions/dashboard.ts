@@ -87,6 +87,10 @@ export interface RangkumanAdmin {
   ujianPerluDinilai: number
   tugasPerluDinilai: number
   tagihanBelumBayar: number
+  /** Email outbox FAILED — butuh intervensi admin (retry manual). */
+  emailGagal: number
+  /** Email outbox PENDING (belum terkirim, menunggu worker cron). */
+  emailTertunda: number
   daftarUjian: InfoUjianHome[]
 }
 
@@ -563,6 +567,8 @@ export async function getRangkumanAdminHome(): Promise<
       ujianPerluDinilai,
       tugasPerluDinilai,
       tagihanBelumBayar,
+      emailGagal,
+      emailTertunda,
       daftarUjian,
     ] = await Promise.all([
       prisma.siswa.count({ where: { deleted_at: null } }),
@@ -593,6 +599,10 @@ export async function getRangkumanAdminHome(): Promise<
           deleted_at: null,
         },
       }),
+      // Indikator kesehatan outbox email: email FAILED butuh aksi
+      // admin (retry manual); PENDING normal selama worker cron jalan.
+      prisma.emailOutbox.count({ where: { status: "FAILED" } }),
+      prisma.emailOutbox.count({ where: { status: "PENDING" } }),
       prisma.ujian.findMany({
         include: {
           kelas: { select: { nama: true } },
@@ -616,6 +626,8 @@ export async function getRangkumanAdminHome(): Promise<
         ujianPerluDinilai,
         tugasPerluDinilai,
         tagihanBelumBayar,
+        emailGagal,
+        emailTertunda,
         daftarUjian: daftarUjian.map(infoUjianFrom),
       },
     }

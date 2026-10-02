@@ -30,6 +30,7 @@ const {
   mockPendaftaranCount,
   mockPengerjaanUjianCount,
   mockPengumpulanTugasCount,
+  mockEmailOutboxCount,
 } = vi.hoisted(() => ({
   mockRequireRole: vi.fn(),
   mockIsAcademicAdminRole: vi.fn(),
@@ -49,6 +50,7 @@ const {
   mockPendaftaranCount: vi.fn(),
   mockPengerjaanUjianCount: vi.fn(),
   mockPengumpulanTugasCount: vi.fn(),
+  mockEmailOutboxCount: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -65,6 +67,7 @@ vi.mock("@/lib/prisma", () => ({
     pendaftaran: { count: mockPendaftaranCount },
     pengerjaanUjian: { count: mockPengerjaanUjianCount },
     pengumpulanTugas: { count: mockPengumpulanTugasCount },
+    emailOutbox: { count: mockEmailOutboxCount },
   },
 }))
 
@@ -108,6 +111,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockIsAcademicAdminRole.mockReturnValue(false)
   mockRangkumanKosong()
+  mockEmailOutboxCount.mockResolvedValue(0)
 })
 
 // ========================================================
@@ -538,6 +542,8 @@ describe("getRangkumanAdminHome — guard admin", () => {
     mockPengumpulanTugasCount.mockResolvedValue(9)
     mockTagihanCount.mockResolvedValue(11)
     mockUjianFindMany.mockResolvedValue([buatUjianRow()])
+    mockEmailOutboxCount.mockResolvedValueOnce(2) // FAILED
+    mockEmailOutboxCount.mockResolvedValueOnce(5) // PENDING
 
     const result = await getRangkumanAdminHome()
 
@@ -551,6 +557,8 @@ describe("getRangkumanAdminHome — guard admin", () => {
       ujianPerluDinilai: 6,
       tugasPerluDinilai: 9,
       tagihanBelumBayar: 11,
+      emailGagal: 2,
+      emailTertunda: 5,
     })
     expect(result.data?.daftarUjian).toHaveLength(1)
     expect(result.data?.daftarUjian[0]).toMatchObject({

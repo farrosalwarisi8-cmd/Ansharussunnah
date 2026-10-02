@@ -36,6 +36,32 @@ export type HasilKirimEmail =
   | { success: false; error: string }
 
 /**
+ * Batas waktu panggilan provider (ms). Dijaga JAUH DI BAWAH LEASE_MS
+ * (2 menit, lihat src/lib/email-outbox.ts) sehingga panggilan provider
+ * selalu selesai (sukses/gagal/timeout) sebelum masa sewa klaim atomic
+ * habis. Tanpa ini, provider yang hang > 2 menit membuat baris outbox
+ * terlihat "jatuh tempo" lagi → worker kedua bisa mengklaim baris yang
+ * sama dan mengirim email ganda (double-send).
+ */
+export const EMAIL_PROVIDER_TIMEOUT_MS = 30_000
+
+/** Race sebuah promise melawan timer; selalu resolve/reject dalam `ms`. */
+async function denganTimeout<T>(janji: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} melebihi batas waktu ${Math.round(ms / 1000)} detik`)),
+      ms
+    )
+  })
+  try {
+    return await Promise.race([janji, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
  * Kirim email lewat provider. Tidak pernah melempar error — kegagalan
  * dikembalikan sebagai `{ success: false, error }` agar pemanggil (worker
  * outbox) bisa menyimpan status/backoff.
@@ -49,13 +75,17 @@ export async function sendEmailViaProvider({
     return { success: false, error: "RESEND_API_KEY belum dikonfigurasi" }
   }
   try {
-    const { data, error } = await resend.emails.send({
-      from: fromEmail,
-      to: [to],
-      replyTo,
-      subject,
-      html,
-    })
+    const { data, error } = await denganTimeout(
+      resend.emails.send({
+        from: fromEmail,
+        to: [to],
+        replyTo,
+        subject,
+        html,
+      }),
+      EMAIL_PROVIDER_TIMEOUT_MS,
+      "Panggilan provider email"
+    )
 
     if (error) {
       console.error("Email send error:", error)

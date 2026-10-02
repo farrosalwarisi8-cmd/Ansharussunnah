@@ -8,6 +8,7 @@ import { verifyGuruAksesKelas, getMapelIdYangDiajarDiKelas } from "@/lib/guru-au
 import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getSignedUrl, getSignedUrls, isExternalUrl } from "@/lib/storage"
+import { validasiUrlEksternal } from "@/lib/validations/external-url"
 import {
   createTugasSchema,
   updateTugasSchema,
@@ -1037,6 +1038,18 @@ export async function submitTugas(
     const isInternalPath = urlFile.startsWith("submission/")
     const isExternalUrl = /^https?:\/\//i.test(urlFile)
 
+    // URL eksternal WAJIB lolos allowlist domain (Google Drive).
+    // Domain arbitrary, protokol non-https, kredensial, dan
+    // scheme berbahaya DITOLAK. URL tersimpan ternormalisasi.
+    let urlFileTersimpan = urlFile
+    if (isExternalUrl) {
+      const eksternal = validasiUrlEksternal(urlFile)
+      if (!eksternal.ok) {
+        return { success: false, message: eksternal.reason }
+      }
+      urlFileTersimpan = eksternal.normalized
+    }
+
     if (!isExternalUrl) {
       if (!urlFile.startsWith(expectedPrefix)) {
         return {
@@ -1116,7 +1129,7 @@ export async function submitTugas(
         await tx.pengumpulanTugas.update({
           where: { id: existing.id },
           data: {
-            urlFile,
+            urlFile: urlFileTersimpan,
             namaFile,
             ukuranFile,
             waktuKumpul: now,
@@ -1150,7 +1163,7 @@ export async function submitTugas(
       data: {
         tugasId,
         siswaId,
-        urlFile,
+        urlFile: urlFileTersimpan,
         namaFile,
         ukuranFile,
         waktuKumpul: now,

@@ -1781,7 +1781,7 @@ describe("verifikasiPendaftaran — State Machine (SEDANG_DIPROSES)", () => {
     expect(result.message).toContain("antrean verifikasi");
     // Klaim dibatalkan: updateMany SEDANG_DIPROSES → MENUNGGU_VERIFIKASI.
     const rollbackCall = mockPendaftaranUpdateMany.mock.calls.find(
-      (c: [{ where?: { status?: string }; data?: { status?: string } }]) =>
+      (c: any[]) =>
         c[0]?.where?.status === "SEDANG_DIPROSES" &&
         c[0]?.data?.status === "MENUNGGU_VERIFIKASI",
     );
@@ -1804,7 +1804,7 @@ describe("verifikasiPendaftaran — State Machine (SEDANG_DIPROSES)", () => {
     expect(mockDeleteUser).toHaveBeenCalledWith("auth-siswa-uuid");
     // Klaim SEDANG_DIPROSES dibatalkan.
     const rollbackCall = mockPendaftaranUpdateMany.mock.calls.find(
-      (c: [{ where?: { status?: string }; data?: { status?: string } }]) =>
+      (c: any[]) =>
         c[0]?.where?.status === "SEDANG_DIPROSES",
     );
     expect(rollbackCall).toBeDefined();
@@ -1849,7 +1849,7 @@ describe("verifikasiPendaftaran — State Machine (SEDANG_DIPROSES)", () => {
     expect(result.success).toBe(true);
     // Pemulihan benar-benar memindahkan SEDANG_DIPROSES → MENUNGGU_VERIFIKASI.
     const recoveryCall = mockPendaftaranUpdateMany.mock.calls.find(
-      (c: [{ where?: { status?: string }; data?: { status?: string } }]) =>
+      (c: any[]) =>
         c[0]?.where?.status === "SEDANG_DIPROSES" &&
         c[0]?.data?.status === "MENUNGGU_VERIFIKASI",
     );

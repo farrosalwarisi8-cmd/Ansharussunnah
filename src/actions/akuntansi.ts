@@ -31,6 +31,7 @@ import {
   type RekapSppFilterValues,
 } from "@/lib/validations/akuntansi"
 import { sendEmail, buildTagihanSppEmail } from "@/lib/email"
+import { validasiUrlEksternal } from "@/lib/validations/external-url"
 import { getPengaturanPPDB } from "@/lib/biaya-ppdb-server"
 import type { ActionResponse } from "@/types"
 import { Role, StatusTagihan, StatusPembayaran, StatusTransaksi, TipeTransaksi } from "@prisma/client"
@@ -41,6 +42,13 @@ import { normalizePagination, paginatedResult, type Paginated } from "@/lib/pagi
 import { revalidatePath } from "next/cache"
 
 const BULAN_NAMES = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+
+// Batas keras server untuk panel bulk-select "Generate SPP Khusus"
+// (mode tanpa pagination). Mencegah query tak terbatas sekaligus
+// tetap memuat seluruh daftar terfilter untuk keperluan pilih-massa.
+// Dideklarasikan `number` (bukan literal) agar spread ternary
+// pagination/bulk tidak mempersempit tipe `take` di Prisma.
+const MAX_BULK_SISWA: number = 1000
 
 export type LaporanGenerateSpp = Array<{
   jenjangId: string
@@ -336,14 +344,25 @@ export type SiswaUntukTagihanKhusus = {
  * Daftar siswa aktif (dengan tarif SPP dasar & status tagihan bulan tsb)
  * untuk panel "Generate SPP Khusus". Admin bisa memfilter jenjang/kelas.
  */
-export async function getSiswaUntukTagihanKhusus(params: {
-  bulan: number
-  tahun: number
-  jenjangId?: string
-  kelasId?: string
-}): Promise<ActionResponse<SiswaUntukTagihanKhusus[]>> {
+export async function getSiswaUntukTagihanKhusus(
+  params: {
+    bulan: number
+    tahun: number
+    jenjangId?: string
+    kelasId?: string
+  },
+  options?: { page?: number; pageSize?: number }
+): Promise<ActionResponse<SiswaUntukTagihanKhusus[]>> {
   try {
     await requireAdminKeuangan()
+
+    // Query daftar UI: bila klien mengirim page/pageSize, pagination
+    // server-side ditegakkan (maks 100/page). Tanpa pagination,
+    // panel bulk-select memuat daftar terfilter dengan batas keras
+    // server (MAX_BULK_SISWA) agar query tidak pernah tak terbatas.
+    // Scope selalu dibatasi: siswa aktif + filter jenjang/kelas.
+    const pagination = normalizePagination(options)
+    const bulkMode = !options
 
     const siswaList = await prisma.siswa.findMany({
       where: {
@@ -354,6 +373,9 @@ export async function getSiswaUntukTagihanKhusus(params: {
           ? { kelas: { jenjangId: params.jenjangId } }
           : {}),
       },
+      ...(bulkMode
+        ? { take: MAX_BULK_SISWA }
+        : { skip: pagination.skip, take: pagination.take }),
       include: {
         user: { select: { nama: true, email: true } },
         kelas: {
@@ -663,13 +685,26 @@ export async function submitBuktiPembayaranSpp(
     // ✅ Validasi path file & pencegahan path traversal
     // Dua bentuk diterima:
     //  1) Path storage internal -> `spp/{tagihanId}/...` (diverifikasi di bucket)
-    //  2) URL eksternal (Google Drive / cloud) -> `https://...` (diterima apa adanya)
+    //  2) URL eksternal -> WAJIB https + domain allowlist (Google Drive).
+    //     Domain arbitrary, protokol non-https, dan kredensial DITOLAK.
     const expectedPrefix = `spp/${tagihanId}/`
     const isInternalPath = urlBukti.startsWith("spp/")
     const isExternalUrl = /^https?:\/\//i.test(urlBukti)
 
     if (!isInternalPath && !isExternalUrl) {
       return { success: false, message: "Struktur lokasi berkas tidak valid" }
+    }
+
+    // URL yang tersimpan: internal dipakai apa adanya, eksternal
+    // disimpan dalam bentuk ternormalisasi setelah lolos allowlist.
+    let urlBuktiTersimpan = urlBukti
+
+    if (isExternalUrl) {
+      const eksternal = validasiUrlEksternal(urlBukti)
+      if (!eksternal.ok) {
+        return { success: false, message: eksternal.reason }
+      }
+      urlBuktiTersimpan = eksternal.normalized
     }
 
     if (isInternalPath) {
@@ -762,7 +797,7 @@ export async function submitBuktiPembayaranSpp(
               nominalDibayar: new Prisma.Decimal(nominalDibayar),
               tanggalBayar: new Date(),
               metodeBayar,
-              urlBukti,
+              urlBukti: urlBuktiTersimpan,
               namaBukti,
               catatan,
               idempotencyKey: idempotencyKey ?? null,

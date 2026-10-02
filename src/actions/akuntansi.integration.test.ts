@@ -23,12 +23,14 @@ const {
   mockPembayaranSiswaCount,
   mockSiswaFindMany,
   mockTagihanSiswaFindMany,
+  mockGetSignedUrls,
 } = vi.hoisted(() => ({
   mockRequireRole: vi.fn(),
   mockPembayaranSiswaFindMany: vi.fn(),
   mockPembayaranSiswaCount: vi.fn(),
   mockSiswaFindMany: vi.fn(),
   mockTagihanSiswaFindMany: vi.fn(),
+  mockGetSignedUrls: vi.fn().mockResolvedValue(new Map()),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -50,7 +52,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdmin: vi.fn() }))
 vi.mock("@/lib/storage", () => ({
   getSignedUrl: vi.fn(),
   // getDaftarPembayaranPendingVerifikasi memanggil getSignedUrls (jamak).
-  getSignedUrls: vi.fn().mockResolvedValue(new Map()),
+  getSignedUrls: mockGetSignedUrls,
 }))
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 
@@ -215,6 +217,130 @@ describe("getDaftarPembayaranPendingVerifikasi — Full Pipeline", () => {
     // Number("500000.00") === 500000 — should work
     expect(result.data!.items[0].nominalDibayar).toBe(500000)
     expect(result.data!.items[0].nominalTagihan).toBe(500000)
+  })
+
+  it("path internal menghasilkan signed URL dan dikembalikan di signedUrlBukti", async () => {
+    setupAdmin()
+    mockPembayaranSiswaFindMany.mockResolvedValue([
+      {
+        id: "pay-signed",
+        tagihanId: "tag-1",
+        nominalDibayar: dec(500000),
+        metodeBayar: "Transfer BSI",
+        urlBukti: "spp/tag-1/bukti.jpg",
+        namaBukti: "bukti.jpg",
+        catatan: null,
+        createdAt: new Date("2024-03-01T09:30:00Z"),
+        tagihan: {
+          bulan: 3, tahun: 2024, nominal: dec(500000),
+          siswa: {
+            user: { nama: "Ahmad Fauzi" },
+            kelas: { nama: "7A", jenjang: { nama: "Tsawawiyah" } },
+          },
+        },
+      },
+    ])
+    mockPembayaranSiswaCount.mockResolvedValue(1)
+    mockGetSignedUrls.mockResolvedValue(
+      new Map([["spp/tag-1/bukti.jpg", "https://supabase.co/storage/v1/object/sign/bukti-spp/spp/tag-1/bukti.jpg?sig=abc"]])
+    )
+
+    const result = await getDaftarPembayaranPendingVerifikasi()
+
+    // Batch signed URL dipanggil untuk bucket bukti-spp dengan path internal.
+    expect(mockGetSignedUrls).toHaveBeenCalledWith(
+      "bukti-spp",
+      ["spp/tag-1/bukti.jpg"]
+    )
+    // UI memakai signedUrlBukti — raw path private tidak pernah
+    // dipakai sebagai href browser.
+    expect(result.data!.items[0].signedUrlBukti).toBe(
+      "https://supabase.co/storage/v1/object/sign/bukti-spp/spp/tag-1/bukti.jpg?sig=abc"
+    )
+  })
+
+  it("signed URL gagal → signedUrlBukti null (UI menampilkan disabled)", async () => {
+    setupAdmin()
+    mockPembayaranSiswaFindMany.mockResolvedValue([
+      {
+        id: "pay-fail",
+        tagihanId: "tag-1",
+        nominalDibayar: dec(500000),
+        metodeBayar: "Transfer BSI",
+        urlBukti: "spp/tag-1/bukti.jpg",
+        namaBukti: "bukti.jpg",
+        catatan: null,
+        createdAt: new Date("2024-03-01T09:30:00Z"),
+        tagihan: {
+          bulan: 3, tahun: 2024, nominal: dec(500000),
+          siswa: {
+            user: { nama: "Ahmad Fauzi" },
+            kelas: { nama: "7A", jenjang: { nama: "Tsawawiyah" } },
+          },
+        },
+      },
+    ])
+    mockPembayaranSiswaCount.mockResolvedValue(1)
+    // Map kosong = provider signed URL gagal untuk semua path.
+    mockGetSignedUrls.mockResolvedValue(new Map())
+
+    const result = await getDaftarPembayaranPendingVerifikasi()
+
+    expect(result.data!.items[0].signedUrlBukti).toBeNull()
+  })
+
+  it("URL eksternal (Google Drive) diteruskan apa adanya di signedUrlBukti", async () => {
+    setupAdmin()
+    const googleDriveUrl = "https://drive.google.com/file/d/abc123/view"
+    mockPembayaranSiswaFindMany.mockResolvedValue([
+      {
+        id: "pay-ext",
+        tagihanId: "tag-1",
+        nominalDibayar: dec(500000),
+        metodeBayar: "Transfer BSI",
+        urlBukti: googleDriveUrl,
+        namaBukti: "bukti.jpg",
+        catatan: null,
+        createdAt: new Date("2024-03-01T09:30:00Z"),
+        tagihan: {
+          bulan: 3, tahun: 2024, nominal: dec(500000),
+          siswa: {
+            user: { nama: "Ahmad Fauzi" },
+            kelas: { nama: "7A", jenjang: { nama: "Tsawawiyah" } },
+          },
+        },
+      },
+    ])
+    mockPembayaranSiswaCount.mockResolvedValue(1)
+
+    const result = await getDaftarPembayaranPendingVerifikasi()
+
+    // URL eksternal tidak diproses signed URL (bukan path bucket).
+    expect(mockGetSignedUrls).not.toHaveBeenCalled()
+    // URL eksternal yang diizinkan boleh dibuka langsung.
+    expect(result.data!.items[0].signedUrlBukti).toBe(googleDriveUrl)
+  })
+
+  it("user tanpa role admin keuangan tidak dapat memperoleh signed URL", async () => {
+    setupNonAdmin()
+
+    const result = await getDaftarPembayaranPendingVerifikasi()
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("akses")
+    expect(mockPembayaranSiswaFindMany).not.toHaveBeenCalled()
+    expect(mockGetSignedUrls).not.toHaveBeenCalled()
+  })
+
+  it("page size dibatasi maksimal 100", async () => {
+    setupAdmin()
+    mockPembayaranSiswaFindMany.mockResolvedValue([])
+    mockPembayaranSiswaCount.mockResolvedValue(0)
+
+    await getDaftarPembayaranPendingVerifikasi({ page: 1, pageSize: 10000 })
+
+    const call = mockPembayaranSiswaFindMany.mock.calls[0][0]
+    expect(call.take).toBeLessThanOrEqual(100)
   })
 })
 

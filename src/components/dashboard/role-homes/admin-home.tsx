@@ -183,6 +183,11 @@ export function AdminDashboardHome() {
       ]
     : []
 
+  // Indikator kesehatan outbox email: email FAILED butuh
+  // intervensi admin (retry manual) — ditampilkan sebagai alert
+  // agar tidak luput dari perhatian.
+  const adaEmailGagal = (data?.emailGagal ?? 0) > 0
+
   return (
     <div className="space-y-6">
       <DashboardHeader
@@ -200,6 +205,34 @@ export function AdminDashboardHome() {
         />
       ) : (
         <>
+          {adaEmailGagal ? (
+            <div
+              role="alert"
+              className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-200 bg-white text-red-600">
+                <AlertCircle className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-slate-900">
+                  {data?.emailGagal} email gagal terkirim
+                </p>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
+                  Email outbox bernilai FAILED. Gunakan tombol retry pada halaman
+                  Outbox Email untuk mengirim ulang.
+                  {data?.emailTertunda
+                    ? ` ${data.emailTertunda} email lain masih menunggu worker cron.`
+                    : ""}
+                </p>
+              </div>
+              <Button asChild size="sm" variant="destructive" className="shrink-0">
+                <Link href="/dashboard/email-outbox">
+                  Buka Outbox Email
+                </Link>
+              </Button>
+            </div>
+          ) : null}
+
           {/* KPI utama */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
             <StatCard

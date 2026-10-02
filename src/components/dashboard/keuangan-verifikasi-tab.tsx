@@ -20,6 +20,7 @@ type PendingPaymentItem = {
   metodeBayar: string
   namaBukti: string | null
   urlBukti: string | null
+  signedUrlBukti: string | null
   catatan: string | null
   waktuUpload: Date
 }
@@ -113,9 +114,20 @@ export function VerifikasiPembayaranTab() {
                 {p.namaBukti && <div className="text-xs text-slate-500">Bukti: {p.namaBukti}</div>}
                 <div className="text-xs text-slate-400">Waktu upload: {new Date(p.waktuUpload).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
                 {p.urlBukti && (
-                  <a href={p.urlBukti} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-yellow-600 font-bold hover:underline pt-1">
-                    <ExternalLink className="h-3 w-3" /> Buka Foto Bukti Transfer
-                  </a>
+                  p.signedUrlBukti ? (
+                    <a
+                      href={p.signedUrlBukti}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-yellow-600 font-bold hover:underline pt-1"
+                    >
+                      <ExternalLink className="h-3 w-3" /> Buka Foto Bukti Transfer
+                    </a>
+                  ) : (
+                    <div className="text-xs text-rose-500 font-semibold pt-1" role="alert">
+                      ⚠ Berkas bukti tidak tersedia atau link kedaluwarsa. Hubungi admin untuk upload ulang.
+                    </div>
+                  )
                 )}
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-200">
