@@ -12,9 +12,11 @@ import {
 import {
   konfirmasiKontakWali,
   batalkanKonfirmasiKontakWali,
+} from "@/actions/konfirmasi-kontak-wali";
+import {
   METODE_KONFIRMASI,
   type MetodeKonfirmasi,
-} from "@/actions/konfirmasi-kontak-wali";
+} from "@/lib/konfirmasi-kontak-wali";
 import { hitungStatusBerkas, LABEL_BERKAS_UTAMA } from "@/lib/status-berkas";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";

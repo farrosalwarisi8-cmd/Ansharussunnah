@@ -22,9 +22,15 @@ import { toUserFriendlyError } from "@/lib/prisma-error";
 import { revalidatePath } from "next/cache";
 import type { ActionResponse } from "@/types";
 import { z } from "zod";
+import {
+  METODE_KONFIRMASI,
+  type MetodeKonfirmasi,
+} from "@/lib/konfirmasi-kontak-wali";
 
-export const METODE_KONFIRMASI = ["WHATSAPP", "TELEPON", "LANGSUNG"] as const;
-export type MetodeKonfirmasi = (typeof METODE_KONFIRMASI)[number];
+// Konstanta & tipe (METODE_KONFIRMASI, MetodeKonfirmasi) sengaja TIDAK
+// diekspor dari file "use server" ini — Next.js hanya mengizinkan export
+// fungsi async dari file tersebut. Keduanya hidup di
+// @/lib/konfirmasi-kontak-wali agar bisa dipakai client component juga.
 
 const konfirmasiSchema = z.object({
   pendaftaranId: z.string().min(1),
