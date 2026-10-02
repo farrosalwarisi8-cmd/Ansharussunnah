@@ -1,6 +1,6 @@
 // src/actions/verifikasi.test.ts
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const {
   mockPrismaTransaction,
@@ -15,6 +15,7 @@ const {
   mockUserCreate,
   mockOrangTuaFindUnique,
   mockSiswaFindUnique,
+  mockSiswaCreate,
   mockParentStudentCreate,
   mockParentStudentFindUnique,
   mockBuktiTransferUpdate,
@@ -38,6 +39,7 @@ const {
   mockUserCreate: vi.fn(),
   mockOrangTuaFindUnique: vi.fn(),
   mockSiswaFindUnique: vi.fn(),
+  mockSiswaCreate: vi.fn(),
   mockParentStudentCreate: vi.fn(),
   mockParentStudentFindUnique: vi.fn().mockResolvedValue(null),
   mockBuktiTransferUpdate: vi.fn(),
@@ -87,6 +89,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     siswa: {
       findUnique: mockSiswaFindUnique,
+      create: mockSiswaCreate,
       update: mockSiswaUpdate,
     },
     parentStudent: {
@@ -274,6 +277,7 @@ function setupTransactionMock() {
         },
         siswa: {
           findUnique: mockSiswaFindUnique,
+          create: mockSiswaCreate,
         },
         parentStudent: {
           create: mockParentStudentCreate,
@@ -741,9 +745,9 @@ describe("verifikasiPendaftaran — Override Kelas Tujuan (pendaftar tanpa kelas
       .mockResolvedValueOnce({ id: "user-ortu-4", role: "ORANG_TUA" })
       .mockResolvedValueOnce({ id: "user-siswa-4", role: "SISWA" });
     mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-4" });
-    mockSiswaFindUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValue({ id: "siswa-4" });
+    // pendaftaranMinimal punya nisn: null → tidak ada cek NISN, jadi
+    // siswaRecord langsung mendapat nilai ini (simulasi nested create).
+    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-4" });
 
     const result = await verifikasiPendaftaran({
       pendaftaranId: "pend-2",
@@ -778,9 +782,7 @@ describe("verifikasiPendaftaran — Override Kelas Tujuan (pendaftar tanpa kelas
       .mockResolvedValueOnce({ id: "user-ortu-5", role: "ORANG_TUA" })
       .mockResolvedValueOnce({ id: "user-siswa-5", role: "SISWA" });
     mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-5" });
-    mockSiswaFindUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValue({ id: "siswa-5" });
+    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-5" });
 
     const result = await verifikasiPendaftaran({
       pendaftaranId: "pend-2",
@@ -905,6 +907,154 @@ describe("verifikasiPendaftaran - DITERIMA (Atomicity check)", () => {
     expect(mockDeleteUser).toHaveBeenCalledTimes(1);
     expect(mockDeleteUser).toHaveBeenCalledWith("auth-siswa-uuid");
     expect(mockDeleteUser).not.toHaveBeenCalledWith("existing-ortu-uuid");
+  });
+});
+
+// ========================================================
+// DITERIMA — konsistensi row siswa (orphan heal + guard)
+// ========================================================
+
+describe("verifikasiPendaftaran — DITERIMA konsistensi siswa", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // vi.clearAllMocks() TIDAK menghapus implementasi mock — default yang
+    // di-set di sini akan bocor ke describe berikutnya. Reset eksplisit
+    // untuk mocks yang dipakai bersama, lalu kembalikan default hoisted
+    // yang diandalkan describe lain.
+    mockUserFindUnique.mockReset();
+    mockSiswaFindUnique.mockReset();
+    mockSiswaCreate.mockReset();
+    mockUserCreate.mockReset();
+    mockOrangTuaFindUnique.mockReset();
+    mockPendaftaranFindUnique.mockReset();
+    mockParentStudentFindUnique.mockReset().mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    // Bersihkan default yang tersisa agar tidak bocor ke describe berikutnya.
+    mockUserFindUnique.mockReset();
+    mockSiswaFindUnique.mockReset();
+    mockSiswaCreate.mockReset();
+    mockUserCreate.mockReset();
+    mockOrangTuaFindUnique.mockReset();
+    mockPendaftaranFindUnique.mockReset();
+    mockParentStudentFindUnique.mockReset().mockResolvedValue(null);
+  });
+
+  it("orphan heal: user SISWA tanpa row siswas → row siswa dibuat, approval sukses", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranWithEmis);
+    setupAuthMocks();
+    setupTransactionMock();
+    setupSalinMocks();
+
+    // user ORANG_TUA belum ada → dibuat
+    mockUserFindUnique
+      .mockResolvedValueOnce(null) // tx: ortu by authId
+      .mockResolvedValueOnce(null); // tx: ortu by email
+    mockUserCreate.mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA" });
+    mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-1" });
+    // user SISWA SUDAH ADA (orphan) → tidak dibuat user baru
+    mockUserFindUnique.mockResolvedValue({
+      id: "user-siswa-1",
+      role: "SISWA",
+      authId: "auth-siswa-uuid",
+    });
+
+    // siswaRecord tidak ada → orphan. pendaftaranId bebas → create row siswa.
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null) // cek NISN duplikat
+      .mockResolvedValueOnce(null) // siswaRecord → orphan
+      .mockResolvedValueOnce(null) // cek pendaftaranId dipakai
+      .mockResolvedValue({ id: "siswa-baru-1", userId: "user-siswa-1" }); // verifikasi pasca-commit
+    mockSiswaCreate.mockResolvedValue({
+      id: "siswa-baru-1",
+      userId: "user-siswa-1",
+    });
+    mockParentStudentFindUnique.mockResolvedValue(null);
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(true);
+    // Row siswa baru dibuat untuk user yang sudah ada — TANPA user/auth baru.
+    expect(mockSiswaCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: "user-siswa-1",
+          pendaftaranId: "pend-1",
+        }),
+      }),
+    );
+    // ParentStudent tetap dibuat
+    expect(mockParentStudentCreate).toHaveBeenCalled();
+  });
+
+  it("guard: siswa gagal dibuat → approval dibatalkan, auth dibersihkan, status tidak berubah", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranWithEmis);
+    setupAuthMocks();
+    setupTransactionMock();
+
+    mockUserFindUnique
+      .mockResolvedValueOnce(null) // tx: ortu by authId
+      .mockResolvedValueOnce(null); // tx: ortu by email
+    mockUserCreate.mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA" });
+    mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-1" });
+    // user SISWA sudah ada, siswaRecord null, pendaftaranId bebas,
+    // tapi siswa.create gagal (return null) → guard harus melempar.
+    mockUserFindUnique.mockResolvedValue({
+      id: "user-siswa-1",
+      role: "SISWA",
+      authId: "auth-siswa-uuid",
+    });
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null) // cek NISN
+      .mockResolvedValueOnce(null) // siswaRecord
+      .mockResolvedValueOnce(null); // pendaftaranId
+    mockSiswaCreate.mockResolvedValue(null);
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Data siswa gagal dibuat");
+    // Auth user dibersihkan dan klaim SEDANG_DIPROSES dibatalkan.
+    expect(mockDeleteUser).toHaveBeenCalledWith("auth-ortu-uuid");
+    expect(mockDeleteUser).toHaveBeenCalledWith("auth-siswa-uuid");
+    expect(mockPendaftaranUpdateMany).toHaveBeenCalled();
+  });
+
+  it("verifikasi pasca-commit: siswa tidak ditemukan setelah commit → error jujur", async () => {
+    mockPendaftaranFindUnique.mockResolvedValue(pendaftaranWithEmis);
+    setupAuthMocks();
+    setupTransactionMock();
+
+    mockUserFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    mockUserCreate.mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA" });
+    mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-1" });
+    mockUserFindUnique.mockResolvedValue({
+      id: "user-siswa-1",
+      role: "SISWA",
+      authId: "auth-siswa-uuid",
+    });
+    // siswaRecord ada (tx sukses) tapi verifikasi pasca-commit gagal.
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null) // cek NISN
+      .mockResolvedValueOnce({ id: "siswa-1", userId: "user-siswa-1" }) // siswaRecord
+      .mockResolvedValue(null); // verifikasi pasca-commit → tidak ditemukan
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("tidak dapat diverifikasi");
   });
 });
 
@@ -1509,6 +1659,10 @@ describe("verifikasiPendaftaran — Duplikat NISN", () => {
 describe("verifikasiPendaftaran — Gerbang Konfirmasi Kontak Wali", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Test "menolak" di bawah return lebih awal (guard kontak wali) sehingga
+    // Once queue setupDiterimaMinimal tidak terconsumsi — reset agar tidak
+    // menggeser sequencing test berikutnya.
+    mockSiswaFindUnique.mockReset();
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 

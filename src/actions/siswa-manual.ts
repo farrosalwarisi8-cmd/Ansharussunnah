@@ -13,7 +13,7 @@ import { toUserFriendlyError } from "@/lib/prisma-error"
 import { sendEmail, buildPemberitahuanRoleBaruEmail } from "@/lib/email"
 import { normalizePagination, paginatedResult, type Paginated } from "@/lib/pagination"
 import type { ActionResponse } from "@/types"
-import { Role, StatusPendaftaran } from "@prisma/client"
+import { Prisma, Role, StatusPendaftaran } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
 // ========================================================
@@ -412,6 +412,29 @@ export async function createSiswaManual(
       }
     }
 
+    // Verifikasi ulang SETELAH commit: row `siswas` HARUS ada untuk user ini.
+    // User role SISWA tanpa row siswa = data setengah yang merusak seluruh
+    // alur (dashboard wali, akademik, absensi). Bila gagal, auth user yang
+    // baru dibuat dibersihkan agar tidak ada akun yatim — dan kita TIDAK
+    // mengembalikan success:true.
+    const siswaTerverifikasi = await prisma.siswa.findUnique({
+      where: { userId: prismaSiswaUserId },
+      select: { id: true },
+    })
+    if (!siswaTerverifikasi) {
+      console.error(
+        `[createSiswaManual] KONSISTENSI GAGAL: user ${prismaSiswaUserId} tanpa row siswas — membersihkan auth user`,
+      )
+      for (const authId of newlyCreatedAuthIds) {
+        await supabaseAdmin.auth.admin.deleteUser(authId)
+      }
+      return {
+        success: false,
+        message:
+          "Gagal membuat data siswa secara lengkap. Perubahan dibatalkan dan akun auth dibersihkan. Silakan coba lagi.",
+      }
+    }
+
     // Kirim pemberitahuan role baru (TANPA password) jika peran dibuat dari email
     // yang SUDAH punya akun lain (reuse authId). Password tidak pernah dikirim
     // untuk skenario reuse — user memakai password lama.
@@ -600,6 +623,8 @@ type SiswaManualListItem = {
   jenjangNama: string | null
   aktif: boolean
   createdAt: Date
+  /** false = row siswa tanpa User terkait (data tidak lengkap, perlu repair). */
+  dataLengkap: boolean
   orangTua: Array<{
     id: string
     userId: string
@@ -610,7 +635,25 @@ type SiswaManualListItem = {
 }
 
 /**
+ * Metadata diagnostics — HANYA untuk role admin yang sudah lolos
+ * requireGuruAdmin(). Tidak berisi data sensitif, hanya agregat count.
+ */
+type SiswaListDiagnostics = {
+  /** User role SISWA yang tidak punya row siswas (orphan). */
+  orphanUserSiswaCount: number
+  /** Pendaftaran DITERIMA yang tidak punya row siswas. */
+  diterimaTanpaSiswaCount: number
+}
+
+/**
  * Mengambil daftar siswa (termasuk yang dibuat manual) beserta info kelas dan orang tua.
+ *
+ * Sumber data utama: tabel `siswas` dengan filter `deleted_at: null` (soft-deleted
+ * tidak tampil di daftar aktif tetapi tetap bisa diaudit via repair tooling).
+ *
+ * Row siswa tanpa User TIDAK membuat seluruh request gagal — item tetap
+ * dikembalikan dengan nama fallback + flag dataLengkap=false agar admin
+ * bisa melihat dan memperbaikinya (lihat src/actions/reconcile-siswa.ts).
  */
 export async function getDaftarSiswaManual(options?: {
   page?: number
@@ -618,21 +661,31 @@ export async function getDaftarSiswaManual(options?: {
   search?: string
   kelasNama?: string
   jenisKelamin?: "LAKI_LAKI" | "PEREMPUAN"
-}): Promise<ActionResponse<Paginated<SiswaManualListItem>>> {
+}): Promise<
+  ActionResponse<Paginated<SiswaManualListItem> & { diagnostics?: SiswaListDiagnostics }>
+> {
   try {
     await requireGuruAdmin()
 
     const pagination = normalizePagination(options)
     const search = options?.search?.trim()
+    const kelasNama = options?.kelasNama?.trim()
+
+    console.log(
+      `[student-list] request page=${pagination.page} pageSize=${pagination.pageSize} search=${search || "-"} kelas=${kelasNama || "ALL"}`,
+    )
 
     // Filter dikerjakan di server supaya pagination tetap benar: memfilter
     // hanya pada baris yang sudah di-fetch akan menghasilkan hasil yang salah.
-    const where: Record<string, unknown> = { deleted_at: null }
+    const where: Prisma.SiswaWhereInput = { deleted_at: null }
     if (options?.jenisKelamin) {
       where.jenisKelamin = options.jenisKelamin
     }
-    if (options?.kelasNama) {
-      where.kelas = { nama: options.kelasNama }
+    // Filter kelas HANYA diterapkan bila nilai bukan "ALL"/kosong — memfilter
+    // dengan string kosong menghasilkan kelas.nama = "" yang tidak pernah
+    // cocok dan membuat daftar tampak kosong padahal data ada.
+    if (kelasNama && kelasNama !== "ALL") {
+      where.kelas = { nama: kelasNama }
     }
     if (search) {
       where.OR = [
@@ -644,79 +697,137 @@ export async function getDaftarSiswaManual(options?: {
       ]
     }
 
-    const [siswaList, total] = await Promise.all([
-      prisma.siswa.findMany({
-        where,
-        include: {
-          user: {
-            select: {
-              id: true,
-              nama: true,
-              email: true,
-              username: true,
-              aktif: true,
-              createdAt: true,
-            },
-          },
-          kelas: {
-            select: {
-              nama: true,
-              jenjang: {
-                select: { nama: true },
+    // total HARUS berasal dari where yang sama dengan findMany.
+    const total = await prisma.siswa.count({ where })
+
+    // Koreksi page di luar total halaman → halaman terakhir (response konsisten).
+    const totalPages = Math.max(1, Math.ceil(total / pagination.pageSize))
+    const page = Math.min(pagination.page, totalPages)
+    const skip = (page - 1) * pagination.pageSize
+
+    const [siswaList, orphanUserSiswaCount, diterimaTanpaSiswaCount] =
+      await Promise.all([
+        prisma.siswa.findMany({
+          where,
+          include: {
+            user: {
+              select: {
+                id: true,
+                nama: true,
+                email: true,
+                username: true,
+                aktif: true,
+                createdAt: true,
               },
             },
-          },
-          orangTua: {
-            include: {
-              orangTua: {
-                include: {
-                  user: {
-                    select: {
-                      id: true,
-                      nama: true,
-                      email: true,
+            kelas: {
+              select: {
+                nama: true,
+                jenjang: {
+                  select: { nama: true },
+                },
+              },
+            },
+            orangTua: {
+              include: {
+                orangTua: {
+                  include: {
+                    user: {
+                      select: {
+                        id: true,
+                        nama: true,
+                        email: true,
+                      },
                     },
                   },
                 },
               },
             },
           },
-        },
-        orderBy: [{ user: { createdAt: "desc" } }, { id: "desc" }],
-        skip: pagination.skip,
-        take: pagination.take,
-      }),
-      prisma.siswa.count({ where }),
-    ])
+          orderBy: [{ user: { createdAt: "desc" } }, { id: "desc" }],
+          skip,
+          take: pagination.take,
+        }),
+        // Diagnostics orphan — agregat count saja, tanpa data sensitif.
+        prisma.user.count({ where: { role: Role.SISWA, siswa: null } }),
+        prisma.pendaftaran.count({
+          where: {
+            status: StatusPendaftaran.DITERIMA,
+            deleted_at: null,
+            siswa: null,
+          },
+        }),
+      ])
 
-    const formatted: SiswaManualListItem[] = siswaList.map((s) => ({
-      id: s.id,
-      userId: s.user.id,
-      nama: s.user.nama,
-      email: s.user.email,
-      username: s.user.username,
-      nisn: s.nisn,
-      nis: s.nis,
-      jenisKelamin: s.jenisKelamin,
-      kelasNama: s.kelas?.nama || null,
-      jenjangNama: s.kelas?.jenjang?.nama || null,
-      aktif: s.user.aktif,
-      createdAt: s.user.createdAt,
-      orangTua: s.orangTua.map((ps) => ({
-        id: ps.orangTua.id,
-        userId: ps.orangTua.user.id,
-        nama: ps.orangTua.user.nama,
-        email: ps.orangTua.user.email,
-        noHp: ps.orangTua.noHp,
-      })),
-    }))
+    if (total === 0) {
+      console.log("[student-list] empty total=0")
+    } else {
+      console.log(`[student-list] success total=${total} page=${page}`)
+    }
+
+    const formatted: SiswaManualListItem[] = siswaList.map((s) => {
+      if (!s.user) {
+        // Row siswa tanpa user tidak boleh membuat seluruh request gagal.
+        console.warn(`[student-list] orphan: siswa ${s.id} tanpa user`)
+        return {
+          id: s.id,
+          userId: s.userId,
+          nama: "(Data siswa tidak lengkap)",
+          email: "-",
+          username: null,
+          nisn: s.nisn,
+          nis: s.nis,
+          jenisKelamin: s.jenisKelamin,
+          kelasNama: s.kelas?.nama || null,
+          jenjangNama: s.kelas?.jenjang?.nama || null,
+          aktif: false,
+          createdAt: s.createdAt,
+          dataLengkap: false,
+          orangTua: [],
+        }
+      }
+      return {
+        id: s.id,
+        userId: s.user.id,
+        nama: s.user.nama,
+        email: s.user.email,
+        username: s.user.username,
+        nisn: s.nisn,
+        nis: s.nis,
+        jenisKelamin: s.jenisKelamin,
+        kelasNama: s.kelas?.nama || null,
+        jenjangNama: s.kelas?.jenjang?.nama || null,
+        aktif: s.user.aktif,
+        createdAt: s.user.createdAt,
+        dataLengkap: true,
+        orangTua: s.orangTua.map((ps) => ({
+          id: ps.orangTua.id,
+          userId: ps.orangTua.user.id,
+          nama: ps.orangTua.user.nama,
+          email: ps.orangTua.user.email,
+          noHp: ps.orangTua.noHp,
+        })),
+      }
+    })
 
     return {
       success: true,
       message: "Daftar siswa berhasil dimuat",
-      data: paginatedResult(formatted, total, pagination),
+      data: {
+        ...paginatedResult(formatted, total, {
+          page,
+          pageSize: pagination.pageSize,
+          skip,
+          take: pagination.take,
+        }),
+        diagnostics: {
+          orphanUserSiswaCount,
+          diterimaTanpaSiswaCount,
+        },
+      },
     }
   } catch (error: unknown) {
+    console.error("[student-list] failed", error)
     return {
       success: false,
       message: toUserFriendlyError(error, "Gagal memuat daftar siswa"),

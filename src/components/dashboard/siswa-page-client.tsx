@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { ListPagination } from "@/components/ui/list-pagination"
+import { EmptyState } from "@/components/ui/empty-state"
 import dynamic from "next/dynamic"
 const Dialog = dynamic(() => import("@/components/ui/dialog").then(m => m.Dialog), { ssr: false })
 const DialogContent = dynamic(() => import("@/components/ui/dialog").then(m => m.DialogContent), { ssr: false })
@@ -91,6 +92,7 @@ type SiswaListItem = {
   jenjangNama: string | null
   aktif: boolean
   createdAt: string
+  dataLengkap: boolean
   orangTua: Array<{
     id: string
     userId: string
@@ -296,6 +298,9 @@ export default function KelolaSiswaPage() {
   // Data state
   const [siswaList, setSiswaList] = React.useState<SiswaListItem[]>([])
   const [loadingData, setLoadingData] = React.useState(true)
+  // Error server/database TIDAK boleh terlihat sebagai "Belum Ada Siswa":
+  // state ini memisahkan error response dari data kosong yang sah.
+  const [loadError, setLoadError] = React.useState<string | null>(null)
   const [filterKelas, setFilterKelas] = React.useState<string>("ALL")
   const [filterGender, setFilterGender] = React.useState<string>("ALL")
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -355,33 +360,43 @@ export default function KelolaSiswaPage() {
   // Muat satu halaman siswa dengan filter server-side.
   const fetchSiswa = React.useCallback(
     async (targetPage: number) => {
-      const res = await getDaftarSiswaManual({
-        page: targetPage,
-        search: debouncedSearch.trim() || undefined,
-        kelasNama: filterKelas !== "ALL" ? filterKelas : undefined,
-        jenisKelamin:
-          filterGender === "LAKI_LAKI" || filterGender === "PEREMPUAN"
-            ? filterGender
-            : undefined,
-      })
-      if (res.success && res.data) {
-        const data = res.data as unknown as {
-          items: SiswaListItem[]
-          total: number
-          page: number
-          pageSize: number
-          totalPages: number
+      setLoadError(null)
+      try {
+        const res = await getDaftarSiswaManual({
+          page: targetPage,
+          search: debouncedSearch.trim() || undefined,
+          kelasNama: filterKelas !== "ALL" ? filterKelas : undefined,
+          jenisKelamin:
+            filterGender === "LAKI_LAKI" || filterGender === "PEREMPUAN"
+              ? filterGender
+              : undefined,
+        })
+        if (res.success && res.data) {
+          const data = res.data as unknown as {
+            items: SiswaListItem[]
+            total: number
+            page: number
+            pageSize: number
+            totalPages: number
+          }
+          setSiswaList(data.items)
+          setTotal(data.total)
+          setPage(data.page)
+          setTotalPages(data.totalPages)
+          setPageSize(data.pageSize)
+        } else {
+          // Response gagal: tampilkan error state, BUKAN empty state.
+          setLoadError(res.message || "Gagal memuat data siswa")
+          setSiswaList([])
+          setTotal(0)
         }
-        setSiswaList(data.items)
-        setTotal(data.total)
-        setPage(data.page)
-        setTotalPages(data.totalPages)
-        setPageSize(data.pageSize)
-      } else if (res.message) {
-        toast({ title: "Gagal memuat data", description: res.message, variant: "destructive" })
+      } catch {
+        setLoadError("Gagal terhubung ke server. Silakan coba lagi.")
+        setSiswaList([])
+        setTotal(0)
       }
     },
-    [debouncedSearch, filterKelas, filterGender, toast]
+    [debouncedSearch, filterKelas, filterGender]
   )
 
   // Refresh daftar siswa setelah berkas diubah (dipanggil dari modal).
@@ -699,6 +714,13 @@ export default function KelolaSiswaPage() {
     return Array.from(names) as string[]
   }, [availableKelas])
 
+  // Empty state yang berbeda bila filter/search aktif — pesan "Belum ada
+  // siswa" akan menyesatkan admin yang sedang memfilter dan hasilnya kosong.
+  const filterAktif =
+    debouncedSearch.trim() !== "" ||
+    filterKelas !== "ALL" ||
+    filterGender !== "ALL"
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       <DashboardHeader
@@ -769,18 +791,34 @@ export default function KelolaSiswaPage() {
               <Loader2 className="h-6 w-6 animate-spin text-yellow-500" />
               <span className="ml-2 text-sm text-slate-500">Memuat data...</span>
             </div>
+          ) : loadError ? (
+            // Error server/database TIDAK boleh terlihat sebagai "Belum Ada
+            // Siswa" — dengan state ini, kegagalan request selalu terbaca
+            // sebagai error dan bisa di-retry, bukan daftar kosong palsu.
+            <EmptyState
+              variant="error"
+              title="Data siswa gagal dimuat"
+              description={loadError}
+              actionLabel="Coba Lagi"
+              onAction={() => fetchSiswa(page)}
+            />
           ) : siswaList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-center p-12">
-              <div className="w-14 h-14 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-4">
-                <UserCheck className="h-7 w-7" />
-              </div>
-              <h3 className="text-base font-semibold text-slate-800 mb-1">
-                Belum Ada Siswa
-              </h3>
-              <p className="text-sm text-slate-500 max-w-sm">
-                Klik &quot;Tambah Siswa Lama&quot; untuk menambahkan siswa baru ke dalam sistem.
-              </p>
-            </div>
+            // Empty state HANYA untuk response sukses dengan total 0.
+            // Pesan berbeda bila filter/search aktif — "tidak ada siswa"
+            // akan menyesatkan admin yang sedang memfilter.
+            <EmptyState
+              icon={UserCheck}
+              title={
+                filterAktif
+                  ? "Tidak ada siswa yang cocok dengan filter ini."
+                  : "Belum ada data siswa aktif. Tambahkan siswa atau selesaikan approval pendaftaran."
+              }
+              description={
+                filterAktif
+                  ? "Coba ubah kata kunci atau filter kelas/gender."
+                  : "Belum ada data siswa aktif. Tambahkan siswa atau selesaikan approval pendaftaran."
+              }
+            />
           ) : (
             <>
               {/* Desktop Table */}

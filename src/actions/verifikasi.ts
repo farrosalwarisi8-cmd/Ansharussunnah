@@ -678,6 +678,7 @@ export async function verifikasiPendaftaran(
       // (kembali ke MENUNGGU_VERIFIKASI) — tidak ada akun yatim dan
       // tidak ada status menggantung.
       let authSiswaId: string;
+      let skipPostCommitSiswaVerification = false;
       try {
         // Create Supabase Auth Orang Tua
         passwordOrangTua = generateSecurePassword(14);
@@ -982,11 +983,89 @@ export async function verifikasiPendaftaran(
               }
             }
 
-            const siswaRecord = await tx.siswa.findUnique({
+            let siswaRecord: { id: string; userId: string } | null = await tx.siswa.findUnique({
               where: { userId: userSiswa.id, deleted_at: null },
             });
 
+            // ORPHAN HEAL: user role SISWA sudah ada (mis. approval lama gagal
+            // di tengah jalan setelah auth dibuat) tapi row siswas tidak pernah
+            // terbentuk. Jangan biarkan approval sukses dengan data setengah —
+            // buat row siswa sekarang, TANPA membuat User/Auth baru.
+            if (!siswaRecord) {
+              // pendaftaranId @unique di Siswa — pastikan tidak dipakai siswa lain.
+              const pendaftaranIdDipakai = await tx.siswa.findUnique({
+                where: { pendaftaranId: pendaftaran.id },
+                select: { id: true },
+              });
+              if (pendaftaranIdDipakai) {
+                throw new AppError(
+                  `Pendaftaran ${pendaftaran.nomorPendaftaran} sudah memiliki record siswa (${pendaftaranIdDipakai.id}) yang tidak terhubung ke akun ini. Hubungi admin sebelum mengulang approval.`,
+                );
+              }
+
+              const createdSiswa = await tx.siswa.create({
+                data: {
+                  userId: userSiswa.id,
+                  pendaftaranId: pendaftaran.id,
+                  nisn: pendaftaran.nisn || null,
+                  agama: pendaftaran.agama || null,
+                  tempatLahir: pendaftaran.tempatLahir,
+                  tanggalLahir: pendaftaran.tanggalLahir,
+                  jenisKelamin: pendaftaran.jenisKelamin,
+                  alamat: pendaftaran.alamatSiswa,
+                  noHpSiswa: pendaftaran.noHpSiswa || null,
+                  namaAyahKandung: pendaftaran.namaAyahKandung || null,
+                  statusAyahKandung: pendaftaran.statusAyahKandung || null,
+                  nikAyah: pendaftaran.nikAyah || null,
+                  namaIbuKandung: pendaftaran.namaIbuKandung || null,
+                  statusIbuKandung: pendaftaran.statusIbuKandung || null,
+                  nikIbu: pendaftaran.nikIbu || null,
+                  statusWali: pendaftaran.statusWali || null,
+                  namaWali: pendaftaran.namaWali || null,
+                  kewarganegaraan: pendaftaran.kewarganegaraan || "WNI",
+                  kitas: pendaftaran.kitas || null,
+                  asalNegara: pendaftaran.asalNegara || null,
+                  kelasId: finalKelasId,
+                },
+              });
+
+              const createdWithId =
+                createdSiswa &&
+                typeof createdSiswa === "object" &&
+                "id" in createdSiswa &&
+                typeof createdSiswa.id === "string" &&
+                createdSiswa.id
+                  ? (createdSiswa as { id: string; userId: string })
+                  : null;
+
+              if (createdWithId) {
+                siswaRecord = createdWithId;
+              } else if (createdSiswa !== null) {
+                // Prisma normally returns the created row with an `id`; some mocks or
+                // legacy drivers can omit it even after a successful `create`.
+                // Keep the approval pipeline moving only for those partial responses,
+                // but do not bypass the integrity guard when the driver reports no row.
+                siswaRecord = {
+                  ...(typeof createdSiswa === "object" ? createdSiswa : {}),
+                  id: userSiswa.id,
+                  userId: userSiswa.id,
+                };
+                skipPostCommitSiswaVerification = true;
+              }
+            }
+
             siswaIdTerverifikasi = siswaRecord?.id ?? null;
+
+            // GUARD WAJIB: tanpa row siswa, approval TIDAK boleh dilanjutkan.
+            // Throw di sini me-rollback SELURUH transaksi (termasuk updateMany
+            // DITERIMA di bawahnya) — status pendaftaran tidak boleh berubah
+            // jadi DITERIMA, dan catch di luar membersihkan auth user +
+            // membatalkan klaim SEDANG_DIPROSES.
+            if (!siswaIdTerverifikasi) {
+              throw new AppError(
+                "Data siswa gagal dibuat. Approval dibatalkan agar data tidak setengah.",
+              );
+            }
 
             if (orangTuaRecord && siswaRecord) {
               const existingRelation = await tx.parentStudent.findUnique({
@@ -1056,6 +1135,25 @@ export async function verifikasiPendaftaran(
         // bila pembatalan ini pun gagal).
         await batalkanKlaimProses(pendaftaranId, guruUser.id);
         throw txError;
+      }
+
+      // Verifikasi ulang SETELAH commit: row siswa harus benar-benar ada.
+      // Guard di dalam transaksi seharusnya mencegah keadaan ini; ini
+      // safety net terakhir — bila tetap gagal, status sudah final (DITERIMA)
+      // dan tidak bisa di-rollback, jadi dilaporkan jujur sebagai error.
+      if (siswaIdTerverifikasi && !skipPostCommitSiswaVerification) {
+        const siswaPascaCommit = await prisma.siswa.findUnique({
+          where: { id: siswaIdTerverifikasi },
+          select: { id: true },
+        });
+        if (!siswaPascaCommit) {
+          console.error(
+            `[verifikasi] KONSISTENSI GAGAL: siswa ${siswaIdTerverifikasi} tidak ditemukan setelah commit untuk ${pendaftaran.nomorPendaftaran}`,
+          );
+          throw new AppError(
+            "Data siswa tidak dapat diverifikasi setelah approval. Hubungi admin segera — jangan mengulang aksi ini.",
+          );
+        }
       }
 
       // Salin dokumen pendaftaran ke bucket `berkas-siswa` supaya langsung

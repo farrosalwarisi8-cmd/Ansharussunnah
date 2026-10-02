@@ -6,28 +6,34 @@ const {
   mockPrismaTransaction,
   mockUserFindFirst,
   mockUserCreate,
+  mockUserCount,
   mockOrangTuaFindUnique,
   mockSiswaFindUnique,
   mockParentStudentFindUnique,
   mockParentStudentCreate,
   mockKelasFindUnique,
   mockCreateUser,
+  mockDeleteUser,
   mockListUsers,
   mockPendaftaranFindFirst,
+  mockPendaftaranCount,
   mockSiswaFindMany,
   mockSiswaCount,
 } = vi.hoisted(() => ({
   mockPrismaTransaction: vi.fn(),
   mockUserFindFirst: vi.fn(),
   mockUserCreate: vi.fn(),
+  mockUserCount: vi.fn().mockResolvedValue(0),
   mockOrangTuaFindUnique: vi.fn(),
   mockSiswaFindUnique: vi.fn(),
   mockParentStudentFindUnique: vi.fn(),
   mockParentStudentCreate: vi.fn(),
   mockKelasFindUnique: vi.fn(),
   mockCreateUser: vi.fn(),
+  mockDeleteUser: vi.fn().mockResolvedValue({ error: null }),
   mockListUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
   mockPendaftaranFindFirst: vi.fn(),
+  mockPendaftaranCount: vi.fn().mockResolvedValue(0),
   mockSiswaFindMany: vi.fn(),
   mockSiswaCount: vi.fn(),
 }))
@@ -46,6 +52,7 @@ vi.mock("@/lib/prisma", () => ({
     user: {
       findFirst: mockUserFindFirst,
       create: mockUserCreate,
+      count: mockUserCount,
     },
     orangTua: {
       findUnique: mockOrangTuaFindUnique,
@@ -64,6 +71,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     pendaftaran: {
       findFirst: mockPendaftaranFindFirst,
+      count: mockPendaftaranCount,
     },
     $transaction: mockPrismaTransaction,
   },
@@ -74,6 +82,7 @@ vi.mock("@/lib/supabase/admin", () => ({
     auth: {
       admin: {
         createUser: mockCreateUser,
+        deleteUser: mockDeleteUser,
         listUsers: mockListUsers,
       },
     },
@@ -639,5 +648,174 @@ describe("getDaftarSiswaManual", () => {
     expect(mockSiswaFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ skip: 0, take: 100 }),
     )
+  })
+
+  it("tidak mengembalikan siswa soft-deleted", async () => {
+    mockSiswaFindMany.mockResolvedValue([siswaRow])
+    mockSiswaCount.mockResolvedValue(1)
+
+    await getDaftarSiswaManual({ page: 1 })
+
+    expect(mockSiswaFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ deleted_at: null }),
+      }),
+    )
+  })
+
+  it("filter kelas tidak diterapkan bila nilai ALL atau kosong", async () => {
+    mockSiswaFindMany.mockResolvedValue([])
+    mockSiswaCount.mockResolvedValue(0)
+
+    await getDaftarSiswaManual({ page: 1, kelasNama: "ALL" })
+    const whereAll = mockSiswaFindMany.mock.calls[0][0].where
+    expect(whereAll).not.toHaveProperty("kelas")
+
+    await getDaftarSiswaManual({ page: 1, kelasNama: "" })
+    const whereKosong = mockSiswaFindMany.mock.calls[1][0].where
+    expect(whereKosong).not.toHaveProperty("kelas")
+  })
+
+  it("search kosong tidak membuat OR", async () => {
+    mockSiswaFindMany.mockResolvedValue([])
+    mockSiswaCount.mockResolvedValue(0)
+
+    await getDaftarSiswaManual({ page: 1, search: "   " })
+
+    const where = mockSiswaFindMany.mock.calls[0][0].where
+    expect(where).not.toHaveProperty("OR")
+  })
+
+  it("search mencakup nama, email, username, NISN, NIS", async () => {
+    mockSiswaFindMany.mockResolvedValue([])
+    mockSiswaCount.mockResolvedValue(0)
+
+    await getDaftarSiswaManual({ page: 1, search: "ahmad" })
+
+    const where = mockSiswaFindMany.mock.calls[0][0].where
+    expect(where.OR).toEqual(
+      expect.arrayContaining([
+        { user: { nama: { contains: "ahmad", mode: "insensitive" } } },
+        { user: { email: { contains: "ahmad", mode: "insensitive" } } },
+        { user: { username: { contains: "ahmad", mode: "insensitive" } } },
+        { nisn: { contains: "ahmad", mode: "insensitive" } },
+        { nis: { contains: "ahmad", mode: "insensitive" } },
+      ]),
+    )
+  })
+
+  it("total konsisten dengan items dan pagination", async () => {
+    mockSiswaFindMany.mockResolvedValue([siswaRow, siswaRow])
+    mockSiswaCount.mockResolvedValue(2)
+
+    const result = await getDaftarSiswaManual({ page: 1, pageSize: 25 })
+
+    expect(result.data?.total).toBe(2)
+    expect(result.data?.items).toHaveLength(2)
+    expect(result.data?.totalPages).toBe(1)
+  })
+
+  it("page di luar total halaman dikoreksi ke halaman terakhir", async () => {
+    mockSiswaFindMany.mockResolvedValue([siswaRow])
+    mockSiswaCount.mockResolvedValue(1)
+
+    const result = await getDaftarSiswaManual({ page: 99, pageSize: 25 })
+
+    expect(result.data?.page).toBe(1)
+    expect(mockSiswaFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 0 }),
+    )
+  })
+
+  it("siswa tanpa user tidak membuat seluruh response gagal", async () => {
+    mockSiswaFindMany.mockResolvedValue([
+      { ...siswaRow, user: null },
+    ])
+    mockSiswaCount.mockResolvedValue(1)
+
+    const result = await getDaftarSiswaManual({ page: 1 })
+
+    expect(result.success).toBe(true)
+    expect(result.data?.items[0]).toMatchObject({
+      nama: "(Data siswa tidak lengkap)",
+      dataLengkap: false,
+    })
+  })
+
+  it("error Prisma dikembalikan sebagai error response, bukan empty success", async () => {
+    mockSiswaFindMany.mockRejectedValue(new Error("connection failed"))
+    mockSiswaCount.mockResolvedValue(0)
+
+    const result = await getDaftarSiswaManual({ page: 1 })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toBeTruthy()
+  })
+
+  it("mengembalikan diagnostics orphan untuk admin", async () => {
+    mockSiswaFindMany.mockResolvedValue([siswaRow])
+    mockSiswaCount.mockResolvedValue(1)
+    mockUserCount.mockResolvedValue(2)
+    mockPendaftaranCount.mockResolvedValue(1)
+
+    const result = await getDaftarSiswaManual({ page: 1 })
+
+    expect(result.data?.diagnostics).toEqual({
+      orphanUserSiswaCount: 2,
+      diterimaTanpaSiswaCount: 1,
+    })
+  })
+})
+
+// ========================================================
+// createSiswaManual — konsistensi user/siswa
+// ========================================================
+
+describe("createSiswaManual — konsistensi data", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockKelasFindUnique.mockResolvedValue({
+      id: "kelas-1",
+      nama: "7A",
+      jenisKelamin: null,
+    })
+    mockPendaftaranFindFirst.mockResolvedValue(null)
+    mockUserFindFirst.mockResolvedValue(null)
+    mockCreateUser
+      .mockResolvedValueOnce({ data: { user: { id: "auth-ortu" } }, error: null })
+      .mockResolvedValueOnce({ data: { user: { id: "auth-siswa" } }, error: null })
+    setupTransactionMock()
+    mockUserCreate
+      .mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA" })
+      .mockResolvedValue({ id: "user-siswa-1", role: "SISWA" })
+    mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-1" })
+    mockParentStudentFindUnique.mockResolvedValue(null)
+  })
+
+  it("tidak menghasilkan user yatim tanpa row siswas", async () => {
+    // Transaksi berhasil membuat user, tapi row siswa tidak terbentuk.
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null) // cek NISN duplikat
+      .mockResolvedValueOnce(null) // cek NIS duplikat
+      .mockResolvedValue(null) // siswaRecord di tx + verifikasi pasca-commit
+
+    const result = await createSiswaManual(validPayload())
+
+    expect(result.success).toBe(false)
+    expect(result.message).not.toContain("berhasil")
+    // Auth user yang baru dibuat dibersihkan — tidak ada akun yatim.
+    expect(mockDeleteUser).toHaveBeenCalledWith("auth-siswa")
+  })
+
+  it("sukses hanya bila row siswa terverifikasi setelah commit", async () => {
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null) // cek NISN duplikat
+      .mockResolvedValueOnce(null) // cek NIS duplikat
+      .mockResolvedValue({ id: "siswa-1" }) // siswaRecord + verifikasi pasca-commit
+
+    const result = await createSiswaManual(validPayload())
+
+    expect(result.success).toBe(true)
+    expect(mockDeleteUser).not.toHaveBeenCalled()
   })
 })
