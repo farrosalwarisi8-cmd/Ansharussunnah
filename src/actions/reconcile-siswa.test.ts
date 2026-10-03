@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const {
   mockUserFindUnique,
   mockUserFindFirst,
+  mockUserFindMany,
   mockUserCreate,
   mockSiswaFindUnique,
   mockSiswaCreate,
@@ -23,12 +24,14 @@ const {
   mockKelasFindUnique,
   mockPendaftaranFindUnique,
   mockPendaftaranFindMany,
+  mockPendaftaranFindFirst,
   mockPrismaTransaction,
   mockCreateUser,
   mockRevalidatePath,
 } = vi.hoisted(() => ({
   mockUserFindUnique: vi.fn(),
   mockUserFindFirst: vi.fn(),
+  mockUserFindMany: vi.fn(),
   mockUserCreate: vi.fn(),
   mockSiswaFindUnique: vi.fn(),
   mockSiswaCreate: vi.fn(),
@@ -39,6 +42,7 @@ const {
   mockKelasFindUnique: vi.fn(),
   mockPendaftaranFindUnique: vi.fn(),
   mockPendaftaranFindMany: vi.fn().mockResolvedValue([]),
+  mockPendaftaranFindFirst: vi.fn(),
   mockPrismaTransaction: vi.fn(),
   mockCreateUser: vi.fn(),
   mockRevalidatePath: vi.fn(),
@@ -57,6 +61,7 @@ vi.mock("@/lib/prisma", () => ({
     user: {
       findUnique: mockUserFindUnique,
       findFirst: mockUserFindFirst,
+      findMany: mockUserFindMany,
       create: mockUserCreate,
     },
     siswa: {
@@ -76,6 +81,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     pendaftaran: {
       findUnique: mockPendaftaranFindUnique,
+      findFirst: mockPendaftaranFindFirst,
       findMany: mockPendaftaranFindMany,
     },
     $transaction: mockPrismaTransaction,
@@ -96,7 +102,7 @@ vi.mock("next/cache", () => ({
   revalidatePath: mockRevalidatePath,
 }));
 
-import { reconcileSiswa } from "@/actions/reconcile-siswa";
+import { listOrphanSiswaCandidates, reconcileSiswa } from "@/actions/reconcile-siswa";
 
 const adminAkademik = {
   id: "admin-1",
@@ -191,6 +197,41 @@ describe("reconcileSiswa — authorization", () => {
     expect(result.success).toBe(false);
     expect(result.message).toContain("Akses ditolak");
     expect(mockSiswaCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("listOrphanSiswaCandidates — read-only review", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireGuruAdmin.mockResolvedValue(adminAkademik);
+    mockIsAcademicAdminRole.mockReturnValue(true);
+  });
+
+  it("mengembalikan kandidat orphan tanpa mengubah data apa pun", async () => {
+    mockUserFindMany.mockResolvedValue([
+      { id: "user-siswa-1", nama: "Ahmad Fauzi", email: "siswa.reg202600001@sekolah.internal", role: "SISWA", siswa: null },
+      { id: "user-siswa-2", nama: "Budi", email: "siswa.reg202600002@sekolah.internal", role: "SISWA", siswa: { id: "siswa-ada" } },
+    ]);
+    mockPendaftaranFindMany.mockResolvedValue([]);
+    mockPendaftaranFindFirst.mockResolvedValue({
+      id: "pend-1",
+      nomorPendaftaran: "REG-2026-00001",
+      status: "DITERIMA",
+      deleted_at: null,
+    });
+
+    const result = await listOrphanSiswaCandidates();
+
+    expect(result.success).toBe(true);
+    expect(result.data?.summary.total).toBe(1);
+    expect(result.data?.summary.review).toBe(1);
+    expect(result.data?.candidates[0]).toMatchObject({
+      userId: "user-siswa-1",
+      tipe: "USER_TANPA_SISWA",
+      safeToRepair: true,
+    });
+    expect(mockSiswaCreate).not.toHaveBeenCalled();
+    expect(mockPrismaTransaction).not.toHaveBeenCalled();
   });
 });
 

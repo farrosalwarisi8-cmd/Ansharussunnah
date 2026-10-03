@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 import * as fs from "fs";
 import prisma from "../src/lib/prisma";
 
@@ -21,6 +23,17 @@ function loadEnvFile(file: string) {
     // file tidak ada — abaikan
   }
 }
+
+async function safeQueryMany<T>(sql: string): Promise<Array<T>> {
+  try {
+    return await prisma.$queryRawUnsafe<Array<T>>(sql);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[diag-verifikasi] query skipped: ${message}`);
+    return [];
+  }
+}
+
 loadEnvFile(".env");
 loadEnvFile(".env.local");
 
@@ -34,33 +47,34 @@ async function main() {
   console.log(`referensi: jenjang=${jenjangCount}, kelas=${kelasCount}`);
 
   // Pendaftaran dengan jenjangTujuanId yang TIDAK merujuk ke jenjang yang ada.
-  const danglingJenjang = await prisma.$queryRawUnsafe<
-    Array<{ id: string; nomor_pendaftaran: string; jenjang_tujuan_id: string | null }>
-  >(
-    `SELECT p.id, p."nomorPendaftaran" AS "nomor_pendaftaran", p."jenjangTujuanId" AS "jenjang_tujuan_id"
-     FROM "Pendaftaran" p
-     LEFT JOIN "Jenjang" j ON j.id = p."jenjangTujuanId"
-     WHERE p."deleted_at" IS NULL AND p."jenjangTujuanId" IS NOT NULL AND j.id IS NULL`
-  );
+  const danglingJenjang = await safeQueryMany<{
+    id: string;
+    nomor_pendaftaran: string;
+    jenjang_tujuan_id: string | null;
+  }>(`SELECT p.id, p."nomor_pendaftaran" AS "nomor_pendaftaran", p."jenjang_tujuan_id" AS "jenjang_tujuan_id"
+     FROM "pendaftarans" p
+     LEFT JOIN "jenjangs" j ON j.id = p."jenjang_tujuan_id"
+     WHERE p."deleted_at" IS NULL AND p."jenjang_tujuan_id" IS NOT NULL AND j.id IS NULL`);
   console.log(
     `\npendaftaran dengan jenjangTujuanId MENGGANTUNG: ${danglingJenjang.length}`
   );
   for (const r of danglingJenjang) console.log(`  ${r.id} | ${r.nomor_pendaftaran} | jenjangTujuanId=${r.jenjang_tujuan_id}`);
 
-  const nullJenjang = await prisma.pendaftaran.count({
-    where: { deleted_at: null, jenjangTujuanId: null },
-  });
+  const nullJenjangRows = await safeQueryMany<{ count: bigint }>(`SELECT COUNT(*)::bigint AS count
+    FROM "pendaftarans"
+    WHERE "deleted_at" IS NULL AND "jenjang_tujuan_id" IS NULL`);
+  const nullJenjang = Number(nullJenjangRows[0]?.count ?? 0n);
   console.log(`pendaftaran dengan jenjangTujuanId = NULL: ${nullJenjang}`);
 
   // Pendaftaran dengan kelasTujuanId yang tidak merujuk ke kelas yang ada.
-  const danglingKelas = await prisma.$queryRawUnsafe<
-    Array<{ id: string; nomor_pendaftaran: string; kelas_tujuan_id: string | null }>
-  >(
-    `SELECT p.id, p."nomorPendaftaran" AS "nomor_pendaftaran", p."kelasTujuanId" AS "kelas_tujuan_id"
-     FROM "Pendaftaran" p
-     LEFT JOIN "Kelas" k ON k.id = p."kelasTujuanId"
-     WHERE p."deleted_at" IS NULL AND p."kelasTujuanId" IS NOT NULL AND k.id IS NULL`
-  );
+  const danglingKelas = await safeQueryMany<{
+    id: string;
+    nomor_pendaftaran: string;
+    kelas_tujuan_id: string | null;
+  }>(`SELECT p.id, p."nomor_pendaftaran" AS "nomor_pendaftaran", p."kelas_tujuan_id" AS "kelas_tujuan_id"
+     FROM "pendaftarans" p
+     LEFT JOIN "kelas" k ON k.id = p."kelas_tujuan_id"
+     WHERE p."deleted_at" IS NULL AND p."kelas_tujuan_id" IS NOT NULL AND k.id IS NULL`);
   console.log(
     `\npendaftaran dengan kelasTujuanId MENGGANTUNG: ${danglingKelas.length}`
   );

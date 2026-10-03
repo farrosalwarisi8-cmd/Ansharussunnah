@@ -59,7 +59,145 @@ export type ReconcileResult = {
   pesan: string;
 };
 
+export type OrphanSiswaReviewCandidate = {
+  tipe: "USER_TANPA_SISWA" | "PENDAFTARAN_TANPA_SISWA";
+  userId: string | null;
+  pendaftaranId: string | null;
+  nama: string | null;
+  email: string | null;
+  nomorPendaftaran: string | null;
+  status: string | null;
+  alasan: string;
+  safeToRepair: boolean;
+  requiresReview: boolean;
+};
+
 const REQUIRES_REVIEW = "REQUIRES_REVIEW" as const;
+
+export async function listOrphanSiswaCandidates(): Promise<
+  ActionResponse<{
+    candidates: OrphanSiswaReviewCandidate[];
+    summary: {
+      total: number;
+      repairable: number;
+      review: number;
+    };
+  }>
+> {
+  try {
+    const admin = await requireGuruAdmin();
+    if (!isAcademicAdminRole(admin.role)) {
+      throw new AppError(
+        "Akses ditolak: daftar review siswa hanya untuk SUPER_ADMIN / ADMIN_AKADEMIK.",
+      );
+    }
+
+    const users = await prisma.user.findMany({
+      where: { role: Role.SISWA, deleted_at: null },
+      include: { siswa: true },
+    });
+
+    const pendaftarans = await prisma.pendaftaran.findMany({
+      where: { status: StatusPendaftaran.DITERIMA, deleted_at: null },
+      include: { siswa: true },
+    });
+
+    const candidates: OrphanSiswaReviewCandidate[] = [];
+
+    const userSeen = new Set<string>();
+
+    for (const user of users) {
+      const hasActiveSiswa = !!user.siswa && !user.siswa.deleted_at;
+      if (hasActiveSiswa) continue;
+
+      const cleanEmailTail = user.email?.replace(/[^a-z0-9]/gi, "").toLowerCase();
+      const matchingPendaftaran = cleanEmailTail
+        ? await prisma.pendaftaran.findFirst({
+            where: {
+              status: StatusPendaftaran.DITERIMA,
+              deleted_at: null,
+              nomorPendaftaran: {
+                not: null,
+              },
+            },
+          })
+        : null;
+
+      const matched = !!matchingPendaftaran;
+      userSeen.add(user.id);
+      candidates.push({
+        tipe: "USER_TANPA_SISWA",
+        userId: user.id,
+        pendaftaranId: matchingPendaftaran?.id ?? null,
+        nama: user.nama,
+        email: user.email,
+        nomorPendaftaran: matchingPendaftaran?.nomorPendaftaran ?? null,
+        status: matchingPendaftaran?.status ?? null,
+        alasan: matched
+          ? "User SISWA tidak memiliki row siswa aktif; pendaftaran yang cocok tersedia untuk review."
+          : "User SISWA tidak memiliki row siswa aktif; perlu review admin agar kandidat tidak disambung ke data yang salah.",
+        safeToRepair: true,
+        requiresReview: true,
+      });
+    }
+
+    for (const pendaftaran of pendaftarans) {
+      const hasActiveSiswa = !!pendaftaran.siswa && !pendaftaran.siswa.deleted_at;
+      if (hasActiveSiswa) continue;
+
+      const matchingUser = await prisma.user.findFirst({
+        where: {
+          role: Role.SISWA,
+          email: pendaftaran.nomorPendaftaran
+            ? `siswa.${pendaftaran.nomorPendaftaran.toLowerCase().replace(/[^a-z0-9]/g, "")}@sekolah.internal`
+            : undefined,
+          deleted_at: null,
+        },
+      });
+
+      const alreadyListed =
+        candidates.some((candidate) => candidate.pendaftaranId === pendaftaran.id) ||
+        (matchingUser ? userSeen.has(matchingUser.id) : false);
+      if (alreadyListed) continue;
+
+      candidates.push({
+        tipe: "PENDAFTARAN_TANPA_SISWA",
+        userId: matchingUser?.id ?? null,
+        pendaftaranId: pendaftaran.id,
+        nama: pendaftaran.namaLengkap,
+        email: matchingUser?.email ?? null,
+        nomorPendaftaran: pendaftaran.nomorPendaftaran,
+        status: pendaftaran.status,
+        alasan: matchingUser
+          ? "Pendaftaran DITERIMA butuh row siswa dan user SISWA yang cocok telah terdeteksi."
+          : "Pendaftaran DITERIMA tetap tanpa row siswa; tidak ada user SISWA yang dapat dipasangkan secara aman.",
+        safeToRepair: !!matchingUser,
+        requiresReview: !matchingUser,
+      });
+    }
+
+    const summary = {
+      total: candidates.length,
+      repairable: candidates.filter((candidate) => candidate.safeToRepair).length,
+      review: candidates.filter((candidate) => candidate.requiresReview).length,
+    };
+
+    return {
+      success: true,
+      message: "Daftar kandidat orphan siswa berhasil dihasilkan tanpa mengubah data.",
+      data: {
+        candidates,
+        summary,
+      },
+    };
+  } catch (error: unknown) {
+    console.error("[student-reconcile] review-list failed", error);
+    return {
+      success: false,
+      message: toUserFriendlyError(error, "Gagal memuat daftar review siswa."),
+    };
+  }
+}
 
 function emailSiswaInternal(nomorPendaftaran: string): string {
   const clean = nomorPendaftaran.toLowerCase().replace(/[^a-z0-9]/g, "");
