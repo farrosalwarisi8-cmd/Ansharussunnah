@@ -83,7 +83,11 @@ model Siswa {
   agama             String?
   tempatLahir       String?             @map("tempat_lahir")
   tanggalLahir      DateTime?           @map("tanggal_lahir") @db.Timestamptz(3)
-  jenisKelamin      JenisKelamin        @map("jenis_kelamin")
+  // Nullable SEBAGAI representasi jujur data hasil pemulihan insiden 2026-10-02:
+  // row siswa yang direkonstruksi dari akun yatim tidak punya sumber gender
+  // (kolom aslinya NOT NULL, datanya hilang saat wipe). NULL = "belum diketahui",
+  // bukan "campuran". Form/create selalu mengisi nilai ini.
+  jenisKelamin      JenisKelamin?       @map("jenis_kelamin")
   alamat            String?
   kelasId           String?             @map("kelas_id")
   pendaftaranId     String?             @unique @map("pendaftaran_id")

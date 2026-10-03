@@ -46,3 +46,6 @@ next-env.d.ts
 
 # recovery data (sensitive — berisi hash password & file pengguna, JANGAN commit)
 /recovery/
+
+# artefak uji end-to-end (screenshot + snapshot relasi — jangan commit)
+.tmp-e2e/

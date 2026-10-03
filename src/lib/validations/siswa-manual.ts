@@ -232,3 +232,59 @@ export const updateAkunSiswaSchema = z
   )
 
 export type UpdateAkunSiswaValues = z.infer<typeof updateAkunSiswaSchema>
+
+/**
+ * Schema untuk membuat akun orang tua BARU dari dialog "Tautkan Orang Tua"
+ * (Kelola Siswa). Hanya data kontak minimal — sisanya dilengkapi orang tua
+ * sendiri saat login. No HP & alamat opsional agar tautan darurat (kasus
+ * data hilang) tidak terhambat; keduanya bisa dilengkapi belakangan.
+ */
+export const tambahOrangTuaSchema = z.object({
+  nama: z
+    .string()
+    .trim()
+    .min(3, "Nama orang tua minimal 3 karakter")
+    .max(100, "Nama orang tua maksimal 100 karakter"),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("Format email tidak valid")
+    .max(254, "Email terlalu panjang"),
+  noHp: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (val) => !val || (/^\d{10,15}$/.test(val) && /^[0-9+]+$/.test(val)),
+      "No HP harus 10-15 digit angka"
+    ),
+  alamat: z.string().trim().max(255, "Alamat terlalu panjang").optional(),
+})
+
+export type TambahOrangTuaValues = z.infer<typeof tambahOrangTuaSchema>
+
+/**
+ * Schema untuk melengkapi/mengedit data riwayat siswa dari halaman Kelola
+ * Siswa (gender, kelas, NISN, NIS).
+ *
+ * Konteks: data hasil pemulihan insiden 2026-10-02 kehilangan gender, kelas,
+ * dan NISN/NIS — sehingga ketiganya justru field utama yang harus dilengkapi
+ * admin. `jenisKelamin` WAJIB karena kolomnya penentu kecocokan kelas & filter
+ * konten (ujian/materi khusus gender).
+ */
+export const updateDataSiswaSchema = z
+  .object({
+    jenisKelamin: z.enum(["LAKI_LAKI", "PEREMPUAN"], {
+      errorMap: () => ({ message: "Pilih jenis kelamin" }),
+    }),
+    // "" = siswa belum punya kelas; undefined = tidak diubah.
+    kelasId: z.string().optional(),
+    nisn: z
+      .string()
+      .optional()
+      .refine((val) => !val || /^\d{10}$/.test(val), "NISN harus 10 digit angka"),
+    nis: z.string().optional(),
+  })
+
+export type UpdateDataSiswaValues = z.infer<typeof updateDataSiswaSchema>

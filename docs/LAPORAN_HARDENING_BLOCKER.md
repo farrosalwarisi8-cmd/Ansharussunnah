@@ -98,6 +98,40 @@ Semua migrasi **sudah diaplikasikan** ke database live (lihat `npx prisma migrat
 
 **Status pemulihan**: **SEBAGAIAN** — skema 100% pulih (34 migrasi applied, `migrate status` up to date); **DATA BELUM PULIH**.
 
+### Pemulihan lanjutan 2026-10-03 — `siswas` / `orang_tuas` / `parent_students`
+
+Gejala yang dilaporkan: menu **Kelola Siswa** menampilkan `Daftar Siswa (0 Siswa)`
+padahal akun login siswa & orang tua ada. Penyebabnya bukan bug query — ketiga
+tabel relasi keluarga masih kosong setelah insiden wipe di atas, sementara
+tabel `users` sudah dipulihkan oleh `scripts/pulihkan-users.ts` (126 akun).
+
+Yang dilakukan (semuanya **INSERT saja**, idempoten, tanpa UPDATE/DELETE):
+
+| Aksi | Detail |
+|------|--------|
+| Migration `20261003010000_siswas_jenis_kelamin_nullable` | `ALTER TABLE siswas ALTER COLUMN jenis_kelamin DROP NOT NULL` — gender hasil rekonstruksi tidak punya sumber data, diwakili `NULL` ("belum diketahui"), bukan nilai karangan. Non-destruktif. |
+| `scripts/pulihkan-siswa-ortu.ts --apply` | 67 row `siswas` (dari 67 akun `users` role SISWA), 57 row `orang_tuas`, 57 relasi `parent_students`. |
+| Relasi anak↔ortu | Dipasangkan dari selisih `users.created_at` ≤ 5 detik (transaksi pembuatan yang sama; selisih terukur 0,3–2,2 detik, tanpa ambiguitas). |
+| Verifikasi | `npx tsx scripts/verifikasi-daftar-siswa.ts` → `siswas=67 orang_tuas=57 parent_students=57`, `users=126` (tidak berkurang). |
+
+**Yang TIDAK bisa dipulihkan** (tidak ada sumber data yang selamat): gender,
+NISN/NIS, tanggal lahir, alamat, kelas, dan No. HP orang tua — kolomnya dibiarkan
+`NULL` dan wajib dilengkapi admin. **10 siswa** tidak punya relasi orang tua yang
+bisa dipasangkan secara aman (kemungkinan akun ortu reuse dari pendaftaran
+sebelumnya) — daftarnya dicetak oleh script. Pemulihan **fidelitas penuh** tetap
+hanya lewat restore backup Supabase (PITR) seperti langkah 1 di atas.
+
+**Penuntasan manual oleh admin** (fitur baru, INSERT saja, idempoten): menu
+**Kelola Siswa** → chip filter **"Tanpa Orang Tua"** (filter di server lewat
+`getDaftarSiswaManual({ tanpaOrangTua: true })`, jadi total & pagination tetap
+benar) → tombol **"Tautkan Ortu"** per baris → pilih akun ortu yang sudah ada
+(`getDaftarOrangTuaUntukTautan`) **atau** buat akun baru langsung dari dialog
+yang sama (`createOrangTuaBaruDanTautkan`; password baru ditampilkan sekali).
+Relasi dibuat oleh `tautkanOrangTuaSiswa`. Data riwayat siswa (gender, kelas,
+NISN/NIS) dilengkapi lewat tombol **"Lengkapi Data"** per baris →
+`updateDataSiswaManual` (UPDATE satu row `siswas`; field yang tidak dikirim
+tidak diubah, validasi kecocokan gender↔kelas & unik NISN/NIS tetap berlaku).
+
 **Target waktu restore**: **≤ 2026-10-02 03:27 UTC**. Bukti: baris migrasi `20260829000000` gagal (`finished_at = NULL`, logs "A migration failed to apply...") pada upaya pertama ~03:27:10 UTC; replay yang berhasil dimulai 03:32:30 UTC. Data terakhir kali utuh sebelum 03:27 UTC.
 
 **Yang harus dilakukan manusia (tidak bisa dari kode) — BLOKIR**:

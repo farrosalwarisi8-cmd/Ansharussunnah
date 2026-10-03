@@ -116,9 +116,8 @@ export async function listOrphanSiswaCandidates(): Promise<
             where: {
               status: StatusPendaftaran.DITERIMA,
               deleted_at: null,
-              nomorPendaftaran: {
-                not: null,
-              },
+              // nomorPendaftaran wajib isi (String @unique, non-null) — tidak
+              // perlu difilter; filter `not: null` bahkan tidak valid di tipe Prisma.
             },
           })
         : null;

@@ -19,6 +19,9 @@ const {
   mockPendaftaranCount,
   mockSiswaFindMany,
   mockSiswaCount,
+  mockUserFindMany,
+  mockOrangTuaCreate,
+  mockSiswaUpdate,
 } = vi.hoisted(() => ({
   mockPrismaTransaction: vi.fn(),
   mockUserFindFirst: vi.fn(),
@@ -36,6 +39,9 @@ const {
   mockPendaftaranCount: vi.fn().mockResolvedValue(0),
   mockSiswaFindMany: vi.fn(),
   mockSiswaCount: vi.fn(),
+  mockUserFindMany: vi.fn(),
+  mockOrangTuaCreate: vi.fn(),
+  mockSiswaUpdate: vi.fn(),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -51,16 +57,19 @@ vi.mock("@/lib/prisma", () => ({
   default: {
     user: {
       findFirst: mockUserFindFirst,
+      findMany: mockUserFindMany,
       create: mockUserCreate,
       count: mockUserCount,
     },
     orangTua: {
       findUnique: mockOrangTuaFindUnique,
+      create: mockOrangTuaCreate,
     },
     siswa: {
       findUnique: mockSiswaFindUnique,
       findMany: mockSiswaFindMany,
       count: mockSiswaCount,
+      update: mockSiswaUpdate,
     },
     parentStudent: {
       findUnique: mockParentStudentFindUnique,
@@ -97,8 +106,19 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }))
 
-import { createSiswaManual, getDaftarSiswaManual } from "@/actions/siswa-manual"
-import type { SiswaManualFormValues } from "@/lib/validations/siswa-manual"
+import {
+  createSiswaManual,
+  getDaftarSiswaManual,
+  getDaftarOrangTuaUntukTautan,
+  tautkanOrangTuaSiswa,
+  createOrangTuaBaruDanTautkan,
+  updateDataSiswaManual,
+} from "@/actions/siswa-manual"
+import { revalidatePath } from "next/cache"
+import type {
+  SiswaManualFormValues,
+  UpdateDataSiswaValues,
+} from "@/lib/validations/siswa-manual"
 
 // ========================================================
 // Helper: payload valid untuk siswa manual
@@ -147,6 +167,7 @@ function setupTransactionMock() {
         },
         orangTua: {
           findUnique: mockOrangTuaFindUnique,
+          create: mockOrangTuaCreate,
         },
         siswa: {
           findUnique: mockSiswaFindUnique,
@@ -704,6 +725,38 @@ describe("getDaftarSiswaManual", () => {
     )
   })
 
+  it("filter tanpaOrangTua diterapkan di server (total & pagination ikut)", async () => {
+    mockSiswaFindMany.mockResolvedValue([siswaRow])
+    mockSiswaCount.mockResolvedValue(1)
+
+    const result = await getDaftarSiswaManual({ page: 1, tanpaOrangTua: true })
+
+    expect(result.success).toBe(true)
+    expect(mockSiswaFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ orangTua: { none: {} } }),
+      }),
+    )
+    expect(mockSiswaCount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ orangTua: { none: {} } }),
+      }),
+    )
+  })
+
+  it("tanpa filter tanpaOrangTua, relasi orang tua tidak dibatasi", async () => {
+    mockSiswaFindMany.mockResolvedValue([siswaRow])
+    mockSiswaCount.mockResolvedValue(1)
+
+    await getDaftarSiswaManual({ page: 1 })
+
+    expect(mockSiswaCount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({ orangTua: expect.anything() }),
+      }),
+    )
+  })
+
   it("total konsisten dengan items dan pagination", async () => {
     mockSiswaFindMany.mockResolvedValue([siswaRow, siswaRow])
     mockSiswaCount.mockResolvedValue(2)
@@ -817,5 +870,588 @@ describe("createSiswaManual — konsistensi data", () => {
 
     expect(result.success).toBe(true)
     expect(mockDeleteUser).not.toHaveBeenCalled()
+  })
+})
+
+// ========================================================
+// getDaftarOrangTuaUntukTautan — pilihan ortu untuk tautan
+// ========================================================
+
+describe("getDaftarOrangTuaUntukTautan", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUserFindMany.mockResolvedValue([
+      {
+        id: "u-ortu-1",
+        nama: "Budi Santoso",
+        email: "budi@mail.com",
+        orangTua: { noHp: "081234567890", _count: { siswa: 2 } },
+      },
+      {
+        id: "u-ortu-2",
+        nama: "Siti Aminah",
+        email: "siti@mail.com",
+        orangTua: null,
+      },
+    ])
+  })
+
+  it("memetakan daftar ortu beserta jumlah anak (profil null aman)", async () => {
+    const result = await getDaftarOrangTuaUntukTautan()
+
+    expect(result.success).toBe(true)
+    expect(result.data).toEqual([
+      {
+        userId: "u-ortu-1",
+        nama: "Budi Santoso",
+        email: "budi@mail.com",
+        noHp: "081234567890",
+        jumlahAnak: 2,
+      },
+      {
+        userId: "u-ortu-2",
+        nama: "Siti Aminah",
+        email: "siti@mail.com",
+        noHp: null,
+        jumlahAnak: 0,
+      },
+    ])
+  })
+
+  it("hanya mengambil role ORANG_TUA yang belum di-soft-delete", async () => {
+    await getDaftarOrangTuaUntukTautan()
+
+    expect(mockUserFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ role: "ORANG_TUA", deleted_at: null }),
+      }),
+    )
+  })
+
+  it("meneruskan pencarian nama/email ke server", async () => {
+    await getDaftarOrangTuaUntukTautan({ search: "budi" })
+
+    expect(mockUserFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { nama: { contains: "budi", mode: "insensitive" } },
+            { email: { contains: "budi", mode: "insensitive" } },
+          ],
+        }),
+      }),
+    )
+  })
+
+  it("error database menjadi error response, bukan data kosong", async () => {
+    mockUserFindMany.mockRejectedValue(new Error("connection failed"))
+
+    const result = await getDaftarOrangTuaUntukTautan()
+
+    expect(result.success).toBe(false)
+    expect(result.data).toBeUndefined()
+  })
+})
+
+// ========================================================
+// tautkanOrangTuaSiswa — relasi parent_students (INSERT saja)
+// ========================================================
+
+describe("tautkanOrangTuaSiswa — menautkan ortu ke siswa", () => {
+  const siswaUser = {
+    id: "user-siswa-1",
+    nama: "Ahmad Fauzi",
+    role: "SISWA",
+    siswa: { id: "siswa-1", deleted_at: null },
+  }
+  const ortuUser = {
+    id: "user-ortu-1",
+    nama: "Bapak Ahmad",
+    role: "ORANG_TUA",
+    createdAt: new Date("2026-10-02T03:28:32.000Z"),
+    orangTua: { id: "ortu-1", noHp: null },
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUserFindFirst.mockImplementation(
+      async (args: { where: { role?: string } }) => {
+        if (args?.where?.role === "SISWA") return siswaUser
+        if (args?.where?.role === "ORANG_TUA") return ortuUser
+        return null
+      },
+    )
+    mockParentStudentFindUnique.mockResolvedValue(null)
+    mockParentStudentCreate.mockResolvedValue({ id: "ps-1" })
+    mockOrangTuaCreate.mockResolvedValue({ id: "ortu-baru" })
+  })
+
+  it("menolak id kosong tanpa query database", async () => {
+    const result = await tautkanOrangTuaSiswa("", "user-ortu-1")
+
+    expect(result.success).toBe(false)
+    expect(mockUserFindFirst).not.toHaveBeenCalled()
+    expect(mockParentStudentCreate).not.toHaveBeenCalled()
+  })
+
+  it("menolak siswa yang ditautkan ke akunnya sendiri", async () => {
+    const result = await tautkanOrangTuaSiswa("user-siswa-1", "user-siswa-1")
+
+    expect(result.success).toBe(false)
+    expect(mockParentStudentCreate).not.toHaveBeenCalled()
+  })
+
+  it("gagal bila akun siswa tidak ditemukan", async () => {
+    mockUserFindFirst.mockResolvedValue(null)
+
+    const result = await tautkanOrangTuaSiswa("tidak-ada", "user-ortu-1")
+
+    expect(result.success).toBe(false)
+    expect(mockParentStudentCreate).not.toHaveBeenCalled()
+  })
+
+  it("gagal bila user siswa tidak punya row siswas", async () => {
+    mockUserFindFirst.mockImplementation(
+      async (args: { where: { role?: string } }) =>
+        args?.where?.role === "SISWA"
+          ? { ...siswaUser, siswa: null }
+          : args?.where?.role === "ORANG_TUA"
+            ? ortuUser
+            : null,
+    )
+
+    const result = await tautkanOrangTuaSiswa("user-siswa-1", "user-ortu-1")
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("Data siswa")
+    expect(mockParentStudentCreate).not.toHaveBeenCalled()
+  })
+
+  it("gagal bila akun orang tua tidak ditemukan", async () => {
+    mockUserFindFirst.mockImplementation(
+      async (args: { where: { role?: string } }) =>
+        args?.where?.role === "SISWA" ? siswaUser : null,
+    )
+
+    const result = await tautkanOrangTuaSiswa("user-siswa-1", "tidak-ada")
+
+    expect(result.success).toBe(false)
+    expect(mockParentStudentCreate).not.toHaveBeenCalled()
+  })
+
+  it("berhasil membuat relasi parent_students + revalidate", async () => {
+    const result = await tautkanOrangTuaSiswa("user-siswa-1", "user-ortu-1")
+
+    expect(result.success).toBe(true)
+    expect(result.data?.sudahTertaut).toBe(false)
+    expect(mockParentStudentCreate).toHaveBeenCalledWith({
+      data: {
+        orangTuaId: "ortu-1",
+        siswaId: "siswa-1",
+        hubungan: "Orang Tua",
+      },
+    })
+    expect(mockOrangTuaCreate).not.toHaveBeenCalled()
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith("/dashboard/siswa")
+  })
+
+  it("idempotent: relasi yang sudah ada tidak dibuat ulang", async () => {
+    mockParentStudentFindUnique.mockResolvedValue({
+      id: "ps-lama",
+      orangTuaId: "ortu-1",
+      siswaId: "siswa-1",
+    })
+
+    const result = await tautkanOrangTuaSiswa("user-siswa-1", "user-ortu-1")
+
+    expect(result.success).toBe(true)
+    expect(result.data?.sudahTertaut).toBe(true)
+    expect(mockParentStudentCreate).not.toHaveBeenCalled()
+  })
+
+  it("membuat row orang_tuas bila profil orang tua belum ada (INSERT saja)", async () => {
+    mockUserFindFirst.mockImplementation(
+      async (args: { where: { role?: string } }) =>
+        args?.where?.role === "SISWA"
+          ? siswaUser
+          : args?.where?.role === "ORANG_TUA"
+            ? { ...ortuUser, orangTua: null }
+            : null,
+    )
+
+    const result = await tautkanOrangTuaSiswa("user-siswa-1", "user-ortu-1")
+
+    expect(result.success).toBe(true)
+    expect(mockOrangTuaCreate).toHaveBeenCalledWith({
+      data: { userId: "user-ortu-1", createdAt: ortuUser.createdAt },
+    })
+    expect(mockParentStudentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ orangTuaId: "ortu-baru" }),
+      }),
+    )
+  })
+
+  it("tidak merevalidasi path saat operasi gagal", async () => {
+    mockParentStudentCreate.mockRejectedValue(new Error("db down"))
+
+    const result = await tautkanOrangTuaSiswa("user-siswa-1", "user-ortu-1")
+
+    expect(result.success).toBe(false)
+    expect(vi.mocked(revalidatePath)).not.toHaveBeenCalled()
+  })
+})
+
+// ========================================================
+// createOrangTuaBaruDanTautkan — akun ortu baru dari dialog tautan
+// ========================================================
+
+describe("createOrangTuaBaruDanTautkan — buat akun ortu baru + tautkan", () => {
+  const siswaUser = {
+    id: "user-siswa-1",
+    nama: "Ahmad Fauzi",
+    role: "SISWA",
+    siswa: { id: "siswa-1", deleted_at: null },
+  }
+  const payloadValid = {
+    nama: "Bapak Santoso",
+    email: "santoso@mail.com",
+    noHp: "081234567890",
+  }
+
+  /** urutan findFirst: siswa → ortu-by-email → (tx) authId → (tx) username */
+  function queueFindFirst(ortuByEmail: unknown) {
+    mockUserFindFirst
+      .mockResolvedValueOnce(siswaUser)
+      .mockResolvedValueOnce(ortuByEmail)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockParentStudentFindUnique.mockResolvedValue(null)
+    mockParentStudentCreate.mockResolvedValue({ id: "ps-1" })
+    mockOrangTuaCreate.mockResolvedValue({ id: "ortu-fallback" })
+    mockUserCreate.mockResolvedValue({
+      id: "user-ortu-baru",
+      orangTua: { id: "ortu-baru" },
+    })
+  })
+
+  it("menolak payload tidak valid tanpa query database", async () => {
+    const result = await createOrangTuaBaruDanTautkan("user-siswa-1", {
+      nama: "Ab",
+      email: "bukan-email",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.errors).toBeTruthy()
+    expect(mockUserFindFirst).not.toHaveBeenCalled()
+    expect(mockCreateUser).not.toHaveBeenCalled()
+  })
+
+  it("gagal bila siswa tidak ditemukan", async () => {
+    mockUserFindFirst.mockResolvedValue(null)
+
+    const result = await createOrangTuaBaruDanTautkan("tidak-ada", payloadValid)
+
+    expect(result.success).toBe(false)
+    expect(mockCreateUser).not.toHaveBeenCalled()
+  })
+
+  it("email sudah punya akun ortu → ditautkan tanpa membuat auth/pengguna baru", async () => {
+    mockUserFindFirst
+      .mockResolvedValueOnce(siswaUser)
+      .mockResolvedValueOnce({
+        id: "user-ortu-lama",
+        nama: "Santoso",
+        orangTua: { id: "ortu-lama" },
+      })
+    setupTransactionMock()
+
+    const result = await createOrangTuaBaruDanTautkan("user-siswa-1", payloadValid)
+
+    expect(result.success).toBe(true)
+    expect(result.data?.akunSudahAda).toBe(true)
+    expect(result.data?.passwordOrangTua).toBeUndefined()
+    expect(mockCreateUser).not.toHaveBeenCalled()
+    expect(mockUserCreate).not.toHaveBeenCalled()
+    expect(mockParentStudentCreate).toHaveBeenCalledWith({
+      data: { orangTuaId: "ortu-lama", siswaId: "siswa-1", hubungan: "Orang Tua" },
+    })
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith("/dashboard/siswa")
+  })
+
+  it("email sudah tertaut → idempotent, tanpa relasi ganda", async () => {
+    mockUserFindFirst
+      .mockResolvedValueOnce(siswaUser)
+      .mockResolvedValueOnce({
+        id: "user-ortu-lama",
+        nama: "Santoso",
+        orangTua: { id: "ortu-lama" },
+      })
+    mockParentStudentFindUnique.mockResolvedValue({
+      id: "ps-lama",
+      orangTuaId: "ortu-lama",
+      siswaId: "siswa-1",
+    })
+
+    const result = await createOrangTuaBaruDanTautkan("user-siswa-1", payloadValid)
+
+    expect(result.success).toBe(true)
+    expect(result.data?.akunSudahAda).toBe(true)
+    expect(mockParentStudentCreate).not.toHaveBeenCalled()
+    expect(mockCreateUser).not.toHaveBeenCalled()
+  })
+
+  it("akun auth baru → user + profil ortu + relasi dibuat, password dikembalikan", async () => {
+    queueFindFirst(null)
+    setupTransactionMock()
+    mockCreateUser.mockResolvedValueOnce({
+      data: { user: { id: "auth-ortu-baru" } },
+      error: null,
+    })
+
+    const result = await createOrangTuaBaruDanTautkan("user-siswa-1", payloadValid)
+
+    expect(result.success).toBe(true)
+    expect(result.data?.akunSudahAda).toBe(false)
+    expect(result.data?.passwordOrangTua).toBeTruthy()
+    expect(mockUserCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          email: "santoso@mail.com",
+          nama: "Bapak Santoso",
+          role: "ORANG_TUA",
+          authId: "auth-ortu-baru",
+          mustChangePassword: true,
+          orangTua: { create: { noHp: "081234567890", alamat: null } },
+        }),
+      }),
+    )
+    expect(mockParentStudentCreate).toHaveBeenCalledWith({
+      data: { orangTuaId: "ortu-baru", siswaId: "siswa-1", hubungan: "Orang Tua" },
+    })
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith("/dashboard/siswa")
+  })
+
+  it("email sudah terdaftar di auth (role lain) → reuse authId tanpa password baru", async () => {
+    queueFindFirst(null)
+    setupTransactionMock()
+    mockCreateUser.mockResolvedValue({ error: { message: "already been registered" } })
+    mockListUsers.mockResolvedValue({
+      data: { users: [{ id: "auth-lama", email: "santoso@mail.com" }] },
+      error: null,
+    })
+
+    const result = await createOrangTuaBaruDanTautkan("user-siswa-1", payloadValid)
+
+    expect(result.success).toBe(true)
+    expect(result.data?.akunSudahAda).toBe(true)
+    expect(result.data?.passwordOrangTua).toBeUndefined()
+    expect(mockUserCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ authId: "auth-lama", mustChangePassword: false }),
+      }),
+    )
+    expect(mockDeleteUser).not.toHaveBeenCalled()
+  })
+
+  it("transaksi gagal → auth baru dibersihkan (tidak ada akun yatim)", async () => {
+    queueFindFirst(null)
+    setupTransactionMock()
+    mockCreateUser.mockResolvedValueOnce({
+      data: { user: { id: "auth-ortu-baru" } },
+      error: null,
+    })
+    mockUserCreate.mockRejectedValue(new Error("db down"))
+
+    const result = await createOrangTuaBaruDanTautkan("user-siswa-1", payloadValid)
+
+    expect(result.success).toBe(false)
+    expect(mockDeleteUser).toHaveBeenCalledWith("auth-ortu-baru")
+    expect(vi.mocked(revalidatePath)).not.toHaveBeenCalled()
+  })
+
+  it("error database menjadi error response, bukan crash", async () => {
+    mockUserFindFirst.mockRejectedValue(new Error("connection failed"))
+
+    const result = await createOrangTuaBaruDanTautkan("user-siswa-1", payloadValid)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toBeTruthy()
+  })
+})
+
+// ========================================================
+// updateDataSiswaManual — lengkapi gender/kelas/NISN/NIS
+// ========================================================
+
+describe("updateDataSiswaManual — lengkapi data siswa", () => {
+  const siswaUser = {
+    id: "user-siswa-1",
+    nama: "Ahmad Fauzi",
+    role: "SISWA",
+    siswa: {
+      id: "siswa-1",
+      deleted_at: null,
+      kelasId: null,
+      nisn: null,
+      nis: null,
+    },
+  }
+  const payloadLengkap = {
+    jenisKelamin: "LAKI_LAKI" as const,
+    kelasId: "kelas-1",
+    nisn: "0012345678",
+    nis: "001",
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUserFindFirst.mockResolvedValue(siswaUser)
+    mockKelasFindUnique.mockResolvedValue({
+      id: "kelas-1",
+      nama: "7A",
+      jenisKelamin: null,
+    })
+    mockSiswaFindUnique.mockResolvedValue(null)
+    mockPendaftaranFindFirst.mockResolvedValue(null)
+    mockSiswaUpdate.mockResolvedValue({ id: "siswa-1" })
+  })
+
+  it("menolak payload tanpa jenis kelamin tanpa query database", async () => {
+    const result = await updateDataSiswaManual("user-siswa-1", {
+      kelasId: "kelas-1",
+    } as unknown as UpdateDataSiswaValues)
+
+    expect(result.success).toBe(false)
+    expect(result.errors?.jenisKelamin).toBeTruthy()
+    expect(mockUserFindFirst).not.toHaveBeenCalled()
+    expect(mockSiswaUpdate).not.toHaveBeenCalled()
+  })
+
+  it("gagal bila siswa tidak ditemukan", async () => {
+    mockUserFindFirst.mockResolvedValue(null)
+
+    const result = await updateDataSiswaManual("tidak-ada", payloadLengkap)
+
+    expect(result.success).toBe(false)
+    expect(mockSiswaUpdate).not.toHaveBeenCalled()
+  })
+
+  it("menolak kelas yang tidak ditemukan", async () => {
+    mockKelasFindUnique.mockResolvedValue(null)
+
+    const result = await updateDataSiswaManual("user-siswa-1", payloadLengkap)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("Kelas")
+    expect(mockSiswaUpdate).not.toHaveBeenCalled()
+  })
+
+  it("menolak kelas khusus Akhwat untuk siswa Ikhwan", async () => {
+    mockKelasFindUnique.mockResolvedValue({
+      id: "kelas-1",
+      nama: "7A",
+      jenisKelamin: "PEREMPUAN",
+    })
+
+    const result = await updateDataSiswaManual("user-siswa-1", payloadLengkap)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("khusus")
+    expect(mockSiswaUpdate).not.toHaveBeenCalled()
+  })
+
+  it("menolak NISN yang sudah dipakai siswa lain", async () => {
+    mockSiswaFindUnique.mockResolvedValue({
+      id: "siswa-lain",
+      user: { nama: "Budi" },
+    })
+
+    const result = await updateDataSiswaManual("user-siswa-1", payloadLengkap)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("NISN")
+    expect(mockSiswaUpdate).not.toHaveBeenCalled()
+  })
+
+  it("menolak NISN yang tertahan di pendaftaran pending", async () => {
+    mockSiswaFindUnique.mockResolvedValue(null)
+    mockPendaftaranFindFirst.mockResolvedValue({
+      nomorPendaftaran: "PPDB-2026-001",
+      namaLengkap: "Siti",
+    })
+
+    const result = await updateDataSiswaManual("user-siswa-1", payloadLengkap)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("pendaftaran")
+    expect(mockSiswaUpdate).not.toHaveBeenCalled()
+  })
+
+  it("menolak NIS yang sudah dipakai siswa lain", async () => {
+    mockSiswaFindUnique
+      .mockResolvedValueOnce(null) // cek NISN
+      .mockResolvedValueOnce({ id: "siswa-lain", user: { nama: "Budi" } }) // cek NIS
+
+    const result = await updateDataSiswaManual("user-siswa-1", payloadLengkap)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain("NIS")
+    expect(mockSiswaUpdate).not.toHaveBeenCalled()
+  })
+
+  it("berhasil update: gender + kelas + NISN + NIS tersimpan & revalidate", async () => {
+    const result = await updateDataSiswaManual("user-siswa-1", payloadLengkap)
+
+    expect(result.success).toBe(true)
+    expect(mockSiswaUpdate).toHaveBeenCalledWith({
+      where: { id: "siswa-1" },
+      data: {
+        jenisKelamin: "LAKI_LAKI",
+        kelasId: "kelas-1",
+        nisn: "0012345678",
+        nis: "001",
+      },
+    })
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith("/dashboard/siswa")
+  })
+
+  it("field yang tidak dikirim TIDAK diubah (nilai lama dipertahankan)", async () => {
+    mockUserFindFirst.mockResolvedValue({
+      ...siswaUser,
+      siswa: { ...siswaUser.siswa, nisn: "0099999999", nis: "007" },
+    })
+
+    const result = await updateDataSiswaManual("user-siswa-1", {
+      jenisKelamin: "PEREMPUAN",
+    })
+
+    expect(result.success).toBe(true)
+    // kelasId/nisn/nis tidak dikirim → dipertahankan, bukan di-nol-kan.
+    expect(mockSiswaUpdate).toHaveBeenCalledWith({
+      where: { id: "siswa-1" },
+      data: {
+        jenisKelamin: "PEREMPUAN",
+        kelasId: null,
+        nisn: "0099999999",
+        nis: "007",
+      },
+    })
+    // Tidak ada query kelas/duplikasi karena ketiganya tidak berubah jadi baru.
+    expect(mockKelasFindUnique).not.toHaveBeenCalled()
+    expect(mockSiswaFindUnique).not.toHaveBeenCalled()
+  })
+
+  it("error database menjadi error response, bukan crash", async () => {
+    mockSiswaUpdate.mockRejectedValue(new Error("connection failed"))
+
+    const result = await updateDataSiswaManual("user-siswa-1", payloadLengkap)
+
+    expect(result.success).toBe(false)
+    expect(result.message).toBeTruthy()
   })
 })

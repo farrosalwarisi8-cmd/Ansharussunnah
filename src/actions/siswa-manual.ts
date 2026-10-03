@@ -6,7 +6,16 @@ import prisma from "@/lib/prisma"
 import { requireGuruAdmin } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateSecurePassword } from "@/lib/password"
-import { siswaManualSchema, type SiswaManualFormValues, updateAkunSiswaSchema, type UpdateAkunSiswaValues } from "@/lib/validations/siswa-manual"
+import {
+  siswaManualSchema,
+  type SiswaManualFormValues,
+  updateAkunSiswaSchema,
+  type UpdateAkunSiswaValues,
+  tambahOrangTuaSchema,
+  type TambahOrangTuaValues,
+  updateDataSiswaSchema,
+  type UpdateDataSiswaValues,
+} from "@/lib/validations/siswa-manual"
 import { siswaCocokKelas } from "@/lib/guru-kelas-gender"
 import { deriveUniqueUsername } from "@/lib/username"
 import { toUserFriendlyError } from "@/lib/prisma-error"
@@ -619,6 +628,7 @@ type SiswaManualListItem = {
   nisn: string | null
   nis: string | null
   jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
+  kelasId: string | null
   kelasNama: string | null
   jenjangNama: string | null
   aktif: boolean
@@ -661,6 +671,8 @@ export async function getDaftarSiswaManual(options?: {
   search?: string
   kelasNama?: string
   jenisKelamin?: "LAKI_LAKI" | "PEREMPUAN"
+  /** Hanya tampilkan siswa yang belum punya relasi orang tua (butuh tautan). */
+  tanpaOrangTua?: boolean
 }): Promise<
   ActionResponse<Paginated<SiswaManualListItem> & { diagnostics?: SiswaListDiagnostics }>
 > {
@@ -696,6 +708,11 @@ export async function getDaftarSiswaManual(options?: {
         { nis: { contains: search, mode: "insensitive" } },
       ]
     }
+    // Filter "belum punya ortu" — dikerjakan di server agar `total` &
+    // pagination tetap konsisten dengan baris yang ditampilkan.
+    if (options?.tanpaOrangTua) {
+      where.orangTua = { none: {} }
+    }
 
     // total HARUS berasal dari where yang sama dengan findMany.
     const total = await prisma.siswa.count({ where })
@@ -722,6 +739,7 @@ export async function getDaftarSiswaManual(options?: {
             },
             kelas: {
               select: {
+                id: true,
                 nama: true,
                 jenjang: {
                   select: { nama: true },
@@ -778,6 +796,7 @@ export async function getDaftarSiswaManual(options?: {
           nisn: s.nisn,
           nis: s.nis,
           jenisKelamin: s.jenisKelamin,
+          kelasId: s.kelas?.id || null,
           kelasNama: s.kelas?.nama || null,
           jenjangNama: s.kelas?.jenjang?.nama || null,
           aktif: false,
@@ -795,6 +814,7 @@ export async function getDaftarSiswaManual(options?: {
         nisn: s.nisn,
         nis: s.nis,
         jenisKelamin: s.jenisKelamin,
+        kelasId: s.kelas?.id || null,
         kelasNama: s.kelas?.nama || null,
         jenjangNama: s.kelas?.jenjang?.nama || null,
         aktif: s.user.aktif,
@@ -1170,6 +1190,570 @@ export async function hapusSiswaPermanent(
     return {
       success: false,
       message: toUserFriendlyError(error, "Gagal menghapus siswa"),
+    }
+  }
+}
+
+// ========================================================
+// 7. DAFTAR ORANG TUA (UNTUK MENAUTKAN KE SISWA)
+// ========================================================
+
+type OrangTuaTautanItem = {
+  userId: string
+  nama: string
+  email: string
+  noHp: string | null
+  /** Jumlah anak yang sudah tertaut — membantu admin memilih akun yang benar. */
+  jumlahAnak: number
+}
+
+/**
+ * Daftar akun orang tua untuk dipilih saat menautkan siswa yang belum punya
+ * relasi orang tua (kasus siswa hasil pemulihan insiden 2026-10-02).
+ */
+export async function getDaftarOrangTuaUntukTautan(options?: {
+  search?: string
+}): Promise<ActionResponse<OrangTuaTautanItem[]>> {
+  try {
+    await requireGuruAdmin()
+
+    const search = options?.search?.trim()
+    const where: Prisma.UserWhereInput = { role: Role.ORANG_TUA, deleted_at: null }
+    if (search) {
+      where.OR = [
+        { nama: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+      ]
+    }
+
+    const rows = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        nama: true,
+        email: true,
+        orangTua: {
+          select: {
+            noHp: true,
+            _count: { select: { siswa: true } },
+          },
+        },
+      },
+      orderBy: { nama: "asc" },
+      take: 200,
+    })
+
+    const formatted: OrangTuaTautanItem[] = rows.map((u) => ({
+      userId: u.id,
+      nama: u.nama,
+      email: u.email,
+      noHp: u.orangTua?.noHp ?? null,
+      jumlahAnak: u.orangTua?._count.siswa ?? 0,
+    }))
+
+    return {
+      success: true,
+      message: `Daftar orang tua berhasil dimuat (${formatted.length} akun)`,
+      data: formatted,
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: toUserFriendlyError(error, "Gagal memuat daftar orang tua"),
+    }
+  }
+}
+
+// ========================================================
+// 8. TAUTKAN ORANG TUA KE SISWA
+// ========================================================
+
+type TautkanOrangTuaResult = {
+  siswaUserId: string
+  orangTuaUserId: string
+  /** true bila relasi sudah ada sebelumnya (idempotent, tidak diduplikasi). */
+  sudahTertaut: boolean
+}
+
+/**
+ * Menautkan akun orang tua ke siswa lewat relasi `parent_students`.
+ *
+ * Dipakai admin untuk melengkapi siswa yang relasi orang tuanya hilang saat
+ * insiden wipe 2026-10-02. ATURAN:
+ *   - Hanya INSERT relasi — tidak ada data yang diubah/dihapus.
+ *   - Idempotent: pasangan yang sudah ada tidak dibuat ulang.
+ *   - Row `orang_tuas` dibuat bila profil orang tua belum ada (insert saja).
+ */
+export async function tautkanOrangTuaSiswa(
+  siswaUserId: string,
+  orangTuaUserId: string,
+): Promise<ActionResponse<TautkanOrangTuaResult>> {
+  try {
+    await requireGuruAdmin()
+
+    if (!siswaUserId || !orangTuaUserId) {
+      return { success: false, message: "Pilih siswa dan orang tua yang akan ditautkan" }
+    }
+    if (siswaUserId === orangTuaUserId) {
+      return { success: false, message: "Siswa dan orang tua tidak boleh akun yang sama" }
+    }
+
+    const siswaUser = await prisma.user.findFirst({
+      where: { id: siswaUserId, role: Role.SISWA, deleted_at: null },
+      include: { siswa: true },
+    })
+    if (!siswaUser) {
+      return { success: false, message: "Akun siswa tidak ditemukan" }
+    }
+    if (!siswaUser.siswa || siswaUser.siswa.deleted_at) {
+      return { success: false, message: "Data siswa tidak ditemukan" }
+    }
+
+    const ortuUser = await prisma.user.findFirst({
+      where: { id: orangTuaUserId, role: Role.ORANG_TUA, deleted_at: null },
+      include: { orangTua: true },
+    })
+    if (!ortuUser) {
+      return { success: false, message: "Akun orang tua tidak ditemukan" }
+    }
+
+    const existing = await prisma.parentStudent.findUnique({
+      where: {
+        orangTuaId_siswaId: {
+          orangTuaId: ortuUser.orangTua?.id ?? "__belum-ada__",
+          siswaId: siswaUser.siswa.id,
+        },
+      },
+    })
+    if (existing) {
+      return {
+        success: true,
+        message: `Orang tua "${ortuUser.nama}" sudah tertaut dengan siswa "${siswaUser.nama}".`,
+        data: {
+          siswaUserId,
+          orangTuaUserId,
+          sudahTertaut: true,
+        },
+      }
+    }
+
+    // Profil orang tua belum ada (akun yatim) → buat row-nya (INSERT saja).
+    const orangTuaRecord =
+      ortuUser.orangTua ??
+      (await prisma.orangTua.create({
+        data: { userId: ortuUser.id, createdAt: ortuUser.createdAt },
+      }))
+
+    await prisma.parentStudent.create({
+      data: {
+        orangTuaId: orangTuaRecord.id,
+        siswaId: siswaUser.siswa.id,
+        hubungan: "Orang Tua",
+      },
+    })
+
+    revalidatePath("/dashboard/siswa")
+    return {
+      success: true,
+      message: `Orang tua "${ortuUser.nama}" berhasil ditautkan ke siswa "${siswaUser.nama}".`,
+      data: { siswaUserId, orangTuaUserId, sudahTertaut: false },
+    }
+  } catch (error: unknown) {
+    console.error("Error tautkan orang tua:", error)
+    return {
+      success: false,
+      message: toUserFriendlyError(error, "Gagal menautkan orang tua ke siswa"),
+    }
+  }
+}
+
+// ========================================================
+// 9. BUAT AKUN ORANG TUA BARU + TAUTKAN (dari dialog tautan)
+// ========================================================
+
+type OrangTuaBaruResult = {
+  orangTuaUserId: string
+  /** Hanya diisi bila akun auth BARU dibuat — tampilkan sekali ke admin. */
+  passwordOrangTua?: string
+  /** true bila email sudah punya akun ORANG_TUA (langsung dipakai, tanpa password baru). */
+  akunSudahAda: boolean
+}
+
+/**
+ * Membuat akun orang tua baru SEKALIGUS menautkannya ke siswa — dipanggil dari
+ * dialog "Tautkan Orang Tua" bila wali siswa belum punya akun sama sekali
+ * (kasus umum pada data hasil pemulihan insiden 2026-10-02).
+ *
+ * Aturan:
+ *   - Tidak PERNAH menimpa data akun yang sudah ada — email yang sudah punya
+ *     akun ORANG_TUA hanya ditautkan (akunSudahAda=true, tanpa password baru).
+ *   - Hanya INSERT row user/orang_tua/parent_students.
+ *   - Auth yang baru dibuat dibersihkan bila transaksi DB gagal (tidak ada
+ *     akun yatim).
+ *   - Password tidak dikirim via email — ditampilkan sekali ke admin, konsisten
+ *     dengan alur reset password manual.
+ */
+export async function createOrangTuaBaruDanTautkan(
+  siswaUserId: string,
+  payload: TambahOrangTuaValues,
+): Promise<ActionResponse<OrangTuaBaruResult>> {
+  try {
+    await requireGuruAdmin()
+
+    if (!siswaUserId) {
+      return { success: false, message: "Pilih siswa yang akan ditautkan" }
+    }
+
+    const validated = tambahOrangTuaSchema.safeParse(payload)
+    if (!validated.success) {
+      return {
+        success: false,
+        message: "Data orang tua tidak valid",
+        errors: validated.error.flatten().fieldErrors,
+      }
+    }
+    const data = validated.data
+
+    const siswaUser = await prisma.user.findFirst({
+      where: { id: siswaUserId, role: Role.SISWA, deleted_at: null },
+      include: { siswa: true },
+    })
+    if (!siswaUser) {
+      return { success: false, message: "Akun siswa tidak ditemukan" }
+    }
+    if (!siswaUser.siswa || siswaUser.siswa.deleted_at) {
+      return { success: false, message: "Data siswa tidak ditemukan" }
+    }
+    const siswaRowId = siswaUser.siswa.id
+
+    const emailOrtu = data.email.toLowerCase().trim()
+
+    // --- Jalur A: email sudah punya akun ORANG_TUA → tautkan saja ---
+    const existingOrtu = await prisma.user.findFirst({
+      where: { email: emailOrtu, role: Role.ORANG_TUA, deleted_at: null },
+      include: { orangTua: true },
+    })
+    if (existingOrtu) {
+      const orangTuaRecord =
+        existingOrtu.orangTua ??
+        (await prisma.orangTua.create({
+          data: {
+            userId: existingOrtu.id,
+            noHp: data.noHp || null,
+            alamat: data.alamat || null,
+            createdAt: existingOrtu.createdAt,
+          },
+        }))
+
+      const existingLink = await prisma.parentStudent.findUnique({
+        where: {
+          orangTuaId_siswaId: {
+            orangTuaId: orangTuaRecord.id,
+            siswaId: siswaUser.siswa.id,
+          },
+        },
+      })
+      if (existingLink) {
+        return {
+          success: true,
+          message: `Akun orang tua "${existingOrtu.nama}" sudah tertaut dengan siswa "${siswaUser.nama}".`,
+          data: { orangTuaUserId: existingOrtu.id, akunSudahAda: true },
+        }
+      }
+
+      await prisma.parentStudent.create({
+        data: {
+          orangTuaId: orangTuaRecord.id,
+          siswaId: siswaUser.siswa.id,
+          hubungan: "Orang Tua",
+        },
+      })
+      revalidatePath("/dashboard/siswa")
+      return {
+        success: true,
+        message: `Email sudah punya akun orang tua — "${existingOrtu.nama}" langsung ditautkan ke siswa "${siswaUser.nama}".`,
+        data: { orangTuaUserId: existingOrtu.id, akunSudahAda: true },
+      }
+    }
+
+    // --- Jalur B: buat akun auth orang tua baru ---
+    const supabaseAdmin = createSupabaseAdmin()
+    const passwordOrangTua = generateSecurePassword(14)
+    let authOrtuId: string
+    let ortuAlreadyExisted = false
+    let authBaruDibuat = false
+
+    const { data: authOrtuData, error: authOrtuError } =
+      await supabaseAdmin.auth.admin.createUser({
+        email: emailOrtu,
+        password: passwordOrangTua,
+        email_confirm: true,
+        user_metadata: { nama: data.nama, role: Role.ORANG_TUA },
+      })
+
+    if (authOrtuError) {
+      if (authOrtuError.message.includes("already been registered")) {
+        // Email sudah terdaftar di auth untuk role LAIN — reuse authId
+        // (pola sama dengan createSiswaManual), tanpa password baru.
+        const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
+          perPage: 1000,
+        })
+        const matched = existingUsers.users.find((u) => u.email === emailOrtu)
+        if (!matched) {
+          return { success: false, message: "Gagal memetakan akun auth orang tua yang sudah ada" }
+        }
+        authOrtuId = matched.id
+        ortuAlreadyExisted = true
+      } else {
+        console.error("Supabase auth error (orang tua baru):", authOrtuError)
+        return { success: false, message: `Gagal membuat akun auth orang tua: ${authOrtuError.message}` }
+      }
+    } else {
+      authOrtuId = authOrtuData.user!.id
+      authBaruDibuat = true
+    }
+
+    let orangTuaUserId: string | undefined
+    try {
+      orangTuaUserId = await prisma.$transaction(
+        async (tx) => {
+          // Cek by authId dulu — mencegah duplikat bila email reuse ternyata
+          // sudah punya record ORANG_TUA (race / multi-role).
+          let userOrtu = await tx.user.findFirst({
+            where: { authId: authOrtuId, role: Role.ORANG_TUA },
+            include: { orangTua: true },
+          })
+
+          if (!userOrtu) {
+            userOrtu = await tx.user.create({
+              data: {
+                email: emailOrtu,
+                username: await deriveUniqueUsername(tx, emailOrtu),
+                nama: data.nama,
+                role: Role.ORANG_TUA,
+                authId: authOrtuId,
+                // Akun reuse (auth sudah punya role lain): tidak ada password
+                // baru → tidak boleh dipaksa ganti password.
+                mustChangePassword: !ortuAlreadyExisted,
+                orangTua: {
+                  create: {
+                    noHp: data.noHp || null,
+                    alamat: data.alamat || null,
+                  },
+                },
+              },
+              include: { orangTua: true },
+            })
+          }
+
+          const orangTuaRecord =
+            userOrtu.orangTua ??
+            (await tx.orangTua.create({
+              data: {
+                userId: userOrtu.id,
+                noHp: data.noHp || null,
+                alamat: data.alamat || null,
+              },
+            }))
+
+          const existingLink = await tx.parentStudent.findUnique({
+            where: {
+              orangTuaId_siswaId: {
+                orangTuaId: orangTuaRecord.id,
+                siswaId: siswaRowId,
+              },
+            },
+          })
+          if (!existingLink) {
+            await tx.parentStudent.create({
+              data: {
+                orangTuaId: orangTuaRecord.id,
+                siswaId: siswaRowId,
+                hubungan: "Orang Tua",
+              },
+            })
+          }
+
+          return userOrtu.id
+        },
+        { timeout: 15000, maxWait: 5000 },
+      )
+    } catch (txError) {
+      console.error("Prisma transaction error (orang tua baru), membersihkan auth...", txError)
+      if (authBaruDibuat) {
+        // Jangan tinggalkan akun auth yatim bila transaksi gagal.
+        try {
+          await supabaseAdmin.auth.admin.deleteUser(authOrtuId)
+        } catch (cleanupError) {
+          console.error("Gagal membersihkan auth orang tua baru:", cleanupError)
+        }
+      }
+      throw txError
+    }
+
+    revalidatePath("/dashboard/siswa")
+    if (!orangTuaUserId) {
+      return {
+        success: false,
+        message: "Gagal membuat akun orang tua: ID akun tidak ditemukan setelah transaksi.",
+      }
+    }
+
+    return {
+      success: true,
+      message: `Akun orang tua "${data.nama}" berhasil dibuat dan ditautkan ke siswa "${siswaUser.nama}".`,
+      data: {
+        orangTuaUserId,
+        // Password hanya untuk akun auth yang benar-benar baru dibuat.
+        passwordOrangTua: authBaruDibuat && !ortuAlreadyExisted ? passwordOrangTua : undefined,
+        akunSudahAda: ortuAlreadyExisted,
+      },
+    }
+  } catch (error: unknown) {
+    console.error("Error buat orang tua baru:", error)
+    return {
+      success: false,
+      message: toUserFriendlyError(error, "Gagal membuat akun orang tua. Silakan coba lagi."),
+    }
+  }
+}
+
+// ========================================================
+// 10. LENGKAPI / EDIT DATA SISWA (gender, kelas, NISN, NIS)
+// ========================================================
+
+type UpdateDataSiswaResult = {
+  siswaUserId: string
+}
+
+/**
+ * Admin melengkapi data riwayat siswa: jenis kelamin, kelas, NISN, NIS.
+ *
+ * Dibutuhkan untuk data hasil pemulihan insiden 2026-10-02 (gender/kelas/NISN
+ * hilang → NULL). Sifatnya HANYA UPDATE satu row `siswas` — tidak ada row
+ * lain yang disentuh, tidak ada delete. Field yang tidak dikirim tidak diubah.
+ */
+export async function updateDataSiswaManual(
+  siswaUserId: string,
+  payload: UpdateDataSiswaValues,
+): Promise<ActionResponse<UpdateDataSiswaResult>> {
+  try {
+    await requireGuruAdmin()
+
+    if (!siswaUserId) {
+      return { success: false, message: "ID siswa tidak valid" }
+    }
+
+    const validated = updateDataSiswaSchema.safeParse(payload)
+    if (!validated.success) {
+      return {
+        success: false,
+        message: "Data siswa tidak valid",
+        errors: validated.error.flatten().fieldErrors,
+      }
+    }
+    const data = validated.data
+
+    const siswaUser = await prisma.user.findFirst({
+      where: { id: siswaUserId, role: Role.SISWA, deleted_at: null },
+      include: { siswa: true },
+    })
+    if (!siswaUser) {
+      return { success: false, message: "Akun siswa tidak ditemukan" }
+    }
+    if (!siswaUser.siswa || siswaUser.siswa.deleted_at) {
+      return { success: false, message: "Data siswa tidak ditemukan" }
+    }
+    const siswaRow = siswaUser.siswa
+
+    // Field yang tidak dikirim dikirim TIDAK DIUBAH (update parsial aman);
+    // string kosong = sengaja dikosongkan admin.
+    const jenisKelamin = data.jenisKelamin
+    const kelasId =
+      data.kelasId !== undefined ? data.kelasId.trim() || null : siswaRow.kelasId
+    const nisn = data.nisn !== undefined ? data.nisn.trim() || null : siswaRow.nisn
+    const nis = data.nis !== undefined ? data.nis.trim() || null : siswaRow.nis
+
+    // ✅ Kecocokan gender dengan kelas tujuan (paritas createSiswaManual)
+    if (kelasId) {
+      const kelas = await prisma.kelas.findUnique({
+        where: { id: kelasId },
+        select: { id: true, nama: true, jenisKelamin: true },
+      })
+      if (!kelas) {
+        return { success: false, message: "Kelas tujuan tidak ditemukan" }
+      }
+      if (!siswaCocokKelas(jenisKelamin, kelas.jenisKelamin)) {
+        const labelKelas = kelas.jenisKelamin === "LAKI_LAKI" ? "Ikhwan" : "Akhwat"
+        return {
+          success: false,
+          message: `Kelas "${kelas.nama}" adalah kelas khusus ${labelKelas} dan tidak cocok untuk siswa yang berjenis kelamin ${jenisKelamin === "LAKI_LAKI" ? "laki-laki" : "perempuan"}.`,
+        }
+      }
+    }
+
+    // ✅ Unik NISN / NIS — dicek proaktif agar error P2002 tidak bocor ke layar.
+    if (nisn && nisn !== siswaRow.nisn) {
+      const [nisnSiswa, nisnPendaftaran] = await Promise.all([
+        prisma.siswa.findUnique({
+          where: { nisn },
+          select: { id: true, user: { select: { nama: true } } },
+        }),
+        prisma.pendaftaran.findFirst({
+          where: {
+            nisn,
+            status: {
+              in: [
+                StatusPendaftaran.MENUNGGU_PEMBAYARAN,
+                StatusPendaftaran.MENUNGGU_VERIFIKASI,
+              ],
+            },
+          },
+          select: { nomorPendaftaran: true, namaLengkap: true },
+        }),
+      ])
+      if (nisnSiswa && nisnSiswa.id !== siswaRow.id) {
+        return {
+          success: false,
+          message: `NISN "${nisn}" sudah terdaftar atas nama ${nisnSiswa.user.nama}.`,
+        }
+      }
+      if (nisnPendaftaran) {
+        return {
+          success: false,
+          message: `NISN "${nisn}" sudah dipakai pendaftaran lain (Nomor: ${nisnPendaftaran.nomorPendaftaran}, atas nama ${nisnPendaftaran.namaLengkap}).`,
+        }
+      }
+    }
+    if (nis && nis !== siswaRow.nis) {
+      const nisDipakai = await prisma.siswa.findUnique({
+        where: { nis },
+        select: { id: true, user: { select: { nama: true } } },
+      })
+      if (nisDipakai && nisDipakai.id !== siswaRow.id) {
+        return {
+          success: false,
+          message: `NIS "${nis}" sudah terdaftar atas nama ${nisDipakai.user.nama}.`,
+        }
+      }
+    }
+
+    await prisma.siswa.update({
+      where: { id: siswaRow.id },
+      data: { jenisKelamin, kelasId, nisn, nis },
+    })
+
+    revalidatePath("/dashboard/siswa")
+    return {
+      success: true,
+      message: `Data siswa "${siswaUser.nama}" berhasil diperbarui.`,
+      data: { siswaUserId },
+    }
+  } catch (error: unknown) {
+    console.error("Error update data siswa:", error)
+    return {
+      success: false,
+      message: toUserFriendlyError(error, "Gagal memperbarui data siswa"),
     }
   }
 }

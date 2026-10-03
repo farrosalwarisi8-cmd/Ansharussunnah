@@ -15,6 +15,10 @@ import {
   resetPasswordOrangTuaManual,
   updateAkunSiswa,
   getDaftarSiswaManual,
+  getDaftarOrangTuaUntukTautan,
+  tautkanOrangTuaSiswa,
+  createOrangTuaBaruDanTautkan,
+  updateDataSiswaManual,
   getKelasList,
   hapusSiswaPermanent,
 } from "@/actions/siswa-manual"
@@ -59,6 +63,7 @@ import {
   ChevronRight,
   Search,
   UserCheck,
+  UserPlus,
   Trash2,
   FileText,
 } from "lucide-react"
@@ -88,6 +93,7 @@ type SiswaListItem = {
   nisn: string | null
   nis: string | null
   jenisKelamin: "LAKI_LAKI" | "PEREMPUAN" | null
+  kelasId: string | null
   kelasNama: string | null
   jenjangNama: string | null
   aktif: boolean
@@ -116,6 +122,14 @@ type PasswordDisplay = {
   passwordOrangTua?: string
   namaSiswa: string
   namaOrangTua?: string
+}
+
+type OrangTuaTautanItem = {
+  userId: string
+  nama: string
+  email: string
+  noHp: string | null
+  jumlahAnak: number
 }
 
 // ============================================
@@ -303,6 +317,9 @@ export default function KelolaSiswaPage() {
   const [loadError, setLoadError] = React.useState<string | null>(null)
   const [filterKelas, setFilterKelas] = React.useState<string>("ALL")
   const [filterGender, setFilterGender] = React.useState<string>("ALL")
+  // Filter cepat: siswa yang relasi orang tuanya belum ada (hasil pemulihan
+  // insiden / memang belum tercatat) agar bisa segera ditautkan.
+  const [filterTanpaOrtu, setFilterTanpaOrtu] = React.useState(false)
   const [searchQuery, setSearchQuery] = React.useState("")
   const [debouncedSearch, setDebouncedSearch] = React.useState("")
   // Pagination server-side daftar siswa.
@@ -357,6 +374,37 @@ export default function KelolaSiswaPage() {
     nama: string
   }>({ open: false, siswaId: "", nama: "" })
 
+  // Tautkan orang tua — untuk siswa yang relasi ortunya hilang (insiden wipe
+  // 2026-10-02) atau memang belum punya orang tua tercatat.
+  const [tautan, setTautan] = React.useState<{
+    open: boolean
+    siswaUserId: string
+    nama: string
+  }>({ open: false, siswaUserId: "", nama: "" })
+  const [ortuOptions, setOrtuOptions] = React.useState<OrangTuaTautanItem[]>([])
+  const [ortuLoading, setOrtuLoading] = React.useState(false)
+  const [ortuSearch, setOrtuSearch] = React.useState("")
+  const [ortuTerpilih, setOrtuTerpilih] = React.useState<string | null>(null)
+  const [tautanLoading, setTautanLoading] = React.useState(false)
+  // Mode "buat akun orang tua baru" di dalam dialog yang sama.
+  const [tambahOrtuMode, setTambahOrtuMode] = React.useState(false)
+  const [ortuBaru, setOrtuBaru] = React.useState({ nama: "", email: "", noHp: "" })
+  const [ortuBaruError, setOrtuBaruError] = React.useState<string | null>(null)
+  const [ortuBaruLoading, setOrtuBaruLoading] = React.useState(false)
+
+  // Lengkapi/edit data riwayat siswa (gender, kelas, NISN, NIS).
+  const [editData, setEditData] = React.useState<{
+    open: boolean
+    siswaUserId: string
+    nama: string
+    jenisKelamin: string // "" | "LAKI_LAKI" | "PEREMPUAN"
+    kelasId: string // "" = belum punya kelas
+    nisn: string
+    nis: string
+  }>({ open: false, siswaUserId: "", nama: "", jenisKelamin: "", kelasId: "", nisn: "", nis: "" })
+  const [editDataError, setEditDataError] = React.useState<string | null>(null)
+  const [editDataLoading, setEditDataLoading] = React.useState(false)
+
   // Muat satu halaman siswa dengan filter server-side.
   const fetchSiswa = React.useCallback(
     async (targetPage: number) => {
@@ -370,6 +418,7 @@ export default function KelolaSiswaPage() {
             filterGender === "LAKI_LAKI" || filterGender === "PEREMPUAN"
               ? filterGender
               : undefined,
+          tanpaOrangTua: filterTanpaOrtu || undefined,
         })
         if (res.success && res.data) {
           const data = res.data as unknown as {
@@ -396,7 +445,7 @@ export default function KelolaSiswaPage() {
         setTotal(0)
       }
     },
-    [debouncedSearch, filterKelas, filterGender]
+    [debouncedSearch, filterKelas, filterGender, filterTanpaOrtu]
   )
 
   // Refresh daftar siswa setelah berkas diubah (dipanggil dari modal).
@@ -477,7 +526,7 @@ export default function KelolaSiswaPage() {
   // Reset ke halaman 1 saat filter berubah.
   React.useEffect(() => {
     setPage(1)
-  }, [debouncedSearch, filterKelas, filterGender])
+  }, [debouncedSearch, filterKelas, filterGender, filterTanpaOrtu])
 
   // Muat daftar siswa (server-side pagination + filter).
   React.useEffect(() => {
@@ -707,6 +756,198 @@ export default function KelolaSiswaPage() {
     }
   }
 
+  // --- Tautkan orang tua ---
+  const openTautan = async (s: SiswaListItem) => {
+    setTautan({ open: true, siswaUserId: s.userId, nama: s.nama })
+    setOrtuSearch("")
+    setOrtuTerpilih(null)
+    setOrtuOptions([])
+    setTambahOrtuMode(false)
+    setOrtuBaru({ nama: "", email: "", noHp: "" })
+    setOrtuBaruError(null)
+    setOrtuLoading(true)
+    try {
+      const res = await getDaftarOrangTuaUntukTautan()
+      if (res.success && res.data) {
+        setOrtuOptions(res.data)
+      } else {
+        toast({
+          title: "Gagal memuat daftar orang tua",
+          description: res.message,
+          variant: "destructive",
+        })
+      }
+    } catch {
+      toast({
+        title: "Gagal memuat daftar orang tua",
+        description: "Terjadi kesalahan saat memuat data.",
+        variant: "destructive",
+      })
+    } finally {
+      setOrtuLoading(false)
+    }
+  }
+
+  // Pencarian daftar ortu dilakukan di client — daftarnya sudah kecil dan
+  // sudah di-load satu kali saat dialog dibuka.
+  const ortuTerfilter = React.useMemo(() => {
+    const q = ortuSearch.trim().toLowerCase()
+    if (!q) return ortuOptions
+    return ortuOptions.filter(
+      (o) => o.nama.toLowerCase().includes(q) || o.email.toLowerCase().includes(q),
+    )
+  }, [ortuOptions, ortuSearch])
+
+  const handleTautkan = async () => {
+    if (!tautan.siswaUserId || !ortuTerpilih) return
+    setTautanLoading(true)
+    try {
+      const result = await tautkanOrangTuaSiswa(tautan.siswaUserId, ortuTerpilih)
+      if (result.success) {
+        const namaSiswa = tautan.nama
+        setTautan({ open: false, siswaUserId: "", nama: "" })
+        await refreshSiswaList()
+        toast({
+          title: "Orang Tua Ditautkan 👨‍👩‍👦",
+          description: result.message || `Relasi ortu untuk ${namaSiswa} berhasil dibuat.`,
+        })
+      } else {
+        toast({
+          title: "Gagal Menautkan Orang Tua",
+          description: result.message,
+          variant: "destructive",
+        })
+      }
+    } catch {
+      toast({
+        title: "Gagal Menautkan Orang Tua",
+        description: "Terjadi kesalahan saat menautkan.",
+        variant: "destructive",
+      })
+    } finally {
+      setTautanLoading(false)
+    }
+  }
+
+  const ortuBaruValid =
+    ortuBaru.nama.trim().length >= 3 && /^\S+@\S+\.\S+$/.test(ortuBaru.email.trim())
+
+  // Buat akun orang tua baru SEKALIGUS tautkan ke siswa terpilih.
+  const handleBuatOrtuBaru = async () => {
+    if (!tautan.siswaUserId || !ortuBaruValid) return
+    setOrtuBaruLoading(true)
+    setOrtuBaruError(null)
+
+    try {
+      const result = await createOrangTuaBaruDanTautkan(tautan.siswaUserId, {
+        nama: ortuBaru.nama.trim(),
+        email: ortuBaru.email.trim(),
+        noHp: ortuBaru.noHp.trim() || undefined,
+      })
+
+      if (result.success && result.data) {
+        const namaSiswa = tautan.nama
+        const namaOrtu = ortuBaru.nama.trim()
+        setTautan({ open: false, siswaUserId: "", nama: "" })
+        setTambahOrtuMode(false)
+        setOrtuBaru({ nama: "", email: "", noHp: "" })
+        await refreshSiswaList()
+
+        // Password baru ditampilkan SEKALI lewat modal yang sudah ada.
+        if (result.data.passwordOrangTua) {
+          setPasswordDisplay({
+            passwordOrangTua: result.data.passwordOrangTua,
+            namaSiswa,
+            namaOrangTua: namaOrtu,
+          })
+        }
+
+        toast({
+          title: result.data.akunSudahAda
+            ? "Akun Orang Tua Ditautkan 👨‍👩‍👦"
+            : "Akun Orang Tua Baru Dibuat 🎉",
+          description: result.message,
+        })
+      } else {
+        setOrtuBaruError(result.message || "Gagal membuat akun orang tua.")
+      }
+    } catch {
+      setOrtuBaruError("Terjadi kesalahan. Silakan coba lagi.")
+    } finally {
+      setOrtuBaruLoading(false)
+    }
+  }
+
+  // --- Lengkapi data siswa ---
+  const openEditData = (s: SiswaListItem) => {
+    setEditData({
+      open: true,
+      siswaUserId: s.userId,
+      nama: s.nama,
+      jenisKelamin: s.jenisKelamin ?? "",
+      kelasId: s.kelasId ?? "",
+      nisn: s.nisn ?? "",
+      nis: s.nis ?? "",
+    })
+    setEditDataError(null)
+  }
+
+  const handleSimpanEditData = async () => {
+    if (!editData.siswaUserId) return
+    if (!editData.jenisKelamin) {
+      setEditDataError("Pilih jenis kelamin terlebih dahulu.")
+      return
+    }
+    setEditDataLoading(true)
+    setEditDataError(null)
+
+    try {
+      const result = await updateDataSiswaManual(editData.siswaUserId, {
+        jenisKelamin: editData.jenisKelamin as "LAKI_LAKI" | "PEREMPUAN",
+        kelasId: editData.kelasId,
+        nisn: editData.nisn.trim(),
+        nis: editData.nis.trim(),
+      })
+
+      if (result.success) {
+        const nama = editData.nama
+        setEditData({
+          open: false,
+          siswaUserId: "",
+          nama: "",
+          jenisKelamin: "",
+          kelasId: "",
+          nisn: "",
+          nis: "",
+        })
+        await refreshSiswaList()
+        toast({
+          title: "Data Siswa Diperbarui ✅",
+          description: result.message || `Data ${nama} berhasil disimpan.`,
+        })
+      } else {
+        setEditDataError(result.message || "Gagal memperbarui data siswa.")
+      }
+    } catch {
+      setEditDataError("Terjadi kesalahan. Silakan coba lagi.")
+    } finally {
+      setEditDataLoading(false)
+    }
+  }
+
+  // Kelas yang boleh dipilih mengikuti gender di form (kelas Ikhwan/Akhwat
+  // hanya untuk gender yang cocok; kelas campuran untuk semua).
+  const kelasUntukEdit = React.useMemo(
+    () =>
+      availableKelas.filter(
+        (k) =>
+          !editData.jenisKelamin ||
+          !k.jenisKelamin ||
+          k.jenisKelamin === editData.jenisKelamin,
+      ),
+    [availableKelas, editData.jenisKelamin],
+  )
+
   // Nama kelas untuk dropdown filter diambil dari daftar kelas (bukan halaman
   // siswa yang sedang tampil) agar pilihan tidak menyusut saat pagination.
   const kelasNames = React.useMemo(() => {
@@ -719,7 +960,8 @@ export default function KelolaSiswaPage() {
   const filterAktif =
     debouncedSearch.trim() !== "" ||
     filterKelas !== "ALL" ||
-    filterGender !== "ALL"
+    filterGender !== "ALL" ||
+    filterTanpaOrtu
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -772,6 +1014,22 @@ export default function KelolaSiswaPage() {
               <SelectItem value="PEREMPUAN">Akhwat</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setFilterTanpaOrtu((v) => !v)}
+            aria-pressed={filterTanpaOrtu}
+            title="Tampilkan hanya siswa yang belum punya relasi orang tua"
+            className={
+              "w-full sm:w-auto h-10 rounded-xl text-sm font-semibold border-dashed " +
+              (filterTanpaOrtu
+                ? "bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-500 shadow-md"
+                : "text-slate-600 hover:text-yellow-600 hover:border-yellow-400")
+            }
+          >
+            <UserPlus className="h-4 w-4 mr-1.5" />
+            Tanpa Orang Tua
+          </Button>
         </CardContent>
       </Card>
 
@@ -814,9 +1072,11 @@ export default function KelolaSiswaPage() {
                   : "Belum ada data siswa aktif. Tambahkan siswa atau selesaikan approval pendaftaran."
               }
               description={
-                filterAktif
-                  ? "Coba ubah kata kunci atau filter kelas/gender."
-                  : "Belum ada data siswa aktif. Tambahkan siswa atau selesaikan approval pendaftaran."
+                filterTanpaOrtu
+                  ? "Semua siswa sudah punya relasi orang tua — tidak ada yang perlu ditautkan."
+                  : filterAktif
+                    ? "Coba ubah kata kunci atau filter kelas/gender."
+                    : "Belum ada data siswa aktif. Tambahkan siswa atau selesaikan approval pendaftaran."
               }
             />
           ) : (
@@ -904,6 +1164,15 @@ export default function KelolaSiswaPage() {
                             <Button
                               size="sm"
                               variant="outline"
+                              onClick={() => openEditData(s)}
+                              className="rounded-xl text-xs font-semibold"
+                            >
+                              <School className="h-3 w-3 mr-1" />
+                              {s.jenisKelamin && s.kelasNama ? "Edit Data" : "Lengkapi Data"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
                               onClick={() =>
                                 setResetConfirm({
                                   open: true,
@@ -933,6 +1202,17 @@ export default function KelolaSiswaPage() {
                               >
                                 <RotateCcw className="h-3 w-3 mr-1" />
                                 PW Ortu
+                              </Button>
+                            )}
+                            {s.orangTua.length === 0 && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openTautan(s)}
+                                className="rounded-xl text-xs font-semibold border-dashed"
+                              >
+                                <UserPlus className="h-3 w-3 mr-1" />
+                                Tautkan Ortu
                               </Button>
                             )}
                             <Button
@@ -1024,6 +1304,15 @@ export default function KelolaSiswaPage() {
                       </Button>
                       <Button
                         size="sm"
+                        variant="outline"
+                        onClick={() => openEditData(s)}
+                        className="rounded-xl text-xs min-h-[40px]"
+                      >
+                        <School className="h-3 w-3 mr-1" />
+                        {s.jenisKelamin && s.kelasNama ? "Edit Data" : "Lengkapi Data"}
+                      </Button>
+                      <Button
+                        size="sm"
                         variant="default"
                         onClick={() =>
                           setBerkasModal({ open: true, siswaId: s.id, nama: s.nama })
@@ -1049,6 +1338,17 @@ export default function KelolaSiswaPage() {
                         <RotateCcw className="h-3 w-3 mr-1" />
                         Reset PW
                       </Button>
+                      {s.orangTua.length === 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openTautan(s)}
+                          className="col-span-2 rounded-xl text-xs min-h-[40px] border-dashed"
+                        >
+                          <UserPlus className="h-3 w-3 mr-1" />
+                          Tautkan Orang Tua
+                        </Button>
+                      )}
                       {s.orangTua.length > 0 && (
                         <Button
                           size="sm"
@@ -1940,6 +2240,375 @@ export default function KelolaSiswaPage() {
         variant="destructive"
         onConfirm={handleHapusSiswa}
       />
+
+      {/* ============================================ */}
+      {/* MODAL: TAUTKAN ORANG TUA KE SISWA            */}
+      {/* ============================================ */}
+      <Dialog
+        open={tautan.open}
+        onOpenChange={(open) => {
+          if (!open) setTautan({ open: false, siswaUserId: "", nama: "" })
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-yellow-500" />
+              Tautkan Orang Tua — {tautan.nama}
+            </DialogTitle>
+            <p className="text-xs text-slate-500">
+              Pilih akun orang tua yang akan dihubungkan ke siswa ini. Hanya relasi
+              BARU yang ditambahkan — data yang sudah ada tidak diubah.
+            </p>
+          </DialogHeader>
+
+          {tambahOrtuMode ? (
+            /* ===== Form: buat akun orang tua baru ===== */
+            <div className="space-y-4 py-1">
+              <p className="text-xs text-slate-500">
+                Akun baru akan langsung ditautkan ke siswa{" "}
+                <strong className="text-slate-700">{tautan.nama}</strong>. Password
+                ditampilkan <strong>sekali</strong> setelah akun dibuat.
+              </p>
+
+              {ortuBaruError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm">
+                  {ortuBaruError}
+                </div>
+              )}
+
+              <div>
+                <Label htmlFor="ortuBaruNama">
+                  Nama Orang Tua <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="ortuBaruNama"
+                  placeholder="Nama lengkap orang tua/wali"
+                  value={ortuBaru.nama}
+                  onChange={(e) => setOrtuBaru((p) => ({ ...p, nama: e.target.value }))}
+                  className="h-10 rounded-xl text-sm"
+                />
+                {ortuBaru.nama.trim() !== "" && ortuBaru.nama.trim().length < 3 && (
+                  <p className="text-xs text-destructive mt-1">Nama minimal 3 karakter</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="ortuBaruEmail">
+                  Email (untuk login) <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="ortuBaruEmail"
+                  type="email"
+                  placeholder="nama@email.com"
+                  value={ortuBaru.email}
+                  onChange={(e) => setOrtuBaru((p) => ({ ...p, email: e.target.value }))}
+                  className="h-10 rounded-xl text-sm"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Jika email sudah punya akun, sistem memakai akun itu (tanpa password
+                  baru) dan langsung menautkannya.
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="ortuBaruHp">No. HP (opsional)</Label>
+                <Input
+                  id="ortuBaruHp"
+                  type="tel"
+                  inputMode="numeric"
+                  placeholder="08xxxxxxxxxx"
+                  value={ortuBaru.noHp}
+                  onChange={(e) =>
+                    setOrtuBaru((p) => ({
+                      ...p,
+                      noHp: e.target.value.replace(/\D/g, "").slice(0, 15),
+                    }))
+                  }
+                  className="h-10 rounded-xl text-sm"
+                />
+              </div>
+            </div>
+          ) : (
+          /* ===== Pilih akun orang tua yang sudah ada ===== */
+          <div className="space-y-3 py-1">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setTambahOrtuMode(true)
+                setOrtuBaruError(null)
+              }}
+              className="w-full rounded-xl border-dashed text-sm font-semibold text-slate-600 hover:text-yellow-600 hover:border-yellow-400"
+            >
+              <UserPlus className="h-4 w-4 mr-1.5" />
+              Belum punya akun? Buat Akun Orang Tua Baru
+            </Button>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Cari nama atau email orang tua..."
+                value={ortuSearch}
+                onChange={(e) => setOrtuSearch(e.target.value)}
+                className="pl-9 h-10 rounded-xl text-sm"
+              />
+            </div>
+
+            <div className="max-h-[320px] overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
+              {ortuLoading ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-yellow-500" />
+                  <span className="ml-2 text-sm text-slate-500">
+                    Memuat daftar orang tua...
+                  </span>
+                </div>
+              ) : ortuTerfilter.length === 0 ? (
+                <div className="p-6 text-center text-sm text-slate-500">
+                  Tidak ada akun orang tua yang cocok.
+                </div>
+              ) : (
+                ortuTerfilter.map((o) => (
+                  <button
+                    key={o.userId}
+                    type="button"
+                    onClick={() => setOrtuTerpilih(o.userId)}
+                    className={
+                      "w-full text-left px-4 py-3 flex items-center justify-between gap-3 transition-colors " +
+                      "border-l-4 " +
+                      (ortuTerpilih === o.userId
+                        ? "bg-yellow-50 border-yellow-500"
+                        : "border-transparent hover:bg-slate-50")
+                    }
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-800 truncate">
+                        {o.nama}
+                      </div>
+                      <div className="text-xs text-slate-500 truncate">{o.email}</div>
+                      {o.noHp && (
+                        <div className="text-xs text-slate-400">{o.noHp}</div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 whitespace-nowrap">
+                        {o.jumlahAnak} anak
+                      </span>
+                      {ortuTerpilih === o.userId && (
+                        <Check className="h-4 w-4 text-yellow-500" />
+                      )}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            {tambahOrtuMode ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setTambahOrtuMode(false)}
+                  disabled={ortuBaruLoading}
+                  className="rounded-xl min-h-[40px]"
+                >
+                  Kembali
+                </Button>
+                <Button
+                  onClick={handleBuatOrtuBaru}
+                  disabled={!ortuBaruValid || ortuBaruLoading}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
+                >
+                  {ortuBaruLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Membuat...
+                    </>
+                  ) : (
+                    "Buat & Tautkan"
+                  )}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setTautan({ open: false, siswaUserId: "", nama: "" })}
+                  disabled={tautanLoading}
+                  className="rounded-xl min-h-[40px]"
+                >
+                  Batal
+                </Button>
+                <Button
+                  onClick={handleTautkan}
+                  disabled={!ortuTerpilih || tautanLoading || ortuLoading}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
+                >
+                  {tautanLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Menautkan...
+                    </>
+                  ) : (
+                    "Tautkan Orang Tua"
+                  )}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============================================ */}
+      {/* MODAL: LENGKAPI / EDIT DATA SISWA            */}
+      {/* ============================================ */}
+      <Dialog
+        open={editData.open}
+        onOpenChange={(open) => {
+          if (!open) setEditData((prev) => ({ ...prev, open: false }))
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <School className="h-5 w-5 text-yellow-500" />
+              Lengkapi Data — {editData.nama}
+            </DialogTitle>
+            <p className="text-xs text-slate-500">
+              Isi data yang belum lengkap (jenis kelamin, kelas, NISN/NIS). Kolom
+              yang dikosongkan akan disimpan kosong.
+            </p>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            {editDataError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm">
+                {editDataError}
+              </div>
+            )}
+
+            <div>
+              <Label>
+                Jenis Kelamin <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={editData.jenisKelamin || undefined}
+                onValueChange={(v) =>
+                  setEditData((prev) => ({ ...prev, jenisKelamin: v }))
+                }
+              >
+                <SelectTrigger className="h-10 rounded-xl text-sm">
+                  <SelectValue placeholder="Pilih jenis kelamin" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="LAKI_LAKI">Ikhwan (Laki-laki)</SelectItem>
+                  <SelectItem value="PEREMPUAN">Akhwat (Perempuan)</SelectItem>
+                </SelectContent>
+              </Select>
+              {!editData.jenisKelamin && (
+                <p className="text-xs text-amber-600 mt-1">
+                  Wajib diisi — data ini belum diketahui.
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Label>Kelas</Label>
+              <Select
+                value={editData.kelasId || "NONE"}
+                onValueChange={(v) =>
+                  setEditData((prev) => ({ ...prev, kelasId: v === "NONE" ? "" : v }))
+                }
+              >
+                <SelectTrigger className="h-10 rounded-xl text-sm">
+                  <SelectValue placeholder="Pilih kelas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE">Belum ada kelas</SelectItem>
+                  {kelasUntukEdit.map((k) => (
+                    <SelectItem key={k.id} value={k.id}>
+                      {k.jenjangNama} - {k.nama}
+                      {k.jenisKelamin === "LAKI_LAKI"
+                        ? " (Ikhwan)"
+                        : k.jenisKelamin === "PEREMPUAN"
+                          ? " (Akhwat)"
+                          : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {editData.jenisKelamin &&
+                kelasUntukEdit.length === 0 &&
+                availableKelas.length > 0 && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Belum ada kelas yang sesuai jenis kelamin ini.
+                  </p>
+                )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="editDataNisn">NISN (10 digit)</Label>
+                <Input
+                  id="editDataNisn"
+                  inputMode="numeric"
+                  maxLength={10}
+                  placeholder="10 digit angka"
+                  value={editData.nisn}
+                  onChange={(e) =>
+                    setEditData((prev) => ({
+                      ...prev,
+                      nisn: e.target.value.replace(/\D/g, "").slice(0, 10),
+                    }))
+                  }
+                  className="h-10 rounded-xl text-sm"
+                />
+                {editData.nisn !== "" && editData.nisn.length !== 10 && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    NISN umumnya 10 digit ({editData.nisn.length}/10).
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label htmlFor="editDataNis">NIS</Label>
+                <Input
+                  id="editDataNis"
+                  placeholder="Nomor induk siswa lokal"
+                  value={editData.nis}
+                  onChange={(e) => setEditData((prev) => ({ ...prev, nis: e.target.value }))}
+                  className="h-10 rounded-xl text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setEditData((prev) => ({ ...prev, open: false }))}
+              disabled={editDataLoading}
+              className="rounded-xl min-h-[40px]"
+            >
+              Batal
+            </Button>
+            <Button
+              onClick={handleSimpanEditData}
+              disabled={!editData.jenisKelamin || editDataLoading}
+              className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[40px]"
+            >
+              {editDataLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Menyimpan...
+                </>
+              ) : (
+                "Simpan Data"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ============================================ */}
       {/* MODAL: BERKAS SISWA (unggah/pratinjau/cetak) */}
