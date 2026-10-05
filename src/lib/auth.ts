@@ -121,9 +121,12 @@ async function loadUserRecord(authUserId: string): Promise<UserWithRelations | n
 
   // Fallback: find by authId (single role or first match) — sertakan nested kelas
   // karena role belum diketahui pasti.
+  // WAJIB: aktif=true + deleted_at null (jangan pernah memilih akun nonaktif /
+  // soft-deleted), dan orderBy deterministik berdasarkan hak akses tertinggi
+  // (SUPER_ADMIN dulu) supaya multi-role selalu resolve ke akun yang sama.
   if (!user) {
-    user = (await prisma.user.findFirst({
-      where: { authId: authUserId, deleted_at: null },
+    const fallbackUsers = await prisma.user.findMany({
+      where: { authId: authUserId, deleted_at: null, aktif: true },
       include: {
         guru: true,
         siswa: {
@@ -133,7 +136,23 @@ async function loadUserRecord(authUserId: string): Promise<UserWithRelations | n
         },
         orangTua: true,
       },
-    })) as UserWithRelations | null
+      orderBy: [
+        { role: "asc" },
+        { createdAt: "asc" },
+      ],
+    })
+    const ROLE_ORDER: Record<string, number> = {
+      SUPER_ADMIN: 0,
+      ADMIN_AKADEMIK: 1,
+      ADMIN_KEUANGAN: 2,
+      GURU: 3,
+      SISWA: 4,
+      ORANG_TUA: 5,
+    }
+    fallbackUsers.sort(
+      (a, b) => (ROLE_ORDER[a.role] ?? 999) - (ROLE_ORDER[b.role] ?? 999)
+    )
+    user = (fallbackUsers[0] ?? null) as UserWithRelations | null
   }
 
   // Defense-in-depth: cek apakah akun masih aktif

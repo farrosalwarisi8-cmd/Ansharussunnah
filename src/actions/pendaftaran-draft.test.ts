@@ -62,6 +62,7 @@ beforeEach(() => {
   mockDraftCreate.mockResolvedValue({ id: "draft-1" });
   mockDraftUpdate.mockResolvedValue({ updatedAt: new Date() });
   mockDraftUpdateMany.mockResolvedValue({ count: 1 });
+  mockDraftFindUnique.mockResolvedValue({ updatedAt: new Date() });
 });
 
 describe("createPendaftaranDraft", () => {
@@ -180,7 +181,16 @@ describe("savePendaftaranDraft", () => {
   };
 
   it("menyimpan perubahan setelah refresh (simulasi reload)", async () => {
-    mockDraftFindUnique.mockResolvedValue(draftRow);
+    // Pemanggilan pertama: get draft by token hash
+    mockDraftFindUnique.mockResolvedValueOnce({
+      ...draftRow,
+      updatedAt: new Date("2026-01-01T00:00:00Z"),
+      expiresAt: FUTURE,
+    });
+    // Pemanggilan kedua: get latest updatedAt setelah CAS gagal / update berhasil
+    mockDraftFindUnique.mockResolvedValueOnce({
+      updatedAt: new Date("2026-01-01T00:00:00Z"),
+    });
 
     const res = await savePendaftaranDraft(
       "token-benar-123456",
@@ -189,7 +199,8 @@ describe("savePendaftaranDraft", () => {
     );
 
     expect(res.success).toBe(true);
-    const data = mockDraftUpdate.mock.calls[0][0].data;
+    // savePendaftaranDraft menggunakan updateMany, bukan update
+    const data = mockDraftUpdateMany.mock.calls[0][0].data;
     expect(data.lastStep).toBe(3);
     expect(data.payload.namaLengkap).toBe("Ahmad Fauzi");
     // TTL diperpanjang saat disimpan.

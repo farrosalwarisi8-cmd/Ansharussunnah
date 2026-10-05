@@ -112,11 +112,14 @@ class InMemoryRateLimiter implements RateLimiterBackend {
 
 const localMemoryStore = new Map<string, InMemoryEntry>()
 
-function createRateLimiter(): RateLimiterBackend {
-  const hasUpstash =
+export function isRedisConfigured(): boolean {
+  return Boolean(
     process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+  )
+}
 
-  if (hasUpstash) {
+function createRateLimiter(): RateLimiterBackend {
+  if (isRedisConfigured()) {
     return new UpstashRateLimiter()
   }
   return new InMemoryRateLimiter()
@@ -174,6 +177,26 @@ export async function rateLimitAsync(
   identifier: string,
   options: RateLimitOptions
 ): Promise<RateLimitResult> {
+  return rateLimiterInstance.limit(identifier, options)
+}
+
+/**
+ * Rate limit STRICT untuk endpoint sensitif (login, reset password, OTP).
+ * Jika Redis/Upstash tidak tersedia, FAIL-CLOSED: request ditolak daripada
+ * diam-diam memakai limiter process-local yang tidak konsisten antar instance
+ * serverless. Pakai ini untuk semua endpoint yang melindungi kredensial.
+ */
+export async function rateLimitAsyncStrict(
+  identifier: string,
+  options: RateLimitOptions
+): Promise<RateLimitResult> {
+  if (!isRedisConfigured()) {
+    return {
+      success: false,
+      remaining: 0,
+      resetAt: Date.now() + options.windowMs,
+    }
+  }
   return rateLimiterInstance.limit(identifier, options)
 }
 

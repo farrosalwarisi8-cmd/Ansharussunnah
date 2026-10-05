@@ -7,7 +7,7 @@ import * as React from "react"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import {
   createAkunGuru,
-  getDaftarGuru,
+  getDaftarGuruLengkap,
   nonaktifkanAkunGuru,
   aktifkanKembaliAkunGuru,
   setGuruAdmin,
@@ -57,7 +57,7 @@ export default function KelolaGuruPage() {
     setLoading(true)
     setLoadError(null)
     try {
-      const result = await getDaftarGuru()
+      const result = await getDaftarGuruLengkap()
       if (result.success && result.data) {
         setGuruList(result.data as DataGuru[])
       } else {

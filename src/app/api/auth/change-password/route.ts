@@ -19,7 +19,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const result = await changePassword(currentPassword, newPassword, confirmPassword)
+    const result = await changePassword(
+      currentPassword,
+      newPassword,
+      confirmPassword,
+      auth.user?.id
+    )
     return NextResponse.json(result, { status: result.success ? 200 : 400 })
   } catch {
     return NextResponse.json(

@@ -3,12 +3,12 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { resetPassword } from "@/actions/password-reset"
-import { rateLimitAsync, getClientIp } from "@/lib/rate-limit"
+import { rateLimitAsyncStrict, getClientIp } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
   try {
     const ip = getClientIp(request)
-    const limiter = await rateLimitAsync(`api-reset-password:${ip}`, {
+    const limiter = await rateLimitAsyncStrict(`api-reset-password:${ip}`, {
       maxRequests: 3,
       windowMs: 5 * 60 * 1000,
     })

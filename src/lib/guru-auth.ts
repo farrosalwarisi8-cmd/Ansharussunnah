@@ -166,3 +166,136 @@ export async function getMapelIdYangDiajarDiKelas(
     .map((p) => p.mataPelajaranId)
     .filter((x): x is string => !!x)
 }
+
+// ============================================================
+// HELPER TERPUSAT: VERIFIKASI AKSES KELAS AKADEMIK (BARU)
+// ============================================================
+
+/**
+ * Jenis akses guru terhadap kelas untuk fitur akademik.
+ * Digunakan oleh: Materi, Tugas, Ujian, Absensi, Rapor, Rekap Nilai, dll.
+ */
+export type AcademicAccess =
+  | { status: "authorized"; user: Awaited<ReturnType<typeof requireGuru>>; roleInKelas: "WALI_KELAS" | "PENGAJAR" | "ADMIN"; guruId: string | null }
+  | { status: "forbidden"; reason: string }
+
+/**
+ * Helper terpusat untuk memverifikasi akses akademik ke kelas.
+ * Aturan:
+ *   - SUPER_ADMIN dan ADMIN_AKADEMIK memiliki akses penuh ke seluruh kelas aktif
+ *     dan seluruh mata pelajaran aktif. Tidak wajib memiliki record `Guru`.
+ *   - GURU biasa hanya boleh mengakses kelas jika:
+ *       - menjadi wali kelas; atau
+ *       - memiliki penugasan pada GuruKelas.
+ *   - GURU dengan isAdmin = true mengikuti akses admin akademik.
+ *   - Role lain harus ditolak dengan response aman.
+ *
+ * PENTING: Helper ini DIPAKAI secara konsisten oleh semua fitur akademik.
+ * Jangan menduplikasi guard di setiap action/server.
+ */
+export async function verifyAcademicClassAccess(
+  kelasId: string,
+  mataPelajaranName?: string | null,
+  mataPelajaranId?: string | null
+): Promise<AcademicAccess> {
+  const user = await requireGuru()
+
+  // Super admin / admin akademik: akses penuh tanpa perlu record Guru
+  if (isAcademicAdminRole(user.role) || user.isAdmin) {
+    // Validasi mata pelajaran jika ada (bukan wajib tapi jika ada harus valid)
+    if (mataPelajaranName) {
+      const mapel = await prisma.mataPelajaran.findFirst({
+        where: { nama: mataPelajaranName, aktif: true },
+        select: { id: true },
+      })
+      if (!mapel) {
+        return { status: "forbidden", reason: "Mata pelajaran tidak ditemukan" }
+      }
+    }
+    if (mataPelajaranId) {
+      const mapel = await prisma.mataPelajaran.findUnique({ where: { id: mataPelajaranId } })
+      if (!mapel || !mapel.aktif) {
+        return { status: "forbidden", reason: "Mata pelajaran tidak ditemukan" }
+      }
+    }
+
+    // Tentukan peran: wali kelas jika guru punya, else ADMIN
+    const guruId = user.guru?.id ?? null
+    let roleInKelas: "WALI_KELAS" | "PENGAJAR" | "ADMIN" = "ADMIN"
+
+    if (guruId) {
+      const kelas = await prisma.kelas.findFirst({
+        where: { id: kelasId, waliKelasId: guruId },
+        select: { id: true },
+      })
+      if (kelas) {
+        roleInKelas = "WALI_KELAS"
+      } else {
+        const guruKelas = await prisma.guruKelas.findFirst({
+          where: { guruId, kelasId },
+          select: { id: true },
+        })
+        if (guruKelas) {
+          roleInKelas = "PENGAJAR"
+        }
+      }
+    }
+
+    return {
+      status: "authorized",
+      user,
+      roleInKelas,
+      guruId,
+    }
+  }
+
+  // Guru biasa: harus memiliki akses ke kelas melalui GuruKelas atau wali kelas
+  if (user.role === "GURU") {
+    const guruId = user.guru?.id
+    if (!guruId) {
+      return { status: "forbidden", reason: "Profil guru tidak ditemukan" }
+    }
+
+    // Cek apakah guru memiliki akses ke kelas ini
+    const guruKelas = await prisma.guruKelas.findFirst({
+      where: { guruId, kelasId },
+      include: { mataPelajaran: true },
+    })
+
+    // Atau guru adalah wali kelas
+    const kelas = await prisma.kelas.findFirst({
+      where: { id: kelasId, waliKelasId: guruId },
+    })
+
+    const isPengajar = !!guruKelas
+    const isWaliKelas = !!kelas
+
+    if (!isPengajar && !isWaliKelas) {
+      return { status: "forbidden", reason: "Anda tidak memiliki akses ke kelas ini" }
+    }
+
+    // Validasi mata pelajaran jika ada (hanya untuk guru pengajar)
+    if ((mataPelajaranName || mataPelajaranId) && isPengajar && guruKelas) {
+      const isMapelCorrect =
+        (mataPelajaranName && guruKelas.mataPelajaran.nama === mataPelajaranName) ||
+        (mataPelajaranId && guruKelas.mataPelajaranId === mataPelajaranId)
+
+      if (!isMapelCorrect) {
+        return { status: "forbidden", reason: "Anda tidak memiliki akses ke mata pelajaran ini di kelas ini" }
+      }
+    }
+
+    // Tentukan peran
+    let roleInKelas: "WALI_KELAS" | "PENGAJAR" | "ADMIN" = isWaliKelas ? "WALI_KELAS" : "PENGAJAR"
+
+    return {
+      status: "authorized",
+      user,
+      roleInKelas,
+      guruId,
+    }
+  }
+
+  // Role lain ditolak
+  return { status: "forbidden", reason: "Anda tidak memiliki akses ke kelas ini" }
+}

@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { requestPasswordReset } from "@/actions/password-reset"
-import { rateLimitAsync, getClientIp } from "@/lib/rate-limit"
+import { rateLimitAsyncStrict, getClientIp } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     // panggilan. Bucket ini hanya untuk memberi status HTTP 429 ke klien API;
     // proteksi untuk Server Component tetap datang dari dalam action.
     const ip = getClientIp(request)
-    const limiter = await rateLimitAsync(`api-forgot-password:${ip}`, {
+    const limiter = await rateLimitAsyncStrict(`api-forgot-password:${ip}`, {
       maxRequests: 3,
       windowMs: 5 * 60 * 1000,
     })

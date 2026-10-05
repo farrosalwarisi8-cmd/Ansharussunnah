@@ -261,7 +261,14 @@ export async function getDaftarKelasYangDiajarGuru(
         where: { aktif: true },
         include: {
           jenjang: { select: { nama: true } },
-          _count: { select: { siswa: true } },
+          // Hitung hanya siswa yang aktif (belum soft-deleted)
+          _count: {
+            select: {
+              siswa: {
+                where: { deleted_at: null },
+              },
+            },
+          },
         },
         orderBy: [{ jenjang: { urutan: "asc" } }, { nama: "asc" }],
       })
@@ -323,6 +330,7 @@ export async function getDaftarKelasYangDiajarGuru(
         jenjang: gk.kelas.jenjang.nama,
         jenisKelamin: gk.kelas.jenisKelamin,
         mataPelajaranId: gk.mataPelajaranId,
+        // Hitung hanya siswa yang aktif (belum soft-deleted)
         jumlahSiswa: gk.kelas._count.siswa,
         // Kelas diajarkan = Guru Mapel; bila sekaligus wali kelas → tandai keduanya
         peran: (gk.kelas.waliKelasId === targetGuruId
@@ -336,6 +344,7 @@ export async function getDaftarKelasYangDiajarGuru(
         jenjang: k.jenjang.nama,
         jenisKelamin: k.jenisKelamin,
         mataPelajaranId: null,
+        // Hitung hanya siswa yang aktif (belum soft-deleted)
         jumlahSiswa: k._count.siswa,
         // Hanya wali kelas (tidak mengajar mapel apa pun di kelas ini)
         peran: "WALI_KELAS" as const,

@@ -647,13 +647,79 @@ export async function hapusAkunGuruPermanent(
 }
 
 /**
- * Mengambil daftar semua guru beserta info akun.
+ * Selector guru dengan field MINIMAL tanpa PII sensitif.
+ * Dipakai guru biasa untuk memilih pengajar/wali kelas — tidak boleh
+ * mengekspos email, nomor telepon, isAdmin, atau status password guru lain.
  */
 export async function getDaftarGuru(): Promise<ActionResponse> {
   try {
     await requireGuru();
 
     const guruList = await prisma.guru.findMany({
+      where: { deleted_at: null },
+      include: {
+        user: {
+          select: {
+            id: true,
+            nama: true,
+            aktif: true,
+          },
+        },
+        waliKelas: {
+          select: { nama: true },
+        },
+        mengajar: {
+          select: {
+            kelas: { select: { nama: true } },
+            mataPelajaran: { select: { id: true, kode: true, nama: true } },
+          },
+        },
+      },
+      orderBy: { user: { nama: "asc" } },
+    });
+
+    const formatted = guruList.map((g) => ({
+      id: g.id,
+      userId: g.user.id,
+      nama: g.user.nama,
+      nip: g.nip,
+      jabatan: g.jabatan,
+      jenisKelamin: g.jenisKelamin,
+      aktif: g.user.aktif,
+      waliKelas: g.waliKelas.map((k) => k.nama),
+      mengajar: g.mengajar.map((m) => ({
+        kelas: m.kelas?.nama ?? null,
+        mapelId: m.mataPelajaran?.id ?? null,
+        mapelKode: m.mataPelajaran?.kode ?? null,
+        mapelNama: m.mataPelajaran?.nama ?? null,
+      })),
+      jumlahMengajar: g.mengajar.length,
+    }));
+
+    return {
+      success: true,
+      message: "Daftar guru berhasil dimuat",
+      data: formatted,
+    };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Gagal memuat daftar guru",
+    };
+  }
+}
+
+/**
+ * Daftar lengkap guru DENGAN PII (email, noHp, isAdmin, mustChangePassword).
+ * HANYA untuk admin berwenang (SUPER_ADMIN / ADMIN_AKADEMIK / GURU+isAdmin).
+ */
+export async function getDaftarGuruLengkap(): Promise<ActionResponse> {
+  try {
+    await requireGuruAdmin();
+
+    const guruList = await prisma.guru.findMany({
+      where: { deleted_at: null },
       include: {
         user: {
           select: {

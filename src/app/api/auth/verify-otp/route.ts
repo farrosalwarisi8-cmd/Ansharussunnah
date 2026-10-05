@@ -3,14 +3,14 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { verifyResetOtp } from "@/actions/password-reset"
-import { rateLimitAsync, getClientIp } from "@/lib/rate-limit"
+import { rateLimitAsyncStrict, getClientIp } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
   try {
     // Bucket terpisah dari limiter di dalam `verifyResetOtp` (`verify-reset-otp`)
     // — lihat catatan di route forgot-password. Jangan disatukan.
     const ip = getClientIp(request)
-    const limiter = await rateLimitAsync(`api-verify-otp:${ip}`, {
+    const limiter = await rateLimitAsyncStrict(`api-verify-otp:${ip}`, {
       maxRequests: 5,
       windowMs: 60 * 1000,
     })

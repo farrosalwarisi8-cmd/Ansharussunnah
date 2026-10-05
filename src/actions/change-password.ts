@@ -5,21 +5,33 @@
 import prisma from "@/lib/prisma"
 import { requireAuth } from "@/lib/auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
+import { rateLimitAsyncStrict, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
 
 export async function changePassword(
   currentPassword: string,
   newPassword: string,
-  confirmPassword: string
+  confirmPassword: string,
+  bearerAuthId?: string
 ): Promise<ActionResponse> {
   try {
     const user = await requireAuth()
 
+    // API route mengautentikasi via Bearer token. Jika identitas cookie
+    // berbeda dengan identitas Bearer, tolak — jangan pernah menimpa
+    // password akun lain. UI (server action) mengirim undefined → perilaku
+    // existing tidak berubah.
+    if (bearerAuthId && user.authId !== bearerAuthId) {
+      return {
+        success: false,
+        message: "Identitas token tidak cocok dengan sesi aktif",
+      }
+    }
+
     // Rate Limit: maksimal 5 percobaan ganti password per 15 menit per IP
     const ip = await getClientIpFromHeaders()
-    const limiter = await rateLimitAsync(`change-password:${ip}:${user.id}`, {
+    const limiter = await rateLimitAsyncStrict(`change-password:${ip}:${user.id}`, {
       maxRequests: 5,
       windowMs: 15 * 60 * 1000, // 15 menit
     })

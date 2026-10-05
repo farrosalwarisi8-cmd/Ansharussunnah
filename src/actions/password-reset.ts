@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { createOtpWithHash, verifyOtp } from "@/lib/otp"
 import { sendEmail, buildOtpEmail } from "@/lib/email"
-import { rateLimitAsync, getClientIpFromHeaders } from "@/lib/rate-limit"
+import { rateLimitAsyncStrict, getClientIpFromHeaders } from "@/lib/rate-limit"
 import type { ActionResponse } from "@/types"
 import { revalidatePath } from "next/cache"
 
@@ -34,7 +34,7 @@ export async function requestPasswordReset(
 ): Promise<ActionResponse> {
   try {
     const ip = await getClientIpFromHeaders()
-    const limiter = await rateLimitAsync(
+    const limiter = await rateLimitAsyncStrict(
       `request-password-reset:${ip}`,
       RATE_LIMIT_REQUEST_PER_IP
     )
@@ -140,7 +140,7 @@ export async function verifyResetOtp(
 ): Promise<ActionResponse<{ resetToken: string }>> {
   try {
     const ip = await getClientIpFromHeaders()
-    const limiter = await rateLimitAsync(
+    const limiter = await rateLimitAsyncStrict(
       `verify-reset-otp:${ip}`,
       RATE_LIMIT_VERIFY_PER_IP
     )
@@ -227,7 +227,7 @@ export async function resetPassword(
 ): Promise<ActionResponse> {
   try {
     const ip = await getClientIpFromHeaders()
-    const limiter = await rateLimitAsync(
+    const limiter = await rateLimitAsyncStrict(
       `reset-password:${ip}`,
       RATE_LIMIT_RESET_PER_IP
     )

@@ -120,13 +120,15 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
           if (data.length > 0 && !kelasId) {
             setKelasId(data[0].kelasId)
           }
+        } else if (result.message) {
+          console.error("Gagal memuat daftar kelas:", result.message)
         }
-      } catch {
-        // Silent fail
+      } catch (err) {
+        console.error("Error fetching kelas list:", err)
       }
     }
     fetchKelas()
-  }, [isTeacher, kelasId])
+  }, [isTeacher])
 
   // Muat periode ajaran aktif sebagai nilai default periode
   React.useEffect(() => {

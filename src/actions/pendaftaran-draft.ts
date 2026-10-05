@@ -200,8 +200,9 @@ export async function resumePendaftaranDraft(
 export async function savePendaftaranDraft(
   resumeToken: string,
   payload: unknown,
-  lastStep: number
-): Promise<ActionResponse<{ updatedAt: string }>> {
+  lastStep: number,
+  expectedUpdatedAt?: string
+): Promise<ActionResponse<{ updatedAt: string; conflict?: boolean }>> {
   try {
     if (!isPendaftaranTokenValid("__bentuk_only__", resumeToken) && resumeToken.length < 16) {
       // Bentuk token dicek murah di sini; kecocokan hash dicek via DB lookup.
@@ -227,7 +228,7 @@ export async function savePendaftaranDraft(
     const tokenHash = hashTokenAkses(resumeToken)
     const draft = await prisma.pendaftaranDraft.findUnique({
       where: { resumeTokenHash: tokenHash },
-      select: { id: true, finalizedAt: true, expiresAt: true },
+      select: { id: true, finalizedAt: true, expiresAt: true, updatedAt: true },
     })
 
     if (!draft) {
@@ -240,8 +241,18 @@ export async function savePendaftaranDraft(
       return { success: false, message: "Draft sudah kedaluwarsa" }
     }
 
-    const hasil = await prisma.pendaftaranDraft.update({
-      where: { id: draft.id },
+    // CAS (compare-and-swap): jika klien mengirim expectedUpdatedAt, hanya
+    // update bila updatedAt di DB masih sama dengan yang terakhir dilihat klien.
+    // Ini mencegah request autosave lama (dari perangkat lain / tab lain) menimpa
+    // data yang lebih baru. Klien lama yang tidak mengirim expectedUpdatedAt
+    // tetap berperilaku last-write-wins (backward compatible).
+    const casCondition =
+      expectedUpdatedAt && !Number.isNaN(Date.parse(expectedUpdatedAt))
+        ? { updatedAt: new Date(expectedUpdatedAt) }
+        : {}
+
+    const hasil = await prisma.pendaftaranDraft.updateMany({
+      where: { id: draft.id, finalizedAt: null, ...casCondition },
       data: {
         payload: bersih.data as Prisma.InputJsonValue,
         lastStep: batasiStep(lastStep),
@@ -250,10 +261,36 @@ export async function savePendaftaranDraft(
       },
     })
 
+    if (hasil.count === 0) {
+      // CAS gagal: updatedAt berubah sejak klien terakhir membaca. Ambil
+      // updatedAt terbaru agar klien bisa menampilkan pesan konflik dan memuat
+      // ulang versi terbaru, bukan menimpa diam-diam.
+      const terbaru = await prisma.pendaftaranDraft.findUnique({
+        where: { id: draft.id },
+        select: { updatedAt: true, finalizedAt: true },
+      })
+      if (terbaru?.finalizedAt) {
+        return { success: false, message: "Draft sudah difinalisasi" }
+      }
+      return {
+        success: false,
+        message: "Data berubah di perangkat lain. Memuat ulang versi terbaru.",
+        data: {
+          updatedAt: terbaru?.updatedAt.toISOString() ?? draft.updatedAt.toISOString(),
+          conflict: true,
+        },
+      }
+    }
+
+    const updated = await prisma.pendaftaranDraft.findUnique({
+      where: { id: draft.id },
+      select: { updatedAt: true },
+    })
+
     return {
       success: true,
       message: "Draft tersimpan",
-      data: { updatedAt: hasil.updatedAt.toISOString() },
+      data: { updatedAt: updated?.updatedAt.toISOString() ?? "" },
     }
   } catch (error) {
     console.error("Error savePendaftaranDraft:", error)

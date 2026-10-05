@@ -50,6 +50,7 @@ vi.mock("@/lib/otp", () => ({
 
 vi.mock("@/lib/rate-limit", () => ({
   rateLimitAsync: vi.fn().mockResolvedValue({ success: true }),
+  rateLimitAsyncStrict: vi.fn().mockResolvedValue({ success: true }),
   getClientIpFromHeaders: vi.fn().mockResolvedValue("127.0.0.1"),
 }))
 
@@ -59,7 +60,7 @@ vi.mock("next/cache", () => ({
 
 import prisma from "@/lib/prisma"
 import { verifyOtp } from "@/lib/otp"
-import { rateLimitAsync } from "@/lib/rate-limit"
+import { rateLimitAsync, rateLimitAsyncStrict } from "@/lib/rate-limit"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
   requestPasswordReset,
@@ -163,7 +164,7 @@ describe("OTP — Rate Limit per IP", () => {
   })
 
   it("requestPasswordReset: menolak saat limiter per-IP menolak", async () => {
-    vi.mocked(rateLimitAsync).mockResolvedValue({ success: false } as never)
+    vi.mocked(rateLimitAsyncStrict).mockResolvedValue({ success: false } as never)
 
     const result = await requestPasswordReset("test@example.com")
 
@@ -177,14 +178,14 @@ describe("OTP — Rate Limit per IP", () => {
   it("requestPasswordReset: memakai bucket per-IP dengan batas 3/5 menit", async () => {
     await requestPasswordReset("test@example.com")
 
-    expect(rateLimitAsync).toHaveBeenCalledWith(
+    expect(rateLimitAsyncStrict).toHaveBeenCalledWith(
       "request-password-reset:127.0.0.1",
       { maxRequests: 3, windowMs: 5 * 60 * 1000 }
     )
   })
 
   it("verifyResetOtp: menolak saat limiter per-IP menolak", async () => {
-    vi.mocked(rateLimitAsync).mockResolvedValue({ success: false } as never)
+    vi.mocked(rateLimitAsyncStrict).mockResolvedValue({ success: false } as never)
 
     const result = await verifyResetOtp("test@example.com", "123456")
 
@@ -197,14 +198,14 @@ describe("OTP — Rate Limit per IP", () => {
   it("verifyResetOtp: memakai bucket per-IP dengan batas 5/1 menit", async () => {
     await verifyResetOtp("test@example.com", "123456")
 
-    expect(rateLimitAsync).toHaveBeenCalledWith("verify-reset-otp:127.0.0.1", {
+    expect(rateLimitAsyncStrict).toHaveBeenCalledWith("verify-reset-otp:127.0.0.1", {
       maxRequests: 5,
       windowMs: 60 * 1000,
     })
   })
 
   it("resetPassword: menolak saat limiter per-IP menolak", async () => {
-    vi.mocked(rateLimitAsync).mockResolvedValue({ success: false } as never)
+    vi.mocked(rateLimitAsyncStrict).mockResolvedValue({ success: false } as never)
 
     const result = await resetPassword(
       "test@example.com",
@@ -227,7 +228,7 @@ describe("OTP — Rate Limit per IP", () => {
       "PasswordBaru123"
     )
 
-    expect(rateLimitAsync).toHaveBeenCalledWith("reset-password:127.0.0.1", {
+    expect(rateLimitAsyncStrict).toHaveBeenCalledWith("reset-password:127.0.0.1", {
       maxRequests: 10,
       windowMs: 5 * 60 * 1000,
     })
@@ -243,7 +244,7 @@ describe("OTP — Rate Limit per IP", () => {
       "PasswordBaru123"
     )
 
-    const keys = vi.mocked(rateLimitAsync).mock.calls.map((c) => c[0])
+    const keys = vi.mocked(rateLimitAsyncStrict).mock.calls.map((c) => c[0])
     expect(keys).toEqual([
       "request-password-reset:127.0.0.1",
       "verify-reset-otp:127.0.0.1",
