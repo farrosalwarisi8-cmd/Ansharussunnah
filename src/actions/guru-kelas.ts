@@ -304,7 +304,11 @@ export async function getDaftarKelasYangDiajarGuru(
         kelas: {
           include: {
             jenjang: { select: { nama: true } },
-            _count: { select: { siswa: true } },
+            _count: {
+              select: {
+                siswa: { where: { deleted_at: null } },
+              },
+            },
           },
         },
       },
@@ -317,7 +321,11 @@ export async function getDaftarKelasYangDiajarGuru(
       where: { aktif: true, waliKelasId: targetGuruId, id: { notIn: taughtKelasIds } },
       include: {
         jenjang: { select: { nama: true } },
-        _count: { select: { siswa: true } },
+        _count: {
+          select: {
+            siswa: { where: { deleted_at: null } },
+          },
+        },
       },
       orderBy: [{ jenjang: { urutan: "asc" } }, { nama: "asc" }],
     })

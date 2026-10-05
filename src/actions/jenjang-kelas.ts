@@ -95,7 +95,9 @@ export async function getAdminJenjangList(): Promise<ActionResponse<JenjangWithK
                 include: { user: true },
               },
               _count: {
-                select: { siswa: true },
+                select: {
+                  siswa: { where: { deleted_at: null } },
+                },
               },
             },
           },
