@@ -164,7 +164,13 @@ export async function createPendaftaran(
     if (data.kelasTujuanId) {
       const kelas = await prisma.kelas.findFirst({
         where: { id: data.kelasTujuanId, jenjangId: data.jenjangTujuanId },
-        include: { _count: { select: { siswa: true } } },
+        include: {
+          _count: {
+            select: {
+              siswa: { where: { deleted_at: null } },
+            },
+          },
+        },
       })
       if (!kelas) {
         return {

@@ -52,7 +52,13 @@ export async function promosiSiswaMassal(
     const kelasBaruIds = [...new Set(mapping.map((m) => m.kelasBaruId))]
     const kelasBaruList = await prisma.kelas.findMany({
       where: { id: { in: kelasBaruIds } },
-      include: { _count: { select: { siswa: true } } },
+      include: {
+        _count: {
+          select: {
+            siswa: { where: { deleted_at: null } },
+          },
+        },
+      },
     })
 
     if (kelasBaruList.length !== kelasBaruIds.length) {
@@ -189,7 +195,13 @@ export async function promosiSiswaMassal(
           for (const [kelasBaruId, siswaIds] of grupPerKelas) {
             const kelasTx = await tx.kelas.findUnique({
               where: { id: kelasBaruId },
-              include: { _count: { select: { siswa: true } } },
+              include: {
+                _count: {
+                  select: {
+                    siswa: { where: { deleted_at: null } },
+                  },
+                },
+              },
             })
             if (
               kelasTx &&
@@ -285,7 +297,11 @@ export async function getSiswaUntukPromosi(
         nama: true,
         kapasitas: true,
         jenisKelamin: true,
-        _count: { select: { siswa: true } },
+        _count: {
+          select: {
+            siswa: { where: { deleted_at: null } },
+          },
+        },
       },
     })
     kelasSamaJenjang.sort(
@@ -345,7 +361,11 @@ export async function getSiswaUntukPromosi(
               nama: true,
               kapasitas: true,
               jenisKelamin: true,
-              _count: { select: { siswa: true } },
+              _count: {
+          select: {
+            siswa: { where: { deleted_at: null } },
+          },
+        },
             },
           },
         },

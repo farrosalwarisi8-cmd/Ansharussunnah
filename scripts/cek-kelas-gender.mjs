@@ -12,7 +12,7 @@ const jenjangs = await prisma.jenjang.findMany({
     kelas: {
       where: { aktif: true },
       orderBy: { nama: "asc" },
-      select: { id: true, nama: true, kapasitas: true, jenisKelamin: true, _count: { select: { siswa: true } } },
+      select: { id: true, nama: true, kapasitas: true, jenisKelamin: true, _count: { select: { siswa: { where: { deleted_at: null } } } } },
     },
   },
 })

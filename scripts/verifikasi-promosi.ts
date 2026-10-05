@@ -38,7 +38,11 @@ async function hitungPromosi(kelasId: string): Promise<HasilPromosi> {
       nama: true,
       kapasitas: true,
       jenisKelamin: true,
-      _count: { select: { siswa: true } },
+      _count: {
+        select: {
+          siswa: { where: { deleted_at: null } },
+        },
+      },
     },
   })
   kelasSamaJenjang.sort(
@@ -88,7 +92,11 @@ async function hitungPromosi(kelasId: string): Promise<HasilPromosi> {
             nama: true,
             kapasitas: true,
             jenisKelamin: true,
-            _count: { select: { siswa: true } },
+            _count: {
+        select: {
+          siswa: { where: { deleted_at: null } },
+        },
+      },
           },
         },
       },

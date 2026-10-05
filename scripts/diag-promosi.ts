@@ -16,7 +16,11 @@ async function main() {
       nama: true,
       aktif: true,
       jenjang: { select: { nama: true, urutan: true } },
-      _count: { select: { siswa: true } },
+      _count: {
+        select: {
+          siswa: { where: { deleted_at: null } },
+        },
+      },
     },
     orderBy: [{ jenjang: { urutan: "asc" } }, { nama: "asc" }],
   })

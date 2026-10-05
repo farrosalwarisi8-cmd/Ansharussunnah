@@ -1043,7 +1043,11 @@ export async function getKelasList(): Promise<ActionResponse<KelasListItem[]>> {
       where: { aktif: true },
       include: {
         jenjang: { select: { nama: true } },
-        _count: { select: { siswa: true } },
+        _count: {
+          select: {
+            siswa: { where: { deleted_at: null } },
+          },
+        },
       },
       orderBy: [{ jenjang: { urutan: "asc" } }, { nama: "asc" }],
     })
@@ -1235,7 +1239,9 @@ export async function getDaftarOrangTuaUntukTautan(options?: {
         orangTua: {
           select: {
             noHp: true,
-            _count: { select: { siswa: true } },
+            _count: {
+              select: { siswa: true },
+            },
           },
         },
       },

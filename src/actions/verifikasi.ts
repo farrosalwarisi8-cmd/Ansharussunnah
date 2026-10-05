@@ -587,7 +587,14 @@ export async function verifikasiPendaftaran(
       if (finalKelasId) {
         const kelas = await prisma.kelas.findUnique({
           where: { id: finalKelasId },
-          include: { _count: { select: { siswa: true } }, jenjang: true },
+          include: {
+            jenjang: true,
+            _count: {
+              select: {
+                siswa: { where: { deleted_at: null } },
+              },
+            },
+          },
         });
         if (!kelas) {
           return {
@@ -908,7 +915,13 @@ export async function verifikasiPendaftaran(
             if (finalKelasId) {
               const kelasTx = await tx.kelas.findUnique({
                 where: { id: finalKelasId },
-                include: { _count: { select: { siswa: true } } },
+                include: {
+                  _count: {
+                    select: {
+                      siswa: { where: { deleted_at: null } },
+                    },
+                  },
+                },
               });
               if (!kelasTx) {
                 throw new AppError(
