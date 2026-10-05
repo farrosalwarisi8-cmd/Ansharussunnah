@@ -221,25 +221,20 @@ export async function verifyAcademicClassAccess(
 
     // Tentukan peran: wali kelas jika guru punya, else ADMIN
     const guruId = user.guru?.id ?? null
-    let roleInKelas: "WALI_KELAS" | "PENGAJAR" | "ADMIN" = "ADMIN"
-
-    if (guruId) {
-      const kelas = await prisma.kelas.findFirst({
+    const roleInKelas: "WALI_KELAS" | "PENGAJAR" | "ADMIN" =
+      guruId &&
+      (await prisma.kelas.findFirst({
         where: { id: kelasId, waliKelasId: guruId },
         select: { id: true },
-      })
-      if (kelas) {
-        roleInKelas = "WALI_KELAS"
-      } else {
-        const guruKelas = await prisma.guruKelas.findFirst({
-          where: { guruId, kelasId },
-          select: { id: true },
-        })
-        if (guruKelas) {
-          roleInKelas = "PENGAJAR"
-        }
-      }
-    }
+      }))
+        ? "WALI_KELAS"
+        : guruId &&
+          (await prisma.guruKelas.findFirst({
+            where: { guruId, kelasId },
+            select: { id: true },
+          }))
+          ? "PENGAJAR"
+          : "ADMIN"
 
     return {
       status: "authorized",
@@ -286,7 +281,7 @@ export async function verifyAcademicClassAccess(
     }
 
     // Tentukan peran
-    let roleInKelas: "WALI_KELAS" | "PENGAJAR" | "ADMIN" = isWaliKelas ? "WALI_KELAS" : "PENGAJAR"
+    const roleInKelas: "WALI_KELAS" | "PENGAJAR" | "ADMIN" = isWaliKelas ? "WALI_KELAS" : "PENGAJAR"
 
     return {
       status: "authorized",
