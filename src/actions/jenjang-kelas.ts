@@ -302,7 +302,9 @@ export async function getAdminKelasList(): Promise<ActionResponse<KelasWithRelat
             include: { user: true },
           },
           _count: {
-            select: { siswa: true },
+            // Hitung hanya siswa aktif (belum soft-deleted) — konsisten dengan
+            // seluruh tampilan jumlahSiswa lain (guru-kelas, siswa-manual, dst).
+            select: { siswa: { where: { deleted_at: null } } },
           },
         },
       })

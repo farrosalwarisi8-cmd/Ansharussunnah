@@ -1240,7 +1240,12 @@ export async function getDaftarOrangTuaUntukTautan(options?: {
           select: {
             noHp: true,
             _count: {
-              select: { siswa: true },
+              // Hitung hanya anak yang aktif (belum soft-deleted) — relasi
+              // `siswa` di OrangTua adalah ParentStudent, jadi filter soft-delete
+              // dilakukan lewat relasi siswa-nya.
+              select: {
+                siswa: { where: { siswa: { deleted_at: null } } },
+              },
             },
           },
         },

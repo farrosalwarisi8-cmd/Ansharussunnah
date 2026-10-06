@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma"
 import { requireGuru, requireGuruAdmin } from "@/lib/auth"
 import { mapelSchema, type MapelFormValues } from "@/lib/validations/mapel"
 import type { ActionResponse } from "@/types"
+import { toUserFriendlyError } from "@/lib/prisma-error"
 import { revalidatePath } from "next/cache"
 import { cachedJson, invalidateCache, CACHE_TTL_REF } from "@/lib/cache"
 
@@ -214,7 +215,7 @@ export async function getAdminMapelList(): Promise<
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar mata pelajaran",
+      message: toUserFriendlyError(error, "Gagal memuat daftar mata pelajaran"),
     }
   }
 }
@@ -280,7 +281,7 @@ export async function createMapel(payload: MapelFormValues): Promise<ActionRespo
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menambahkan mata pelajaran",
+      message: toUserFriendlyError(error, "Gagal menambahkan mata pelajaran"),
     }
   }
 }
@@ -385,7 +386,7 @@ export async function updateMapel(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memperbarui mata pelajaran",
+      message: toUserFriendlyError(error, "Gagal memperbarui mata pelajaran"),
     }
   }
 }
@@ -442,7 +443,7 @@ export async function deleteMapel(id: string): Promise<ActionResponse> {
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menghapus mata pelajaran",
+      message: toUserFriendlyError(error, "Gagal menghapus mata pelajaran"),
     }
   }
 }
@@ -471,7 +472,7 @@ export async function toggleMapelAktif(id: string): Promise<ActionResponse> {
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal mengubah status mata pelajaran",
+      message: toUserFriendlyError(error, "Gagal mengubah status mata pelajaran"),
     }
   }
 }

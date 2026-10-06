@@ -167,12 +167,20 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
       }
 
       if (result.success && result.data) {
-        setMateriList(result.data as MateriItem[])
+        // Server mengembalikan bentuk paginated { items, total, ... }.
+        // Sebelumnya data dipakai langsung sebagai array sehingga
+        // materiList.map melempar error render → halaman "Terjadi Kesalahan".
+        const payload = result.data as { items?: MateriItem[] } | MateriItem[]
+        const items = Array.isArray(payload)
+          ? payload
+          : (payload.items ?? [])
+        setMateriList(items)
       } else {
         setMateriError(result.message || "Gagal memuat daftar materi")
       }
-    } catch {
-      setMateriError("Gagal memuat daftar materi")
+    } catch (err) {
+      console.error("Error fetching materi list:", err)
+      setMateriError("Gagal menghubungi server. Silakan coba lagi.")
     } finally {
       setFetchingMateri(false)
     }
@@ -340,9 +348,15 @@ function MateriPageContent({ isTeacher, isParent }: { isTeacher: boolean; isPare
 <PageSkeleton label="Memuat materi pembelajaran..." />
       )}
 
-      {/* Error State */}
+      {/* Error State — bedakan dari empty state, dan sediakan retry */}
       {!fetchingMateri && materiError && (
-        <EmptyState title="Gagal Memuat Data" description={materiError} />
+        <EmptyState
+          variant="error"
+          title="Gagal Memuat Data"
+          description={materiError}
+          actionLabel="Coba Lagi"
+          onAction={() => fetchMateri()}
+        />
       )}
 
       {/* Content */}

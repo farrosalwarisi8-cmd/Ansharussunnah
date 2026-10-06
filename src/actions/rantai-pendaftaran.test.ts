@@ -305,7 +305,7 @@ beforeEach(() => {
 // RANTAI 1 — daftar → bayar → berkas → konfirmasi kontak wali → terima
 // ===========================================================================
 describe("RANTAI 1 — alur lengkap sampai DITERIMA", () => {
-  it("tanpa OTP: bayar → berkas → konfirmasi kontak wali → terima", async () => {
+  it("tanpa OTP: bayar → berkas → terima (konfirmasi kontak wali hanya audit)", async () => {
     // Langkah 1 — bayar langsung bisa: tidak ada gerbang OTP lagi.
     const bayar = await uploadBuktiTransferPendaftaran(formBukti());
     expect(bayar.success, `bayar: ${bayar.message}`).toBe(true);
@@ -315,22 +315,9 @@ describe("RANTAI 1 — alur lengkap sampai DITERIMA", () => {
     const berkas = await uploadDokumenPendaftaran(formDokumen());
     expect(berkas.success, `berkas: ${berkas.message}`).toBe(true);
 
-    // Langkah 3 — approve TANPA konfirmasi kontak wali: ditolak gerbang baru.
-    const tanpaKonfirmasi = await verifikasiPendaftaran({
-      pendaftaranId: "pend-1",
-      status: "DITERIMA",
-      catatanAdmin: "",
-      kelasTujuanId: "kelas-1",
-    });
-    expect(tanpaKonfirmasi.success).toBe(false);
-    expect(tanpaKonfirmasi.message).toContain("Kontak wali belum dikonfirmasi");
-    expect(db.pendaftaran.status).toBe("MENUNGGU_VERIFIKASI");
-
-    // Langkah 4 — panitia mengonfirmasi kontak wali (menulis state bersama).
-    db.pendaftaran.kontakWaliDikonfirmasiAt = new Date();
-    db.pendaftaran.metodeKonfirmasiKontak = "WHATSAPP";
-
-    // Langkah 5 — approve sekarang lolos.
+    // Langkah 3 — approve TANPA konfirmasi kontak wali: kini TETAP lolos.
+    // Kontrak baru: kontak wali hanya jejak audit, bukan blokade approval.
+    // Syarat approval = bukti pembayaran + status MENUNGGU_VERIFIKASI + kelas valid.
     const terima = await verifikasiPendaftaran({
       pendaftaranId: "pend-1",
       status: "DITERIMA",
@@ -463,20 +450,19 @@ describe("RANTAI 4 — token kedaluwarsa", () => {
   });
 
   /**
-   * Kontak legacy yang terisi TIDAK boleh membuka gerbang approval.
+   * Kolom legacy (`emailOrangTuaTerverifikasiAt`, OTP) TIDAK punya daya sama
+   * sekali: terisi pun, approval tetap butuh bukti pembayaran.
    *
-   * Ini kontrak yang paling mudah dilanggar diam-diam: kolom
-   * `emailOrangTuaTerverifikasiAt` masih ada di DB untuk data lama, jadi
-   * mudah suatu saat dipakai lagi sebagai syarat. Test ini mengunci bahwa
-   * satu-satunya gerbang DITERIMA adalah konfirmasi kontak wali.
+   * Ini kontrak yang paling mudah dilanggar diam-diam: kolom legacy masih ada
+   * di DB untuk data lama, jadi mudah suatu saat dipakai lagi sebagai syarat
+   * (atau sebaliknya, sebagai 'bukti' bahwa pendaftar sudah lolos).
    */
-  it("email legacy terisi TIDAK membuka gerbang DITERIMA", async () => {
+  it("email legacy terisi TIDAK membuka gerbang DITERIMA tanpa bukti", async () => {
     db.pendaftaran.emailOrangTuaTerverifikasiAt = new Date();
     db.pendaftaran.emailOrangTuaDiverifikasiOtpAt = new Date();
+    db.pendaftaran.kontakWaliDikonfirmasiAt = new Date();
     db.pendaftaran.status = "MENUNGGU_VERIFIKASI";
-    db.pendaftaran.buktiTransfer = [
-      { id: "bukti-1", status: "DIUNGGAH" } as Bukti,
-    ];
+    db.pendaftaran.buktiTransfer = []; // tidak ada bukti pembayaran
 
     const terima = await verifikasiPendaftaran({
       pendaftaranId: "pend-1",
@@ -486,7 +472,7 @@ describe("RANTAI 4 — token kedaluwarsa", () => {
     });
 
     expect(terima.success).toBe(false);
-    expect(terima.message).toContain("Kontak wali belum dikonfirmasi");
+    expect(terima.message).toContain("Bukti pembayaran belum tersedia");
     expect(db.pendaftaran.status).toBe("MENUNGGU_VERIFIKASI");
   });
 

@@ -15,6 +15,7 @@ import {
   type UpdateMateriValues,
 } from "@/lib/validations/materi"
 import type { ActionResponse } from "@/types"
+import { toUserFriendlyError } from "@/lib/prisma-error"
 import { normalizePagination, paginatedResult } from "@/lib/pagination"
 import { Role } from "@prisma/client"
 import { revalidatePath } from "next/cache"
@@ -39,6 +40,29 @@ async function verifyOrangTuaAksesSiswa(
 
 function urlFileCheck(url: string, prefix: string): boolean {
   return url.startsWith(prefix) && !url.includes("..") && !url.includes("//")
+}
+
+/**
+ * Ambil signed URL untuk daftar path internal secara aman.
+ *
+ * - Path eksternal (Google Drive, dst.) sudah difilter pemanggil dan TIDAK
+ *   pernah dikirim ke createSignedUrls.
+ * - Bila tidak ada path internal, lewati panggilan storage sama sekali.
+ * - Bila storage/gagal konfigurasi (createSupabaseAdmin throw), jangan jatuhkan
+ *   seluruh daftar: log di server dan kembalikan null untuk semua path sehingga
+ *   client menampilkan "File tidak tersedia" tanpa membocorkan path privat.
+ */
+async function safeSignedUrls(
+  bucket: string,
+  paths: string[]
+): Promise<Map<string, string | null>> {
+  try {
+    const hasil = await getSignedUrls(bucket, paths)
+    return hasil instanceof Map ? hasil : new Map()
+  } catch (error) {
+    console.error(`[materi] Gagal membuat signed URL untuk bucket ${bucket}:`, error)
+    return new Map(paths.map((p) => [p, null]))
+  }
 }
 
 // ========================================================
@@ -173,7 +197,7 @@ export async function createMateri(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal mengunggah materi",
+      message: toUserFriendlyError(error, "Gagal mengunggah materi"),
     }
   }
 }
@@ -307,7 +331,7 @@ export async function updateMateri(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memperbarui materi",
+      message: toUserFriendlyError(error, "Gagal memperbarui materi"),
     }
   }
 }
@@ -359,7 +383,7 @@ export async function deleteMateri(materiId: string): Promise<ActionResponse> {
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menghapus materi",
+      message: toUserFriendlyError(error, "Gagal menghapus materi"),
     }
   }
 }
@@ -414,7 +438,7 @@ export async function getDaftarMateriGuru(
       .map((m) => m.urlFile)
       .filter((u): u is string => !!u && !isExternalUrl(u))
 
-    const signedUrlMap = await getSignedUrls("materi", urlFileList)
+    const signedUrlMap = await safeSignedUrls("materi", urlFileList)
 
     const formatted = materiList.map((m) => {
       const signedUrl = m.urlFile ? signedUrlMap.get(m.urlFile) ?? null : null
@@ -423,17 +447,17 @@ export async function getDaftarMateriGuru(
         id: m.id,
         judul: m.judul,
         deskripsi: m.deskripsi,
-        mataPelajaran: m.mataPelajaran.nama,
+        mataPelajaran: m.mataPelajaran?.nama ?? "Mata pelajaran tidak tersedia",
         mataPelajaranId: m.mataPelajaranId,
         kelasId: m.kelasId,
         targetGender: m.targetGender,
-        mapelGender: m.mataPelajaran.jenisKelamin,
+        mapelGender: m.mataPelajaran?.jenisKelamin ?? null,
         urlFile: m.urlFile,
         urlLink: m.urlLink,
         signedUrl,
-        periode: m.periodeAjaran.nama,
+        periode: m.periodeAjaran?.nama ?? "Periode tidak tersedia",
         periodeAjaranId: m.periodeAjaranId,
-        diunggahOleh: m.diunggahOleh.nama,
+        diunggahOleh: m.diunggahOleh?.nama ?? "Pengunggah tidak tersedia",
         createdAt: m.createdAt,
       }
     })
@@ -446,7 +470,7 @@ export async function getDaftarMateriGuru(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar materi",
+      message: toUserFriendlyError(error, "Gagal memuat daftar materi"),
     }
   }
 }
@@ -510,7 +534,7 @@ export async function getDaftarMateriSiswa(
       .map((m) => m.urlFile)
       .filter((u): u is string => !!u && !isExternalUrl(u))
 
-    const signedUrlMap = await getSignedUrls("materi", urlFileList)
+    const signedUrlMap = await safeSignedUrls("materi", urlFileList)
 
     const formatted = materiList.map((m) => {
       const signedUrl = m.urlFile ? signedUrlMap.get(m.urlFile) ?? null : null
@@ -519,12 +543,12 @@ export async function getDaftarMateriSiswa(
         id: m.id,
         judul: m.judul,
         deskripsi: m.deskripsi,
-        mataPelajaran: m.mataPelajaran.nama,
+        mataPelajaran: m.mataPelajaran?.nama ?? "Mata pelajaran tidak tersedia",
         urlFile: m.urlFile,
         urlLink: m.urlLink,
         signedUrl,
-        periode: m.periodeAjaran.nama,
-        diunggahOleh: m.diunggahOleh.nama,
+        periode: m.periodeAjaran?.nama ?? "Periode tidak tersedia",
+        diunggahOleh: m.diunggahOleh?.nama ?? "Pengunggah tidak tersedia",
         createdAt: m.createdAt,
       }
     })
@@ -537,7 +561,7 @@ export async function getDaftarMateriSiswa(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar materi",
+      message: toUserFriendlyError(error, "Gagal memuat daftar materi"),
     }
   }
 }
@@ -616,7 +640,7 @@ export async function getDaftarMateriAnak(
       .map((m) => m.urlFile)
       .filter((u): u is string => !!u && !isExternalUrl(u))
 
-    const signedUrlMap = await getSignedUrls("materi", urlFileList)
+    const signedUrlMap = await safeSignedUrls("materi", urlFileList)
 
     const formatted = materiList.map((m) => {
       const signedUrl = m.urlFile ? signedUrlMap.get(m.urlFile) ?? null : null
@@ -625,12 +649,12 @@ export async function getDaftarMateriAnak(
         id: m.id,
         judul: m.judul,
         deskripsi: m.deskripsi,
-        mataPelajaran: m.mataPelajaran.nama,
+        mataPelajaran: m.mataPelajaran?.nama ?? "Mata pelajaran tidak tersedia",
         urlFile: m.urlFile,
         urlLink: m.urlLink,
         signedUrl,
-        periode: m.periodeAjaran.nama,
-        diunggahOleh: m.diunggahOleh.nama,
+        periode: m.periodeAjaran?.nama ?? "Periode tidak tersedia",
+        diunggahOleh: m.diunggahOleh?.nama ?? "Pengunggah tidak tersedia",
         createdAt: m.createdAt,
       }
     })
@@ -643,7 +667,7 @@ export async function getDaftarMateriAnak(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar materi anak",
+      message: toUserFriendlyError(error, "Gagal memuat daftar materi anak"),
     }
   }
 }

@@ -1419,7 +1419,10 @@ describe("verifikasiPendaftaran — Multi-Child (Same Parent Email)", () => {
     });
   });
 
-  it("harus skip buktiTransfer update jika latestBuktiId null (anak kedua tanpa bukti baru)", async () => {
+  it("approval TANPA bukti pembayaran ditolak — update bukti & akun tidak dijalankan", async () => {
+    // Kontrak bisnis baru: bukti pembayaran adalah syarat approval.
+    // Anak kedua tanpa bukti TIDAK bisa diterima (tidak ada bukti = tidak ada
+    // dasar penerimaan) — dan penolakan tidak boleh membuat akun baru.
     const pendaftaranTanpaBukti = {
       ...pendaftaranMinimal,
       id: "pend-child-4",
@@ -1431,46 +1434,20 @@ describe("verifikasiPendaftaran — Multi-Child (Same Parent Email)", () => {
     };
     mockPendaftaranFindUnique.mockResolvedValue(pendaftaranTanpaBukti);
 
-    mockCreateUser.mockResolvedValueOnce({
-      data: null,
-      error: { message: "User already been registered" },
-    });
-    mockListUsers.mockResolvedValueOnce({
-      data: {
-        users: [{ id: "existing-ortu-auth-uuid", email: "ortu@example.com" }],
-      },
-      error: null,
-    });
-    mockCreateUser.mockResolvedValueOnce({
-      data: { user: { id: "auth-siswa-child4-uuid" } },
-      error: null,
-    });
-
     setupTransactionMock();
-
-    mockUserFindUnique.mockResolvedValueOnce({
-      id: "user-ortu-existing",
-      role: "ORANG_TUA",
-    });
-    mockUserCreate.mockResolvedValueOnce({
-      id: "user-siswa-child4",
-      role: "SISWA",
-    });
-    mockOrangTuaFindUnique.mockResolvedValue({ id: "ortu-existing" });
-    mockSiswaFindUnique.mockResolvedValue({ id: "siswa-child4" });
 
     const result = await verifikasiPendaftaran({
       pendaftaranId: "pend-child-4",
       status: "DITERIMA",
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Bukti pembayaran belum tersedia");
 
-    // buktiTransfer update tidak dipanggil karena tidak ada bukti
+    // Tidak ada akun Auth yang dibuat, tidak ada relasi yang dibuat.
+    expect(mockCreateUser).not.toHaveBeenCalled();
     expect(mockBuktiTransferUpdate).not.toHaveBeenCalled();
-
-    // ParentStudent tetap dibuat
-    expect(mockParentStudentCreate).toHaveBeenCalled();
+    expect(mockParentStudentCreate).not.toHaveBeenCalled();
   });
 });
 
@@ -1666,7 +1643,10 @@ describe("verifikasiPendaftaran — Gerbang Konfirmasi Kontak Wali", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
-  it("menolak menyetujui pendaftaran yang kontak walinya belum dikonfirmasi", async () => {
+  it("approval TETAP lolos walau konfirmasi kontak wali belum dilakukan", async () => {
+    // Kontrak bisnis baru: OTP/email dihapus dari alur, dan konfirmasi kontak
+    // wali oleh panitia hanyalah JEJAK AUDIT — bukan blokade approval.
+    // Syarat approval = bukti pembayaran + data lengkap + kelas valid.
     setupDiterimaMinimal({
       ...pendaftaranWithEmis,
       kontakWaliDikonfirmasiAt: null,
@@ -1680,11 +1660,10 @@ describe("verifikasiPendaftaran — Gerbang Konfirmasi Kontak Wali", () => {
       kelasTujuanId: "kelas-1",
     });
 
-    expect(result.success).toBe(false);
-    expect(result.message).toContain("Kontak wali belum dikonfirmasi");
-    // Tidak boleh ada akun auth yang dibuat, dan tidak boleh ada siswa.
-    expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(mockSiswaUpdate).not.toHaveBeenCalled();
+    expect(result.success, result.message).toBe(true);
+    // Tidak ada akun yang dibuat hanya karena konfirmasi kontak belum ada —
+    // approval berjalan normal dengan seluruh akun & relasinya.
+    expect(mockCreateUser).toHaveBeenCalled();
   });
 
   it("approval TIDAK lagi bergantung pada kolom verifikasi email warisan (OTP dihapus)", async () => {

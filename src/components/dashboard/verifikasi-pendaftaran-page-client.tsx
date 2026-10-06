@@ -469,10 +469,11 @@ export default function VerifikasiPendaftaranPage() {
           variant: "destructive" as never,
         });
       }
-    } catch {
+    } catch (error) {
+      console.error("Error saat memuat daftar:", error);
       toast({
         title: "Error",
-        description: "Gagal menghubungi server",
+        description: "Gagal menghubungi server. Silakan coba lagi.",
         variant: "destructive" as never,
       });
     } finally {
@@ -502,10 +503,11 @@ export default function VerifikasiPendaftaranPage() {
         });
         setSelectedId(null);
       }
-    } catch {
+    } catch (error) {
+      console.error("Error saat memuat detail:", error);
       toast({
         title: "Error",
-        description: "Gagal menghubungi server",
+        description: "Gagal menghubungi server. Silakan coba lagi.",
         variant: "destructive" as never,
       });
       setSelectedId(null);
@@ -517,6 +519,9 @@ export default function VerifikasiPendaftaranPage() {
   const handleCloseDetail = () => {
     setSelectedId(null);
     setDetailData(null);
+    setIsApproveConfirmOpen(false);
+    setIsRejectDialogOpen(false);
+    setIsKonfirmasiDialogOpen(false);
   };
 
   // Approve
@@ -531,6 +536,9 @@ export default function VerifikasiPendaftaranPage() {
       });
       if (result.success) {
         toast({ title: "Pendaftaran Disetujui!", description: result.message });
+        handleCloseDetail();
+        setIsApproveConfirmOpen(false);
+        fetchList();
       } else {
         toast({
           title: "Gagal",
@@ -538,13 +546,11 @@ export default function VerifikasiPendaftaranPage() {
           variant: "destructive" as never,
         });
       }
-      handleCloseDetail();
-      setIsApproveConfirmOpen(false);
-      fetchList();
-    } catch {
+    } catch (error) {
+      console.error("Error saat memproses verifikasi:", error);
       toast({
         title: "Error",
-        description: "Gagal memproses verifikasi",
+        description: "Gagal memproses verifikasi. Silakan coba lagi.",
         variant: "destructive" as never,
       });
     } finally {
@@ -564,6 +570,9 @@ export default function VerifikasiPendaftaranPage() {
       });
       if (result.success) {
         toast({ title: "Pendaftaran Ditolak", description: result.message });
+        handleCloseDetail();
+        setIsRejectDialogOpen(false);
+        fetchList();
       } else {
         toast({
           title: "Gagal",
@@ -571,13 +580,11 @@ export default function VerifikasiPendaftaranPage() {
           variant: "destructive" as never,
         });
       }
-      handleCloseDetail();
-      setIsRejectDialogOpen(false);
-      fetchList();
-    } catch {
+    } catch (error) {
+      console.error("Error saat memproses penolakan:", error);
       toast({
         title: "Error",
-        description: "Gagal memproses verifikasi",
+        description: "Gagal memproses verifikasi. Silakan coba lagi.",
         variant: "destructive" as never,
       });
     } finally {
@@ -585,11 +592,12 @@ export default function VerifikasiPendaftaranPage() {
     }
   };
 
-  // Konfirmasi kontak wali (pengganti OTP email).
+  // Konfirmasi kontak wali (jejak audit; pengganti OTP email).
   //
-  // Tombol ini muncul justru saat pendaftaran TERTAHAN: tanpa gerbang ini,
-  // approval ditolak server (lihat verifikasiPendaftaran). Konfirmasi dulu ke
-  // orang tua lewat WhatsApp/telepon, baru catat metode + waktunya di sini.
+  // Konfirmasi ini TIDAK lagi menjadi blokade approval — server
+  // (verifikasiPendaftaran) tidak lagi menolak DITERIMA tanpa konfirmasi.
+  // Tetap dicatat agar ada jejak bahwa panitia benar-benar menghubungi wali
+  // sebelum menerima pendaftaran.
   const handleKonfirmasiKontak = async () => {
     if (!detailData) return;
     setIsMemprosesKonfirmasi(true);
@@ -616,10 +624,11 @@ export default function VerifikasiPendaftaranPage() {
           variant: "destructive" as never,
         });
       }
-    } catch {
+    } catch (error) {
+      console.error("Error saat menyimpan konfirmasi kontak wali:", error);
       toast({
         title: "Error",
-        description: "Gagal menyimpan konfirmasi kontak wali",
+        description: "Gagal menyimpan konfirmasi kontak wali. Silakan coba lagi.",
         variant: "destructive" as never,
       });
     } finally {
@@ -648,6 +657,13 @@ export default function VerifikasiPendaftaranPage() {
           variant: "destructive" as never,
         });
       }
+    } catch (error) {
+      console.error("Error saat membatalkan konfirmasi:", error);
+      toast({
+        title: "Error",
+        description: "Gagal membatalkan konfirmasi. Silakan coba lagi.",
+        variant: "destructive" as never,
+      });
     } finally {
       setIsMemprosesKonfirmasi(false);
     }
@@ -1279,15 +1295,15 @@ export default function VerifikasiPendaftaranPage() {
                   </div>
                 )}
 
-              {/* ---- KONFIRMASI KONTAK WALI (gerbang approval) ---- */}
+              {/* ---- KONFIRMASI KONTAK WALI (jejak audit, bukan blokade) ---- */}
               {/*
-                Pendaftaran tidak lagi lewat OTP email, jadi tidak ada bukti
-                otomatis kepemilikan kontak. Penggantinya: panitia WAJIB
-                menghubungi wali (WhatsApp/telepon/langsung) dan mencatatnya di
-                sini sebelum menekan "Terima". Server menegakkan hal yang sama —
-                `verifikasiPendaftaran` menolak DITERIMA bila
-                `kontakWaliDikonfirmasiAt` masih kosong — jadi tombol di bawah
-                bukan hiasan, tanpa ini approval mustahil berhasil.
+                Pendaftaran tidak lagi lewat OTP email. Konfirmasi kontak wali
+                oleh panitia dicatat sebagai JEJAK AUDIT di kolom
+                `kontakWaliDikonfirmasiAt`; server TIDAK menjadikannya syarat
+                approval (syarat approval = bukti pembayaran + kelas valid +
+                NISN tidak duplikat). Panel ini tetap ditampilkan agar jejak
+                audit tetap tercatat — teksnya tidak boleh lagi mengklaim bahwa
+                approval "mustahil" tanpa konfirmasi.
 
                 Ditampilkan selama belum final. DITOLAK ikut karena saat ini
                 tidak terjangkau lewat alur normal, tapi kalau alurnya berubah
@@ -1333,15 +1349,17 @@ export default function VerifikasiPendaftaranPage() {
                             </p>
                           )}
                           <p className="m-0 text-amber-700">
-                            Pendaftaran ini sekarang boleh disetujui.
+                            Jejak audit konfirmasi tersimpan di berkas
+                            pendaftaran ini.
                           </p>
                         </div>
                       ) : (
                         <p className="text-xs text-amber-900 mt-1 m-0">
-                          Pendaftaran ini <strong>tidak bisa disetujui</strong>{" "}
-                          sampai kontak wali dikonfirmasi. Hubungi orang
-                          tua/wali (WhatsApp/telepon/datang langsung), lalu
-                          catat konfirmasinya di bawah. Nomor WhatsApp wali:{" "}
+                          Konfirmasi kontak wali <strong>disarankan</strong>{" "}
+                          sebelum menerima pendaftaran, tetapi bukan syarat
+                          approval. Hubungi orang tua/wali
+                          (WhatsApp/telepon/datang langsung), lalu catat
+                          konfirmasinya di bawah. Nomor WhatsApp wali:{" "}
                           <span className="font-mono font-bold">
                             {pendaftar.noHpOrangTua}
                           </span>
@@ -1403,15 +1421,13 @@ export default function VerifikasiPendaftaranPage() {
                     <Button
                       type="button"
                       onClick={() => setIsApproveConfirmOpen(true)}
-                      // UI hanya menampilkan alasannya; PENEGAKANNYA di
-                      // server (verifikasiPendaftaran menolak DITERIMA tanpa
-                      // kontakWaliDikonfirmasiAt). Disable di sini supaya admin
-                      // tidak knock-knock ke server untuk hal yang pasti ditolak.
-                      disabled={!pendaftar?.kontakWaliDikonfirmasiAt}
+                      disabled={processing || !detailData?.pendaftaran.buktiTransfer?.length}
                       title={
-                        pendaftar?.kontakWaliDikonfirmasiAt
-                          ? undefined
-                          : "Konfirmasi kontak wali dulu sebelum menerima pendaftaran"
+                        !detailData?.pendaftaran.buktiTransfer?.length
+                          ? "Bukti pembayaran belum tersedia. Pendaftaran belum dapat diterima."
+                          : pendaftar?.kontakWaliDikonfirmasiAt
+                            ? undefined
+                            : "Kontak wali belum dikonfirmasi. Anda tetap dapat menerima pendaftaran, namun disarankan untuk mengonfirmasi kontak wali terlebih dahulu."
                       }
                       className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-xl min-h-[44px] text-xs px-6 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -1501,8 +1517,8 @@ export default function VerifikasiPendaftaranPage() {
             <div className="rounded-xl bg-amber-50 border border-amber-200 p-3">
               <p className="text-[11px] text-amber-900 m-0">
                 Konfirmasi dulu ke orang tua — jangan tekan tombol ini sebelum
-                benar-benar menghubungi. Ini satu-satunya pemeriksaan sebelum
-                pendaftaran disetujui dan akun diterbitkan.
+                benar-benar menghubungi. Catatan ini disimpan permanen sebagai
+                jejak audit di berkas pendaftaran.
               </p>
             </div>
             <div className="space-y-1">

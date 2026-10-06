@@ -571,6 +571,18 @@ export async function createOrUpdateCatatanRapor(
       return { success: false, message: "Akses ditolak: Hanya wali kelas yang dapat menulis catatan rapor" }
     }
 
+    // Admin akademik/super admin tidak wajib punya profil Guru, sehingga
+    // `guru` bisa null. Kolom waliKelasId pada CatatanRapor adalah FK wajib,
+    // jadi jatuhkan ke wali kelas kelas tersebut (data existing, bukan tebakan).
+    const waliKelasId = guru?.id ?? siswa.kelas.waliKelasId
+    if (!waliKelasId) {
+      return {
+        success: false,
+        message:
+          "Kelas ini belum memiliki wali kelas. Tetapkan wali kelas terlebih dahulu sebelum menyimpan catatan rapor.",
+      }
+    }
+
     // Upsert catatan rapor (uniqueness: siswa × periode × bulan; 0 = rapor akhir semester)
     await prisma.catatanRapor.upsert({
       where: {
@@ -589,7 +601,7 @@ export async function createOrUpdateCatatanRapor(
         siswaId,
         periodeAjaranId,
         bulan,
-        waliKelasId: guru.id,
+        waliKelasId,
         catatan,
         ranking,
         kedisiplinan,
@@ -608,7 +620,7 @@ export async function createOrUpdateCatatanRapor(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menyimpan catatan rapor",
+      message: toUserFriendlyError(error, "Gagal menyimpan catatan rapor"),
     }
   }
 }
@@ -678,7 +690,7 @@ export async function updateCatatanRapor(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memperbarui catatan rapor",
+      message: toUserFriendlyError(error, "Gagal memperbarui catatan rapor"),
     }
   }
 }
@@ -750,7 +762,7 @@ export async function getCatatanRaporDetail(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat detail catatan rapor",
+      message: toUserFriendlyError(error, "Gagal memuat detail catatan rapor"),
     }
   }
 }
@@ -868,7 +880,7 @@ export async function getRaporSiswa(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat rapor",
+      message: toUserFriendlyError(error, "Gagal memuat rapor"),
     }
   }
 }
@@ -994,7 +1006,7 @@ export async function getRaporAnak(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat rapor anak",
+      message: toUserFriendlyError(error, "Gagal memuat rapor anak"),
     }
   }
 }

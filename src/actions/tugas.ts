@@ -22,6 +22,7 @@ import {
   type InputNilaiTugasManualValues,
 } from "@/lib/validations/tugas"
 import type { ActionResponse } from "@/types"
+import { toUserFriendlyError } from "@/lib/prisma-error"
 import { normalizePagination, paginatedResult } from "@/lib/pagination"
 import { Role, StatusPengumpulan, Prisma } from "@prisma/client"
 import { revalidatePath } from "next/cache"
@@ -202,7 +203,7 @@ export async function createTugas(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal membuat tugas",
+      message: toUserFriendlyError(error, "Gagal membuat tugas"),
     }
   }
 }
@@ -347,7 +348,7 @@ export async function updateTugas(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memperbarui tugas",
+      message: toUserFriendlyError(error, "Gagal memperbarui tugas"),
     }
   }
 }
@@ -399,7 +400,7 @@ export async function deleteTugas(tugasId: string): Promise<ActionResponse> {
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menghapus tugas",
+      message: toUserFriendlyError(error, "Gagal menghapus tugas"),
     }
   }
 }
@@ -471,7 +472,7 @@ export async function getDaftarTugasGuru(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar tugas",
+      message: toUserFriendlyError(error, "Gagal memuat daftar tugas"),
     }
   }
 }
@@ -551,7 +552,7 @@ export async function beriNilaiTugas(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menyimpan nilai tugas",
+      message: toUserFriendlyError(error, "Gagal menyimpan nilai tugas"),
     }
   }
 }
@@ -694,7 +695,7 @@ export async function inputNilaiTugasManual(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal menyimpan nilai manual",
+      message: toUserFriendlyError(error, "Gagal menyimpan nilai manual"),
     }
   }
 }
@@ -812,7 +813,7 @@ export async function getRekapPengumpulanTugas(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat rekap pengumpulan",
+      message: toUserFriendlyError(error, "Gagal memuat rekap pengumpulan"),
     }
   }
 }
@@ -932,7 +933,7 @@ export async function getDaftarTugasSiswa(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat daftar tugas",
+      message: toUserFriendlyError(error, "Gagal memuat daftar tugas"),
     }
   }
 }
@@ -1184,7 +1185,7 @@ export async function submitTugas(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal mengirim jawaban tugas",
+      message: toUserFriendlyError(error, "Gagal mengirim jawaban tugas"),
     }
   }
 }
@@ -1308,7 +1309,7 @@ export async function getDetailTugasSiswa(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat detail tugas",
+      message: toUserFriendlyError(error, "Gagal memuat detail tugas"),
     }
   }
 }
@@ -1428,7 +1429,7 @@ export async function getTugasAnak(
   } catch (error: unknown) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Gagal memuat data tugas anak",
+      message: toUserFriendlyError(error, "Gagal memuat data tugas anak"),
     }
   }
 }

@@ -42,15 +42,12 @@ export async function verifyGuruAksesKelas(
 
   // Admin akademik / super admin bebas mengelola semua kelas
   if (isAcademicAdminRole(user.role) || user.isAdmin) {
-    if (!user.guru) {
-      throw new AppError("Forbidden: Profil guru tidak ditemukan")
-    }
-
     // Admin dapat memakai mapel yang terdaftar di master mapel meskipun belum
     // memiliki baris penugasan GuruKelas.
     if (mapelFilter) {
       const mapel = await prisma.mataPelajaran.findFirst({
         where: { ...mapelFilter, aktif: true },
+        select: { id: true },
       })
       if (!mapel) {
         throw new AppError(
@@ -59,7 +56,7 @@ export async function verifyGuruAksesKelas(
       }
     }
 
-    return { user, guru: user.guru, roleInKelas: "ADMIN" as const }
+    return { user, guru: user.guru ?? null, roleInKelas: "ADMIN" as const }
   }
 
   if (!user.guru) {

@@ -456,32 +456,22 @@ export async function verifikasiPendaftaran(
       };
     }
 
-    // GERBANG APPROVAL: konfirmasi kontak wali oleh panitia (pengganti OTP).
+    // ATURAN BISNIS BARU: Verifikasi email/OTP BUKAN syarat approval.
     //
-    // OTP email dihapus dari alur pendaftaran, jadi tidak ada lagi bukti
-    // otomatis kepemilikan kontak. Sebagai gantinya, panitia WAJIB mengonfirmasi
-    // kontak wali (WhatsApp/telepon/langsung) SEBELUM menyetujui — tombol
-    // "Konfirmasi Kontak Wali" di panel verifikasi mencatatnya ke kolom
-    // khusus (kontakWaliDikonfirmasiAt + metode + catatan). Bila belum,
-    // approval ditolak dengan pesan yang jelas — BUKAN diam-diam dianggap
-    // "email sudah terverifikasi".
+    // Kolom emailOrangTuaTerverifikasiAt, emailOrangTuaDiverifikasiOtpAt,
+    // emailOrangTuaDiverifikasiManualAt, dan alasanVerifikasiEmailManual
+    // dipertahankan untuk kompatibilitas dan audit, tetapi TIDAK digunakan
+    // sebagai blocking gate approval.
     //
-    // Kolom emailOrangTuaTerverifikasiAt yang lama TIDAK dipakai lagi sebagai
-    // gerbang: isinya adalah jejak OTP/grandfathering pendaftaran lama, dan
-    // memakainya untuk approval baru akan mencampur makna audit.
+    // Admin dapat menerima pendaftaran selama:
+    //   1. Bukti pembayaran tersedia dan valid
+    //   2. Data pendaftaran lengkap
+    //   3. Kelas tujuan valid (jika diwajibkan)
+    //   4. Kapasitas kelas tidak terlampaui
+    //   5. NISN tidak duplikat
     //
-    // Penolakan (DITOLAK) tidak melewati gerbang ini: menolak tidak membuat
-    // akun apa pun dan harus selalu bisa dilakukan.
-    if (
-      status === "DITERIMA" &&
-      !pendaftaran.kontakWaliDikonfirmasiAt
-    ) {
-      return {
-        success: false,
-        message:
-          "Kontak wali belum dikonfirmasi panitia, sehingga pendaftaran tidak bisa disetujui. Hubungi orang tua/wali (WhatsApp/telepon/langsung), lalu tekan \"Konfirmasi Kontak Wali\" pada panel pendaftaran ini sebelum menerima.",
-      };
-    }
+    // Verifikasi kontak wali oleh panitia (kontakWaliDikonfirmasiAt) tetap
+    // dicatat sebagai jejak audit, tetapi tidak memblokir approval.
 
     const latestBuktiId = pendaftaran.buktiTransfer[0]?.id;
 
@@ -490,6 +480,9 @@ export async function verifikasiPendaftaran(
     const finalKelasId = kelasTujuanId || pendaftaran.kelasTujuanId || null;
 
     // --- CASE A: PENDAFTARAN DITOLAK ---
+    // Menolak tidak membuat akun apa pun, jadi selalu boleh dilakukan.
+    // zod sudah mewajibkan alasan (min 5 karakter) untuk status DITOLAK;
+    // guard ini dipertahankan sebagai narrowing + pertahanan lapis kedua.
     if (status === "DITOLAK") {
       if (!alasanPenolakan) {
         return {
@@ -583,6 +576,15 @@ export async function verifikasiPendaftaran(
     if (status === "DITERIMA") {
       const supabaseAdmin = createSupabaseAdmin();
 
+      // ✅ Validasi bukti pembayaran sebelum menerima pendaftaran
+      if (!latestBuktiId) {
+        return {
+          success: false,
+          message:
+            "Bukti pembayaran belum tersedia. Pendaftaran belum dapat diterima.",
+        };
+      }
+
       // ✅ Validasi kapasitas kelas sebelum menerima pendaftaran
       if (finalKelasId) {
         const kelas = await prisma.kelas.findUnique({
@@ -658,6 +660,61 @@ export async function verifikasiPendaftaran(
           success: false,
           message: `Pendaftaran ${pendaftaran.nomorPendaftaran} sedang atau sudah diproses admin lain. Silakan refresh halaman dan coba lagi.`,
         };
+      }
+
+      // ============ VALIDASI NISN DUPLIKAT (sebelum akun Auth) ============
+      // Dilakukan SETELAH klaim (klaim menentukan siapa yang berhak
+     // melanjutkan) tetapi SEBELUM pembuatan akun Supabase Auth — kalau
+      // ditunda sampai dalam transaksi DB, akun Auth sudah sempat dibuat
+      // sehingga menolak berarti meninggalkan akun baru (langgar kontrak
+      // "NISN duplikat ditolak tanpa membuat akun baru").
+      // Klaim dikembalikan ke MENUNGGU_VERIFIKASI agar pendaftaran tidak
+      // menggantung di SEDANG_DIPROSES.
+      // Kolom nisn di model Siswa @unique; cek ini memberi pesan jelas
+      // alih-alih error mentah P2002. Paritas dengan jalur pendaftaran online
+      // & siswa manual: NISN hanya boleh milik SATU calon siswa.
+      if (pendaftaran.nisn) {
+        const [nisnSiswa, nisnPendaftaran] = await Promise.all([
+          prisma.siswa.findUnique({
+            where: { nisn: pendaftaran.nisn },
+            select: {
+              id: true,
+              user: { select: { nama: true, id: true } },
+            },
+          }),
+          prisma.pendaftaran.findFirst({
+            where: {
+              nisn: pendaftaran.nisn,
+              id: { not: pendaftaran.id },
+              status: {
+                in: [
+                  StatusPendaftaran.MENUNGGU_PEMBAYARAN,
+                  StatusPendaftaran.MENUNGGU_VERIFIKASI,
+                ],
+              },
+            },
+            select: {
+              nomorPendaftaran: true,
+              namaLengkap: true,
+              status: true,
+            },
+          }),
+        ]);
+        if (nisnSiswa || nisnPendaftaran) {
+          await batalkanKlaimProses(pendaftaranId, guruUser.id);
+        }
+        if (nisnSiswa) {
+          return {
+            success: false,
+            message: `NISN "${pendaftaran.nisn}" sudah terdaftar atas nama ${nisnSiswa.user?.nama ?? "santri lain"}. Mohon periksa kembali data pendaftaran ini sebelum melanjutkan.`,
+          };
+        }
+        if (nisnPendaftaran) {
+          return {
+            success: false,
+            message: `NISN "${pendaftaran.nisn}" sudah digunakan pada pendaftaran lain (Nomor: ${nisnPendaftaran.nomorPendaftaran}, atas nama ${nisnPendaftaran.namaLengkap}) yang sedang ${nisnPendaftaran.status === StatusPendaftaran.MENUNGGU_VERIFIKASI ? "diverifikasi admin" : "menunggu pembayaran"}. Satu NISN hanya boleh untuk satu calon siswa. Mohon periksa kembali.`,
+          };
+        }
       }
 
       // Amankan credentials secara random. Password ortu hanya digenerate bila
@@ -784,52 +841,11 @@ export async function verifikasiPendaftaran(
       try {
         await prisma.$transaction(
           async (tx) => {
-            // ✅ Validasi NISN agar tidak duplikat dengan siswa yang SUDAH ADA
-            // ATAU pendaftaran aktif lain. Kolom nisn di model Siswa bersifat
-            // @unique — tanpa pengecekan proaktif ini, approve akan crash dengan
-            // error mentah P2002 langsung ke layar admin. Kita cek lebih awal dan
-            // beri pesan yang jelas. Satu NISN hanya boleh milik SATU calon siswa:
-            // dicek juga terhadap pendaftaran aktif (MENUNGGU_PEMBAYARAN /
-            // MENUNGGU_VERIFIKASI) lain, paritas dengan jalur pendaftaran online
-            // & siswa manual.
-            if (pendaftaran.nisn) {
-              const [nisnSiswa, nisnPendaftaran] = await Promise.all([
-                tx.siswa.findUnique({
-                  where: { nisn: pendaftaran.nisn },
-                  select: {
-                    id: true,
-                    user: { select: { nama: true, id: true } },
-                  },
-                }),
-                tx.pendaftaran.findFirst({
-                  where: {
-                    nisn: pendaftaran.nisn,
-                    id: { not: pendaftaran.id },
-                    status: {
-                      in: [
-                        StatusPendaftaran.MENUNGGU_PEMBAYARAN,
-                        StatusPendaftaran.MENUNGGU_VERIFIKASI,
-                      ],
-                    },
-                  },
-                  select: {
-                    nomorPendaftaran: true,
-                    namaLengkap: true,
-                    status: true,
-                  },
-                }),
-              ]);
-              if (nisnSiswa) {
-                throw new AppError(
-                  `NISN "${pendaftaran.nisn}" sudah terdaftar atas nama ${nisnSiswa.user.nama}. Mohon periksa kembali data pendaftaran ini sebelum melanjutkan.`,
-                );
-              }
-              if (nisnPendaftaran) {
-                throw new AppError(
-                  `NISN "${pendaftaran.nisn}" sudah digunakan pada pendaftaran lain (Nomor: ${nisnPendaftaran.nomorPendaftaran}, atas nama ${nisnPendaftaran.namaLengkap}) yang sedang ${nisnPendaftaran.status === StatusPendaftaran.MENUNGGU_VERIFIKASI ? "diverifikasi admin" : "menunggu pembayaran"}. Satu NISN hanya boleh untuk satu calon siswa. Mohon periksa kembali.`,
-                );
-              }
-            }
+            // Catatan: validasi NISN duplikat sudah dilakukan SETELAH klaim &
+            // SEBELUM pembuatan akun (lihat blok "VALIDASI NISN DUPLIKAT" di
+            // atas) supaya menolak tidak meninggalkan akun Auth baru. Unique
+            // constraint @unique pada kolom nisn tetap jadi pengaman terakhir
+            // bila terjadi race.
 
             // Find existing user by authId + role first, then by email as fallback
             // (handles cases where authId differs but email matches — e.g. parent
