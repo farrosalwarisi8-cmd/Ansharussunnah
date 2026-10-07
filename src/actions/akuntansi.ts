@@ -553,7 +553,9 @@ export async function generateTagihanSppKhusus(
       ).catch((err) => {
         console.error("Gagal menyimpan sppKhusus berkelanjutan:", err)
       })
-    }    let totalEmailTerkirim = 0
+    }
+
+    let totalEmailTerkirim = 0
     if (kirimEmail) {
       // Rekening tujuan diambil dari konfigurasi DB (PengaturanPPDB) supaya
       // perubahan rekening di panel admin ikut terkirim di email tagihan.

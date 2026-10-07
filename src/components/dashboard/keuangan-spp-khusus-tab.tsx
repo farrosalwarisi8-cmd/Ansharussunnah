@@ -566,7 +566,10 @@ export function SppKhususTab() {
               <UserCheck className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
               <span>
                 Tagihan kini tampil di menu <strong>Tagihan SPP</strong> pada akun orang tua/wali masing-masing siswa.
-                {kirimEmail && " Email pemberitahuan telah dikirim (fire-and-forget; jika RESEND belum dikonfigurasi, email diabaikan oleh sistem)."}
+                {kirimEmail &&
+                  (hasil.totalEmailTerkirim > 0
+                    ? ` Email pemberitahuan terkirim langsung melalui provider ke ${hasil.totalEmailTerkirim} penerima (tanpa antrean/cron).`
+                    : " Email belum berhasil dikirim ke penerima mana pun. Periksa konfigurasi email (RESEND_API_KEY, EMAIL_FROM) lalu sampaikan tagihan ke wali secara manual.")}
               </span>
             </div>
           </CardContent>
