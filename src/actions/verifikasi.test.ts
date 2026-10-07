@@ -143,7 +143,7 @@ vi.mock("@/lib/salin-dokumen-pendaftaran", () => ({
 }));
 
 import { verifikasiPendaftaran } from "@/actions/verifikasi";
-import { sendPendaftaranDitolakEmail } from "@/lib/email";
+import { sendEmail, sendPendaftaranDitolakEmail } from "@/lib/email";
 
 // ========================================================
 // Data dummy — pendaftaran dengan semua field EMIS terisi
@@ -2091,5 +2091,127 @@ describe("verifikasiPendaftaran — State Machine (SEDANG_DIPROSES)", () => {
     // Response tidak mengandung password hasil generateSecurePassword.
     expect(result.message).not.toContain("RandomSecurePass123!");
     expect(JSON.stringify(result)).not.toContain("RandomSecurePass123!");
+  });
+});
+
+// ========================================================
+// 5. Email kredensial — pengiriman LANGSUNG (tanpa outbox)
+// ========================================================
+
+describe("verifikasiPendaftaran — email kredensial dikirim langsung", () => {
+  /** Setup approval DITERIMA yang bersih (reset semua mock terkait). */
+  function setupEmailApproval(pend: Record<string, unknown> = pendaftaranWithEmis) {
+    vi.clearAllMocks();
+    vi.mocked(sendEmail).mockResolvedValue({ success: true });
+    mockPendaftaranFindUnique.mockReset().mockResolvedValue(pend);
+    mockPendaftaranFindFirst.mockReset().mockResolvedValue(null);
+    mockPendaftaranUpdate.mockReset().mockResolvedValue({});
+    mockPendaftaranUpdateMany.mockReset().mockResolvedValue({ count: 1 });
+    mockKelasFindUnique.mockReset().mockResolvedValue({
+      id: "kelas-1",
+      nama: "Kelas 1",
+      kapasitas: 30,
+      _count: { siswa: 5 },
+    });
+    mockCreateUser.mockReset();
+    setupAuthMocks();
+    mockListUsers.mockReset().mockResolvedValue({ data: { users: [] }, error: null });
+    mockDeleteUser.mockReset().mockResolvedValue({ error: null });
+    setupTransactionMock();
+    setupSalinMocks();
+    mockUserFindUnique.mockReset().mockResolvedValue(null);
+    mockUserCreate
+      .mockReset()
+      .mockResolvedValueOnce({ id: "user-ortu-1", role: "ORANG_TUA" })
+      .mockResolvedValueOnce({ id: "user-siswa-1", role: "SISWA" });
+    mockOrangTuaFindUnique.mockReset().mockResolvedValue({ id: "ortu-1" });
+    mockSiswaFindUnique
+      .mockReset()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: "siswa-1", userId: "user-siswa-1" });
+    mockSiswaCreate.mockReset().mockResolvedValue({ id: "siswa-1", userId: "user-siswa-1" });
+    mockParentStudentFindUnique.mockReset().mockResolvedValue(null);
+    mockParentStudentCreate.mockReset().mockResolvedValue({ id: "ps-1" });
+    mockBuktiTransferUpdate.mockReset().mockResolvedValue({});
+    mockSiswaUpdate.mockReset().mockResolvedValue({});
+  }
+
+  it("approval sukses → email kredensial dipanggil langsung dan pesan menyatakan terkirim", async () => {
+    setupEmailApproval();
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(true);
+    // Pengiriman langsung: parameter lengkap, termasuk kunci idempotency lama.
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "ortu@example.com",
+        jenisEmail: "kredensial_akun",
+        idempotencyKey: "kredensial:REG-2026-00001",
+        subject: expect.stringContaining("REG-2026-00001"),
+        html: expect.any(String),
+      }),
+    );
+    expect(result.message).toContain(
+      "Akun login telah dikirim langsung ke alamat email wali",
+    );
+    expect(result.message).toContain("DITERIMA");
+  });
+
+  it("approval TETAP sukses dan status final saat email gagal — tanpa rollback", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    setupEmailApproval();
+    vi.mocked(sendEmail).mockResolvedValue({ success: false, error: "Resend timeout" });
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    // Approval tidak dibatalkan hanya karena email gagal.
+    expect(result.success).toBe(true);
+    expect(result.message).toContain("email belum berhasil dikirim");
+    expect(result.message).toContain("Periksa konfigurasi email");
+    expect(result.message).toContain("DITERIMA");
+    // Status tetap final & akun/dokumen tetap dibuat (tidak dihapus).
+    expect(mockPendaftaranUpdateMany).toHaveBeenCalled();
+    expect(mockCreateUser).toHaveBeenCalledTimes(2);
+    expect(mockUserCreate).toHaveBeenCalled();
+    expect(mockSalinDokumen).toHaveBeenCalled();
+    // Password tidak pernah bocor ke pesan admin.
+    expect(result.message).not.toContain("RandomSecurePass123!");
+    expect(JSON.stringify(result)).not.toContain("RandomSecurePass123!");
+    vi.restoreAllMocks();
+  });
+
+  it("approval ganda tidak mengirim email ganda (guard status)", async () => {
+    setupEmailApproval({ ...pendaftaranWithEmis, status: "DITERIMA" });
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    // Idempoten: dianggap sukses, tanpa akun baru dan tanpa email baru.
+    expect(result.success).toBe(true);
+    expect(result.message).toContain("sudah DITERIMA");
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("klaim status gagal (diproses admin lain) → email tidak dikirim", async () => {
+    setupEmailApproval();
+    mockPendaftaranUpdateMany.mockResolvedValue({ count: 0 });
+
+    const result = await verifikasiPendaftaran({
+      pendaftaranId: "pend-1",
+      status: "DITERIMA",
+    });
+
+    expect(result.success).toBe(false);
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 });

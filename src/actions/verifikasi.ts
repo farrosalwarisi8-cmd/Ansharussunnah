@@ -1341,7 +1341,7 @@ export async function verifikasiPendaftaran(
       const catatanParsial: string[] = [];
       if (!emailKredensialTerkirim) {
         catatanParsial.push(
-          `EMAIL KREDENSIAL GAGAL terkirim ke ${emailOrtu}${emailKredensialError ? ` (${emailKredensialError})` : ""}. Sampaikan kredensial login secara manual — jangan mengulang aksi "Terima" karena status sudah final.`,
+          `Kredensial belum sampai ke ${emailOrtu}${emailKredensialError ? ` (${emailKredensialError})` : ""}. Sampaikan kredensial login secara manual — jangan mengulang aksi "Terima" karena status sudah final.`,
         );
       }
       if (dokumenGagalDisalin > 0) {
@@ -1353,7 +1353,10 @@ export async function verifikasiPendaftaran(
       return {
         success: true,
         message:
-          `Pendaftaran ${pendaftaran.nomorPendaftaran} DITERIMA. Akun login telah dikirimkan ke ${emailOrtu}.` +
+          (emailKredensialTerkirim
+            ? `Pendaftaran berhasil diterima. Akun login telah dikirim langsung ke alamat email wali.`
+            : `Pendaftaran berhasil diterima, tetapi email belum berhasil dikirim. Periksa konfigurasi email atau gunakan pengiriman ulang.`) +
+          ` Status DITERIMA — nomor ${pendaftaran.nomorPendaftaran}, email ${emailOrtu}.` +
           (catatanParsial.length > 0
             ? ` CATATAN: ${catatanParsial.join(" ")} Sekaligus periksa panel berkas di dashboard wali.`
             : ""),

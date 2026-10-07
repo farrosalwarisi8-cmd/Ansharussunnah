@@ -553,36 +553,46 @@ export async function generateTagihanSppKhusus(
       ).catch((err) => {
         console.error("Gagal menyimpan sppKhusus berkelanjutan:", err)
       })
-    }
-
-    let totalEmailTerkirim = 0
+    }    let totalEmailTerkirim = 0
     if (kirimEmail) {
       // Rekening tujuan diambil dari konfigurasi DB (PengaturanPPDB) supaya
       // perubahan rekening di panel admin ikut terkirim di email tagihan.
       // Fail-open: getPengaturanPPDB mengembalikan default teraman bila DB
       // bermasalah, sehingga email tidak pernah menampilkan rekening kosong.
       const rekening = await getPengaturanPPDB()
-      for (const t of targetEmail) {
-        const res = await sendEmail({
-          to: t.to,
-          jenisEmail: "tagihan_spp",
-          // Satu email per penerima per periode tagihan.
-          idempotencyKey: `tagihan-spp:${tahun}-${bulan}:${t.to}`,
-          subject: `Tagihan SPP ${bulanLabel} ${tahun} — ${t.namaSiswa}`,
-          html: buildTagihanSppEmail({
-            namaSiswa: t.namaSiswa,
-            bulanLabel: `${bulanLabel} ${tahun}`,
-            nominal: t.nominal,
-            jatuhTempo,
-            bankNama: rekening.bankNama,
-            bankNoRekening: rekening.bankNoRekening,
-            bankAtasNama: rekening.bankAtasNama,
-          }),
-        }).catch((err) => {
-          console.error("Gagal kirim email tagihan SPP:", err)
-          return { success: false as const, error: "error" }
-        })
-        if (res?.success) totalEmailTerkirim += 1
+      // Email dikirim LANGSUNG ke provider (bukan antrian outbox) dan hasil
+      // tiap penerima dilaporkan jujur. Paralelitas terbatas agar total waktu
+      // tunggu tetap jauh di bawah batas durasi serverless untuk ratusan
+      // penerima — tanpa mengubah urutan pemanggilan per penerima.
+      const KONKURENSI_KIRIM = 5
+      for (let i = 0; i < targetEmail.length; i += KONKURENSI_KIRIM) {
+        const batch = targetEmail.slice(i, i + KONKURENSI_KIRIM)
+        const hasilBatch = await Promise.all(
+          batch.map((t) =>
+            sendEmail({
+              to: t.to,
+              jenisEmail: "tagihan_spp",
+              // Satu email per penerima per periode tagihan.
+              idempotencyKey: `tagihan-spp:${tahun}-${bulan}:${t.to}`,
+              subject: `Tagihan SPP ${bulanLabel} ${tahun} — ${t.namaSiswa}`,
+              html: buildTagihanSppEmail({
+                namaSiswa: t.namaSiswa,
+                bulanLabel: `${bulanLabel} ${tahun}`,
+                nominal: t.nominal,
+                jatuhTempo,
+                bankNama: rekening.bankNama,
+                bankNoRekening: rekening.bankNoRekening,
+                bankAtasNama: rekening.bankAtasNama,
+              }),
+            }).catch((err) => {
+              console.error("Gagal kirim email tagihan SPP:", err)
+              return { success: false as const, error: "error" }
+            }),
+          ),
+        )
+        for (const res of hasilBatch) {
+          if (res?.success) totalEmailTerkirim += 1
+        }
       }
     }
 
@@ -591,9 +601,11 @@ export async function generateTagihanSppKhusus(
     return {
       success: true,
       message:
-        `Tagihan SPP khusus berhasil diterbitkan. Dibuat: ${totalDibuat}, ` +
-        `Dilewati (sudah ada / tidak ditemukan): ${totalDilewati}.` +
-        (kirimEmail ? ` Email dikirim ke ${totalEmailTerkirim} penerima.` : ""),
+        `Tagihan SPP khusus berhasil diterbitkan. Dibuat: ${totalDibuat}, `
+        + `Dilewati (sudah ada / tidak ditemukan): ${totalDilewati}.`
+        + (kirimEmail
+            ? ` Email terkirim langsung ke ${totalEmailTerkirim} dari ${targetEmail.length} penerima.`
+            : ""),
       data: {
         totalDiproses: totalDibuat,
         totalDilewati,

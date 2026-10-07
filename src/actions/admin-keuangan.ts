@@ -160,21 +160,39 @@ export async function createAkunAdminKeuangan(
       throw createError
     }
 
-    // Kirim kredensial via email (fire-and-forget, jangan block response)
-    sendEmail({
-      to: email,
-      subject: "Akun Admin Keuangan Baru — Anshorussunnah",
-      html: buildKredensialAdminKeuanganEmail({
-        nama,
-        email,
-        password,
-      }),
-    }).catch((err) => console.error("Gagal mengirim email kredensial admin keuangan:", err))
+    // Kirim kredensial via email LANGSUNG ke provider (tanpa antrean outbox)
+    // dan tunggu hasilnya agar admin menerima status jujur. Akun SUDAH tercommit
+    // — kegagalan email TIDAK membatalkan akun, hanya dilaporkan apa adanya
+    // (tanpa password di log/response).
+    let emailTerkirim = false
+    let emailError: string | null = null
+    try {
+      const hasilEmail = await sendEmail({
+        to: email,
+        subject: "Akun Admin Keuangan Baru — Anshorussunnah",
+        html: buildKredensialAdminKeuanganEmail({
+          nama,
+          email,
+          password,
+        }),
+      })
+      emailTerkirim = hasilEmail.success === true
+      if (!hasilEmail.success) {
+        emailError = hasilEmail.error
+        console.error("Email kredensial admin keuangan gagal dikirim:", hasilEmail.error)
+      }
+    } catch (err) {
+      emailTerkirim = false
+      emailError = err instanceof Error ? err.message : "tidak diketahui"
+      console.error("Gagal mengirim email kredensial admin keuangan:", err)
+    }
 
     revalidatePath("/dashboard/kelola-akun-keuangan")
     return {
       success: true,
-      message: `Akun admin keuangan "${nama}" berhasil dibuat. Kredensial telah dikirim ke ${email}.`,
+      message: emailTerkirim
+        ? `Akun admin keuangan "${nama}" berhasil dibuat. Kredensial terkirim langsung ke ${email}.`
+        : `Akun admin keuangan "${nama}" berhasil dibuat, tetapi email kredensial belum berhasil dikirim${emailError ? ` (${emailError})` : ""}. Sampaikan kredensial ke ${email} secara manual.`,
       data: { userId: user.id },
     }
   } catch (error: unknown) {

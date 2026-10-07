@@ -215,13 +215,15 @@ export function AdminDashboardHome() {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold text-slate-900">
-                  {data?.emailGagal} email gagal terkirim
+                  {data?.emailGagal} email outbox lama gagal terkirim
                 </p>
                 <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
-                  Email outbox bernilai FAILED. Gunakan tombol retry pada halaman
-                  Outbox Email untuk mengirim ulang.
+                  Ini riwayat email outbox LAMA (status FAILED). Gunakan tombol
+                  retry pada halaman Outbox Email untuk mengirim ulang langsung
+                  lewat provider. Email baru dikirim langsung dan tidak lagi
+                  masuk antrean.
                   {data?.emailTertunda
-                    ? ` ${data.emailTertunda} email lain masih menunggu worker cron.`
+                    ? ` ${data.emailTertunda} email outbox lama lain masih menunggu diproses ulang.`
                     : ""}
                 </p>
               </div>

@@ -6,6 +6,18 @@
 
 ---
 
+## 📌 UPDATE 2026-10-07 — Outbox email dikeluarkan dari alur runtime
+
+Bagian "Blocker 5 — Outbox email" di bawah adalah **catatan historis**. Kondisi terkini:
+
+- **Email baru dikirim LANGSUNG melalui Resend** (`sendEmail()` → `sendEmailViaProvider()`), tanpa menulis tabel `email_outbox` dan **tanpa menunggu cron**.
+- **Jadwal cron outbox dihapus dari `vercel.json`**; route `/api/cron/proses-email-outbox` tetap ada hanya untuk memproses data lama secara manual (dilindungi `CRON_SECRET`).
+- Tabel `email_outbox`, model Prisma, migration, dan seluruh histori email **tetap ada** — tidak ada yang dihapus.
+- Penanganan data lama: baris `SENT` dibiarkan sebagai histori; baris `PENDING`/`FAILED` boleh diproses ulang lewat tombol retry `/dashboard/email-outbox` atau pemanggilan manual route cron. **Cleanup hanya boleh dilakukan manual, eksplisit, setelah backup dan persetujuan admin.**
+- Jangan jalankan `prisma migrate reset` / `db push --force-reset` untuk perubahan ini.
+
+---
+
 ## ⚠️ INSIDEN DB KRITIS — baca dulu
 
 **Pada 2026-10-02 pukul 03:27–03:36 UTC (10:27–10:36 WIB), seluruh database ditulis ulang dari awal dan SEMUA data aplikasi hilang.** Detail forensik & pemulihan ada di bagian [Insiden DB](#insiden-db-kritis-forensik-dan-pemulihan) di bawah. Status: **BLOKIR — pemulihan data butuh akses konsol Supabase** (restore dari backup). Skema sudah sehat; data belum.

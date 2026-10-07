@@ -1,7 +1,14 @@
 // src/lib/email-outbox.ts
 //
-// Sistem outbox email: email penting disimpan ke DB lebih dulu, lalu dikirim
-// oleh worker (cron /api/cron/proses-email-outbox) dengan retry berjenjang.
+// Sistem outbox email — SEKARANG HANYA UNTUK DATA LAMA (legacy).
+//
+// Alur email BARU tidak memakai file ini: `sendEmail()` di src/lib/email.ts
+// mengirim langsung melalui provider (Resend) dan menunggu hasilnya, tanpa
+// menulis tabel email_outbox dan tanpa menunggu cron.
+// File ini dipertahankan agar tabel/model + migration lama tetap utuh, baris
+// PENDING/FAILED lama masih bisa diproses/di-retry admin (worker route
+// /api/cron/proses-email-outbox, dipanggil manual), dan histori SENT tetap
+// terlihat di /dashboard/email-outbox.
 //
 // Mengapa: sebelumnya email dikirim fire-and-forget. Di serverless, instance
 // bisa dimatikan begitu response terkirim → email hilang tanpa jejak, dan
@@ -79,6 +86,10 @@ export interface HasilEnqueue {
 
 /**
  * Simpan email ke outbox untuk dikirim worker. TIDAK PERNAH melempar.
+ *
+ * LEGACY: tidak lagi dipanggil dari alur aplikasi — email baru dikirim
+ * langsung via `sendEmail()` (src/lib/email.ts). Fungsi dipertahankan hanya
+ * untuk kompatibilitas/komponen lama.
  */
 export async function enqueueEmail(params: EnqueueEmailParams): Promise<HasilEnqueue> {
   const { jenisEmail, recipient, subject, html, idempotencyKey, meta } = params
@@ -256,6 +267,6 @@ export async function retryEmailOutboxManual(id: string): Promise<{
   return {
     success: false,
     message:
-      "Email diantrikan, tetapi pengiriman ulang gagal. Periksa pesan error dan coba lagi nanti.",
+      "Email gagal dikirim ulang. Periksa pesan error pada baris tersebut lalu coba lagi.",
   }
 }

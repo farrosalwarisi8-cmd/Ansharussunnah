@@ -1,15 +1,15 @@
 // src/app/api/cron/proses-email-outbox/route.ts
 //
-// Worker outbox email: mengirim email PENDING yang sudah jatuh tempo retry.
-// Dipanggil Vercel Cron (lihat vercel.json) dan dilindungi CRON_SECRET dengan
-// pembandingan konstan-waktu — tanpa ini siapa pun bisa memicu pengiriman.
+// Worker LEGACY untuk data outbox lama. Email BARU tidak lagi masuk outbox —
+// semua email dikirim langsung melalui Resend (src/lib/email.ts →
+// src/lib/email-provider.ts), sehingga route ini BUKAN dependency email baru
+// dan jadwal cron-nya sudah dihapus dari vercel.json.
 //
-// BATAS HOSTING: Vercel Hobby hanya mengizinkan cron HARIAN. Email yang
-// gagal sementara (retry backoff 1/5/15/60/360 menit) karenanya baru
-// diproses ulang paling lambat ~24 jam kemudian, bukan menit itu juga.
-// Untuk pengiriman segera, admin punya tombol retry manual di
-// /dashboard/email-outbox (retryEmailOutboxManual) yang memproses baris
-// saat itu juga. Upgrade ke Pro mengizinkan cron tiap 1 jam jika diperlukan.
+// Route ini dipertahankan agar baris lama berstatus PENDING/FAILED masih bisa
+// diproses/di-retry secara manual oleh admin (dipanggil eksplisit dengan
+// Bearer CRON_SECRET), tanpa menghapus tabel, migration, atau histori email.
+// Dilindungi CRON_SECRET dengan pembandingan konstan-waktu — tanpa ini siapa
+// pun bisa memicu pengiriman.
 //
 // Aman dipanggil berulang/paralel: setiap baris diklaim secara atomik
 // (updateMany bersyarat) sebelum dikirim, jadi tidak ada double-send.

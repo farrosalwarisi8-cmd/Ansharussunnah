@@ -20,6 +20,7 @@ import { siswaCocokKelas } from "@/lib/guru-kelas-gender"
 import { deriveUniqueUsername } from "@/lib/username"
 import { toUserFriendlyError } from "@/lib/prisma-error"
 import { sendEmail, buildPemberitahuanRoleBaruEmail } from "@/lib/email"
+import { runAfterResponse } from "@/lib/after-response"
 import { normalizePagination, paginatedResult, type Paginated } from "@/lib/pagination"
 import type { ActionResponse } from "@/types"
 import { Prisma, Role, StatusPendaftaran } from "@prisma/client"
@@ -444,31 +445,51 @@ export async function createSiswaManual(
       }
     }
 
-    // Kirim pemberitahuan role baru (TANPA password) jika peran dibuat dari email
+    // Pemberitahuan role baru (TANPA password) jika peran dibuat dari email
     // yang SUDAH punya akun lain (reuse authId). Password tidak pernah dikirim
     // untuk skenario reuse — user memakai password lama.
+    // Dikirim LANGSUNG ke provider lewat runAfterResponse: tidak memblokir
+    // response, tapi runtime tetap menahan instance sampai pengiriman selesai.
     if (ortuAlreadyExisted && ortuRecordBaruDibuat) {
-      sendEmail({
-        to: emailOrtu,
-        subject: "Akun Orang Tua Baru Ditambahkan — Ansharussunnah",
-        html: buildPemberitahuanRoleBaruEmail({
-          nama: data.namaOrangTua,
-          email: emailOrtu,
-          roleBaru: "Orang Tua",
-        }),
-      }).catch((err) => console.error("Gagal mengirim email pemberitahuan role orang tua:", err))
+      runAfterResponse(async () => {
+        try {
+          const hasilEmail = await sendEmail({
+            to: emailOrtu,
+            subject: "Akun Orang Tua Baru Ditambahkan — Ansharussunnah",
+            html: buildPemberitahuanRoleBaruEmail({
+              nama: data.namaOrangTua,
+              email: emailOrtu,
+              roleBaru: "Orang Tua",
+            }),
+          })
+          if (!hasilEmail.success) {
+            console.error("Email pemberitahuan role orang tua gagal dikirim:", hasilEmail.error)
+          }
+        } catch (err) {
+          console.error("Gagal mengirim email pemberitahuan role orang tua:", err)
+        }
+      })
     }
 
     if (siswaAkunSudahAda) {
-      sendEmail({
-        to: emailSiswa,
-        subject: "Akun Siswa Baru Ditambahkan — Ansharussunnah",
-        html: buildPemberitahuanRoleBaruEmail({
-          nama: data.namaLengkap,
-          email: emailSiswa,
-          roleBaru: "Siswa",
-        }),
-      }).catch((err) => console.error("Gagal mengirim email pemberitahuan role siswa:", err))
+      runAfterResponse(async () => {
+        try {
+          const hasilEmail = await sendEmail({
+            to: emailSiswa,
+            subject: "Akun Siswa Baru Ditambahkan — Ansharussunnah",
+            html: buildPemberitahuanRoleBaruEmail({
+              nama: data.namaLengkap,
+              email: emailSiswa,
+              roleBaru: "Siswa",
+            }),
+          })
+          if (!hasilEmail.success) {
+            console.error("Email pemberitahuan role siswa gagal dikirim:", hasilEmail.error)
+          }
+        } catch (err) {
+          console.error("Gagal mengirim email pemberitahuan role siswa:", err)
+        }
+      })
     }
 
     return {

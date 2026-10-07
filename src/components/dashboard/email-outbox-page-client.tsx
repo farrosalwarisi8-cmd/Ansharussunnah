@@ -45,7 +45,10 @@ function StatusPill({ status }: { status: EmailOutboxItem["status"] }) {
     FAILED: "border-rose-300 bg-rose-50 text-rose-800",
   }
   const label: Record<EmailOutboxItem["status"], string> = {
-    PENDING: "Menunggu",
+    // Label untuk data outbox LAMA. Email baru tidak pernah berstatus ini —
+    // pengiriman langsung dilaporkan sebagai "Terkirim langsung" / "Gagal
+    // dikirim" pada pesan hasil aksi masing-masing.
+    PENDING: "Menunggu (lama)",
     SENT: "Terkirim",
     FAILED: "Gagal",
   }
@@ -136,8 +139,8 @@ export function EmailOutboxPageClient({
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <DashboardHeader
-        title="Email Outbox"
-        subtitle="Pantau status email penting (pendaftaran, kredensial, tagihan SPP, reset password) dan kirim ulang yang gagal."
+        title="Email Outbox (Riwayat)"
+        subtitle="Riwayat email outbox lama beserta status kirim ulangnya. Email baru tidak masuk ke sini — semua email baru dikirim langsung melalui provider (Resend) tanpa antrean."
       />
 
       {/* Ringkasan status */}
@@ -206,7 +209,7 @@ export function EmailOutboxPageClient({
       {!error && items.length === 0 && !loading && (
         <EmptyState
           title="Tidak ada email"
-          description="Belum ada email pada filter ini. Email akan muncul di sini setelah ada event seperti pendaftaran, tagihan SPP, atau reset password."
+          description="Belum ada email outbox lama pada filter ini. Halaman ini hanya menampilkan riwayat email outbox lama — email baru dikirim langsung melalui provider dan tidak masuk antrean."
         />
       )}
 

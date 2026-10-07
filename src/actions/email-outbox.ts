@@ -11,6 +11,7 @@
 
 import prisma from "@/lib/prisma"
 import { requireRole } from "@/lib/auth"
+import { rateLimitAsync } from "@/lib/rate-limit"
 import { AppError, toUserFriendlyError } from "@/lib/prisma-error"
 import { retryEmailOutboxManual } from "@/lib/email-outbox"
 import type { ActionResponse } from "@/types"
@@ -133,14 +134,29 @@ export async function getDaftarEmailOutbox(options?: {
 }
 
 /**
- * Kirim ulang satu email (reset attempts lalu coba kirim sekarang).
+ * Kirim ulang satu email (reset attempts lalu coba kirim SEKARANG lewat
+ * provider langsung — tanpa menunggu cron).
+ *
+ * Guard anti-spam: rate limit per admin (10x/menit) selain guard status
+ * (email yang sudah SENT tidak bisa di-retry).
  */
 export async function retryEmailOutbox(id: string): Promise<ActionResponse> {
   try {
-    await requireRole(ADMIN_ROLES)
+    const user = await requireRole(ADMIN_ROLES)
 
     if (!id || typeof id !== "string") {
       throw new AppError("ID email tidak valid")
+    }
+
+    const limiter = await rateLimitAsync(`retry-email-outbox:${user.id}`, {
+      maxRequests: 10,
+      windowMs: 60_000,
+    })
+    if (!limiter.success) {
+      return {
+        success: false,
+        message: "Terlalu banyak percobaan kirim ulang. Coba lagi dalam 1 menit.",
+      }
     }
 
     const hasil = await retryEmailOutboxManual(id)

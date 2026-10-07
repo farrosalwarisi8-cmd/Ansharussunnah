@@ -11,6 +11,8 @@
 //   - retry manual mengirim ulang dan melaporkan hasil.
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { readFileSync, readdirSync } from "node:fs"
+import path from "node:path"
 
 const {
   mockCreate,
@@ -52,7 +54,7 @@ import {
   hitungBackoff,
   MAX_EMAIL_ATTEMPTS,
 } from "@/lib/email-outbox"
-import { Prisma } from "@prisma/client"
+import { Prisma, StatusEmailOutbox } from "@prisma/client"
 
 function row(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -236,5 +238,53 @@ describe("hitungBackoff", () => {
     expect(b3).toBeGreaterThan(b1)
     // attempts sangat besar → tetap delay maksimum (tidak melebihi array).
     expect(hitungBackoff(999, now).getTime()).toBe(hitungBackoff(5, now).getTime())
+  })
+})
+
+describe("outbox legacy — model & data lama dipertahankan", () => {
+  const akar = process.cwd()
+
+  it("model Prisma dan migration tabel email_outbox tetap ada (tidak dihapus)", () => {
+    const schema = readFileSync(path.join(akar, "prisma/schema.prisma"), "utf8")
+    expect(schema).toContain("model EmailOutbox")
+    expect(schema).toContain('@@map("email_outbox")')
+
+    const migration = readFileSync(
+      path.join(akar, "prisma/migrations/20261002000000_email_outbox/migration.sql"),
+      "utf8",
+    )
+    expect(migration).toContain('CREATE TABLE IF NOT EXISTS "email_outbox"')
+    // Tidak boleh ada statement penghapusan tabel di migration outbox.
+    expect(migration).not.toMatch(/DROP\s+TABLE/i)
+  })
+
+  it("enum status legacy tetap tersedia untuk data PENDING/SENT/FAILED", () => {
+    expect(String(StatusEmailOutbox.PENDING)).toBe("PENDING")
+    expect(String(StatusEmailOutbox.SENT)).toBe("SENT")
+    expect(String(StatusEmailOutbox.FAILED)).toBe("FAILED")
+  })
+
+  it("tidak ada kode yang menghapus baris/tabel email_outbox", () => {
+    const berkas: string[] = []
+    for (const folder of ["src", "scripts"]) {
+      const dir = path.join(akar, folder)
+      for (const rel of readdirSync(dir, { recursive: true }) as string[]) {
+        const p = path.join(dir, rel)
+        if (/\.(ts|tsx)$/.test(p) && !p.endsWith(".test.ts")) berkas.push(p)
+      }
+    }
+    const pelanggar = berkas.filter((f) =>
+      /emailOutbox\.(delete|deleteMany)|DROP\s+TABLE[^;]*email_outbox/i.test(
+        readFileSync(f, "utf8"),
+      ),
+    )
+    expect(pelanggar).toEqual([])
+  })
+
+  it("worker legacy tetap bisa membaca & memproses baris lama", () => {
+    // fungsi worker/reader masih diekspor dan utuh (compile-time teruji tsc).
+    expect(typeof prosesEmailOutbox).toBe("function")
+    expect(typeof retryEmailOutboxManual).toBe("function")
+    expect(typeof enqueueEmail).toBe("function")
   })
 })

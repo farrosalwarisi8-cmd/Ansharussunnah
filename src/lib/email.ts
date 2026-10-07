@@ -1,11 +1,15 @@
 // src/lib/email.ts
 //
-// Template email + API pengiriman tingkat tinggi. Sejak sistem outbox,
-// `sendEmail` TIDAK mengirim langsung — ia mengantrikan ke tabel email_outbox
-// dan worker cron yang mengirim dengan retry/backoff. Provider mentah ada di
-// src/lib/email-provider.ts.
+// Template email + API pengiriman tingkat tinggi.
+//
+// `sendEmail` mengirim LANGSUNG melalui provider (Resend, src/lib/email-provider.ts)
+// dan menunggu hasilnya sebelum mengembalikan response ke pemanggil — tanpa
+// antrean, tanpa tabel email_outbox, tanpa menunggu cron. Tabel & worker outbox
+// tetap ada HANYA untuk memproses data lama (lihat src/lib/email-outbox.ts);
+// tidak ada email baru yang masuk ke sana.
 
-import { enqueueEmail, type JenisEmail } from "@/lib/email-outbox"
+import { sendEmailViaProvider, sanitasiErrorProvider } from "@/lib/email-provider"
+import type { JenisEmail } from "@/lib/email-outbox"
 
 function escapeHtml(value: string): string {
   return value
@@ -20,9 +24,13 @@ export interface SendEmailParams {
   to: string
   subject: string
   html: string
-  /** Kategori email (untuk audit di outbox). */
+  /** Kategori email (kompatibilitas pemanggil lama; tidak lagi menulis outbox). */
   jenisEmail?: JenisEmail | string
-  /** Kunci idempotency → cegah email ganda untuk event yang sama. */
+  /**
+   * Kunci idempotency (kompatibilitas pemanggil lama): mencegah email ganda
+   * untuk event yang sama dalam satu instance proses. TIDAK digunakan untuk
+   * memasukkan email ke outbox.
+   */
   idempotencyKey?: string
 }
 
@@ -30,13 +38,36 @@ export type HasilSendEmail =
   | { success: true; id?: string }
   | { success: false; error: string }
 
+/** TTL guard idempotency intra-instance (ms). */
+const DEDUPE_TTL_MS = 15 * 60 * 1000
+/** Batas jumlah kunci idempotency yang diingat di memori. */
+const DEDUPE_MAX = 500
+/** idempotencyKey → epoch ms email terakhir yang berhasil dikirim. */
+const riwayatKirim = new Map<string, number>()
+
+function catatTerkirim(idempotencyKey: string): void {
+  if (riwayatKirim.size >= DEDUPE_MAX) {
+    // Buang entri tertua agar memori tidak tumbuh tanpa batas.
+    const tertua = riwayatKirim.keys().next().value
+    if (tertua !== undefined) riwayatKirim.delete(tertua)
+  }
+  riwayatKirim.set(idempotencyKey, Date.now())
+}
+
+/** Reset guard idempotency — untuk unit test. */
+export function resetRiwayatIdempotencyEmail(): void {
+  riwayatKirim.clear()
+}
+
 /**
- * Antrekan email ke outbox (BUKAN kirim langsung). Worker cron mengirim dengan
- * retry/backoff; kegagalan provider terlihat & bisa di-retry admin.
+ * Kirim email LANGSUNG melalui provider (Resend) dan tunggu hasilnya.
  *
- * TIDAK PERNAH melempar. `success: true` juga ketika email dengan kunci
- * idempotency sama sudah ada (bukan error). `success: false` hanya bila outbox
- * gagal menyimpan.
+ * TIDAK PERNAH melempar exception ke pemanggil: kegagalan provider/konfigurasi
+ * dikembalikan sebagai `{ success: false, error }` berisi pesan aman
+ * (tanpa API key, token, password, atau HTML).
+ *
+ * `success: true` berarti provider mengembalikan sukses (bukan sekadar
+ * "masuk antrean").
  */
 export async function sendEmail({
   to,
@@ -45,22 +76,34 @@ export async function sendEmail({
   jenisEmail,
   idempotencyKey,
 }: SendEmailParams): Promise<HasilSendEmail> {
-  const hasil = await enqueueEmail({
-    jenisEmail: jenisEmail ?? "umum",
-    recipient: to,
-    subject,
-    html,
-    idempotencyKey,
-  })
+  // Kompatibilitas: label audit lama tidak lagi dipakai untuk menulis outbox.
+  void jenisEmail
 
-  if (!hasil.ok) {
-    return {
-      success: false,
-      error: "Email gagal masuk antrian. Silakan coba lagi.",
+  // Guard anti-duplikasi: event dengan kunci yang sama tidak dikirim ulang
+  // dalam TTL pada instance proses yang sama.
+  if (idempotencyKey) {
+    const terakhir = riwayatKirim.get(idempotencyKey)
+    if (terakhir !== undefined && Date.now() - terakhir < DEDUPE_TTL_MS) {
+      return { success: true }
     }
   }
 
-  return { success: true }
+  try {
+    const hasil = await sendEmailViaProvider({ to, subject, html })
+    if (!hasil.success) {
+      return { success: false, error: hasil.error }
+    }
+    if (idempotencyKey) catatTerkirim(idempotencyKey)
+    return { success: true, id: hasil.id }
+  } catch (error: unknown) {
+    // Jaring pengaman: provider seharusnya tidak melempar, tapi pemanggil
+    // (server action) tidak boleh pernah menerima exception mentah.
+    console.error("Email gagal dikirim:", sanitasiErrorProvider(error))
+    return {
+      success: false,
+      error: "Pengiriman email gagal. Silakan coba lagi atau periksa konfigurasi email.",
+    }
+  }
 }
 
 /**

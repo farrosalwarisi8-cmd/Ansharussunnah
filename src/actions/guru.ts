@@ -197,18 +197,32 @@ export async function createAkunGuru(
       throw txError;
     }
 
-    // Kirim kredensial via email (fire-and-forget, jangan block response)
-    sendEmail({
-      to: email,
-      subject: "Akun Guru Baru — Anshorussunnah",
-      html: buildKredensialGuruEmail({
-        nama,
-        email,
-        password,
-      }),
-    }).catch((err) =>
-      console.error("Gagal mengirim email kredensial guru:", err),
-    );
+    // Kirim kredensial via email LANGSUNG ke provider (tanpa antrean outbox)
+    // dan tunggu hasilnya agar admin menerima status jujur. Akun SUDAH tercommit
+    // — kegagalan email tidak membatalkan akun, hanya dilaporkan apa adanya
+    // (tanpa password di log/response).
+    let emailTerkirim = false;
+    let emailError: string | null = null;
+    try {
+      const hasilEmail = await sendEmail({
+        to: email,
+        subject: "Akun Guru Baru — Anshorussunnah",
+        html: buildKredensialGuruEmail({
+          nama,
+          email,
+          password,
+        }),
+      });
+      emailTerkirim = hasilEmail.success === true;
+      if (!hasilEmail.success) {
+        emailError = hasilEmail.error;
+        console.error("Email kredensial guru gagal dikirim:", hasilEmail.error);
+      }
+    } catch (err) {
+      emailTerkirim = false;
+      emailError = err instanceof Error ? err.message : "tidak diketahui";
+      console.error("Gagal mengirim email kredensial guru:", err);
+    }
 
     revalidatePath("/dashboard/guru");
     const infoPenugasan =
@@ -217,7 +231,12 @@ export async function createAkunGuru(
         : "";
     return {
       success: true,
-      message: `Akun guru "${nama}" berhasil dibuat. Kredensial telah dikirim ke ${email}.${infoPenugasan}`,
+      message:
+        `Akun guru "${nama}" berhasil dibuat. ` +
+        (emailTerkirim
+          ? `Kredensial terkirim langsung ke ${email}.`
+          : `Email kredensial belum berhasil dikirim${emailError ? ` (${emailError})` : ""} — sampaikan kredensial ke ${email} secara manual.`) +
+        infoPenugasan,
       data: { userId: result.userId },
     };
   } catch (error: unknown) {
